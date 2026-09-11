@@ -1,0 +1,315 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2759
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica-Bold;\f1\fswiss\fcharset0 Helvetica;\f2\fnil\fcharset0 Menlo-Regular;
+\f3\fnil\fcharset0 Menlo-Bold;\f4\fswiss\fcharset0 Arial-BoldMT;\f5\fswiss\fcharset0 ArialMT;
+\f6\fswiss\fcharset0 Helvetica-Oblique;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red255\green255\blue255;\red0\green0\blue0;
+\red131\green148\blue149;\red61\green73\blue78;\red199\green63\blue5;\red0\green0\blue0;\red193\green193\blue193;
+\red167\green197\blue152;\red202\green202\blue202;\red70\green137\blue204;\red253\green128\blue8;\red24\green26\blue30;
+}
+{\*\expandedcolortbl;;\cspthree\c0\c0\c0;\cssrgb\c100000\c100000\c100000;\cssrgb\c0\c0\c0;
+\cssrgb\c58431\c64706\c65098;\cssrgb\c30588\c35686\c38039;\cssrgb\c82745\c32941\c0;\csgray\c0\c0;\cssrgb\c80000\c80000\c80000;
+\cssrgb\c70980\c80784\c65882;\cssrgb\c83137\c83137\c83137;\cssrgb\c33725\c61176\c83922;\cssrgb\c100000\c57637\c0;\cssrgb\c12157\c13725\c15686;
+}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid101\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid2}
+{\list\listtemplateid3\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid201\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid3}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}{\listoverride\listid3\listoverridecount0\ls3}}
+\margl1440\margr1440\vieww17280\viewh11380\viewkind0
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+
+\f0\b\fs26 \cf2 EXTERNAL PUSH BUTTON FW\
+PHYSICAL NUMPAD (DOUBLE DUTY KEY PAD)\
+\
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+\ls1\ilvl0\cf2 \
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+\cf2 \
+Important
+\f1\b0 \
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+\ls2\ilvl0\cf2 {\listtext	\uc0\u8226 	}Using Gemini 2.5 Pro for the coding\
+{\listtext	\uc0\u8226 	}This is modified FW - Use at YOUR OWN RISK\
+{\listtext	\uc0\u8226 	}Screenset should work with h5V11 FW from Max, but no guarantees. I did my best but I am NOT a programmer. \
+{\listtext	\uc0\u8226 	}But the RPM/Turns/Angle values may be missing if using Max\'92s FW. In that case, use my previous screens\
+{\listtext	\uc0\u8226 	}Remember to change the hardware settings (lead screw pitch, etc) to your current, working settings\
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+\cf2 \
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+
+\f0\b \cf2 Changes in this FW:\
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+
+\f1\b0 \cf2 	\'95	Push buttons can now be mapped to pins. They will work the same as the PS/2 keyboard keys\
+\pard\tx220\tx720\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\li720\fi-720\pardirnatural\partightenfactor0
+\ls3\ilvl0\cf2 {\listtext	\uc0\u8226 	}This FW actually has all the pins mapped for my new 10 button keypad, which does double duty as a numpad\
+{\listtext	\uc0\u8226 	}But you can leave the numpad code in the FW and just change the pins, it should be fine\
+{\listtext	\uc0\u8226 	}+/- now has hold down mode so you can scroll through feed values\
+{\listtext	\uc0\u8226 	}Decimals are stable, always 2 in metric, always 3 in imperial (I hope). \
+{\listtext	\uc0\u8226 	}If you use my custom screenset this means the values don\'92t jump left and right when jogging\
+{\listtext	\uc0\u8226 	}Long pressing the Left Stop (Limit) deletes all limits. This has now been moved to FW from the Nextion side. \
+{\listtext	\uc0\u8226 	}RPM, Turns, Angle now consolidated into one box, so the value can be shown larger. You toggle between them by tapping the value. You can also turn this font green by long pressing the small RPM/Turns/Angle text\
+{\listtext	\uc0\u8226 	}Increments change color depending on their value - red for the coarsest, then yellow, then green \
+{\listtext	\uc0\u8226 	}Since I can\'92t decide on which font to use for the Pitch text box, you can swap between three fonts by tapping the box\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf2 \
+
+\f0\b Push Button Wiring and Mapping
+\f1\b0 \
+Wire buttons between GROUND and the signal pin.\
+Map them in the code. Search the code for  \'93\cb3 \expnd0\expndtw0\kerning0
+PIN AND BUTTON DEFINITIONS\'94 to find the section where to do this.\
+\
+
+\f0\b Pins \
+
+\f1\b0 You can move this around but the FW has the following pin-button connections so far:\
+\pard\pardeftab720\partightenfactor0
+\cf4 \{38, B_LEFT, HIGH, HIGH, 0\}, // JOG LEFT, (Pin is marked "JB" on the PCB), orange wire on my 10 keycap plate\cb1 \
+\cb3 \{6, B_RIGHT, HIGH, HIGH, 0\}, // JOG RIGHT, (Pin is marked "JY" on the PCB), yellow wire on my 10 keycap plate\cb1 \
+\cb3 \{5, B_PLUS, HIGH, HIGH, 0\}, // PLUS, (Pin is marked "JX" on the PCB), grey wire on my 10 keycap plate\cb1 \
+\cb3 \{4, B_MINUS, HIGH, HIGH, 0\}, // MINUS, (Pin is marked "JZ" on the PCB), green wire on my 10 keycap plate\cb1 \
+\cb3 \{10, B_MODE, HIGH, HIGH, 0\}, // CYCLE THROUGH MODES (Pin is marked "IO10" on the PCB), blue wire on my 10 keycap plate\cb1 \
+\cb3 \{11, B_STEP, HIGH, HIGH, 0\}, // JOG INCREMENT (Pin is marked "IO11" on the PCB), purple1 wire on my 10 keycap plate\cb1 \
+\cb3 \{48, B_OFF, HIGH, HIGH, 0\}, // STOP (Pin is marked "Y SCALE B" on the PCB), brown wire on my 10 keycap plate\cb1 \
+\cb3 \{45, B_ON, HIGH, HIGH, 0\}, // RUN (Pin is marked "Y SCALE A" on the PCB), purple2  wire on my 10 keycap plate\cb1 \
+\cb3 \{3, B_MODE_THREAD, HIGH, HIGH, 0\}, // DRO (Pin is marked "Y PULSE B" on the PCB), white wire on my 10 keycap plate\cb1 \
+\cb3 \{46, B_STOPL, HIGH, HIGH, 0\}, // LIMIT (Pin is marked "Y PULSE A" on the PCB), red  wire on my 10 keycap plate\cb1 \
+\
+\cb3 \
+\pard\pardeftab720\partightenfactor0
+
+\f0\b \cf4 NUMPAD PINS\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0 \cf4 NUMBER 1, B_1, pin 5\
+NUMBER 2, B_2, pin 3\
+NUMBER 3, B_3, pin 46\
+NUMBER 4, B_4, pin 10\
+NUMBER 5, B_5, pin 48\
+NUMBER 6, B_6, pin 4\
+NUMBER 7, B_7, pin 11\
+NUMBER 8, B_8, pin 38\
+NUMBER 9, B_9, pin 6\
+NUMBER 0, B_0, pin 45
+\f0\b \
+\
+
+\f1\b0 \
+\pard\pardeftab720\partightenfactor0
+
+\f2 \cf5 \
+\cf6 \cb1 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f1 \cf2 \cb3 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf6 \cb1 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf2 The number is the PIN number (check the schematics.png file or see my partial list below). \
+The B_SOMETHING is the button command/function that you want to trigger. Use this list: \
+\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\b \cf2 Complete Button Commands 
+\f1\b0 (with PS/2 key references, not needed for us)
+\f0\b \
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0 \cf6 \cb3  \cf7 B_LEFT\cf6  \cf5 // Left arrow - controls Z axis movement to the left\cf6 \cb1 \
+\cb3  \cf7 B_RIGHT\cf6  \cf5 // Right arrow - controls Z axis movement to the right\cf6 \cb1 \
+\cb3  \cf7 B_UP\cf6  \cf5 // Up arrow - controls X axis movement forwards\cf6 \cb1 \
+\cb3  \cf7 B_DOWN\cf5  // Down arrow - controls X axis movement backwards\cf6 \cb1 \
+\cb3  \cf7 B_FORWARD\cf5  // u - Advance Y axis\cf6 \cb1 \
+\cb3  \cf7 B_BACK\cf5  // j - Retreat Y axis\cf6 \cb1 \
+\cb3  \cf7 B_MINUS\cf5  // Numpad minus - inrecrements the pitch or number of passes\cf6 \cb1 \
+\cb3  \cf7 B_PLUS\cf6  \cf5 // Numpad plus - increments the pitch or number of passes\cf6 \cb1 \
+\cb3  \cf7 B_ON\cf5  // Enter - starts operation or mode\cf6 \cb1 \
+\cb3  \cf7 B_OFF\cf5  // ESC - stops operation or mode\cf6 \cb1 \
+\cb3  \cf7 B_STOPL\cf5  // a - sets left stop\cf6 \cb1 \
+\cb3  \cf7 B_STOPR\cf5  // d - sets right stop\cf6 \cb1 \
+\cb3  \cf7 B_STOPU\cf5  // w - sets forward stop\cf6 \cb1 \
+\cb3  \cf7 B_STOPD\cf5  // s - sets rear stop\cf6 \cb1 \
+\cb3  \cf7 B_STOPF\cf5  // i - Y forward stop\cf6 \cb1 \
+\cb3  \cf7 B_STOPB\cf5  // k - Y backward stop\cf6 \cb1 \
+\cb3  \cf7 B_MULTISTART\cf5  // t - multi-start thread button\cf6 \cb1 \
+\cb3  \cf7 B_DISPL\cf5  // Win - changes info displayed in the bottom line (angle, rpm, ...)\cf6 \cb1 \
+\cb3  \cf7 B_STEP\cf5  // Tilda - changes distance moved when movement buttons are used\cf6 \cb1 \
+\cb3  \cf7 B_MEASURE\cf5  // m - controls metric / imperial / tpi\cf6 \cb1 \
+\cb3  \cf7 B_REVERSE\cf5  // r - changes pitch sign (left / right thread)\cf6 \cb1 \
+\cb3  \cf7 B_DIAMETER\cf5  // o - sets X0 so that centerline is at the middle of a given diameter value\cf6 \cb1 \
+\cb3  \cf7 B_0\cf5  // Numpad 0\cf6 \cb1 \
+\cb3  \cf7 B_1\cf5  // Numpad 1\cf6 \cb1 \
+\cb3  \cf7 B_2\cf5  // Numpad 2\cf6 \cb1 \
+\cb3  \cf7 B_3\cf5  // Numpad 3\cf6 \cb1 \
+\cb3  \cf7 B_4\cf5  // Numpad 4\cf6 \cb1 \
+\cb3  \cf7 B_5\cf5  // Numpad 5\cf6 \cb1 \
+\cb3  \cf7 B_6\cf5  // Numpad 6\cf6 \cb1 \
+\cb3  \cf7 B_7\cf5  // Numpad 7\cf6 \cb1 \
+\cb3  \cf7 B_8\cf5  // Numpad 8\cf6 \cb1 \
+\cb3  \cf7 B_9\cf5  // Numpad 9\cf6 \cb1 \
+\cb3  \cf7 B_BACKSPACE\cf5  // removes the last entered number\cf6 \cb1 \
+\cb3  \cf7 B_MODE_GEARS\cf5  // F1 - sets the mode to gearbox\cf6 \cb1 \
+\cb3  \cf7 B_MODE_TURN\cf5  // F2 - ...\cf6 \cb1 \
+\cb3  \cf7 B_MODE_FACE\cf5  // F3\cf6 \cb1 \
+\cb3  \cf7 B_MODE_CONE\cf5  // F4\cf6 \cb1 \
+\cb3  \cf7 B_MODE_CUT\cf5  // F5\cf6 \cb1 \
+\cb3  \cf7 B_MODE_THREAD\cf5  // F6\cf6 \cb1 \
+\cb3  \cf7 B_MODE_ASYNC\cf5  // F7\cf6 \cb1 \
+\cb3  \cf7 B_MODE_ELLIPSE\cf5  // F8\cf6 \cb1 \
+\cb3  \cf7 B_MODE_GCODE\cf5  // F9\cf6 \cb1 \
+\cb3  \cf7 B_MODE_Y\cf5  // F10\cf6 \cb1 \
+\cb3  \cf7 B_MODE\cf5  // F11 - to cycle through modes\cf6 \cb1 \
+\cb3  \cf7 B_X\cf5  // x - zeroes X axis\cf6 \cb1 \
+\cb3  \cf7 B_Z\cf5  // z - zeroes Z axis\cf6 \cb1 \
+\cb3  \cf7 B_Y\cf5  // y - zeroes Y axis\cf6 \cb1 \
+\cb3  \cf7 B_X_ENA\cf5  // c - enables / disables X axis\cf6 \cb1 \
+\cb3  \cf7 B_Z_ENA\cf5  // q - enables / disables Z axis\cf6 \cb1 \
+\cb3  \cf7 B_Y_ENA\cf5  // h - enables / disables Y axis\
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb8 \
+\pard\pardeftab720\partightenfactor0
+
+\f3\b \cf4 HEX KEY CODES FOR NEXTION DISPLAY\
+\
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0\fs24 \cf4 \outl0\strokewidth0 \strokec9  [0]  = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 00\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [1]  = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 01\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [2]  = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 02\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [3]  = B_OFF,           // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 03\strokec9  \strokec10 01\strokec9  FF FF FF      OFF (stop, cancel, delete)\
+  [4]  = B_MODE,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 04\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec12 MODE\strokec9  SELECTION\
+  [5]  = B_REVERSE,       // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 05\strokec9  \strokec10 01\strokec9  FF FF FF      REVERSE PITCH (+/- pitch)\
+  [6]  = B_MEASURE,       // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 06\strokec9  \strokec10 01\strokec9  FF FF FF      UNITS (metric, imperial, TPI)\
+  [7]  = B_STEP,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 07\strokec9  \strokec10 01\strokec9  FF FF FF      INCREMENTS - STEPS\
+  [8]  = B_DISPL,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 08\strokec9  \strokec10 01\strokec9  FF FF FF      TOGGLES RPM/TURNS/ANGLE DISPLAY\
+  [9]  = B_OFF,           // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 09\strokec9  \strokec10 01\strokec9  FF FF FF      tTurns (OUTPUT WHEN PRESSING THE TURN BOX) ???\
+  [10] = B_OFF,           // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0A \strokec10 01\strokec9  FF FF FF      tAngle (OUTPUT WHEN PRESSING THE ANGLE BOX) ???\
+  [11] = B_X_ENA,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0B \strokec10 01\strokec9  FF FF FF      ENABLE/DISABLE X AXIS \
+  [12] = B_X,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0C \strokec10 01\strokec9  FF FF FF      ZERO X\
+  [13] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0D \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [14] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0E \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [15] = B_Y_ENA,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  0F \strokec10 01\strokec9  FF FF FF      ENABLE/DISABLE Y AXIS\
+  [16] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 10\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [17] = B_Y,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 11\strokec9  \strokec10 01\strokec9  FF FF FF      ZERO Y\
+  [18] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 12\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [19] = B_Z_ENA,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 13\strokec9  \strokec10 01\strokec9  FF FF FF      ENABLE/DISABLE Z AXIS\
+  [20] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 14\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [21] = B_Z,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 15\strokec9  \strokec10 01\strokec9  FF FF FF      ZERO Z\
+  [22] = 0,               // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 16\strokec9  \strokec10 01\strokec9  FF FF FF      \strokec11 NOT\strokec9  IN USE\
+  [23] = B_OFF,           // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 17\strokec9  \strokec10 01\strokec9  FF FF FF      STOP BUTTON (not in use? B_OFF does its job?)\
+  [24] = B_BACKSPACE,     // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 18\strokec9  \strokec10 01\strokec9  FF FF FF      BACKSPACE\
+  [25] = B_ON,            // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 19\strokec9  \strokec10 01\strokec9  FF FF FF      PLAY, GO, RUN, ENTER, \strokec12 SET\strokec9 \
+  [26] = B_0,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1A \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 0\strokec9 \
+  [27] = B_1,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1B \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 1\strokec9 \
+  [28] = B_2,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1C \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 2\strokec9 \
+  [29] = B_3,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1D \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 3\strokec9 \
+  [30] = B_4,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1E \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 4\strokec9 \
+  [31] = B_5,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  1F \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 5\strokec9 \
+  [32] = B_6,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 20\strokec9  \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 6\strokec9 \
+  [33] = B_7,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 21\strokec9  \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 7\strokec9 \
+  [34] = B_8,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 22\strokec9  \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 8\strokec9 \
+  [35] = B_9,             // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 23\strokec9  \strokec10 01\strokec9  FF FF FF      NUMPAD \strokec10 9\strokec9 \
+  [36] = B_STOPU,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 24\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT UP (X)\
+  [37] = B_STOPD,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 25\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT DOWN (X)\
+  [38] = B_STOPF,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 26\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT FORWARD (Y)\
+  [39] = B_STOPB,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 27\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT BACK (Y)\
+  [40] = B_STOPL,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 28\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT LEFT (Z)\
+  [41] = B_STOPR,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 29\strokec9  \strokec10 01\strokec9  FF FF FF      STOP/LIMIT RIGHT (Z)\
+  [42] = B_PLUS,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2A \strokec10 01\strokec9  FF FF FF      + (PLUS)\
+  [43] = B_MINUS,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2B \strokec10 01\strokec9  FF FF FF      - (MINUS)\
+  [44] = B_UP,            // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2C \strokec10 01\strokec9  FF FF FF      JOG UP (X)\
+  [45] = B_DOWN,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2D \strokec10 01\strokec9  FF FF FF      JOG DOWN (X)\
+  [46] = B_FORWARD,       // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2E \strokec10 01\strokec9  FF FF FF      JOG FORWARD (Y)\
+  [47] = B_BACK,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  2F \strokec10 01\strokec9  FF FF FF      JOG BACK (Y)\
+  [48] = B_LEFT,          // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 30\strokec9  \strokec10 01\strokec9  FF FF FF      JOG LEFT (Z)\
+  [49] = B_RIGHT,         // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 31\strokec9  \strokec10 01\strokec9  FF FF FF      JOG RIGHT (Z)\
+  [50] = B_MULTISTART,    // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 32\strokec9  \strokec10 01\strokec9  FF FF FF      MULTI \strokec12 START\strokec9  THREAD\
+  [51] = B_KNOWN_DIA,     // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 33\strokec9  \strokec10 01\strokec9  FF FF FF      DRO, setting the workpiece diameter\
+  [52] = B_KNOWN_LENGTH,  // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 34\strokec9  \strokec10 01\strokec9  FF FF FF      DRO, setting a Z\
+  [53] = B_DIA_RAD,       // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 35\strokec9  \strokec10 01\strokec9  FF FF FF      DRO, dia/rad - switching between diameter and radius \strokec12 mode\strokec9 \
+  [54] = B_ABS_INC,       // printh \strokec10 65\strokec9  \strokec10 00\strokec9  \strokec10 36\strokec9  \strokec10 01\strokec9  FF FF FF      DRO, abs/inc - switching between absolute and incremental \strokec12 mode\strokec9 \
+\pard\pardeftab720\partightenfactor0
+
+\f3\b\fs26 \cf5 \cb3 \outl0\strokewidth0 \
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0 \cf5 \
+\
+\pard\pardeftab720\partightenfactor0
+
+\f1 \cf2 \
+
+\f0\b Pinout List\
+
+\f1\b0 This is just my personal list. Your pin availability will depend on which peripherals you end up \
+using. I wont use any Y-stuff nor the joystick, so my list of potential pins to attach buttons to\
+looks like this: \
+\
+\pard\pardeftab720\sl288\slmult1\partightenfactor0
+
+\f4\b \cf2 Misc Port
+\f5\b0 \
+10, IO10\
+11, IO11 \
+\
+
+\f4\b Joy Signal
+\f5\b0 \cb1 \uc0\u8232 \cb3 4: Joy Z, JZ\cb1 \uc0\u8232 \cb3 5: Joy X, JX\cb1 \uc0\u8232 \cb3 6: Joy Y, JY\cb1 \uc0\u8232 \cb3 38: (Joy button), JB\
+\
+
+\f4\b Y Scale
+\f5\b0 \cb1 \uc0\u8232 \cf13 \cb3 45: Y Scale A \cf2 \cb1 \uc0\u8232 \cb3 48: Y Scale B\
+\
+
+\f4\b Y Pulse
+\f5\b0 \cb1 \uc0\u8232 \cf13 \cb3 46: Y Pulse A\cb1 \uc0\u8232 \cb3 3: Y Pulse B\
+\cf2 \
+
+\f4\b Y Stepper
+\f5\b0 \cb1 \uc0\u8232 \cb3 1: Y ENA \cb1 \uc0\u8232 \cb3 2: Y DIR \cb1 \uc0\u8232 \cb3 17: Y STEP\
+_______________\
+
+\f4\b Other Pins which I can possibly use\
+
+\f5\b0 \
+
+\f4\b \
+
+\f1\b0 \
+\pard\pardeftab720\sl288\slmult1\partightenfactor0
+
+\f4\b \cf2 X Pulse (Should work, as Y-PUL works for other signals
+\f5\b0 \cb1 \uc0\u8232 \cf4 \cb3 47: X Pulse A\cb1 \uc0\u8232 \cb3 21: X Pulse B\
+\
+
+\f4\b \cf2 Keyboard (Best to keep for backup)\
+
+\f5\b0 36: Key CLK
+\f4\b \
+
+\f5\b0 37: Key DATA\cf4 \
+\cf2 \
+
+\f4\b X Stepper (DIDN\'92T WORK WHEN FIRST TRYING)
+\f5\b0 \cb1 \uc0\u8232 \cb3 16: X ENA \cb1 \uc0\u8232 \cb3 15: X DIR \cb1 \uc0\u8232 \cb3 7: X STEP
+\f1 \
+\pard\pardeftab720\sa320\partightenfactor0
+\cf2 \
+
+\f0\b \
+
+\f1\b0 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf14 Of these pins, 3, 45 & 46 are\'a0
+\f6\i strapping pins
+\f1\i0 \'a0so if a button is connected to any of these, make sure it's not being pushed during boot as it can mess with the ESP32. Once booted, they are all fine.\cf2 \
+\pard\pardeftab720\sa320\partightenfactor0
+\cf2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb1 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf2 \
+}
