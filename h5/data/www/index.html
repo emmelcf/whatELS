@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NanoEls H5</title>
+  <link rel="icon" href="data:;base64,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <nav class="section-tabs" aria-label="Main sections">
+      <a href="#control" data-section-link="control">Control</a>
+      <a href="#gcode" data-section-link="gcode">GCode</a>
+      <a href="#updates" data-section-link="updates">Updates</a>
+      <a href="#wifi" data-section-link="wifi">WiFi</a>
+      <a href="#ui" data-section-link="ui">UI</a>
+      <a href="#settings" data-section-link="settings">Settings</a>
+      <a href="#keyboard" data-section-link="keyboard">Keyboard</a>
+      <a href="#logs" data-section-link="logs">Logs</a>
+    </nav>
+
+    <main>
+      <section id="section-control" class="app-section" data-section="control">
+        <div class="section-stack control-stack">
+          <section id="control-status" class="panel control-status-panel" aria-label="Controller status">
+            <div class="control-status-grid">
+              <div class="control-status-item control-status-button" data-control-shortcut-panel="modes" role="button" tabindex="0" aria-label="Open Modes">
+                <span class="control-status-label">Mode</span>
+                <span id="control-mode" class="control-status-value">--</span>
+                <span id="control-mode-pitch" class="control-mode-pitch">--</span>
+              </div>
+              <div class="control-status-item control-status-button" data-control-shortcut-action="88" data-control-shortcut-label="Zero X" role="button" tabindex="0" aria-label="Zero X">
+                <span class="control-status-label">X</span>
+                <span id="control-x" class="control-status-value">--</span>
+                <span id="control-x-inline-stops" class="control-axis-stops">--</span>
+              </div>
+              <div class="control-status-item control-status-button" data-control-shortcut-action="90" data-control-shortcut-label="Zero Z" role="button" tabindex="0" aria-label="Zero Z">
+                <span class="control-status-label">Z</span>
+                <span id="control-z" class="control-status-value">--</span>
+                <span id="control-z-inline-stops" class="control-axis-stops">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-y" data-control-shortcut-action="72" data-control-shortcut-label="Zero Y" role="button" tabindex="0" aria-label="Zero Y" hidden>
+                <span class="control-status-label">Y</span>
+                <span id="control-y" class="control-status-value">--</span>
+                <span id="control-y-inline-stops" class="control-axis-stops">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="OFF" role="button" tabindex="0" aria-label="Stop controller">
+                <span class="control-status-label">State</span>
+                <span id="control-state" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="82" data-control-shortcut-label="Reverse" role="button" tabindex="0" aria-label="Reverse pitch">
+                <span class="control-status-label">Pitch</span>
+                <span id="control-pitch" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="77" data-control-shortcut-label="Units" role="button" tabindex="0" aria-label="Change units">
+                <span class="control-status-label">Units</span>
+                <span id="control-measure" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="64" data-control-shortcut-label="Step" role="button" tabindex="0" aria-label="Change step">
+                <span class="control-status-label">Step</span>
+                <span id="control-step" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="Stop" role="button" tabindex="0" aria-label="Zero turns and angle">
+                <span class="control-status-label">Turns</span>
+                <span id="control-turns" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="Stop" role="button" tabindex="0" aria-label="Zero turns and angle">
+                <span class="control-status-label">Angle</span>
+                <span id="control-angle" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-status-extra">
+                <span class="control-status-label">RPM</span>
+                <span id="control-rpm" class="control-status-value">--</span>
+              </div>
+              <div class="control-status-item control-message control-extra-toggle" data-control-extra-toggle role="button" tabindex="0" aria-label="Show or hide controller details" aria-expanded="false">
+                <div class="control-message-heading">
+                  <span class="control-status-label">Message</span>
+                  <span class="control-action-status" data-control-action-status role="status" aria-live="polite"></span>
+                </div>
+                <span id="control-message" class="control-status-value">--</span>
+              </div>
+            </div>
+          </section>
+
+          <div class="control-mobile-tabs" role="tablist" aria-label="Control groups">
+            <button type="button" class="control-mobile-tab active" data-control-panel-tab="jog">Jog</button>
+            <button type="button" class="control-mobile-tab" data-control-panel-tab="run">Run</button>
+            <button type="button" class="control-mobile-tab" data-control-panel-tab="numpad">Numpad</button>
+            <button type="button" class="control-mobile-tab" data-control-panel-tab="stops">Stops</button>
+            <button type="button" class="control-mobile-tab" data-control-panel-tab="modes">Modes</button>
+          </div>
+          <div class="control-grid">
+            <section class="panel control-panel active" data-control-panel="jog">
+              <h3>Jog</h3>
+              <div class="control-jog-grid">
+                <button type="button" class="control-button hold control-jog-arrow control-jog-up" data-control-action="23" data-control-hold="1" data-control-label="X Forward" aria-label="Jog X forward" title="X Forward">
+                  <span class="control-jog-symbol">↑</span>
+                  <span class="control-jog-axis">X</span>
+                </button>
+                <button type="button" class="control-button hold control-jog-arrow control-jog-left" data-control-action="21" data-control-hold="1" data-control-label="Z Left" aria-label="Jog Z left" title="Z Left">
+                  <span class="control-jog-symbol">←</span>
+                  <span class="control-jog-axis">Z</span>
+                </button>
+                <div class="control-jog-center" aria-hidden="true"></div>
+                <button type="button" class="control-button hold control-jog-arrow control-jog-right" data-control-action="22" data-control-hold="1" data-control-label="Z Right" aria-label="Jog Z right" title="Z Right">
+                  <span class="control-jog-symbol">→</span>
+                  <span class="control-jog-axis">Z</span>
+                </button>
+                <button type="button" class="control-button hold control-jog-arrow control-jog-down" data-control-action="24" data-control-hold="1" data-control-label="X Back" aria-label="Jog X back" title="X Back">
+                  <span class="control-jog-symbol">↓</span>
+                  <span class="control-jog-axis">X</span>
+                </button>
+                <button type="button" class="control-button hold control-jog-arrow control-jog-y-forward control-y" data-control-action="85" data-control-hold="1" data-control-label="Y Forward" aria-label="Jog Y forward" title="Y Forward" hidden>
+                  <span class="control-jog-symbol">↑</span>
+                  <span class="control-jog-axis">Y</span>
+                </button>
+                <button type="button" class="control-button hold control-jog-arrow control-jog-y-back control-y" data-control-action="74" data-control-hold="1" data-control-label="Y Back" aria-label="Jog Y back" title="Y Back" hidden>
+                  <span class="control-jog-symbol">↓</span>
+                  <span class="control-jog-axis">Y</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="panel control-panel" data-control-panel="run">
+              <h3>Operation</h3>
+              <div class="control-button-grid">
+                <button type="button" class="control-button" data-control-action="30">ON</button>
+                <button type="button" class="control-button danger" data-control-action="27">OFF</button>
+                <button type="button" class="control-button neutral" data-control-action="64">Step</button>
+                <button type="button" class="control-button" data-control-action="95">Plus</button>
+                <button type="button" class="control-button" data-control-action="60">Minus</button>
+                <button type="button" class="control-button neutral" data-control-action="82">Reverse</button>
+                <button type="button" class="control-button neutral" data-control-action="77">Units</button>
+                <button type="button" class="control-button neutral" data-control-action="12">Display</button>
+                <button type="button" class="control-button neutral" data-control-action="84">Starts</button>
+              </div>
+            </section>
+
+            <section class="panel control-panel" data-control-panel="numpad">
+              <h3>Numpad</h3>
+              <div class="control-numpad">
+                <button type="button" class="control-button neutral" data-control-action="49">1</button>
+                <button type="button" class="control-button neutral" data-control-action="50">2</button>
+                <button type="button" class="control-button neutral" data-control-action="51">3</button>
+                <button type="button" class="control-button neutral" data-control-action="52">4</button>
+                <button type="button" class="control-button neutral" data-control-action="53">5</button>
+                <button type="button" class="control-button neutral" data-control-action="54">6</button>
+                <button type="button" class="control-button neutral" data-control-action="55">7</button>
+                <button type="button" class="control-button neutral" data-control-action="56">8</button>
+                <button type="button" class="control-button neutral" data-control-action="57">9</button>
+                <button type="button" class="control-button neutral" data-control-action="48">0</button>
+                <button type="button" class="control-button neutral control-wide" data-control-action="28">Backspace</button>
+              </div>
+            </section>
+
+            <section class="panel control-panel" data-control-panel="stops">
+              <h3>Stops and Axes</h3>
+              <div class="control-button-grid">
+                <button type="button" class="control-button warning" data-control-action="65">Z Left Stop</button>
+                <button type="button" class="control-button warning" data-control-action="68">Z Right Stop</button>
+                <button type="button" class="control-button neutral" data-control-action="90">Zero Z</button>
+                <button type="button" class="control-button warning" data-control-action="87">X Forward Stop</button>
+                <button type="button" class="control-button warning" data-control-action="83">X Rear Stop</button>
+                <button type="button" class="control-button neutral" data-control-action="88">Zero X</button>
+                <button type="button" class="control-button warning control-y" data-control-action="73" hidden>Y Forward Stop</button>
+                <button type="button" class="control-button warning control-y" data-control-action="75" hidden>Y Back Stop</button>
+                <button type="button" class="control-button neutral control-y" data-control-action="72" hidden>Zero Y</button>
+                <button type="button" class="control-button neutral" data-control-action="81">Enable Z</button>
+                <button type="button" class="control-button neutral" data-control-action="67">Enable X</button>
+                <button type="button" class="control-button neutral control-y" data-control-action="89" hidden>Enable Y</button>
+                <button type="button" class="control-button neutral" data-control-action="79">Diameter</button>
+              </div>
+            </section>
+
+            <section class="panel control-panel" data-control-panel="modes">
+              <h3>Modes</h3>
+              <div class="control-button-grid">
+                <button type="button" class="control-button mode" data-control-action="97">Gear</button>
+                <button type="button" class="control-button mode" data-control-action="109">XGear</button>
+                <button type="button" class="control-button mode" data-control-action="108">Joy</button>
+                <button type="button" class="control-button mode" data-control-action="98">Turn</button>
+                <button type="button" class="control-button mode" data-control-action="99">Face</button>
+                <button type="button" class="control-button mode" data-control-action="100">Cone</button>
+                <button type="button" class="control-button mode" data-control-action="101">Cut</button>
+                <button type="button" class="control-button mode" data-control-action="110">Slot</button>
+                <button type="button" class="control-button mode" data-control-action="102">Thread</button>
+                <button type="button" class="control-button mode" data-control-action="104">Ellip</button>
+                <button type="button" class="control-button mode" data-control-action="105">GCode</button>
+                <button type="button" class="control-button mode" data-control-action="103">Async</button>
+                <button type="button" class="control-button mode control-y" data-control-action="106" hidden>Y</button>
+              </div>
+            </section>
+          </div>
+          <div class="control-bottom-bar">
+            <button type="button" id="control-fullscreen" class="control-button control-fullscreen-button" aria-label="Fullscreen">Full</button>
+            <div class="control-bottom-state control-status-button" data-control-shortcut-action="27" data-control-shortcut-label="OFF" role="button" tabindex="0" aria-label="Stop controller">
+              <span class="control-status-label">State</span>
+              <span id="control-bottom-state" class="control-status-value">--</span>
+            </div>
+            <div class="control-bottom-rpm">
+              <span class="control-status-label">RPM</span>
+              <span id="control-bottom-rpm" class="control-status-value">--</span>
+            </div>
+            <button type="button" class="control-button control-bottom-button" data-control-action="30">ON</button>
+            <button type="button" class="control-button control-bottom-button danger" data-control-action="27">OFF</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-gcode" class="app-section" data-section="gcode">
+        <div class="section-stack">
+          <section class="panel">
+            <h3>Stored GCode</h3>
+            <div id="gcode-list"></div>
+            <p id="free-space"></p>
+          </section>
+          <section class="panel">
+            <h3>Add GCode</h3>
+            <p class="section-note">Generate compatible files with <a href="https://kachurovskiy.com/lathecode/" target="_blank">lathecode</a>.</p>
+            <input type="text" id="gcode-name" placeholder="GCode name" required minlength="2">
+            <textarea id="gcode-content" placeholder="GCode content" required minlength="2"></textarea>
+            <div class="checkbox-container">
+              <button id="add-gcode">Save</button>
+              <input type="checkbox" id="remove-comments" checked>
+              <label for="remove-comments">Remove comments before saving</label>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="section-updates" class="app-section" data-section="updates">
+        <div class="section-header">
+          <p class="section-note">Keep this page open until an upload finishes.</p>
+        </div>
+        <div class="section-stack">
+          <section class="panel">
+            <h3>Nextion TFT Upload</h3>
+            <div id="tft-upload-controls">
+              <label for="tft-file" id="tft-browse" class="button-like">Browse</label>
+              <input type="file" id="tft-file" accept=".tft">
+              <input type="checkbox" id="tft-first-upload" checked>
+              <label for="tft-first-upload">First upload / factory display (9600 baud)</label>
+            </div>
+            <progress id="tft-progress" value="0" max="100" hidden></progress>
+            <p id="tft-status"></p>
+          </section>
+          <section class="panel">
+            <h3>ESP32 Firmware Upload</h3>
+            <div id="firmware-upload-controls">
+              <label for="firmware-file" id="firmware-browse" class="button-like">Browse</label>
+              <input type="file" id="firmware-file" accept=".bin,application/octet-stream">
+            </div>
+            <progress id="firmware-progress" value="0" max="100" hidden></progress>
+            <p id="firmware-status"></p>
+          </section>
+        </div>
+      </section>
+
+      <section id="section-wifi" class="app-section" data-section="wifi">
+        <form id="wifi-form" class="config-section">
+          <div class="config-grid">
+            <label class="config-checkbox" for="wifi-enabled">
+              <input type="checkbox" id="wifi-enabled">
+              <span>WiFi enabled</span>
+            </label>
+            <label class="config-field" for="wifi-ssid">
+              <span>Network name</span>
+              <input type="text" id="wifi-ssid" maxlength="32" autocomplete="off">
+            </label>
+            <label class="config-field" for="wifi-password">
+              <span>Password</span>
+              <input type="password" id="wifi-password" maxlength="63" autocomplete="new-password" placeholder="Leave unchanged">
+            </label>
+            <label class="config-checkbox" for="wifi-clear-password">
+              <input type="checkbox" id="wifi-clear-password">
+              <span>Clear saved password</span>
+            </label>
+          </div>
+          <div class="config-actions">
+            <button id="save-wifi" type="submit">Save and restart</button>
+            <button id="reset-wifi" type="button" class="secondary">Forget network</button>
+            <span id="wifi-status" class="action-status" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section id="section-ui" class="app-section" data-section="ui">
+        <div class="section-stack">
+          <details class="config-section settings-group accessibility-settings" open>
+            <summary>Accessibility (7)</summary>
+            <div class="config-grid">
+              <label class="config-checkbox" for="accessibility-voice-feedback">
+                <input type="checkbox" id="accessibility-voice-feedback">
+                <span>Voice feedback</span>
+              </label>
+              <label class="config-checkbox" for="accessibility-announce-buttons">
+                <input type="checkbox" id="accessibility-announce-buttons">
+                <span>Announce button presses</span>
+              </label>
+              <label class="config-checkbox" for="accessibility-announce-status">
+                <input type="checkbox" id="accessibility-announce-status">
+                <span>Announce controller status changes</span>
+              </label>
+              <label class="config-checkbox" for="accessibility-announce-warnings">
+                <input type="checkbox" id="accessibility-announce-warnings">
+                <span>Announce warnings and errors</span>
+              </label>
+              <label class="config-checkbox" for="accessibility-announce-axis">
+                <input type="checkbox" id="accessibility-announce-axis">
+                <span>Announce axis position changes</span>
+              </label>
+              <label class="config-checkbox" for="accessibility-quiet-hold">
+                <input type="checkbox" id="accessibility-quiet-hold">
+                <span>Quiet while holding jog buttons</span>
+              </label>
+              <label class="config-field" for="accessibility-speech-rate">
+                <span class="config-label">Speech speed</span>
+                <select id="accessibility-speech-rate">
+                  <option value="1">1x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2x</option>
+                  <option value="3">3x</option>
+                </select>
+              </label>
+            </div>
+            <div class="config-actions">
+              <button id="accessibility-test-voice" type="button" class="secondary">Test voice</button>
+              <span id="accessibility-status" class="action-status" role="status" aria-live="polite"></span>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section id="section-settings" class="app-section" data-section="settings">
+        <form id="config-form">
+          <div id="config-fields"></div>
+          <div class="config-actions sticky-actions">
+            <button id="save-config" type="submit">Save and restart</button>
+            <button id="reset-config" type="button" class="secondary">Reset defaults</button>
+            <span id="config-status" class="action-status" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section id="section-keyboard" class="app-section" data-section="keyboard">
+        <form id="keyboard-form">
+          <section class="config-section">
+            <label class="config-checkbox" for="keyboard-show-keys">
+              <input type="checkbox" id="keyboard-show-keys">
+              <span>Show key presses on screen</span>
+            </label>
+            <small class="config-help">Last physical key code: <span id="keyboard-last-key">none</span></small>
+          </section>
+          <div id="keyboard-fields"></div>
+          <div class="config-actions sticky-actions">
+            <button id="save-keyboard" type="submit">Save keyboard</button>
+            <button id="reset-keyboard" type="button" class="secondary">Reset keyboard</button>
+            <span id="keyboard-status" class="action-status" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section id="section-logs" class="app-section" data-section="logs">
+        <div id="log"></div>
+        <div id="command-container">
+          <input type="text" id="command" placeholder="Enter command" value="?" minlength="1" required>
+          <button id="send">Send</button>
+        </div>
+        <details class="panel">
+          <summary>Supported websocket commands</summary>
+          <ul>
+            <li><code>?</code> requests controller status</li>
+            <li><code>@21:1</code> presses direct action code 21; <code>@21:0</code> releases it without keyboard remapping</li>
+            <li><code>=20</code> sends key code 20 as if it is pressed on the keyboard</li>
+            <li><code>!</code> turns the controller off</li>
+            <li><code>~</code> turns the controller on</li>
+            <li><code>""</code> removes all GCode</li>
+          </ul>
+        </details>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>NanoEls )rawliteral" CONTROLLER_VERSION_TEXT R"rawliteral(. Trusted local network only. Stop the controller before uploads or settings changes.</p>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

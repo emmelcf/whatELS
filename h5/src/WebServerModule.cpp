@@ -7,7 +7,6 @@
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
-#include "index.html.h"
 
 CircleBuffer inBuffer = {};
 CircleBuffer outBuffer = {};
@@ -781,10 +780,16 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
 }
 
 static void handleClientRequests() {
+  File file = LittleFS.open("/www/index.html", "r");
+  if (!file) {
+    server.send(404, "text/plain", "Web UI not found on LittleFS");
+    return;
+  }
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.sendHeader("Pragma", "no-cache");
   server.sendHeader("Expires", "0");
-  server.send_P(200, PSTR("text/html"), indexhtml);
+  server.streamFile(file, "text/html");
+  file.close();
 }
 
 int getGcodeProgramCount() {
@@ -1522,6 +1527,7 @@ void taskWiFi(void *param) {
   webBuffersReady = true;
 
   registerWebRoutes();
+  server.serveStatic("/", LittleFS, "/www/");
   server.begin();
 
   webSocket.begin();
