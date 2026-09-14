@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lvgl>
+    <!-- Define shared resources here (images, fonts, styles, and constants) -->
+    <!-- The LVGL Editor will use this file as a global registry for your UI project -->
+</lvgl>
