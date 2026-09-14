@@ -2,5 +2,8 @@
     "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf",
     "files.associations": {
         "*.html.h": "html"
-    }
+    },
+    "clangd.arguments": [
+        "--query-driver=**"
+    ]
 }

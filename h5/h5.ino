@@ -235,6 +235,24 @@ const int GCODE_MIN_RPM = 30; // pause GCode execution if RPM is below this
 #define KEY_DATA 37
 #define KEY_CLOCK 36
 
+// --- DRO SCALES ON X/Z ---
+#define X_SCALE_PIN_A 32 // Adjust as needed
+#define X_SCALE_PIN_B 33 // Adjust as needed
+#define X_SCALE_PCNT_UNIT PCNT_UNIT_3
+
+#define Z_SCALE_PIN_A 25 // Adjust as needed
+#define Z_SCALE_PIN_B 26 // Adjust as needed
+#define Z_SCALE_PCNT_UNIT PCNT_UNIT_1
+
+bool zDisplayModeDRO = false; // true=Show Z-Scale, false=Show Z-Stepper
+bool xDisplayModeDRO = false; // true=Show X-Scale, false=Show X-Stepper
+
+bool isDiameterMode = true;
+bool isAbsoluteMode = true;
+
+#define COLOR_DRO_ON 2016
+#define COLOR_DRO_OFF 25388
+
 const bool DEFAULT_SHOW_KEY_PRESSES = false;
 bool SHOW_KEY_PRESSES = DEFAULT_SHOW_KEY_PRESSES;
 
@@ -276,7 +294,11 @@ bool SHOW_KEY_PRESSES = DEFAULT_SHOW_KEY_PRESSES;
 #define B_MODE_FACE 99 // F3
 #define B_MODE_CONE 100 // F4
 #define B_MODE_CUT 101 // F5
-#define B_MODE_THREAD 102 // F6
+#define B_MODE_SLOT 102 // F6
+#define B_X_TOGGLE_DRO 206 // Nextion Touch ID for X DRO toggle
+#define B_Z_TOGGLE_DRO 207 // Nextion Touch ID for Z DRO toggle
+#define B_DIA_RAD 202      // Nextion Touch ID for Dia/Rad toggle
+#define B_ABS_INC 203      // Nextion Touch ID for Abs/Inc toggle
 #define B_MODE_ASYNC 103 // F7
 #define B_MODE_ELLIPSE 104 // F8
 #define B_MODE_GCODE 105 // F9
@@ -522,6 +544,11 @@ struct CircleBuffer {
   size_t size;
 };
 
+#ifndef _CLOCKID_T_DECLARED
+typedef int clockid_t;
+#define _CLOCKID_T_DECLARED
+#endif
+
 #include <FS.h>
 #include <LittleFS.h>
 #include <WiFi.h>
@@ -532,6 +559,12 @@ struct CircleBuffer {
 #include <Preferences.h>
 #include <PS2KeyAdvanced.h> // install via Libraries as "PS2KeyAdvanced"
 #include <soc/soc.h>
+
+#include "DRO_Scale.h"
+
+DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, ENCODER_STEPS_FLOAT / SCREW_X_DU * 10000, 100);
+DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, ENCODER_STEPS_FLOAT / SCREW_Z_DU * 10000, 100);
+
 
 const long NEXTION_NORMAL_BAUD = 115200;
 const long NEXTION_FIRST_UPLOAD_BAUD = 9600;
@@ -3446,7 +3479,10 @@ void updateDisplay() {
   long newHashLine2 =
     x.pos + x.originPos + x.disabled + x.leftStop - x.rightStop +
     z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop +
-    y.pos + y.originPos + y.disabled + y.leftStop - y.rightStop + measure + x.pos % 100;
+    y.pos + y.originPos + y.disabled + y.leftStop - y.rightStop + measure + x.pos % 100 +
+    (xDisplayModeDRO ? (long)(xScale.getRawPosition() * 1000) : 0) +
+    (zDisplayModeDRO ? (long)(zScale.getRawPosition() * 1000) : 0) +
+    isDiameterMode + isAbsoluteMode + xDisplayModeDRO + zDisplayModeDRO;
   bool updateLine2 = lcdHashLine2 != newHashLine2;
   String xText = "";
   String xLeftText = "";
@@ -3458,13 +3494,24 @@ void updateDisplay() {
   String zLeftText = "";
   String zRightText = "";
   if (updateLine2 || publishStatus) {
-    xText = !x.active || x.disabled ? "" : printAxisPos(&x);
+    if (xDisplayModeDRO) {
+      float xVal = xScale.getPosition();
+      if (isDiameterMode) xVal *= 2.0;
+      xText = !x.active || x.disabled ? "" : (measure != MEASURE_METRIC ? String(xVal / 25.4, 3) : String(xVal, 2));
+    } else {
+      xText = !x.active || x.disabled ? "" : printAxisPos(&x);
+    }
     xLeftText = !x.active || x.disabled ? "" : printDistanceToLeftStop(&x);
     xRightText = !x.active || x.disabled ? "" : printDistanceToRightStop(&x);
     yText = !y.active || y.disabled ? "" : printAxisPos(&y);
     yLeftText = !y.active || y.disabled ? "" : printDistanceToLeftStop(&y);
     yRightText = !y.active || y.disabled ? "" : printDistanceToRightStop(&y);
-    zText = !z.active || z.disabled ? "" : printAxisPos(&z);
+    if (zDisplayModeDRO) {
+      float zVal = zScale.getPosition();
+      zText = !z.active || z.disabled ? "" : (measure != MEASURE_METRIC ? String(zVal / 25.4, 3) : String(zVal, 2));
+    } else {
+      zText = !z.active || z.disabled ? "" : printAxisPos(&z);
+    }
     zLeftText = !z.active || z.disabled ? "" : printDistanceToLeftStop(&z);
     zRightText = !z.active || z.disabled ? "" : printDistanceToRightStop(&z);
   }
@@ -5855,6 +5902,18 @@ void processKeypadEvent() {
     setModeFromUi(MODE_SLOT, eventFromNextion);
   } else if (keyCode == B_MODE_THREAD) {
     setModeFromUi(MODE_THREAD, eventFromNextion);
+  } else if (keyCode == B_X_TOGGLE_DRO) {
+    xDisplayModeDRO = !xDisplayModeDRO;
+    beep();
+  } else if (keyCode == B_Z_TOGGLE_DRO) {
+    zDisplayModeDRO = !zDisplayModeDRO;
+    beep();
+  } else if (keyCode == B_DIA_RAD) {
+    isDiameterMode = !isDiameterMode;
+    beep();
+  } else if (keyCode == B_ABS_INC) {
+    isAbsoluteMode = !isAbsoluteMode;
+    beep();
   }
 }
 
@@ -6567,6 +6626,9 @@ void setup() {
   loadMachineConfig();
   loadWifiConfig();
   loadKeyboardConfig();
+
+  xScale.attach();
+  zScale.attach();
 
   pinMode(ENC_A, INPUT_PULLUP);
   pinMode(ENC_B, INPUT_PULLUP);

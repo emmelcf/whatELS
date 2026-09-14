@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - "-include"
+    - "Arduino.h"
+    - "-D_GNU_SOURCE"
+  Remove:
+    - "-f*"
+    - "-m*"
