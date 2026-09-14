@@ -89,11 +89,11 @@ const char NAME_Y = 'Y';
 // DRO Scales on X and Z
 #define X_SCALE_PIN_A (gpio_num_t)32
 #define X_SCALE_PIN_B (gpio_num_t)33
-#define X_SCALE_PCNT_UNIT PCNT_UNIT_3
+#define X_SCALE_PCNT_UNIT PCNT_UNIT_2
 
 #define Z_SCALE_PIN_A (gpio_num_t)25
 #define Z_SCALE_PIN_B (gpio_num_t)26
-#define Z_SCALE_PCNT_UNIT PCNT_UNIT_1
+#define Z_SCALE_PCNT_UNIT PCNT_UNIT_3
 
 #define COLOR_DRO_ON 2016
 #define COLOR_DRO_OFF 25388
@@ -268,6 +268,15 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define B_Z_TOGGLE_DRO 207
 #define B_DIA_RAD 202
 #define B_ABS_INC 203
+#define B_KNOWN_DIA 204
+#define B_KNOWN_LENGTH 205
+#define B_VERSION 208
+#define B_SPINDLE_UNITS 209
+#define B_PITCH 210
+
+enum NumpadMode { PITCH, DIAMETER, LENGTH };
+extern NumpadMode numpadEntryMode;
+
 #define B_MODE_ASYNC 103
 #define B_MODE_ELLIPSE 104
 #define B_MODE_GCODE 105
@@ -497,6 +506,10 @@ extern bool zDisplayModeDRO;
 extern bool xDisplayModeDRO;
 extern bool isDiameterMode;
 extern bool isAbsoluteMode;
+extern bool savedZDisplayModeDRO;
+extern bool savedXDisplayModeDRO;
+extern bool savedIsDiameterMode;
+extern bool savedIsAbsoluteMode;
 extern float xScaleIncrementalOffset;
 extern float zScaleIncrementalOffset;
 

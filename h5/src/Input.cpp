@@ -66,10 +66,15 @@ String joystickStartupWarning = "";
 static unsigned long multistartPressMillis = 0;
 
 // Numpad implementation
+bool numpadNegative = false;
+
 long getNumpadResult() {
   long result = 0;
   for (int i = 0; i < numpadIndex; i++) {
     result = result * 10 + numpadDigits[i];
+  }
+  if (numpadNegative) {
+    result = -result;
   }
   return result;
 }
@@ -95,6 +100,7 @@ long numpadToDeciMicrons() {
 
 void resetNumpad() {
   numpadIndex = 0;
+  numpadNegative = false;
 }
 
 void trimLeadingNumpadZeros() {
@@ -168,6 +174,46 @@ bool processNumpadResult(int keyCode) {
   resetNumpad();
   // Ignore numpad input unless confirmed with ON.
   if (keyCode == B_ON) {
+    if (numpadEntryMode == DIAMETER) {
+      float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
+      float desiredValue = numpadResult / divisor;
+
+      if (xDisplayModeDRO) {
+        desiredValue /= 2.0f;
+        if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
+        xScale.setPosition(desiredValue);
+      } else {
+        float targetRadiusMm = desiredValue / 2.0f;
+        if (measure != MEASURE_METRIC) targetRadiusMm = (desiredValue * 25.4f) / 2.0f;
+        
+        long targetSteps = round((targetRadiusMm * 10000.0f) * x.motorSteps / x.screwPitch);
+        
+        // Fix for wrong direction bug: Motorized X-axis should set origin such that getAxisPosDu aligns with target
+        // getAxisPosDu = stepsToDu(x.pos + x.originPos)
+        // targetRadiusMm * 10000.0f is the du value.
+        // stepsToDu(x.pos + originPos) = targetRadiusMm * 10000.0f
+        // x.pos + originPos = targetSteps
+        x.originPos = targetSteps - x.pos;
+      }
+      numpadEntryMode = PITCH;
+      return true;
+    } else if (numpadEntryMode == LENGTH) {
+      float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
+      float desiredValue = numpadResult / divisor;
+
+      if (zDisplayModeDRO) {
+        if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
+        zScale.setPosition(desiredValue);
+      } else {
+        float targetMm = desiredValue;
+        if (measure != MEASURE_METRIC) targetMm = desiredValue * 25.4f;
+        long targetSteps = round((targetMm * 10000.0f) * z.motorSteps / z.screwPitch);
+        z.originPos = targetSteps - z.pos;
+      }
+      numpadEntryMode = PITCH;
+      return true;
+    }
+    
     if (isPassMode() && setupIndex == 1) {
       setTurnPasses(int(min((long)PASSES_MAX, numpadResult)));
       setupIndex++;
@@ -294,6 +340,10 @@ bool processNumpad(int keyCode) {
     numpadBackspace();
     inNumpad = true;
   } else if (inNumpad && (keyCode == B_PLUS || keyCode == B_MINUS)) {
+    if (numpadIndex == 0 && keyCode == B_MINUS) {
+      numpadNegative = !numpadNegative;
+      return true;
+    }
     numpadPlusMinus(keyCode == B_PLUS);
     return true;
   } else if (inNumpad) {
@@ -743,7 +793,7 @@ static const byte HEX_TO_KEYCODE[256] = {
   [10] = B_OFF, // tAngle
   [11] = B_X_ENA,
   [12] = B_X,
-  [13] = 0,
+  [13] = B_X_TOGGLE_DRO,
   [14] = 0,
   [15] = B_Y_ENA,
   [16] = 0,
@@ -752,7 +802,7 @@ static const byte HEX_TO_KEYCODE[256] = {
   [19] = B_Z_ENA,
   [20] = 0,
   [21] = B_Z,
-  [22] = 0,
+  [22] = B_Z_TOGGLE_DRO,
   [23] = B_OFF,
   [24] = B_BACKSPACE,
   [25] = B_ON,
@@ -781,6 +831,13 @@ static const byte HEX_TO_KEYCODE[256] = {
   [48] = B_LEFT,
   [49] = B_RIGHT,
   [50] = B_MULTISTART,
+  [51] = B_KNOWN_DIA,
+  [52] = B_KNOWN_LENGTH,
+  [53] = B_DIA_RAD,
+  [54] = B_ABS_INC,
+  [55] = B_VERSION,
+  [56] = B_SPINDLE_UNITS,
+  [57] = B_PITCH,
 };
 
 static int processNextionMessage() {

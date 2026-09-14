@@ -84,8 +84,13 @@ bool zDisplayModeDRO = false;
 bool xDisplayModeDRO = false;
 bool isDiameterMode = true;
 bool isAbsoluteMode = true;
+bool savedZDisplayModeDRO = false;
+bool savedXDisplayModeDRO = false;
+bool savedIsDiameterMode = true;
+bool savedIsAbsoluteMode = true;
 float xScaleIncrementalOffset = 0.0f;
 float zScaleIncrementalOffset = 0.0f;
+NumpadMode numpadEntryMode = PITCH;
 
 KeyboardBinding keyboardBindings[] = {
   KEY_BINDING("left", "Left", B_LEFT),

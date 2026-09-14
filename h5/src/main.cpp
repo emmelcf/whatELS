@@ -88,6 +88,10 @@ void setup() {
   savedConeRatio = coneRatio = pref.getFloat(PREF_CONE_RATIO, coneRatio);
   savedTurnPasses = turnPasses = pref.getInt(PREF_TURN_PASSES, turnPasses);
   savedAuxForward = auxForward = pref.getBool(PREF_AUX_FORWARD, true);
+  savedZDisplayModeDRO = zDisplayModeDRO = pref.getBool(PREF_Z_DRO_MODE, false);
+  savedXDisplayModeDRO = xDisplayModeDRO = pref.getBool(PREF_X_DRO_MODE, false);
+  savedIsDiameterMode = isDiameterMode = pref.getBool(PREF_DIAMETER_MODE, true);
+  savedIsAbsoluteMode = isAbsoluteMode = pref.getBool(PREF_ABSOLUTE_MODE, true);
   pref.end();
 
   if (!z.needsRest && !z.disabled) digitalWrite(z.ena, z.invertEnable ? LOW : HIGH);

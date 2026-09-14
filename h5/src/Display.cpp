@@ -464,7 +464,9 @@ bool saveIfChanged() {
       spindlePos == savedSpindlePos && spindlePosAvg == savedSpindlePosAvg && spindlePosSync == savedSpindlePosSync && savedSpindlePosGlobal == spindlePosGlobal && showAngle == savedShowAngle && showTacho == savedShowTacho && moveStep == savedMoveStep &&
       mode == savedMode && measure == savedMeasure && x.pos == x.savedPos && x.originPos == x.savedOriginPos && x.posGlobal == x.savedPosGlobal && x.motorPos == x.savedMotorPos && x.leftStop == x.savedLeftStop && x.rightStop == x.savedRightStop && x.disabled == x.savedDisabled &&
       y.pos == y.savedPos && y.originPos == y.savedOriginPos && y.posGlobal == y.savedPosGlobal && y.motorPos == y.savedMotorPos && y.leftStop == y.savedLeftStop && y.rightStop == y.savedRightStop && y.disabled == y.savedDisabled &&
-      coneRatio == savedConeRatio && turnPasses == savedTurnPasses && savedAuxForward == auxForward) return false;
+      coneRatio == savedConeRatio && turnPasses == savedTurnPasses && savedAuxForward == auxForward &&
+      zDisplayModeDRO == savedZDisplayModeDRO && xDisplayModeDRO == savedXDisplayModeDRO &&
+      isDiameterMode == savedIsDiameterMode && isAbsoluteMode == savedIsAbsoluteMode) return false;
 
   Preferences pref;
   pref.begin(PREF_NAMESPACE);
@@ -503,6 +505,10 @@ bool saveIfChanged() {
   if (coneRatio != savedConeRatio) pref.putFloat(PREF_CONE_RATIO, savedConeRatio = coneRatio);
   if (turnPasses != savedTurnPasses) pref.putInt(PREF_TURN_PASSES, savedTurnPasses = turnPasses);
   if (auxForward != savedAuxForward) pref.putBool(PREF_AUX_FORWARD, savedAuxForward = auxForward);
+  if (zDisplayModeDRO != savedZDisplayModeDRO) pref.putBool(PREF_Z_DRO_MODE, savedZDisplayModeDRO = zDisplayModeDRO);
+  if (xDisplayModeDRO != savedXDisplayModeDRO) pref.putBool(PREF_X_DRO_MODE, savedXDisplayModeDRO = xDisplayModeDRO);
+  if (isDiameterMode != savedIsDiameterMode) pref.putBool(PREF_DIAMETER_MODE, savedIsDiameterMode = isDiameterMode);
+  if (isAbsoluteMode != savedIsAbsoluteMode) pref.putBool(PREF_ABSOLUTE_MODE, savedIsAbsoluteMode = isAbsoluteMode);
   pref.end();
   return true;
 }
