@@ -14,6 +14,7 @@
       <a href="#gcode" data-section-link="gcode">GCode</a>
       <a href="#updates" data-section-link="updates">Updates</a>
       <a href="#wifi" data-section-link="wifi">WiFi</a>
+      <a href="#system" data-section-link="system">System</a>
       <a href="#ui" data-section-link="ui">UI</a>
       <a href="#settings" data-section-link="settings">Settings</a>
       <a href="#keyboard" data-section-link="keyboard">Keyboard</a>
@@ -259,11 +260,13 @@
 
       <section id="section-wifi" class="app-section" data-section="wifi">
         <form id="wifi-form" class="config-section">
-          <div class="config-grid">
+          <div class="config-grid" style="margin-bottom: 10px;">
             <label class="config-checkbox" for="wifi-enabled">
               <input type="checkbox" id="wifi-enabled">
               <span>WiFi enabled</span>
             </label>
+          </div>
+          <div class="config-grid" style="margin-bottom: 10px;">
             <label class="config-field" for="wifi-ssid">
               <span>Network name</span>
               <input type="text" id="wifi-ssid" maxlength="32" autocomplete="off">
@@ -272,6 +275,12 @@
               <span>Password</span>
               <input type="password" id="wifi-password" maxlength="63" autocomplete="new-password" placeholder="Leave unchanged">
             </label>
+            <label class="config-field" for="wifi-hostname">
+              <span>Hostname</span>
+              <input type="text" id="wifi-hostname" maxlength="32" autocomplete="off" placeholder="nanoels">
+            </label>
+          </div>
+          <div class="config-grid">
             <label class="config-checkbox" for="wifi-clear-password">
               <input type="checkbox" id="wifi-clear-password">
               <span>Clear saved password</span>
@@ -283,6 +292,35 @@
             <span id="wifi-status" class="action-status" role="status" aria-live="polite"></span>
           </div>
         </form>
+      </section>
+
+      <section id="section-system" class="app-section" data-section="system">
+        <div class="section-stack">
+          <section class="config-section system-info-settings">
+            <h3>System Information</h3>
+            <div class="config-grid">
+              <label class="config-field">
+                <span class="config-label">Version</span>
+                <span class="config-unit" id="sysinfo-version">Loading...</span>
+              </label>
+              <label class="config-field">
+                <span class="config-label">ESP32 Chip</span>
+                <span class="config-unit" id="sysinfo-chip">Loading...</span>
+              </label>
+              <label class="config-field">
+                <span class="config-label">Flash Size</span>
+                <span class="config-unit" id="sysinfo-flash">Loading...</span>
+              </label>
+              <label class="config-field">
+                <span class="config-label">Free Heap Memory</span>
+                <span class="config-unit" id="sysinfo-heap">Loading...</span>
+              </label>
+            </div>
+            <div class="config-actions">
+              <button id="refresh-sysinfo" type="button" class="secondary">Refresh Info</button>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="section-ui" class="app-section" data-section="ui">
@@ -382,7 +420,7 @@
     </main>
 
     <footer class="app-footer">
-      <p>NanoEls )rawliteral" CONTROLLER_VERSION_TEXT R"rawliteral(. Trusted local network only. Stop the controller before uploads or settings changes.</p>
+      <p>NanoEls <span id="footer-version"></span>. Trusted local network only. Stop the controller before uploads or settings changes.</p>
     </footer>
   </div>
 

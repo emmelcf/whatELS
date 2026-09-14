@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
+#include <ESPmDNS.h>
 
 CircleBuffer inBuffer = {};
 CircleBuffer outBuffer = {};
@@ -560,6 +561,15 @@ void updateWebUiMoveWatchdog(byte actionCode, bool isPress) {
 }
 
 static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
+  if (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) {
+    String response = "SYSINFO.version=" CONTROLLER_VERSION_TEXT "\n";
+    response += "SYSINFO.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
+    response += "SYSINFO.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
+    response += "SYSINFO.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
+    queueWebSocketText(response);
+    return true;
+  }
+
   WebUiEvent event = {};
   String error = "";
   if (!parseWebUiEventCommand(payload, length, &event, &error)) {
@@ -703,6 +713,7 @@ static String getWifiConfigResponse() {
   response.reserve(360);
   appendConfigLine(&response, "wifiEnabled", WIFI_ENABLED);
   appendConfigLine(&response, "wifiSsid", WIFI_SSID);
+  appendConfigLine(&response, "wifiHostname", WIFI_HOSTNAME);
   appendConfigLine(&response, "wifiPasswordSet", WIFI_PASSWORD.length() > 0);
   appendConfigLine(&response, "wifiMode", getWifiMode());
   appendConfigLine(&response, "wifiIp", wifiIpAddress);
@@ -724,6 +735,10 @@ static bool readWifiConfigFromRequest(String* error) {
     *error = "Missing WiFi value: wifiPassword";
     return false;
   }
+  if (!server.hasArg("wifiHostname")) {
+    *error = "Missing WiFi value: wifiHostname";
+    return false;
+  }
 
   bool clearPassword = false;
   if (!readBoolConfigArg("wifiClearPassword", &clearPassword, error)) {
@@ -733,9 +748,12 @@ static bool readWifiConfigFromRequest(String* error) {
   String ssid = server.arg("wifiSsid");
   ssid.trim();
   String password = server.arg("wifiPassword");
+  String hostname = server.arg("wifiHostname");
+  hostname.trim();
 
   WIFI_ENABLED = enabled;
   WIFI_SSID = ssid;
+  WIFI_HOSTNAME = hostname.length() > 0 ? hostname : DEFAULT_WIFI_HOSTNAME;
   if (clearPassword) {
     WIFI_PASSWORD = "";
   } else if (password.length() > 0) {
@@ -1474,7 +1492,20 @@ static bool connectStationWifi() {
     return false;
   }
 
+  if (WIFI_HOSTNAME.length() > 0) {
+    DEBUG_PRINTF("Setting WiFi hostname to: %s\n", WIFI_HOSTNAME.c_str());
+    WiFi.setHostname(WIFI_HOSTNAME.c_str());
+  } else {
+    DEBUG_PRINTLN("WIFI_HOSTNAME is empty! Falling back to default.");
+    WiFi.setHostname("nanoels");
+  }
+
   WiFi.mode(WIFI_STA);
+  
+  if (WIFI_HOSTNAME.length() > 0) {
+    WiFi.setHostname(WIFI_HOSTNAME.c_str());
+  }
+  
   DEBUG_PRINTF("Connecting to WiFi SSID: %s\n", WIFI_SSID.c_str());
   WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
   setWiFiStatus("Connecting");
@@ -1498,6 +1529,15 @@ static bool connectStationWifi() {
 
   wifiStationConnected = true;
   wifiIpAddress = WiFi.localIP().toString();
+  
+  if (WIFI_HOSTNAME.length() > 0) {
+    if (MDNS.begin(WIFI_HOSTNAME.c_str())) {
+      DEBUG_PRINTF("mDNS responder started: http://%s.local\n", WIFI_HOSTNAME.c_str());
+    } else {
+      DEBUG_PRINTLN("Error setting up mDNS responder!");
+    }
+  }
+
   setWiFiStatus("See " + wifiIpAddress);
   DEBUG_PRINT("Web UI: http://");
   DEBUG_PRINTLN(wifiIpAddress);

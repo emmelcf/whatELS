@@ -15,13 +15,20 @@ void setup() {
   delay(100);
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
   DEBUG_PRINTLN("Loading configuration...");
+  DEBUG_PRINTLN("Loading machine config...");
   loadMachineConfig();
+  DEBUG_PRINTLN("Loading wifi config...");
   loadWifiConfig();
+  DEBUG_PRINTLN("Loading keyboard config...");
   loadKeyboardConfig();
 
+  DEBUG_PRINTLN("xScale.attach()...");
+  Serial.flush();
   xScale.attach();
+  DEBUG_PRINTLN("zScale.attach()...");
   zScale.attach();
 
+  DEBUG_PRINTLN("pinMode setup...");
   pinMode(ENC_A, INPUT_PULLUP);
   pinMode(ENC_B, INPUT_PULLUP);
 
@@ -41,14 +48,19 @@ void setup() {
     pinMode(Y_ENA, OUTPUT);
     DHIGH(Y_STEP);
   }
+  DEBUG_PRINTLN("initJoystick...");
   initJoystick();
 
+  DEBUG_PRINTLN("main Preferences...");
   Preferences pref;
+  DEBUG_PRINTLN("pref.begin...");
   pref.begin(PREF_NAMESPACE);
   if (pref.getInt(PREF_VERSION) != PREFERENCES_VERSION) {
+    DEBUG_PRINTLN("pref.clear()...");
     pref.clear();
     pref.putInt(PREF_VERSION, PREFERENCES_VERSION);
   }
+  DEBUG_PRINTLN("Loading main preferences...");
 
   initAxis(&z, NAME_Z, true, false, MOTOR_STEPS_Z, SCREW_Z_DU, PULSE_PER_REVOLUTION_Z, SPEED_START_Z, SPEED_MANUAL_MOVE_Z, ACCELERATION_Z, INVERT_Z, INVERT_Z_ENABLE, NEEDS_REST_Z, MAX_TRAVEL_MM_Z, BACKLASH_DU_Z, Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z);
   initAxis(&x, NAME_X, true, false, MOTOR_STEPS_X, SCREW_X_DU, PULSE_PER_REVOLUTION_X, SPEED_START_X, SPEED_MANUAL_MOVE_X, ACCELERATION_X, INVERT_X, INVERT_X_ENABLE, NEEDS_REST_X, MAX_TRAVEL_MM_X, BACKLASH_DU_X, X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X);

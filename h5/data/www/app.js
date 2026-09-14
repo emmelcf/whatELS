@@ -74,6 +74,7 @@ const defaultSection = 'control';
     const wifiForm = document.getElementById('wifi-form');
     const wifiEnabledInput = document.getElementById('wifi-enabled');
     const wifiSsidInput = document.getElementById('wifi-ssid');
+    const wifiHostnameInput = document.getElementById('wifi-hostname');
     const wifiPasswordInput = document.getElementById('wifi-password');
     const wifiClearPasswordInput = document.getElementById('wifi-clear-password');
     const saveWifiButton = document.getElementById('save-wifi');
@@ -89,6 +90,13 @@ const defaultSection = 'control';
     let tftUploadInProgress = false;
     let firmwareUploadInProgress = false;
     let firmwareReloadTimer = 0;
+    
+    // System Info
+    const sysinfoVersion = document.getElementById('sysinfo-version');
+    const sysinfoChip = document.getElementById('sysinfo-chip');
+    const sysinfoFlash = document.getElementById('sysinfo-flash');
+    const sysinfoHeap = document.getElementById('sysinfo-heap');
+    const sysinfoRefreshBtn = document.getElementById('refresh-sysinfo');
     let firmwareStatusPollTimer = 0;
     let firmwareStatusPollBusy = false;
     let keyboardLearnTarget = '';
@@ -929,6 +937,7 @@ const defaultSection = 'control';
       setControlMessageText('Connected');
       controlActionStatus.textContent = 'Connected';
       updateButtonStates();
+      ws.send('?sysinfo');
     };
 
     ws.onmessage = (event) => {
@@ -1580,13 +1589,24 @@ const defaultSection = 'control';
     function applyWifiValues(values) {
       wifiEnabledInput.checked = values.wifiEnabled === '1';
       wifiSsidInput.value = values.wifiSsid || '';
+      wifiHostnameInput.value = values.wifiHostname || '';
       wifiPasswordInput.value = '';
       wifiPasswordInput.placeholder = values.wifiPasswordSet === '1' ? 'Leave unchanged' : 'Password';
       wifiClearPasswordInput.checked = false;
       const mode = values.wifiMode || 'unknown';
-      const ip = values.wifiIp ? `, ${values.wifiIp}` : '';
-      const setup = values.setupApSsid ? `, setup AP ${values.setupApSsid}` : '';
-      wifiStatusElement.textContent = `Mode: ${mode}${ip}${setup}`;
+      let statusText = '';
+      if (mode === 'station') {
+        statusText = `Connected (IP: ${values.wifiIp || 'unknown'})`;
+      } else if (mode === 'setup-ap') {
+        statusText = `Setup AP active (SSID: ${values.setupApSsid || 'unknown'})`;
+      } else if (mode === 'connecting') {
+        statusText = 'Connecting...';
+      } else if (mode === 'off') {
+        statusText = 'Disabled';
+      } else {
+        statusText = `Unknown state (${mode})`;
+      }
+      wifiStatusElement.textContent = statusText;
     }
 
     function loadWifi() {
@@ -1605,6 +1625,7 @@ const defaultSection = 'control';
       return new URLSearchParams({
         wifiEnabled: wifiEnabledInput.checked ? '1' : '0',
         wifiSsid: wifiSsidInput.value.trim(),
+        wifiHostname: wifiHostnameInput.value.trim(),
         wifiPassword: wifiPasswordInput.value,
         wifiClearPassword: wifiClearPasswordInput.checked ? '1' : '0'
       });
@@ -1684,6 +1705,21 @@ const defaultSection = 'control';
           firmwareStatus.textContent = line.substring('FW: '.length);
           announceWarning(firmwareStatus.textContent);
           handled = true;
+        } else if (line.startsWith('SYSINFO.')) {
+          const parts = line.split('=');
+          if (parts.length >= 2) {
+            const key = parts[0];
+            const val = parts.slice(1).join('=');
+            if (key === 'SYSINFO.version') {
+              if (sysinfoVersion) sysinfoVersion.textContent = val;
+              const footerVer = document.getElementById('footer-version');
+              if (footerVer) footerVer.textContent = ' ' + val;
+            }
+            if (key === 'SYSINFO.chip' && sysinfoChip) sysinfoChip.textContent = val;
+            if (key === 'SYSINFO.flash' && sysinfoFlash) sysinfoFlash.textContent = val;
+            if (key === 'SYSINFO.heap' && sysinfoHeap) sysinfoHeap.textContent = val;
+          }
+          handled = true;
         }
       });
       return handled;
@@ -1715,6 +1751,14 @@ const defaultSection = 'control';
     resetConfigButton.addEventListener('click', resetConfig);
     wifiForm.addEventListener('submit', saveWifi);
     resetWifiButton.addEventListener('click', resetWifi);
+
+    if (sysinfoRefreshBtn) {
+      sysinfoRefreshBtn.addEventListener('click', () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send('?sysinfo\n');
+        }
+      });
+    }
     keyboardForm.addEventListener('submit', saveKeyboardConfig);
     resetKeyboardButton.addEventListener('click', resetKeyboardConfig);
     tftFirstUploadCheckbox.addEventListener('change', saveTftFirstUploadPreference);

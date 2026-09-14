@@ -1,5 +1,7 @@
 #include "Config.h"
 #include "Axis.h"
+#include <LittleFS.h>
+#include "Debug.h"
 
 // Variable Definitions
 int ENCODER_PPR = DEFAULT_ENCODER_PPR;
@@ -35,6 +37,7 @@ bool ENABLE_CONTINUOUS_MOVE = DEFAULT_ENABLE_CONTINUOUS_MOVE;
 bool WIFI_ENABLED = DEFAULT_WIFI_ENABLED;
 String WIFI_SSID = DEFAULT_WIFI_SSID;
 String WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
+String WIFI_HOSTNAME = DEFAULT_WIFI_HOSTNAME;
 
 bool ACTIVE_Y = DEFAULT_ACTIVE_Y;
 bool ROTARY_Y = DEFAULT_ROTARY_Y;
@@ -284,13 +287,19 @@ void normalizeMachineConfig() {
 }
 
 void loadMachineConfig() {
+  DEBUG_PRINTLN("setMachineConfigDefaults...");
   setMachineConfigDefaults();
   Preferences cfg;
+  DEBUG_PRINTLN("cfg.begin...");
   cfg.begin(CONFIG_NAMESPACE);
+  DEBUG_PRINTLN("cfg.getInt...");
   if (cfg.getInt(CFG_VERSION) != CONFIG_VERSION) {
+    DEBUG_PRINTLN("cfg.clear()...");
     cfg.clear();
+    DEBUG_PRINTLN("cfg.putInt...");
     cfg.putInt(CFG_VERSION, CONFIG_VERSION);
   }
+  DEBUG_PRINTLN("loading fields...");
   ENCODER_PPR = cfg.getInt(CFG_ENCODER_PPR, ENCODER_PPR);
   ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
   AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
@@ -499,12 +508,14 @@ void loadKeyboardConfig() {
     setKeyboardConfigDefaults();
     saveKeyboardConfig();
   }
+  DEBUG_PRINTLN("Finished loadKeyboardConfig");
 }
 
 void setWifiConfigDefaults() {
   WIFI_ENABLED = DEFAULT_WIFI_ENABLED;
   WIFI_SSID = DEFAULT_WIFI_SSID;
   WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
+  WIFI_HOSTNAME = DEFAULT_WIFI_HOSTNAME;
 }
 
 bool validateWifiConfig(String* error) {
@@ -534,6 +545,7 @@ void loadWifiConfig() {
   WIFI_ENABLED = cfg.getBool(WCFG_ENABLED, WIFI_ENABLED);
   WIFI_SSID = cfg.getString(WCFG_SSID, WIFI_SSID);
   WIFI_PASSWORD = cfg.getString(WCFG_PASSWORD, WIFI_PASSWORD);
+  WIFI_HOSTNAME = cfg.getString(WCFG_HOSTNAME, WIFI_HOSTNAME);
   cfg.end();
 
   String error = "";
@@ -549,6 +561,7 @@ void saveWifiConfig() {
   cfg.putBool(WCFG_ENABLED, WIFI_ENABLED);
   cfg.putString(WCFG_SSID, WIFI_SSID);
   cfg.putString(WCFG_PASSWORD, WIFI_PASSWORD);
+  cfg.putString(WCFG_HOSTNAME, WIFI_HOSTNAME);
   cfg.end();
 }
 

@@ -1254,7 +1254,7 @@ void taskGcode(void *param) {
         writeBuffer(&outBuffer, ",");
         writeBuffer(&outBuffer, String(getApproxRpm()));
         writeBuffer(&outBuffer, "|Id:");
-        writeBuffer(&outBuffer, "H" + String(HARDWARE_VERSION) + "V" + String(SOFTWARE_VERSION));
+        writeBuffer(&outBuffer, CONTROLLER_VERSION_TEXT);
         writeBuffer(&outBuffer, ">");
       } else if (gcodeInSave && receivedChar == '"') {
         gcodeInSave = false;

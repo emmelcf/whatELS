@@ -2,12 +2,7 @@
 #include <driver/pcnt.h>
 #include <esp_idf_version.h>
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-#include <esp_rom_gpio.h>
-#else
-#include <rom/gpio.h>
-#define esp_rom_gpio_pad_select_gpio gpio_pad_select_gpio
-#endif
+// Includes cleaned up
 
 volatile int32_t DRO_Scale::overflowCount[MAX_ENCODERS] = {0};
 
@@ -33,16 +28,12 @@ void IRAM_ATTR DRO_Scale::pcnt_intr_handler(void* arg) {
 }
 
 void DRO_Scale::attach() {
-    esp_rom_gpio_pad_select_gpio(aPinNumber);
-    gpio_set_direction(aPinNumber, GPIO_MODE_INPUT);
-    esp_rom_gpio_pad_select_gpio(bPinNumber);
-    gpio_set_direction(bPinNumber, GPIO_MODE_INPUT);
-
-    if (puType == up) {
-        gpio_pullup_en(aPinNumber);
-        gpio_pullup_en(bPinNumber);
-    }
+    Serial.println("DRO_Scale::attach start");
+    Serial.flush();
+    pinMode(aPinNumber, puType == up ? INPUT_PULLUP : INPUT);
+    pinMode(bPinNumber, puType == up ? INPUT_PULLUP : INPUT);
     
+    Serial.println("pcnt_config");
     pcnt_config_t pcnt_config = {};
     pcnt_config.pulse_gpio_num = aPinNumber;
     pcnt_config.ctrl_gpio_num  = bPinNumber;

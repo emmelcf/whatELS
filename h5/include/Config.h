@@ -24,8 +24,8 @@
 const int DEFAULT_ENCODER_PPR = 1200;
 const int DEFAULT_ENCODER_BACKLASH = 3;
 const int DEFAULT_AXIS_ENCODER_BACKLASH = 0;
-#define ENC_A 13
-#define ENC_B 14
+#define ENC_A 14
+#define ENC_B 13
 
 // Main lead screw (Z) parameters
 const long DEFAULT_SCREW_Z_DU = 40000;
@@ -83,16 +83,16 @@ const char NAME_Y = 'Y';
 #define Y_ENA 1
 #define Y_DIR 2
 #define Y_STEP 17
-#define Y_PULSE_A 46
-#define Y_PULSE_B 3
+#define Y_PULSE_A 45
+#define Y_PULSE_B 48
 
 // DRO Scales on X and Z
-#define X_SCALE_PIN_A (gpio_num_t)32
-#define X_SCALE_PIN_B (gpio_num_t)33
+#define X_SCALE_PIN_A (gpio_num_t)40
+#define X_SCALE_PIN_B (gpio_num_t)39
 #define X_SCALE_PCNT_UNIT PCNT_UNIT_2
 
-#define Z_SCALE_PIN_A (gpio_num_t)25
-#define Z_SCALE_PIN_B (gpio_num_t)26
+#define Z_SCALE_PIN_A (gpio_num_t)9
+#define Z_SCALE_PIN_B (gpio_num_t)12
 #define Z_SCALE_PCNT_UNIT PCNT_UNIT_3
 
 #define COLOR_DRO_ON 2016
@@ -142,6 +142,7 @@ const bool DEFAULT_ENABLE_CONTINUOUS_MOVE = true;
 const bool DEFAULT_WIFI_ENABLED = true;
 const char* const DEFAULT_WIFI_SSID = "";
 const char* const DEFAULT_WIFI_PASSWORD = "";
+const char* const DEFAULT_WIFI_HOSTNAME = "nanoels";
 const char* const WIFI_SETUP_AP_SSID = "NanoEls-H5-Setup";
 const char* const WIFI_SETUP_AP_PASSWORD = "nanoels-h5";
 const long INCOMING_BUFFER_SIZE = 100000;
@@ -419,6 +420,7 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define WCFG_ENABLED "en"
 #define WCFG_SSID "ssid"
 #define WCFG_PASSWORD "pwd"
+#define WCFG_HOSTNAME "hn"
 
 #define KCFG_VERSION "v"
 #define KCFG_SHOW_KEY_PRESSES "showKeys"
@@ -457,6 +459,7 @@ extern bool ENABLE_CONTINUOUS_MOVE;
 extern bool WIFI_ENABLED;
 extern String WIFI_SSID;
 extern String WIFI_PASSWORD;
+extern String WIFI_HOSTNAME;
 
 extern bool ACTIVE_Y;
 extern bool ROTARY_Y;
