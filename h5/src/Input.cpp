@@ -1,6 +1,7 @@
 #include "Input.h"
 #include "Config.h"
 #include "Axis.h"
+#include "Debug.h"
 #include "Display.h"
 #include "Motion.h"
 #include "WebServerModule.h"

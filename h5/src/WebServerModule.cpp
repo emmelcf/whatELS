@@ -1,6 +1,7 @@
 #include "WebServerModule.h"
 #include "Config.h"
 #include "Axis.h"
+#include "Debug.h"
 #include "Input.h"
 #include "Display.h"
 #include "Motion.h"
@@ -750,14 +751,14 @@ static void scheduleConfigRestart() {
 
 static void tftUploadLog(const String& message) {
   String line = String("TFT: ") + message + "\n";
-  Serial.print(line);
+  DEBUG_PRINT(line);
   webSocket.broadcastTXT(line);
   webSocket.loop();
 }
 
 static void firmwareUploadLog(const String& message) {
   String line = String("FW: ") + message + "\n";
-  Serial.print(line);
+  DEBUG_PRINT(line);
   webSocket.broadcastTXT(line);
   webSocket.loop();
 }
@@ -1474,50 +1475,64 @@ static bool connectStationWifi() {
   }
 
   WiFi.mode(WIFI_STA);
+  DEBUG_PRINTF("Connecting to WiFi SSID: %s\n", WIFI_SSID.c_str());
   WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
   setWiFiStatus("Connecting");
   for (int i = 0; i < 40; i++) {
-    if (WiFi.status() == WL_CONNECTED) break;
+    if (WiFi.status() == WL_CONNECTED) {
+      DEBUG_PRINTLN("WiFi connected successfully!");
+      break;
+    }
+    DEBUG_PRINT(".");
     DELAY(500);
     taskYIELD();
   }
   if (WiFi.status() != WL_CONNECTED) {
-    setWiFiStatus(getStationWifiError());
+    DEBUG_PRINTLN("");
+    String errorMsg = getStationWifiError();
+    DEBUG_PRINTF("WiFi connection failed. Status: %d, Error: %s\n", WiFi.status(), errorMsg.c_str());
+    setWiFiStatus(errorMsg);
     return false;
   }
+  DEBUG_PRINTLN("");
 
   wifiStationConnected = true;
   wifiIpAddress = WiFi.localIP().toString();
   setWiFiStatus("See " + wifiIpAddress);
-  Serial.print("Web UI: http://");
-  Serial.println(wifiIpAddress);
+  DEBUG_PRINT("Web UI: http://");
+  DEBUG_PRINTLN(wifiIpAddress);
   return true;
 }
 
 static bool startSetupAccessPoint() {
   WiFi.disconnect(true);
+  DEBUG_PRINTLN("Starting Setup Access Point...");
   WiFi.mode(WIFI_AP);
   wifiSetupApActive = WiFi.softAP(WIFI_SETUP_AP_SSID, WIFI_SETUP_AP_PASSWORD);
   wifiStationConnected = false;
   if (!wifiSetupApActive) {
+    DEBUG_PRINTLN("WiFi softAP creation failed!");
     wifiIpAddress = "";
     setWiFiStatus("WiFi AP failed");
     return false;
   }
+  DEBUG_PRINTLN("WiFi softAP created successfully.");
 
   wifiIpAddress = WiFi.softAPIP().toString();
   setWiFiStatus("Setup " + wifiIpAddress);
-  Serial.print("Setup AP: ");
-  Serial.print(WIFI_SETUP_AP_SSID);
-  Serial.print(" / ");
-  Serial.println(WIFI_SETUP_AP_PASSWORD);
-  Serial.print("Web UI: http://");
-  Serial.println(wifiIpAddress);
+  DEBUG_PRINT("Setup AP: ");
+  DEBUG_PRINT(WIFI_SETUP_AP_SSID);
+  DEBUG_PRINT(" / ");
+  DEBUG_PRINTLN(WIFI_SETUP_AP_PASSWORD);
+  DEBUG_PRINT("Web UI: http://");
+  DEBUG_PRINTLN(wifiIpAddress);
   return true;
 }
 
 void taskWiFi(void *param) {
+  DEBUG_PRINTLN("Starting WiFi task...");
   if (!connectStationWifi() && !startSetupAccessPoint()) {
+    DEBUG_PRINTLN("Both Station and AP modes failed to start. Stopping WiFi task.");
     vTaskDelete(NULL);
     return;
   }
@@ -1537,6 +1552,7 @@ void taskWiFi(void *param) {
     server.handleClient();
     webSocket.loop();
     if (wifiStationConnected && WiFi.status() != WL_CONNECTED) {
+      DEBUG_PRINTLN("WiFi connection lost! Disconnected.");
       requestWebUiMoveRelease();
       webSocketClientCount = 0;
       wifiStationConnected = false;
@@ -1549,7 +1565,7 @@ void taskWiFi(void *param) {
       ESP.restart();
     }
     if (configRestartPending && ((long)(millis() - configRestartAt) >= 0)) {
-      Serial.println("Machine config saved, restarting now");
+      DEBUG_PRINTLN("Machine config saved, restarting now");
       DELAY(50);
       ESP.restart();
     }

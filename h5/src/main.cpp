@@ -8,8 +8,13 @@
 #include "Motion.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
+#include "Debug.h"
 
 void setup() {
+  Serial.begin(115200);
+  delay(100);
+  DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
+  DEBUG_PRINTLN("Loading configuration...");
   loadMachineConfig();
   loadWifiConfig();
   loadKeyboardConfig();
@@ -102,7 +107,6 @@ void setup() {
     gcodeProgramCount = getGcodeProgramCount();
   }
 
-  Serial.begin(115200);
   if (WIFI_ENABLED) {
     webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
   }
