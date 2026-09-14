@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<lvgl>
+<component>
     <!-- 1. Assets (Images and Fonts) must be declared first -->
     <!-- Example: <image name="img_logo" src="assets/logo.png" /> -->
     <!-- Example: <font name="font_main" src="assets/myfont.ttf" size="14" /> -->
@@ -9,4 +8,4 @@
 
     <!-- 3. Global Data Subjects (for data-binding UI to C code) -->
     <!-- Example: <subject name="rpm_val" type="int" /> -->
-</lvgl>
+</component>
