@@ -388,3 +388,39 @@ void update_ui_element(const char* semantic_name, const char* value) {
 ```
 
 By isolating this inside a display HAL, the core CNC state machine remains clean and completely agnostic to the physical display hardware connected to it.
+
+---
+
+## Phase 6: WebAssembly (Wasm) Remote Control UI
+
+A primary advantage of LVGL is its capability to compile C/C++ interface code directly to WebAssembly using **Emscripten**. This allows the exact same UI codebase used for the physical display to function natively as a web application inside a browser, effectively replacing the need to maintain a separate HTML/CSS "Control" tab.
+
+### 6.1 Architecture & Hosting
+1. **Write Once, Deploy Twice:** The UI layout and widget logic reside in a `shared_ui/` folder within the `screen_lvgl` sub-project.
+2. **Emscripten Build Target:** A dedicated WebAssembly environment compiles the `shared_ui/` code into three static artifacts: `index.html`, `index.js`, and `index.wasm`.
+3. **ESP32 File Serving:** These static files are placed in the Main Controller's `data/` folder and flashed to `LittleFS`. The ESP32's internal web server serves them directly to connected Wi-Fi clients (phones, tablets, PCs).
+
+### 6.2 Telemetry Abstraction Bridge
+While the physical hardware display uses UART to communicate with the main controller, the browser environment cannot. To resolve this, a preprocessor abstraction handles the telemetry transport layer inside the UI code:
+
+```cpp
+// screen_lvgl/src/telemetry_client.cpp
+#include "ui_telemetry.h" // Shared semantic IDs
+
+void request_ui_update(const char* element_id, const char* new_value) {
+#ifdef BUILD_TARGET_ESP32
+    // Hardware Display: Send over UART Serial2
+    Serial2.printf("UPDATE:%s=%s\n", element_id, new_value);
+#elif defined(BUILD_TARGET_WASM)
+    // Web Application: Use Emscripten JS Interop to send over WebSockets
+    EM_ASM({
+        if (window.nanoSocket && window.nanoSocket.readyState === WebSocket.OPEN) {
+            window.nanoSocket.send("UPDATE:" + UTF8ToString($0) + "=" + UTF8ToString($1));
+        }
+    }, element_id, new_value);
+#endif
+}
+```
+
+### 6.3 Main Controller WebSocket Alignment
+On the Main Controller side, the WebSocket event handler leverages the same semantic string IDs defined in `ui_telemetry.h`. When the main controller broadcasts an update, it pushes the data identically over both the physical UART stream and the WebSocket stream, ensuring the physical screen and the remote web interface remain perfectly mirrored without duplicating backend state management.
