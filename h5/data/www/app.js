@@ -930,6 +930,13 @@ const defaultSection = 'control';
     window.addEventListener('hashchange', () => handleSectionChange(true));
 
     const ws = new WebSocket(`ws://${window.location.host.split(':')[0]}:81`);
+    const originalSend = ws.send;
+    ws.send = function(data) {
+      if (data !== '?' && data !== '?sysinfo' && data !== '?sysinfo\n') {
+        console.log('WebUI Command:', typeof data === 'string' ? data.trim() : data);
+      }
+      originalSend.call(ws, data);
+    };
 
     ws.onopen = () => {
       logMessage('Connected to server');

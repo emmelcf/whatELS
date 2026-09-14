@@ -789,6 +789,14 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     requestWebUiMoveRelease();
     if (webSocketClientCount > 0) webSocketClientCount = webSocketClientCount - 1;
   } else if (type == WStype_TEXT) {
+    String cmdStr = "";
+    for (size_t i = 0; i < length; i++) {
+      if (payload[i] >= 32 && payload[i] <= 126) cmdStr += (char)payload[i];
+    }
+    if (cmdStr != "?" && cmdStr != "?sysinfo") {
+      Serial.printf("WebSocket Command: %s\n", cmdStr.c_str());
+    }
+
     if (handleWebUiEventCommand(payload, length)) {
       return;
     }
