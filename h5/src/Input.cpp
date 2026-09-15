@@ -1191,8 +1191,12 @@ void processKeypadEvent() {
   } else if (keyCode == B_MODE_TURN) {
     setModeFromUi(MODE_TURN, eventFromNextion);
   } else if (keyCode == B_MODE) {
-    if (eventFromNextion) toScreen("page 1");
-    else if (mode == MODE_NORMAL) setModeFromTask(MODE_XGEAR);
+    // Note for multi-page screens (e.g. stock Nextion or future LVGL mode selection screen):
+    // Stock Nextion opened a mode selection screen (page 1) when tapping the mode button:
+    //   if (eventFromNextion) toScreen("page 1");
+    // For single-page screens like GeckoSub's screenset, tapping the Mode button cycles
+    // through the modes sequentially directly on the main screen:
+    if (mode == MODE_NORMAL) setModeFromTask(MODE_XGEAR);
     else if (mode == MODE_XGEAR) setModeFromTask(MODE_JOYSTICK);
     else if (mode == MODE_JOYSTICK) setModeFromTask(MODE_TURN);
     else if (mode == MODE_TURN) setModeFromTask(MODE_FACE);
