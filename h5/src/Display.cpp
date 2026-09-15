@@ -311,7 +311,7 @@ void updateDisplay() {
   }
 
   int rpm = getApproxRpm();
-  long newHashLine1 = moveStep + rpm + spindlePos + measure;
+  long newHashLine1 = moveStep + rpm + spindlePos + measure + spindleDisplayMode * 17 + (spindleValColorGreen ? 300 : 0);
   bool updateLine1 = lcdHashLine1 != newHashLine1;
   String stepText = "";
   String rpmText = "";
@@ -330,6 +330,26 @@ void updateDisplay() {
     setText("tRPMVal", rpmText);
     setText("tTurnsVal", turnsText);
     setText("tAngleVal", angleText);
+
+    switch (spindleDisplayMode) {
+      case 0:
+        setText("tSpindleTog", "RPM");
+        setText("tSpindleVal", rpmText);
+        break;
+      case 1:
+        setText("tSpindleTog", "Turns");
+        setText("tSpindleVal", turnsText);
+        break;
+      case 2:
+        setText("tSpindleTog", "Angle");
+        setText("tSpindleVal", String(spindleModulo(spindlePos) * 360 / ENCODER_STEPS_FLOAT, 1));
+        break;
+    }
+    if (spindleValColorGreen) {
+      toScreen("tSpindleVal.pco=" + String(COLOR_DRO_ON));
+    } else {
+      toScreen("tSpindleVal.pco=" + String(COLOR_NUMPAD_DEFAULT));
+    }
   }
 
   long newHashLine2 =

@@ -86,14 +86,17 @@ const char NAME_Y = 'Y';
 #define Y_PULSE_A 45
 #define Y_PULSE_B 48
 
-// DRO Scales on X and Z
-#define X_SCALE_PIN_A (gpio_num_t)40
-#define X_SCALE_PIN_B (gpio_num_t)39
-#define X_SCALE_PCNT_UNIT PCNT_UNIT_2
+// DRO Scales vs Handwheels configuration (set true if physical linear scale is used instead of handwheel)
+#define HAS_DRO_Z false
+#define HAS_DRO_X false
 
 #define Z_SCALE_PIN_A (gpio_num_t)9
 #define Z_SCALE_PIN_B (gpio_num_t)12
-#define Z_SCALE_PCNT_UNIT PCNT_UNIT_3
+#define Z_SCALE_PCNT_UNIT PCNT_UNIT_1
+
+#define X_SCALE_PIN_A (gpio_num_t)40
+#define X_SCALE_PIN_B (gpio_num_t)39
+#define X_SCALE_PCNT_UNIT PCNT_UNIT_2
 
 #define COLOR_DRO_ON 2016
 #define COLOR_DRO_OFF 25388
@@ -509,6 +512,8 @@ extern bool zDisplayModeDRO;
 extern bool xDisplayModeDRO;
 extern bool isDiameterMode;
 extern bool isAbsoluteMode;
+extern int spindleDisplayMode;
+extern bool spindleValColorGreen;
 extern bool savedZDisplayModeDRO;
 extern bool savedXDisplayModeDRO;
 extern bool savedIsDiameterMode;

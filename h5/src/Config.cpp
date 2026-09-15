@@ -87,6 +87,8 @@ bool zDisplayModeDRO = false;
 bool xDisplayModeDRO = false;
 bool isDiameterMode = true;
 bool isAbsoluteMode = true;
+int spindleDisplayMode = 0; // 0=RPM, 1=Turns, 2=Angle
+bool spindleValColorGreen = false;
 bool savedZDisplayModeDRO = false;
 bool savedXDisplayModeDRO = false;
 bool savedIsDiameterMode = true;

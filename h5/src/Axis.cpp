@@ -519,9 +519,19 @@ int applyAxisEncoderBacklash(Axis* a, int delta) {
 
 int getAndResetPulses(Axis* a) {
   int joystickDelta = getAndResetJoystickPulses(a);
-  if (!pulseCountersReady || a == &z) {
+  if (!pulseCountersReady) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
+#if HAS_DRO_Z
+  if (a == &z) {
+    return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
+  }
+#endif
+#if HAS_DRO_X
+  if (a == &x) {
+    return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
+  }
+#endif
   if (a->pulseCounter < 0 || a->pulseCounter >= PULSE_COUNTER_COUNT) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
@@ -616,8 +626,12 @@ void startPulseCounter(PulseCounter pulseCounter, int gpioA, int gpioB) {
 
 void taskAttachInterrupts(void *param) {
   startPulseCounter(PULSE_COUNTER_SPINDLE, ENC_A, ENC_B);
-  // PCNT_UNIT_1 is dedicated to Z-DRO scale, so Z-MPG is not started
+#if !HAS_DRO_Z
+  startPulseCounter(PULSE_COUNTER_Z, Z_PULSE_A, Z_PULSE_B);
+#endif
+#if !HAS_DRO_X
   startPulseCounter(PULSE_COUNTER_X, X_PULSE_A, X_PULSE_B);
+#endif
   if (ACTIVE_Y) {
     startPulseCounter(PULSE_COUNTER_Y, Y_PULSE_A, Y_PULSE_B);
   }

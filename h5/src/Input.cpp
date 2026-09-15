@@ -789,7 +789,7 @@ static const byte HEX_TO_KEYCODE[256] = {
   [5] = B_REVERSE,
   [6] = B_MEASURE,
   [7] = B_STEP,
-  [8] = 0,
+  [8] = B_DISPL,
   [9] = B_OFF, // tTurns
   [10] = B_OFF, // tAngle
   [11] = B_X_ENA,
@@ -990,13 +990,9 @@ static void buttonRightStopPress(Axis* a) {
 }
 
 static void buttonDisplayPress() {
-  if (!showAngle && !showTacho) {
-    showAngle = true;
-  } else if (showAngle) {
-    showAngle = false;
-    showTacho = true;
-  } else {
-    showTacho = false;
+  spindleDisplayMode++;
+  if (spindleDisplayMode > 2) {
+    spindleDisplayMode = 0;
   }
 }
 
@@ -1225,16 +1221,23 @@ void processKeypadEvent() {
   } else if (keyCode == B_MODE_THREAD) {
     setModeFromUi(MODE_THREAD, eventFromNextion);
   } else if (keyCode == B_X_TOGGLE_DRO) {
+#if HAS_DRO_X
     xDisplayModeDRO = !xDisplayModeDRO;
     beep();
+#endif
   } else if (keyCode == B_Z_TOGGLE_DRO) {
+#if HAS_DRO_Z
     zDisplayModeDRO = !zDisplayModeDRO;
     beep();
+#endif
   } else if (keyCode == B_DIA_RAD) {
     isDiameterMode = !isDiameterMode;
     beep();
   } else if (keyCode == B_ABS_INC) {
     isAbsoluteMode = !isAbsoluteMode;
+    beep();
+  } else if (keyCode == B_SPINDLE_UNITS) {
+    spindleValColorGreen = !spindleValColorGreen;
     beep();
   }
 }

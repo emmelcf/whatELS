@@ -22,11 +22,15 @@ void setup() {
   DEBUG_PRINTLN("Loading keyboard config...");
   loadKeyboardConfig();
 
+#if HAS_DRO_X
   DEBUG_PRINTLN("xScale.attach()...");
   Serial.flush();
   xScale.attach();
+#endif
+#if HAS_DRO_Z
   DEBUG_PRINTLN("zScale.attach()...");
   zScale.attach();
+#endif
 
   DEBUG_PRINTLN("pinMode setup...");
   pinMode(ENC_A, INPUT_PULLUP);
