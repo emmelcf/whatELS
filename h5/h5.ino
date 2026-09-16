@@ -2994,6 +2994,9 @@ String printDegrees(long degrees10000) {
 }
 
 String printDupr(long value) {
+  if (measure == MEASURE_INCH) {
+    return String(value / 254000.0, 4);
+  }
   if (measure != MEASURE_TPI || value == 0) return printDeciMicrons(value, 5);
 
   float tpi = 254000.0 / value;
@@ -3497,7 +3500,7 @@ void updateDisplay() {
     if (xDisplayModeDRO) {
       float xVal = xScale.getPosition();
       if (isDiameterMode) xVal *= 2.0;
-      xText = !x.active || x.disabled ? "" : (measure != MEASURE_METRIC ? String(xVal / 25.4, 3) : String(xVal, 2));
+      xText = !x.active || x.disabled ? "" : (measure != MEASURE_METRIC ? String(xVal / 25.4, 3) : String(xVal, 3));
     } else {
       xText = !x.active || x.disabled ? "" : printAxisPos(&x);
     }
@@ -3508,7 +3511,7 @@ void updateDisplay() {
     yRightText = !y.active || y.disabled ? "" : printDistanceToRightStop(&y);
     if (zDisplayModeDRO) {
       float zVal = zScale.getPosition();
-      zText = !z.active || z.disabled ? "" : (measure != MEASURE_METRIC ? String(zVal / 25.4, 3) : String(zVal, 2));
+      zText = !z.active || z.disabled ? "" : (measure != MEASURE_METRIC ? String(zVal / 25.4, 3) : String(zVal, 3));
     } else {
       zText = !z.active || z.disabled ? "" : printAxisPos(&z);
     }
@@ -5191,13 +5194,12 @@ void reset() {
 }
 
 long normalizePitch(long pitch) {
-  int scale = 1;
+  float scale = 1.0f;
   if (measure == MEASURE_METRIC) {
     // Drop the 3rd and 4th precision point if any.
-    scale = 100;
+    scale = 100.0f;
   } else if (measure == MEASURE_INCH) {
-    // Always drop the 4th precision point in inch representation if any.
-    scale = 254;
+    scale = 25.4f;
   }
   return round(pitch / scale) * scale;
 }
@@ -5206,7 +5208,7 @@ void adjustPitch(bool plus) {
   bool minus = !plus;
   long currentDupr = nextDuprFlag ? nextDupr : dupr;
   if (measure != MEASURE_TPI) {
-    int delta = measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3;
+    long delta = moveStep > 0 ? moveStep : (measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3);
     // Switching between mm/inch/tpi often results in getting non-0 3rd and 4th
     // precision points that can't be easily controlled. Remove them.
     long normalizedDupr = normalizePitch(currentDupr);

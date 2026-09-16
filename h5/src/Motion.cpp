@@ -200,13 +200,13 @@ void reset() {
 }
 
 long normalizePitch(long pitch) {
-  int scale = 1;
+  float scale = 1.0f;
   if (measure == MEASURE_METRIC) {
-    scale = 100;
+    scale = 100.0f;
   } else if (measure == MEASURE_INCH) {
-    scale = 254;
+    scale = 25.4f;
   }
-  return round(pitch / (float)scale) * scale;
+  return round(pitch / scale) * scale;
 }
 
 void applyDuprSignReverse() {
@@ -1245,10 +1245,11 @@ void taskGcode(void *param) {
         writeBuffer(&outBuffer, "<");
         writeBuffer(&outBuffer, isOn ? "Run" : "Idle");
         writeBuffer(&outBuffer, "|WPos:");
-        float divisor = measure == MEASURE_METRIC ? 10000.0 : 254000.0;
-        writeBuffer(&outBuffer, getAxisPosDu(&x) / divisor, 3);
-        writeBuffer(&outBuffer, ",0.000,");
-        writeBuffer(&outBuffer, getAxisPosDu(&z) / divisor, 3);
+        writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&x)));
+        writeBuffer(&outBuffer, ",");
+        writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&y)));
+        writeBuffer(&outBuffer, ",");
+        writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&z)));
         writeBuffer(&outBuffer, "|FS:");
         writeBuffer(&outBuffer, round(gcodeFeedDuPerSec * 60 / 10000.0));
         writeBuffer(&outBuffer, ",");

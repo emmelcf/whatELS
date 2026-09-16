@@ -1464,6 +1464,9 @@ String printDegrees(long degrees10000) {
 }
 
 String printDupr(long value) {
+  if (measure == MEASURE_INCH) {
+    return String(value / 254000.0, 4);
+  }
   if (measure != MEASURE_TPI)
     return printDeciMicrons(value, 5);
 
@@ -1805,7 +1808,7 @@ void updateDisplay() {
     if (measure != MEASURE_METRIC) {
       zPosStr = String(zVal / 25.4, 3);
     } else {
-      zPosStr = String(zVal, 2);
+      zPosStr = String(zVal, 3);
     }
   }
   // ---
@@ -1849,7 +1852,7 @@ void updateDisplay() {
       if (measure != MEASURE_METRIC) {
         xPosStr = String(xPos / 25.4, 3);
       } else {
-        xPosStr = String(xPos, 2);
+        xPosStr = String(xPos, 3);
       }
     }
     setText("tX", xPosStr);
@@ -2922,10 +2925,12 @@ void taskGcode(void *param) {
         writeBuffer(&outBuffer, "<");
         writeBuffer(&outBuffer, isOn ? "Run" : "Idle");
         writeBuffer(&outBuffer, "|WPos:");
-        float divisor = measure == MEASURE_METRIC ? 10000.0 : 254000.0;
-        writeBuffer(&outBuffer, getAxisPosDu(&x) / divisor, 3);
+        float xPos = xDisplayModeDRO ? xScale.getPosition() : (getAxisPosDu(&x) / 10000.0f);
+        if (isDiameterMode) xPos *= 2.0f;
+        float zPos = zDisplayModeDRO ? zScale.getPosition() : (getAxisPosDu(&z) / 10000.0f);
+        writeBuffer(&outBuffer, (measure != MEASURE_METRIC ? xPos / 25.4f : xPos), 3);
         writeBuffer(&outBuffer, ",0.000,");
-        writeBuffer(&outBuffer, getAxisPosDu(&z) / divisor, 3);
+        writeBuffer(&outBuffer, (measure != MEASURE_METRIC ? zPos / 25.4f : zPos), 3);
         writeBuffer(&outBuffer, "|FS:");
         writeBuffer(&outBuffer, round(gcodeFeedDuPerSec * 60 / 10000.0));
         writeBuffer(&outBuffer, ",");
@@ -3371,13 +3376,12 @@ void reset() {
 }
 
 long normalizePitch(long pitch) {
-  int scale = 1;
+  float scale = 1.0f;
   if (measure == MEASURE_METRIC) {
     // Drop the 3rd and 4th precision point if any.
-    scale = 100;
+    scale = 100.0f;
   } else if (measure == MEASURE_INCH) {
-    // Always drop the 4th precision point in inch representation if any.
-    scale = 254;
+    scale = 25.4f;
   }
   return round(pitch / scale) * scale;
 }
@@ -3400,7 +3404,7 @@ void buttonPlusMinusPress(bool plus) {
       setTurnPasses(turnPasses + 1);
     }
   } else if (measure != MEASURE_TPI) {
-    int delta = measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3;
+    long delta = moveStep > 0 ? moveStep : (measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3);
     // Switching between mm/inch/tpi often results in getting non-0 3rd and 4th
     // precision points that can't be easily controlled. Remove them.
     long normalizedDupr = normalizePitch(dupr);

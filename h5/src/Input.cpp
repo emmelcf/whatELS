@@ -884,7 +884,7 @@ void adjustPitch(bool plus) {
   bool minus = !plus;
   long currentDupr = nextDuprFlag ? nextDupr : dupr;
   if (measure != MEASURE_TPI) {
-    int delta = measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3;
+    long delta = moveStep > 0 ? moveStep : (measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3);
     long normalizedDupr = normalizePitch(currentDupr);
     if (minus && currentDupr > -DUPR_MAX) {
       setDupr(max(-DUPR_MAX, normalizedDupr - delta));

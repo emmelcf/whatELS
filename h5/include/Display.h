@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "Config.h"
 #include "Axis.h"
+#include "DisplayModel.h"
 
 // LCD Hash Tracking
 extern long lcdHashLine0;
