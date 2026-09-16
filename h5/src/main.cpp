@@ -9,9 +9,10 @@
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "Debug.h"
+#include "UsbKeyboard.h"
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(DEBUG_UART_BAUD, SERIAL_8N1, DEBUG_UART_RX_PIN, DEBUG_UART_TX_PIN);
   delay(100);
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
   DEBUG_PRINTLN("Loading configuration...");
@@ -128,6 +129,10 @@ void setup() {
   }
 
   Serial1.begin(NEXTION_NORMAL_BAUD, SERIAL_8N1, 44, 43);
+
+#if ENABLE_USB_KEYBOARD
+  initUsbKeyboard();
+#endif
 
   keyboard.begin(KEY_DATA, KEY_CLOCK);
   xTaskCreatePinnedToCore(taskKeypad, "taskKeypad", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);

@@ -183,6 +183,18 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define KEY_DATA 37
 #define KEY_CLOCK 36
 
+// USB Host Keyboard (Supported on ESP32-S3 and ESP32-S2)
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+  #define ENABLE_USB_KEYBOARD true
+#else
+  #define ENABLE_USB_KEYBOARD false
+#endif
+
+// Debug UART via MISC Header (for Rainbowlink v2 / bench debugging)
+#define DEBUG_UART_TX_PIN 10
+#define DEBUG_UART_RX_PIN -1
+#define DEBUG_UART_BAUD 115200
+
 #define DHIGH(x) digitalWrite(x, HIGH)
 #define DLOW(x) digitalWrite(x, LOW)
 #define DELAY(x) vTaskDelay(x / portTICK_PERIOD_MS)

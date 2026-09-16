@@ -5,6 +5,7 @@
 #include "Display.h"
 #include "Motion.h"
 #include "WebServerModule.h"
+#include "UsbKeyboard.h"
 
 // Keypad & button states
 bool buttonLeftPressed = false;
@@ -1046,6 +1047,11 @@ void processKeypadEvent() {
     event = wsKeycode;
     wsKeycode = 0;
     eventUsesKeyboardMap = true;
+#if ENABLE_USB_KEYBOARD
+  } else if (usbKeyboardAvailable()) {
+    event = usbKeyboardRead();
+    eventUsesKeyboardMap = true;
+#endif
   } else if (keyboard.available()) {
     event = keyboard.read();
     eventUsesKeyboardMap = true;
