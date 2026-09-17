@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 #include "Config.h"
 #include "DRO_Scale.h"
 
@@ -89,7 +89,7 @@ extern DRO_Scale xScale;
 extern DRO_Scale zScale;
 
 // Pulse counter handles
-extern pcnt_unit_t pulseUnits[PULSE_COUNTER_COUNT];
+extern pcnt_unit_handle_t pulseUnits[PULSE_COUNTER_COUNT];
 extern volatile bool pulseCountersReady;
 
 // Core motion and machine state

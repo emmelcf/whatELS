@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <driver/gpio.h>
-#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 
 #define MAX_ENCODERS 8
 
@@ -15,16 +15,16 @@ private:
     gpio_num_t aPinNumber;
     gpio_num_t bPinNumber;
     pullupType puType;
-    pcnt_unit_t pcntUnit;
+    pcnt_unit_handle_t pcntUnit = NULL;
     int filter;
     float scaleFactor;
     float positionOffset = 0.0f; // Stores the offset for Known Diameter
+    volatile int32_t overflowCount = 0;
 
-    static volatile int32_t overflowCount[MAX_ENCODERS];
-    static void IRAM_ATTR pcnt_intr_handler(void* arg);
+    static bool IRAM_ATTR pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watch_event_data_t *edata, void *user_ctx);
 
 public:
-    DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, pcnt_unit_t unit, float scale, int filterValue = 100);
+    DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, int unit, float scale, int filterValue = 100);
 
     void attach();
     float getPosition();     // Gets the final position (Raw + Offset)

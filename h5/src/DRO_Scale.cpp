@@ -1,30 +1,25 @@
 #include "DRO_Scale.h"
-#include <driver/pcnt.h>
-#include <esp_idf_version.h>
+#include <driver/pulse_cnt.h>
 
-// Includes cleaned up
+bool IRAM_ATTR DRO_Scale::pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watch_event_data_t *edata, void *user_ctx) {
+    DRO_Scale *scale = static_cast<DRO_Scale*>(user_ctx);
+    if (!scale) return false;
 
-volatile int32_t DRO_Scale::overflowCount[MAX_ENCODERS] = {0};
+    if (edata->watch_point_value >= 32767) {
+        scale->overflowCount += 32768;
+    } else if (edata->watch_point_value <= -32768) {
+        scale->overflowCount -= 32768;
+    }
+    return false;
+}
 
-DRO_Scale::DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, pcnt_unit_t unit, float scale, int filterValue) {
+DRO_Scale::DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, int unit, float scale, int filterValue) {
     aPinNumber = pinA;
     bPinNumber = pinB;
-    pcntUnit = unit;
     scaleFactor = scale;
     filter = filterValue;
     puType = up;
-}
-
-void IRAM_ATTR DRO_Scale::pcnt_intr_handler(void* arg) {
-    pcnt_unit_t unit = (pcnt_unit_t)(intptr_t)arg;
-    uint32_t status;
-    pcnt_get_event_status(unit, &status);
-
-    if (status & PCNT_EVT_H_LIM) {
-        overflowCount[unit] += 32768;
-    } else if (status & PCNT_EVT_L_LIM) {
-        overflowCount[unit] -= 32768;
-    }
+    overflowCount = 0;
 }
 
 void DRO_Scale::attach() {
@@ -32,47 +27,54 @@ void DRO_Scale::attach() {
     Serial.flush();
     pinMode(aPinNumber, puType == up ? INPUT_PULLUP : INPUT);
     pinMode(bPinNumber, puType == up ? INPUT_PULLUP : INPUT);
-    
-    Serial.println("pcnt_config");
-    pcnt_config_t pcnt_config = {};
-    pcnt_config.pulse_gpio_num = aPinNumber;
-    pcnt_config.ctrl_gpio_num  = bPinNumber;
-    pcnt_config.channel        = PCNT_CHANNEL_0;
-    pcnt_config.unit           = pcntUnit;
-    pcnt_config.pos_mode       = PCNT_COUNT_INC;
-    pcnt_config.neg_mode       = PCNT_COUNT_DEC;
-    pcnt_config.lctrl_mode     = PCNT_MODE_REVERSE;
-    pcnt_config.hctrl_mode     = PCNT_MODE_KEEP;
-    pcnt_config.counter_h_lim  = 32767;
-    pcnt_config.counter_l_lim  = -32768;
-    pcnt_unit_config(&pcnt_config);
+
+    pcnt_unit_config_t unitConfig = {
+        .low_limit = -32768,
+        .high_limit = 32767,
+    };
+    if (pcnt_new_unit(&unitConfig, &pcntUnit) != ESP_OK) {
+        return;
+    }
 
     if (filter > 0) {
-        pcnt_set_filter_value(pcntUnit, filter);
-        pcnt_filter_enable(pcntUnit);
+        pcnt_glitch_filter_config_t filterConfig = {
+            .max_glitch_ns = (uint32_t)(filter * 10),
+        };
+        pcnt_unit_set_glitch_filter(pcntUnit, &filterConfig);
     }
 
-    pcnt_counter_clear(pcntUnit);
-    pcnt_counter_resume(pcntUnit);
-
-    pcnt_event_enable(pcntUnit, PCNT_EVT_H_LIM);
-    pcnt_event_enable(pcntUnit, PCNT_EVT_L_LIM);
-
-    static bool isrServiceInstalled = false;
-    if (!isrServiceInstalled) {
-        pcnt_isr_service_install(0);
-        isrServiceInstalled = true;
+    pcnt_chan_config_t chanConfig = {
+        .edge_gpio_num = aPinNumber,
+        .level_gpio_num = bPinNumber,
+    };
+    pcnt_channel_handle_t chan = NULL;
+    if (pcnt_new_channel(pcntUnit, &chanConfig, &chan) != ESP_OK) {
+        return;
     }
-    pcnt_isr_handler_add(pcntUnit, pcnt_intr_handler, reinterpret_cast<void*>(static_cast<intptr_t>(pcntUnit)));
-    pcnt_intr_enable(pcntUnit);
+
+    pcnt_channel_set_edge_action(chan, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE);
+    pcnt_channel_set_level_action(chan, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
+
+    // Watchpoints for 16-bit overflow tracking
+    pcnt_unit_add_watch_point(pcntUnit, 32767);
+    pcnt_unit_add_watch_point(pcntUnit, -32768);
+    pcnt_event_callbacks_t cbs = {
+        .on_reach = pcnt_on_reach,
+    };
+    pcnt_unit_register_event_callbacks(pcntUnit, &cbs, this);
+
+    pcnt_unit_enable(pcntUnit);
+    pcnt_unit_clear_count(pcntUnit);
+    pcnt_unit_start(pcntUnit);
 }
 
 // Returns the raw position from the scale with no offset
 float DRO_Scale::getRawPosition() {
-    int16_t currentHardwareCount = 0;
-    pcnt_get_counter_value(pcntUnit, &currentHardwareCount);
-    int32_t total_count = overflowCount[pcntUnit] + currentHardwareCount;
-    return total_count / scaleFactor;
+    if (!pcntUnit) return 0.0f;
+    int currentHardwareCount = 0;
+    pcnt_unit_get_count(pcntUnit, &currentHardwareCount);
+    int32_t total_count = overflowCount + currentHardwareCount;
+    return (float)total_count / scaleFactor;
 }
 
 // Returns the final position including the offset
@@ -87,7 +89,9 @@ void DRO_Scale::setPosition(float desiredPosition) {
 
 // Zeros the raw count AND the offset
 void DRO_Scale::clearCount() {
-    overflowCount[pcntUnit] = 0;
-    pcnt_counter_clear(pcntUnit);
+    overflowCount = 0;
+    if (pcntUnit) {
+        pcnt_unit_clear_count(pcntUnit);
+    }
     positionOffset = 0.0f;
 }

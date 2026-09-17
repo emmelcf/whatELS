@@ -368,15 +368,18 @@ void processSpindleCounter() {
   if (!pulseCountersReady) {
     return;
   }
-  pcnt_unit_t unit = pulseUnits[PULSE_COUNTER_SPINDLE];
-  int16_t count = 0;
-  pcnt_get_counter_value(unit, &count);
+  pcnt_unit_handle_t unit = pulseUnits[PULSE_COUNTER_SPINDLE];
+  if (!unit) {
+    return;
+  }
+  int count = 0;
+  pcnt_unit_get_count(unit, &count);
   int delta = count - spindleCount;
   if (delta == 0) {
     return;
   }
   if (count >= PCNT_CLEAR || count <= -PCNT_CLEAR) {
-    pcnt_counter_clear(unit);
+    pcnt_unit_clear_count(unit);
     spindleCount = 0;
   } else {
     spindleCount = count;
@@ -1031,6 +1034,25 @@ static void buttonReversePress() {
   setDupr(-dupr);
 }
 
+static int heldRepeatKey = 0;
+static unsigned long heldRepeatPressTime = 0;
+static unsigned long heldRepeatLastStepTime = 0;
+
+static void processHeldRepeatKey() {
+  if (heldRepeatKey == 0) return;
+  if (isOn || inNumpad || emergencyStop != ESTOP_NONE) {
+    heldRepeatKey = 0;
+    return;
+  }
+  unsigned long now = millis();
+  if (now - heldRepeatPressTime >= (unsigned long)JOG_HOLD_DELAY_MS) {
+    if (now - heldRepeatLastStepTime >= 200) {
+      heldRepeatLastStepTime = now;
+      buttonPlusMinusPress(heldRepeatKey == B_PLUS);
+    }
+  }
+}
+
 void processKeypadEvent() {
   processWebUiMoveFailsafe();
   int event = 0;
@@ -1056,20 +1078,26 @@ void processKeypadEvent() {
     event = keyboard.read();
     eventUsesKeyboardMap = true;
   } else if (!tftUploadActive && Serial1.available() > 0) {
-    byte incomingByte = Serial1.read();
-    if (nextionBufferIndex < NEXTION_BUFFER_LENGTH) {
-      nextionBuffer[nextionBufferIndex] = incomingByte;
-      nextionBufferIndex++;
-    } else {
-      nextionBufferIndex = 0;
-    }
-    if (checkForTerminator()) {
-      event = processNextionMessage();
-      eventFromNextion = event != 0 && lastNextionPageId != 255;
-      nextionBufferIndex = 0;
+    while (Serial1.available() > 0) {
+      byte incomingByte = Serial1.read();
+      if (nextionBufferIndex < NEXTION_BUFFER_LENGTH) {
+        nextionBuffer[nextionBufferIndex] = incomingByte;
+        nextionBufferIndex++;
+      } else {
+        nextionBufferIndex = 0;
+      }
+      if (checkForTerminator()) {
+        event = processNextionMessage();
+        eventFromNextion = event != 0 && lastNextionPageId != 255;
+        nextionBufferIndex = 0;
+        break;
+      }
     }
   }
-  if (event == 0) return;
+  if (event == 0) {
+    processHeldRepeatKey();
+    return;
+  }
   int physicalKeyCode = event & 0xFF;
   bool isPress = !(event & PS2_BREAK);
   int keyCode = eventUsesKeyboardMap ? keyboardActionForCode(byte(physicalKeyCode)) : physicalKeyCode;
@@ -1135,15 +1163,32 @@ void processKeypadEvent() {
     setMoveButtonPressed(byte(keyCode), isPress);
   }
 
-  // For all other keys we have no "release" logic.
+  // For all other keys we have no "release" logic, except resetting held repeat.
   if (!isPress) {
+    if (keyCode == heldRepeatKey) {
+      heldRepeatKey = 0;
+    }
     return;
+  }
+
+  if (keyCode != heldRepeatKey) {
+    heldRepeatKey = 0;
   }
 
   // Rest of the buttons.
   if (keyCode == B_PLUS) {
+    if (!isOn && !inNumpad) {
+      heldRepeatKey = B_PLUS;
+      heldRepeatPressTime = millis();
+      heldRepeatLastStepTime = millis();
+    }
     buttonPlusMinusPress(true);
   } else if (keyCode == B_MINUS) {
+    if (!isOn && !inNumpad) {
+      heldRepeatKey = B_MINUS;
+      heldRepeatPressTime = millis();
+      heldRepeatLastStepTime = millis();
+    }
     buttonPlusMinusPress(false);
   } else if (keyCode == B_ON) {
     buttonOnOffPress(true);

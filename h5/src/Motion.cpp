@@ -99,7 +99,7 @@ static unsigned int getTimerLimit() {
 
 void updateAsyncTimerSettings() {
   setDir(getAsyncAxis(), dupr > 0);
-  timerAlarmWrite(async_timer, getTimerLimit(), true);
+  timerAlarm(async_timer, getTimerLimit(), true, 0);
   timerWrite(async_timer, 0);
 }
 
@@ -307,7 +307,7 @@ void setModeFromLoop(int value) {
   if (mode == MODE_ASYNC || mode == MODE_Y) {
     if (!timerAttached) {
       timerAttached = true;
-      timerAttachInterrupt(async_timer, &onAsyncTimer, true);
+      timerAttachInterrupt(async_timer, &onAsyncTimer);
     }
     updateAsyncTimerSettings();
     setAsyncTimerEnable(true);

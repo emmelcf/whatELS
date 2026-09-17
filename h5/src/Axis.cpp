@@ -2,6 +2,7 @@
 #include "Input.h"
 #include "Display.h"
 #include "Motion.h"
+#include "Debug.h"
 
 // Global Axes
 Axis z;
@@ -9,19 +10,19 @@ Axis x;
 Axis y;
 
 // DRO Scales
-DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, ENCODER_STEPS_FLOAT / SCREW_X_DU * 10000, 100);
-DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, ENCODER_STEPS_FLOAT / SCREW_Z_DU * 10000, 100);
+DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, X_SCALE_PULSES_PER_MM, 100);
+DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, Z_SCALE_PULSES_PER_MM, 100);
 
-pcnt_unit_t pulseUnits[PULSE_COUNTER_COUNT] = {
-  PCNT_UNIT_0,
-  PCNT_UNIT_1,
-  PCNT_UNIT_2,
-  PCNT_UNIT_3
+pcnt_unit_handle_t pulseUnits[PULSE_COUNTER_COUNT] = {
+  NULL,
+  NULL,
+  NULL,
+  NULL
 };
 volatile bool pulseCountersReady = false;
 
 SemaphoreHandle_t motionMutex = NULL;
-hw_timer_t *async_timer = timerBegin(0, 80, true);
+hw_timer_t *async_timer = NULL;
 int emergencyStop = 0;
 
 bool isOn = false;
@@ -266,9 +267,9 @@ bool markOriginOrEmergencyStop() {
 
 void setAsyncTimerEnable(bool value) {
   if (value) {
-    timerAlarmEnable(async_timer);
+    timerStart(async_timer);
   } else {
-    timerAlarmDisable(async_timer);
+    timerStop(async_timer);
   }
 }
 
@@ -535,18 +536,21 @@ int getAndResetPulses(Axis* a) {
   if (a->pulseCounter < 0 || a->pulseCounter >= PULSE_COUNTER_COUNT) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
-  pcnt_unit_t unit = pulseUnits[a->pulseCounter];
-  int16_t count = 0;
-  pcnt_get_counter_value(unit, &count);
+  pcnt_unit_handle_t unit = pulseUnits[a->pulseCounter];
+  if (!unit) {
+    return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
+  }
+  int count = 0;
+  pcnt_unit_get_count(unit, &count);
   int delta = count - a->pulseCount;
   if (isOn && manualMovesIgnoredWhenOn()) {
     applyAxisEncoderBacklash(a, delta);
-    pcnt_counter_clear(unit);
+    pcnt_unit_clear_count(unit);
     a->pulseCount = 0;
     return 0;
   }
   if (count >= PCNT_CLEAR || count <= -PCNT_CLEAR) {
-    pcnt_counter_clear(unit);
+    pcnt_unit_clear_count(unit);
     a->pulseCount = 0;
   } else {
     a->pulseCount = count;
@@ -604,27 +608,53 @@ bool moveGearboxAxisManually(Axis* a, int pulseDelta, int sign) {
 
 
 void startPulseCounter(PulseCounter pulseCounter, int gpioA, int gpioB) {
-  pcnt_unit_t unit = pulseUnits[pulseCounter];
-  pcnt_config_t pcntConfig;
-  pcntConfig.pulse_gpio_num = gpioA;
-  pcntConfig.ctrl_gpio_num = gpioB;
-  pcntConfig.channel = PCNT_CHANNEL_0;
-  pcntConfig.unit = unit;
-  pcntConfig.pos_mode = PCNT_COUNT_INC;
-  pcntConfig.neg_mode = PCNT_COUNT_DEC;
-  pcntConfig.lctrl_mode = PCNT_MODE_REVERSE;
-  pcntConfig.hctrl_mode = PCNT_MODE_KEEP;
-  pcntConfig.counter_h_lim = PCNT_LIM;
-  pcntConfig.counter_l_lim = -PCNT_LIM;
-  pcnt_unit_config(&pcntConfig);
-  pcnt_set_filter_value(unit, ENCODER_FILTER);
-  pcnt_filter_enable(unit);
-  pcnt_counter_pause(unit);
-  pcnt_counter_clear(unit);
-  pcnt_counter_resume(unit);
+  DEBUG_PRINTF("startPulseCounter: counter=%d gpioA=%d gpioB=%d\r\n", pulseCounter, gpioA, gpioB);
+  Serial.flush();
+
+  pinMode(gpioA, INPUT_PULLUP);
+  pinMode(gpioB, INPUT_PULLUP);
+
+  pcnt_unit_config_t unitConfig = {
+    .low_limit = -PCNT_LIM,
+    .high_limit = PCNT_LIM,
+  };
+  pcnt_unit_handle_t unit = NULL;
+  esp_err_t err = pcnt_new_unit(&unitConfig, &unit);
+  if (err != ESP_OK) {
+    DEBUG_PRINTF("pcnt_new_unit failed: %d\r\n", err);
+    return;
+  }
+
+  pcnt_glitch_filter_config_t filterConfig = {};
+  filterConfig.max_glitch_ns = ((uint64_t)ENCODER_FILTER * 1000000000ULL + APB_CLK_FREQ - 1) / APB_CLK_FREQ;
+  pcnt_unit_set_glitch_filter(unit, &filterConfig);
+
+  pcnt_chan_config_t chanConfig = {
+    .edge_gpio_num = gpioA,
+    .level_gpio_num = gpioB,
+  };
+  pcnt_channel_handle_t chan = NULL;
+  err = pcnt_new_channel(unit, &chanConfig, &chan);
+  if (err != ESP_OK) {
+    DEBUG_PRINTF("pcnt_new_channel failed: %d\r\n", err);
+    return;
+  }
+
+  pcnt_channel_set_edge_action(chan, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE);
+  pcnt_channel_set_level_action(chan, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
+
+  pcnt_unit_enable(unit);
+  pcnt_unit_clear_count(unit);
+  pcnt_unit_start(unit);
+
+  pulseUnits[pulseCounter] = unit;
+  DEBUG_PRINTF("startPulseCounter done for counter=%d\r\n", pulseCounter);
+  Serial.flush();
 }
 
 void taskAttachInterrupts(void *param) {
+  DEBUG_PRINTLN("taskAttachInterrupts started on Core 0");
+  Serial.flush();
   startPulseCounter(PULSE_COUNTER_SPINDLE, ENC_A, ENC_B);
 #if !HAS_DRO_Z
   startPulseCounter(PULSE_COUNTER_Z, Z_PULSE_A, Z_PULSE_B);
@@ -635,6 +665,8 @@ void taskAttachInterrupts(void *param) {
   if (ACTIVE_Y) {
     startPulseCounter(PULSE_COUNTER_Y, Y_PULSE_A, Y_PULSE_B);
   }
+  DEBUG_PRINTLN("taskAttachInterrupts completed successfully");
+  Serial.flush();
   pulseCountersReady = true;
   vTaskDelete(NULL);
 }
@@ -667,8 +699,12 @@ void taskMoveZ(void *param) {
     } else {
       z.speedMax = getStepMaxSpeed(&z);
       int delta = 0;
+      bool pulseMove = false;
+      bool buttonActive = false;
+      unsigned long buttonPressStart = millis();
+      bool continuousAllowed = false;
       do {
-        bool pulseMove = pulseDelta != 0;
+        pulseMove = pulseDelta != 0;
         float fractionalDelta = (pulseMove ? pulseDelta / z.pulsePerRevolution : moveStep * sign / z.screwPitch) * z.motorSteps + z.fractionalPos;
         delta = round(fractionalDelta);
         z.fractionalPos = fractionalDelta - delta;
@@ -692,7 +728,18 @@ void taskMoveZ(void *param) {
         } else {
           pulseDelta = 0;
         }
-      } while (delta != 0 && (pulseDelta != 0 || (left ? buttonLeftPressed : buttonRightPressed)));
+
+        buttonActive = left ? buttonLeftPressed : buttonRightPressed;
+        if (!pulseMove && buttonActive && !continuousAllowed) {
+          while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+            DELAY(5);
+            buttonActive = left ? buttonLeftPressed : buttonRightPressed;
+          }
+          if (buttonActive) {
+            continuousAllowed = true;
+          }
+        }
+      } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
       z.continuous = false;
       waitForPendingPos0(&z);
       if (isOn && mode == MODE_CONE) {
@@ -741,8 +788,13 @@ void taskMoveX(void *param) {
     if (isOn && dupr != 0 && isGearboxManualMove(&x)) {
       stepperOn = moveGearboxAxisManually(&x, pulseDelta, sign);
     } else {
+      int delta = 0;
+      bool pulseMove = false;
+      bool buttonActive = false;
+      unsigned long buttonPressStart = millis();
+      bool continuousAllowed = false;
       do {
-        bool pulseMove = pulseDelta != 0;
+        pulseMove = pulseDelta != 0;
         float fractionalDelta = (pulseMove ? pulseDelta / x.pulsePerRevolution : moveStep * sign / x.screwPitch) * x.motorSteps + x.fractionalPos;
         delta = round(fractionalDelta);
         x.fractionalPos = fractionalDelta - delta;
@@ -768,7 +820,18 @@ void taskMoveX(void *param) {
         } else {
           pulseDelta = getAndResetPulses(&x);
         }
-      } while (delta != 0 && (pulseDelta != 0 || (positiveMove ? buttonUpPressed : buttonDownPressed)));
+
+        buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
+        if (!pulseMove && buttonActive && !continuousAllowed) {
+          while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+            DELAY(5);
+            buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
+          }
+          if (buttonActive) {
+            continuousAllowed = true;
+          }
+        }
+      } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
       x.continuous = false;
       waitForPendingPos0(&x);
       if (isOn && mode == MODE_CONE) {
@@ -801,8 +864,12 @@ void taskMoveY(void *param) {
 
     int delta = 0;
     int sign = plus ? 1 : -1;
+    bool pulseMove = false;
+    bool buttonActive = false;
+    unsigned long buttonPressStart = millis();
+    bool continuousAllowed = false;
     do {
-      bool pulseMove = pulseDelta != 0;
+      pulseMove = pulseDelta != 0;
       float fractionalDelta = (pulseMove ? pulseDelta / y.pulsePerRevolution : getMoveStepForAxis(&y) * sign / y.screwPitch) * y.motorSteps + y.fractionalPos;
       delta = round(fractionalDelta);
       y.fractionalPos = fractionalDelta - delta;
@@ -826,7 +893,18 @@ void taskMoveY(void *param) {
       } else {
         pulseDelta = getAndResetPulses(&y);
       }
-    } while (delta != 0 && (pulseDelta != 0 || (plus ? buttonForwardPressed : buttonBackPressed)));
+
+      buttonActive = plus ? buttonForwardPressed : buttonBackPressed;
+      if (!pulseMove && buttonActive && !continuousAllowed) {
+        while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+          DELAY(5);
+          buttonActive = plus ? buttonForwardPressed : buttonBackPressed;
+        }
+        if (buttonActive) {
+          continuousAllowed = true;
+        }
+      }
+    } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
     y.continuous = false;
     waitForPendingPos0(&y);
     if (isOn && mode == MODE_Y) updateAsyncTimerSettings();

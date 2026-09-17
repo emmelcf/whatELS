@@ -78,64 +78,7 @@ static uint8_t hidToPs2Code(uint8_t hidCode) {
   }
 }
 
-class NanoElsUsbHost : public EspUsbHost {
-public:
-  void onKeyboard(hid_keyboard_report_t report, hid_keyboard_report_t last_report) override {
-    if (!usbKeyQueue) return;
-
-    // Detect newly pressed keys (present in new report, but not in last_report)
-    for (int i = 0; i < 6; i++) {
-      uint8_t code = report.keycode[i];
-      if (code != 0) {
-        bool wasPressed = false;
-        for (int j = 0; j < 6; j++) {
-          if (last_report.keycode[j] == code) {
-            wasPressed = true;
-            break;
-          }
-        }
-        if (!wasPressed) {
-          uint8_t ps2 = hidToPs2Code(code);
-          if (ps2 != 0) {
-            uint16_t event = ps2; // Press event (no PS2_BREAK flag)
-            xQueueSend(usbKeyQueue, &event, 0);
-          }
-        }
-      }
-    }
-
-    // Detect newly released keys (present in last_report, but not in new report)
-    for (int i = 0; i < 6; i++) {
-      uint8_t code = last_report.keycode[i];
-      if (code != 0) {
-        bool isStillPressed = false;
-        for (int j = 0; j < 6; j++) {
-          if (report.keycode[j] == code) {
-            isStillPressed = true;
-            break;
-          }
-        }
-        if (!isStillPressed) {
-          uint8_t ps2 = hidToPs2Code(code);
-          if (ps2 != 0) {
-            uint16_t event = ps2 | PS2_BREAK; // Release event
-            xQueueSend(usbKeyQueue, &event, 0);
-          }
-        }
-      }
-    }
-  }
-};
-
-static NanoElsUsbHost usbHost;
-
-static void taskUsbHost(void *pvParameters) {
-  DEBUG_PRINTLN("taskUsbHost started on Core 0");
-  while (true) {
-    usbHost.task();
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
-}
+static EspUsbHost usbHost;
 
 void initUsbKeyboard() {
   usbKeyQueue = xQueueCreate(USB_KEY_QUEUE_SIZE, sizeof(uint16_t));
@@ -144,9 +87,51 @@ void initUsbKeyboard() {
     return;
   }
 
-  usbHost.begin();
-  xTaskCreatePinnedToCore(taskUsbHost, "taskUsbHost", 4096, NULL, 2, NULL, 0);
-  DEBUG_PRINTLN("USB Host initialized");
+  usbHost.onKeyboard([](const EspUsbHostKeyboardEvent &event) {
+    DEBUG_PRINTF("USB Key: %s iface=%u keycode=0x%02X ascii='%c' (0x%02X)\r\n",
+                 event.pressed ? "PRESS" : "RELEASE",
+                 event.interfaceNumber,
+                 event.keycode,
+                 (event.ascii >= 0x20 && event.ascii < 0x7F) ? (char)event.ascii : ' ',
+                 event.ascii);
+
+    if (!usbKeyQueue) return;
+    uint8_t ps2 = hidToPs2Code(event.keycode);
+    if (ps2 == 0) return;
+
+    if (event.pressed) {
+      uint16_t keyEvent = ps2; // Press event (no PS2_BREAK flag)
+      xQueueSend(usbKeyQueue, &keyEvent, 0);
+    } else if (event.released) {
+      uint16_t keyEvent = ps2 | PS2_BREAK; // Release event
+      xQueueSend(usbKeyQueue, &keyEvent, 0);
+    }
+  });
+
+  usbHost.onConsumerControl([](const EspUsbHostConsumerControlEvent &event) {
+    DEBUG_PRINTF("USB Consumer: %s usage=0x%04X\r\n",
+                 event.pressed ? "PRESS" : "RELEASE",
+                 event.usage);
+  });
+
+  usbHost.onDeviceConnected([](const EspUsbHostDeviceInfo &device) {
+    DEBUG_PRINTF("USB device connected: VID=%04X PID=%04X (%s %s)\n",
+                 device.vid, device.pid, device.manufacturer, device.product);
+  });
+
+  usbHost.onDeviceDisconnected([](const EspUsbHostDeviceInfo &device) {
+    DEBUG_PRINTF("USB device disconnected: VID=%04X PID=%04X\n", device.vid, device.pid);
+  });
+
+  EspUsbHostConfig config;
+  config.taskCore = 0; // Run USB host task on Core 0
+  config.taskPriority = 2;
+
+  if (!usbHost.begin(config)) {
+    DEBUG_PRINTF("usbHost.begin() failed: %s\n", usbHost.lastErrorName());
+  } else {
+    DEBUG_PRINTLN("USB Host initialized");
+  }
 }
 
 bool usbKeyboardAvailable() {

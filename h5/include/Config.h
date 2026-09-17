@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 
 // Versioning
 #define SOFTWARE_VERSION 38
@@ -19,6 +19,8 @@
 #define WIFI_CONFIG_NAMESPACE "h5wifi"
 #define KEYBOARD_CONFIG_VERSION 1
 #define KEYBOARD_CONFIG_NAMESPACE "h5keys"
+
+#define TIMER_FREQ 1000000 // 1MHz async timer frequency
 
 // Spindle optical rotary encoder
 const int DEFAULT_ENCODER_PPR = 1200;
@@ -92,11 +94,13 @@ const char NAME_Y = 'Y';
 
 #define Z_SCALE_PIN_A (gpio_num_t)9
 #define Z_SCALE_PIN_B (gpio_num_t)12
-#define Z_SCALE_PCNT_UNIT PCNT_UNIT_1
+#define Z_SCALE_PCNT_UNIT 1
+#define Z_SCALE_PULSES_PER_MM 1250.67f
 
 #define X_SCALE_PIN_A (gpio_num_t)40
 #define X_SCALE_PIN_B (gpio_num_t)39
-#define X_SCALE_PCNT_UNIT PCNT_UNIT_2
+#define X_SCALE_PCNT_UNIT 2
+#define X_SCALE_PULSES_PER_MM 501.2f
 
 #define COLOR_DRO_ON 2016
 #define COLOR_DRO_OFF 25388
@@ -140,6 +144,7 @@ const bool DEFAULT_INVERT_JOYSTICK_BUTTON = false;
 const long DEFAULT_STEP_TIME_MS = 500;
 const long DEFAULT_DELAY_BETWEEN_STEPS_MS = 80;
 const bool DEFAULT_ENABLE_CONTINUOUS_MOVE = true;
+const long DEFAULT_JOG_HOLD_DELAY_MS = 1000;
 
 // WiFi defaults
 const bool DEFAULT_WIFI_ENABLED = true;
@@ -184,15 +189,11 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define KEY_CLOCK 36
 
 // USB Host Keyboard (Supported on ESP32-S3 and ESP32-S2)
-#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
-  #define ENABLE_USB_KEYBOARD true
-#else
-  #define ENABLE_USB_KEYBOARD false
-#endif
+#define ENABLE_USB_KEYBOARD true
 
 // Debug UART via MISC Header (for Rainbowlink v2 / bench debugging)
 #define DEBUG_UART_TX_PIN 10
-#define DEBUG_UART_RX_PIN -1
+#define DEBUG_UART_RX_PIN 11
 #define DEBUG_UART_BAUD 115200
 
 #define DHIGH(x) digitalWrite(x, HIGH)
@@ -470,6 +471,7 @@ extern long BACKLASH_DU_X;
 extern long STEP_TIME_MS;
 extern long DELAY_BETWEEN_STEPS_MS;
 extern bool ENABLE_CONTINUOUS_MOVE;
+extern long JOG_HOLD_DELAY_MS;
 
 extern bool WIFI_ENABLED;
 extern String WIFI_SSID;
