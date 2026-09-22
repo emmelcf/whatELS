@@ -88,11 +88,11 @@ Located directly above the jog D-pad. Houses live operational apron controls onl
 
 ### 3.2 Mode Parameters & Logic
 * **Turning Mode:**
-  * Parameters: `CUT PITCH`, `FEED DIR [← CHUCK / → TAIL]`, `LENGTH`, `TOTAL DEPTH (Ø)`, `MAX DEPTH/PASS`, `PASSES` (two-way coupled: default $\lceil\Delta X / \text{DOC}\rceil$, editable to override), `RETRACT`, `RESTORE LIMITS`.
+  * Parameters: `OPERATION [EXTERNAL (OD) / INTERNAL (ID / BORE)]`, `FEED DIR [← CHUCK / → TAIL]`, `LENGTH`, `TOTAL DEPTH (Ø)`, `MAX DEPTH/PASS`, `PASSES` (two-way coupled: default $\lceil\Delta X / \text{DOC}\rceil$, editable to override), `RESTORE LIMITS`. (Feed pitch is governed exclusively in the center action deck).
   * Entering `LENGTH` computes feature shoulder boundary relative to starting coordinate and maps directly to the active hardware limit register.
 * **Facing Mode:**
   * Kinematic mirror of Turning: Cutting Axis = $X$, Infeed Axis = $Z$.
-  * Parameters: `FACING FEED`, `FINAL Ø` / `STROKE`, `TOTAL DEPTH`, `MAX DEPTH/PASS`, `PASSES` (two-way coupled, editable to override), `RESTORE LIMITS`.
+  * Parameters: `STROKE DIR [↑ TO CENTER / ↓ RETRACT]`, `STROKE (Ø)`, `TOTAL DEPTH`, `MAX DEPTH/PASS`, `PASSES` (two-way coupled, editable to override), `RESTORE LIMITS`. (Facing feed is governed exclusively in the center action deck).
 * **Threading Mode:**
   * Parameters: `LEAD / PITCH` (integer TPI preserved for imperial, mm pitch for metric), `PASS`, `PASS DEPTH`, `DIRECTION [RH / LH]`, `CYCLE INFEED [90° RADIAL]`.
   * Pitch and pass depth are strictly locked during active cutting; only `STOP` is permitted.

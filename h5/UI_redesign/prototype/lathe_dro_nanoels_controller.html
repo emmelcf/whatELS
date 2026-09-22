@@ -87,7 +87,7 @@
   /* DRO COLUMN: Static 50px font, non-shifting tabular width */
   .col-dro {
     width: 338px; padding: 8px 14px; display: flex; flex-direction: column;
-    justify-content: center; gap: 20px; border-right: 1px solid var(--line);
+    justify-content: flex-start; gap: 14px; border-right: 1px solid var(--line);
   }
   .axis-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; }
   .axis-letter { font-size: 22px; color: var(--dim); font-weight: 700; flex: 0 0 auto; }
@@ -198,8 +198,8 @@
   /* RIGHT COLUMN: Mode Config, Spindle and Action Deck */
   .col-info { width: 260px; padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
   .spindle-card {
-    border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px;
-    display: flex; align-items: baseline; justify-content: space-between; background: #0e1317;
+    border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; min-height: 42px;
+    display: flex; align-items: center; justify-content: space-between; background: #0e1317;
   }
   .card-title { font-size: 11px; letter-spacing: .6px; color: var(--dimmer); font-weight: 700; }
   .spindle-value {
@@ -233,8 +233,9 @@
   .feed-val-box { text-align: left; display: inline-block; }
   .feed-unit-box { font-size: 11px; color: var(--dim); display: inline-block; }
   .dir-chip-fixed {
-    width: 86px; text-align: center; font-size: 11px; font-weight: 700; color: var(--dim);
-    border: 1px solid var(--line); border-radius: 3px; padding: 3px 0; background: #12181d;
+    width: 86px; min-height: 38px; text-align: center; font-size: 12px; font-weight: 700; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 4px; padding: 4px 0; background: #12181d;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .dir-chip-fixed.editable { color: var(--fg); cursor: pointer; }
   .axis-tag-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 700; border: 1px solid var(--line); color: var(--dimmer); }
@@ -252,20 +253,22 @@
 
   /* Mode Properties Table */
   .kv {
-    display: flex; justify-content: space-between; align-items: baseline; font-size: 13px;
-    padding: 2px 0; color: var(--dim); gap: 6px;
+    display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+    padding: 3px 0; color: var(--dim); gap: 6px; min-height: 36px;
   }
   .kv b { color: var(--fg); font-weight: 600; font-size: 14px; }
   .kv b.editable { border-bottom: 1px dashed var(--dimmer); cursor: pointer; }
   .toggle-chip {
-    font-size: 13px; font-weight: 700; min-height: 38px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--line);
+    font-size: 12px; font-weight: 700; min-height: 38px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--line);
     background: #141b21; color: var(--dim); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    letter-spacing: .3px;
   }
   .toggle-chip.active { color: var(--green); border-color: #1f3d2c; background: var(--green-bg); }
   .inline-dir-chip {
-    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 3px;
+    font-size: 12px; font-weight: 700; padding: 4px 10px; min-height: 36px; border-radius: 4px;
     border: 1px solid #234058; background: var(--blue-bg); color: var(--blue);
     cursor: pointer; white-space: nowrap; user-select: none; letter-spacing: .3px;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .inline-dir-chip:active { filter: brightness(1.25); }
 
@@ -382,6 +385,11 @@
         
         <!-- DRO COLUMN: Fixed width, Danish uppercase Ø, no font jump -->
         <div class="col-dro">
+          <div class="spindle-card tap" id="spindleBox" title="Tap to cycle: RPM / TURNS / ANGLE / SIM SPINDLE">
+            <span class="card-title">SPINDLE</span>
+            <span><span class="spindle-value mono" id="spindleValue">0</span><span class="spindle-unit" id="spindleUnit">RPM</span></span>
+          </div>
+
           <div>
             <div class="axis-head">
               <div class="axis-letter">Z</div>
@@ -453,13 +461,8 @@
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: Spindle Card, Mode Selection, & Runstack -->
+    <!-- RIGHT COLUMN: Mode Selection & Runstack -->
     <div class="col-info">
-      <div class="spindle-card tap" id="spindleBox" title="Tap to cycle: RPM / TURNS / ANGLE / SIM SPINDLE">
-        <span class="card-title">SPINDLE</span>
-        <span><span class="spindle-value mono" id="spindleValue">0</span><span class="spindle-unit" id="spindleUnit">RPM</span></span>
-      </div>
-
       <div class="mode-card">
         <div class="mode-head tap" id="modeHead">
           <span class="name" id="modeName">GEARBOX</span>
@@ -1199,7 +1202,7 @@
       var pInfo = getTurnPasses();
       var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>CUT PITCH</span><b class="mono ' + ed + '" id="fld-turnPitch">' + lenStr(state.turnPitch, dp) + ' ' + unitLabel() + '/rev</b></div>' +
+        '<div class="kv"><span>OPERATION</span><span class="toggle-chip active tap" id="fld-turnType" style="min-height:38px; min-width:140px;">' + (state.turnType==='EXTERNAL'?'EXTERNAL (OD)':'INTERNAL (ID / BORE)') + '</span></div>' +
         '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + lenStr(state.turnLength, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-turnDepth">Ø ' + lenStr(state.turnTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + lenStr(state.turnMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
@@ -1211,7 +1214,6 @@
       var fpInfo = getFacePasses();
       var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>FACING FEED</span><b class="mono ' + ed + '" id="fld-facePitch">' + lenStr(state.facePitch, dp) + ' ' + unitLabel() + '/rev</b></div>' +
         '<div class="kv"><span>STROKE</span><span class="inline-dir-chip tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + lenStr(state.faceStroke, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-faceDepth">' + lenStr(state.faceTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + lenStr(state.faceMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
@@ -1304,7 +1306,11 @@
     if(state.runState === 'running') return; // Field editing locked during cycle execution
 
     if(state.mode === 'TURNING'){
-      $('fld-turnPitch').addEventListener('click', function(){ openKeypad('turnPitch', state.turnPitch); });
+      $('fld-turnType').addEventListener('click', function(){
+        state.turnType = state.turnType === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
+        updateStatusMsg();
+        render();
+      });
       $('fld-turnDir').addEventListener('click', function(){
         state.turnDir = state.turnDir === 'CHUCK' ? 'TAIL' : 'CHUCK';
         recalcTurnLimits();
@@ -1320,7 +1326,6 @@
         updateStatusMsg(); render();
       });
     } else if(state.mode === 'FACING'){
-      $('fld-facePitch').addEventListener('click', function(){ openKeypad('facePitch', state.facePitch); });
       $('fld-faceDir').addEventListener('click', function(){
         state.faceDir = state.faceDir === 'CENTER' ? 'RETRACT' : 'CENTER';
         recalcFaceLimits();
@@ -1373,7 +1378,8 @@
     } else if(state.mode === 'TURNING'){
       var p = getTurnPasses();
       var dirStr = state.turnDir === 'CHUCK' ? '← TO CHUCK' : '→ TO TAIL';
-      setStatusMsg('TURNING: ' + fmt(state.turnLength,1) + 'mm ' + dirStr + ' | ' + p.count + ' PASSES (MAX DOC: Ø' + fmt(state.turnMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.turnRestoreLimits?'ON':'OFF'));
+      var typeStr = state.turnType === 'EXTERNAL' ? 'EXT (OD)' : 'INT (BORING)';
+      setStatusMsg('TURNING [' + typeStr + ']: ' + fmt(state.turnLength,1) + 'mm ' + dirStr + ' | ' + p.count + ' PASSES (MAX DOC: Ø' + fmt(state.turnMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.turnRestoreLimits?'ON':'OFF'));
     } else if(state.mode === 'FACING'){
       var fp = getFacePasses();
       var fdirStr = state.faceDir === 'CENTER' ? '↑ TO CENTER' : '↓ RETRACT';
@@ -1481,7 +1487,11 @@
                 state.turnCurrentPass++;
                 state.z = state.turnDir === 'CHUCK' ? (state.zMax !== null ? state.zMax : (state.zMin + state.turnLength))
                                                     : (state.zMin !== null ? state.zMin : (state.zMax - state.turnLength));
-                state.xDia -= pInfo.doc;
+                if(state.turnType === 'INTERNAL'){
+                  state.xDia += pInfo.doc;
+                } else {
+                  state.xDia -= pInfo.doc;
+                }
               } else {
                 stopCycle(false);
               }

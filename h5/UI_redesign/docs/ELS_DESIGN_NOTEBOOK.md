@@ -330,7 +330,43 @@ Prior iterations dynamically mounted and unmounted the `Z UNIT: [ FEED ] [ TPI ]
 3. **Nudge Integration**:
    * Tapping `—` or `+` in Turning or Facing trims the active feed rate (`turnPitch` or `facePitch`) by the exact active step delta, providing real-time feedback in both the dynamic deck and the right-hand mode parameters card.
 
+---
 
+## 16. Mode Card De-Duplication & Operation Selector (External OD vs Internal Boring)
 
+### Motivation & Layout Economy
+* In the 800×480 display layout, vertical real estate in the right-hand mode parameters card is constrained.
+* Having `CUT PITCH` (Turning) and `FACING FEED` (Facing) inside the right-hand card was redundant because the active cutting feed rate is already prominently displayed, tapped for numeric keypad entry, and stepped with `—`/`+` nudges in the dynamic center action deck.
+* Removing the redundant feed rows created room to expose the firmware-supported **Internal vs. External turning operation selector** without overcrowding the card.
 
+### Implementation Standard
+1. **Feed Rate De-Duplication**:
+   * Removed `CUT PITCH` row from the Turning card and `FACING FEED` row from the Facing card.
+   * Operators inspect and adjust cutting feed directly in the center action deck (`deckReadout`, `deckNudgeMinus`, `deckNudgePlus`).
+2. **Operation Selector in Turning Card**:
+   * Added an interactive `OPERATION` toggle chip (`[ EXTERNAL (OD) ]` $\leftrightarrow$ `[ INTERNAL (ID / BORE) ]`).
+   * Tapping cycles `state.turnType` between `'EXTERNAL'` and `'INTERNAL'`.
+   * Real-time status bar updates to reflect the active operation (`TURNING [EXT (OD)]` vs `TURNING [INT (BORING)]`).
+3. **Motion Simulation Awareness**:
+   * In multi-pass simulation, diameter stepping adapts to operation type: external turning decrements diameter (`state.xDia -= doc`) while internal turning increments diameter (`state.xDia += doc`) as material is removed from the bore.
 
+---
+
+## 17. Kinematic Telemetry Alignment (Spindle Relocation to Left Column) & Touch Target Elevation
+
+### Motivation & Spatial Economy
+* Previously, the `SPINDLE` panel was stacked above the Mode Card in the right column (`col-info`), consuming ~45px of vertical room.
+* This vertical compression forced Mode Card interactive chips (like directional chips and toggles) down to an unergonomic ~20px height, violating the $\ge 38\text{px}$ glove-friendly touch target rule.
+* Kinematically, the lathe has 3 primary axes: **$Z$ (longitudinal carriage)**, **$X$ (transverse cross-slide)**, and **$S$ (rotational spindle)**. Placing Spindle on the left unites all machine telemetry in a single dedicated column.
+
+### Implementation Standard
+1. **Left Column Telemetry Hierarchy (`col-dro`)**:
+   * **Top**: Dedicated `SPINDLE` panel (rotational telemetry: RPM / turns / angle).
+   * **Middle**: `$Z$` Carriage Position readout (`50px` monospace) + limit boundary chips.
+   * **Bottom**: `$X$` Cross-Slide Position readout (`50px` monospace with Danish `Ø`) + limit boundary chips + diameter/radius toggle.
+2. **Right Column Mode Card Expansion (`col-info`)**:
+   * Removing the spindle card allows the Mode Card to expand and occupy the full column above the stationary `START` / `STOP` runstack (~242px body height).
+3. **Universal Touch Target Elevation ($\ge 38\text{px}$)**:
+   * `OPERATION` selector (`[ EXTERNAL (OD) ]` $\leftrightarrow$ `[ INTERNAL (ID / BORE) ]`): full $38\text{px}$ height toggle chip.
+   * Longitudinal & Transverse Direction chips (`← CHUCK / → TAIL` and `↑ TO CENTER / ↓ RETRACT`): elevated to $36\text{px}$ min-height.
+   * Property table rows (`.kv`): standardized with a $36\text{px}$ minimum height and centered alignment for effortless touch interactions on the shop floor.
