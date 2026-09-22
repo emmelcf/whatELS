@@ -370,3 +370,24 @@ Prior iterations dynamically mounted and unmounted the `Z UNIT: [ FEED ] [ TPI ]
    * `OPERATION` selector (`[ EXTERNAL (OD) ]` $\leftrightarrow$ `[ INTERNAL (ID / BORE) ]`): full $38\text{px}$ height toggle chip.
    * Longitudinal & Transverse Direction chips (`← CHUCK / → TAIL` and `↑ TO CENTER / ↓ RETRACT`): elevated to $36\text{px}$ min-height.
    * Property table rows (`.kv`): standardized with a $36\text{px}$ minimum height and centered alignment for effortless touch interactions on the shop floor.
+
+---
+
+## 18. Coupled Parameter Visual Affordance (Right Bracket on Max DOC & Passes)
+
+### Motivation & Mental Model
+* In automated lathe cycles (**Turning** and **Facing**), the cut geometry is governed by three interrelated parameters:
+  1. **Total Depth** ($D$): The target material to be removed (part requirement).
+  2. **Max DOC / Pass** ($DOC_{max}$): The maximum allowable depth of cut per pass (machining strategy).
+  3. **Number of Passes** ($N$): The discrete integer pass count executed by the controller ($N = \lceil D / DOC_{max} \rceil$).
+* The NanoELS motion controller firmware expects depth and pass count, but operators frequently think in terms of tool cutting depth ($DOC_{max}$). The UI enables two-way coupled entry: editing $DOC_{max}$ computes $N$, while editing $N$ updates the DOC per pass.
+* Without a clear visual cue, operators could be confused when altering one field silently recalculates the other.
+
+### Implementation Standard
+1. **Visual Grouping via Engineering Right Bracket (`]`)**:
+   * Wrapped `MAX DOC / PASS` and `PASSES` inside a `.kv-bracket-group` container across both Turning and Facing cards.
+   * A crisp right bracket with leader arms groups the two values without consuming extra vertical space on the $800\times 480$ screen.
+2. **Vertical Centerline Alignment**:
+   * The top horizontal tick line aligns directly with the vertical centerline of the `MAX DOC / PASS` value.
+   * The bottom horizontal tick line aligns directly with the vertical centerline of the `PASSES` value.
+   * Spacing between rows inside the bracket group matches the card's standard `6px` gap, ensuring clean rhythm and alignment across all rows.

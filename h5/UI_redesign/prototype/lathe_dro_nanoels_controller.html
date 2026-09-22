@@ -272,6 +272,29 @@
   }
   .inline-dir-chip:active { filter: brightness(1.25); }
 
+  /* Bracket group for coupled inputs (e.g. Max DOC & Passes) */
+  .kv-bracket-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 14px;
+  }
+  .kv-bracket-group::after {
+    content: '';
+    position: absolute;
+    right: 2px;
+    top: 17px;
+    bottom: 17px;
+    width: 8px;
+    border-top: 1.5px solid var(--dimmer);
+    border-right: 1.5px solid var(--dimmer);
+    border-bottom: 1.5px solid var(--dimmer);
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    pointer-events: none;
+  }
+
   /* Universal Runstack: 12px safety gap, static STOP positioning */
   .runstack { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
   .rbtn {
@@ -1205,8 +1228,10 @@
         '<div class="kv"><span>OPERATION</span><span class="toggle-chip active tap" id="fld-turnType" style="min-height:38px; min-width:140px;">' + (state.turnType==='EXTERNAL'?'EXTERNAL (OD)':'INTERNAL (ID / BORE)') + '</span></div>' +
         '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + lenStr(state.turnLength, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-turnDepth">Ø ' + lenStr(state.turnTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + lenStr(state.turnMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-turnPasses">' + pInfo.count + ' @ Ø' + lenStr(pInfo.doc, dp) + '</b></div>' +
+        '<div class="kv-bracket-group">' +
+          '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + lenStr(state.turnMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
+          '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-turnPasses">' + pInfo.count + ' @ Ø' + lenStr(pInfo.doc, dp) + '</b></div>' +
+        '</div>' +
         '<div class="kv"><span>RESTORE LIMITS</span><span class="toggle-chip ' + (state.turnRestoreLimits?'active':'') + ' tap" id="fld-turnRestore">' + (state.turnRestoreLimits?'ON FINISH: YES':'ON FINISH: NO') + '</span></div>';
     }
 
@@ -1216,8 +1241,10 @@
       return '' +
         '<div class="kv"><span>STROKE</span><span class="inline-dir-chip tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + lenStr(state.faceStroke, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-faceDepth">' + lenStr(state.faceTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + lenStr(state.faceMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-facePasses">' + fpInfo.count + ' @ ' + lenStr(fpInfo.doc, dp) + '</b></div>' +
+        '<div class="kv-bracket-group">' +
+          '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + lenStr(state.faceMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
+          '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-facePasses">' + fpInfo.count + ' @ ' + lenStr(fpInfo.doc, dp) + '</b></div>' +
+        '</div>' +
         '<div class="kv"><span>RESTORE LIMITS</span><span class="toggle-chip ' + (state.faceRestoreLimits?'active':'') + ' tap" id="fld-faceRestore">' + (state.faceRestoreLimits?'ON FINISH: YES':'ON FINISH: NO') + '</span></div>';
     }
 
