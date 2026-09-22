@@ -14,6 +14,8 @@
    * Setting a feature dimension (`LENGTH` in turning, `STROKE` in facing) automatically maps to the required hardware limit relative to tool touch-off, removing manual jog-and-set math.
 3. **Opt-In Limit Restoration:**
    * Because stock NanoELS overwrites limits destructively, the companion display controller introduces an opt-in `RESTORE LIMITS ON COMPLETION` toggle. This caches existing machine envelopes (e.g., chuck safety stops) and restores them upon cycle termination without modifying core NanoELS firmware.
+4. **Strict Mode Lockout During Cycle Execution:**
+   * Mode switching is strictly prohibited while any motion cycle or feed is active. The operator must press `STOP` before changing operating modes to prevent unintended spindle synchronization, axis runaway, or tool crashes.
 
 ---
 
@@ -22,29 +24,31 @@
 * **DRO Layout & Typography:**
   * Coordinate readouts are locked to a static `50px` monospace font (`JetBrains Mono` / tabular lining figures). Dynamic font auto-shrinking is prohibited to prevent digit jumping during axis motion.
   * Inline unit labels (`mm`/`in`) are omitted from axis coordinate lines to guarantee full horizontal fit for negative 7-figure values (e.g., `-300.0000 in`). The active system unit is anchored prominently in the top bar.
-  * Diameter symbol strictly utilizes the authentic uppercase Danish/European engineering glyph (`Ø`), matching uppercase `R`.
+  * Diameter symbol strictly utilizes the authentic uppercase Danish/European engineering glyph (`Ø`), matching uppercase `R`. Diameter vs. radius representation is dynamically color-coded (`Ø` in cyan, `R` in amber).
 * **Directional Alignment (Operator Reference Frame):**
   * $Z$ Axis (Carriage): `← Z CHUCK` is toward the headstock ($Z-$); `→ Z TAIL` is toward the tailstock ($Z+$).
   * $X$ Axis (Cross-Slide): `↑ TO CENTER` is into the workpiece/plunge ($X-$); `↓ RETRACT` is toward the operator/backing out ($X+$).
 * **Apron/Jog Cluster Placement:**
   * Jog D-pad and chamfer keys are pinned to the bottom of the center column, providing wrist/palm stability against lathe bed rims during manual stepping.
-  * Step increment selector cycles on tap (`0.010` → `0.100` → `1.000`), with long-press (>600ms) opening the numeric keypad for custom increments.
+  * Step increment selector cycles on tap through discrete standard tables (Metric: `0.010 → 0.100 → 1.000 mm`; Imperial: `0.0010 → 0.0100 → 0.1000 in`), with long-press (>600ms) opening the numeric keypad for custom increments.
 * **Unified Universal Runstack:**
-  * All modes consistently feature the primary action stack in the bottom-right corner: `START FEED` (green) directly above `STOP` (red).
+  * All modes consistently feature the primary action stack in the bottom-right corner: `START FEED` / `START CYCLE` (green) directly above `STOP` (red), separated by a generous 12px vertical safety gap.
+  * The `STOP` button is permanent and stationary across all 9 modes; it is visually subdued when idle and illuminates vibrant red with an active glow during motion.
 
 ---
 
 ## 3. Numeric Keypad Architecture
 
-* **Standard Calculator/ATM Layout:**
+* **Standard Calculator/ATM Layout with Quick Math Row:**
 ```text
 [ 7 ]  [ 8 ]  [ 9 ]
 [ 4 ]  [ 5 ]  [ 6 ]
 [ 1 ]  [ 2 ]  [ 3 ]
 [ ± ]  [ 0 ]  [ . ]
-[ CURR ] [ CLR ] [ ⌫ ]
+[ CURR ] [ ÷ 2 ] [ CLR ] [ ⌫ ]
 ```
-* **Clean Opening State:** Keypad opens with an empty buffer (placeholder `0`). No pre-highlighted zero to delete.
+* **Pre-Filled & Selected Buffer:** The keypad opens pre-populated with the target's current value and fully highlighted/selected. Typing immediately overwrites the buffer without requiring manual clearing, while pressing Cancel preserves the original value.
+* **`÷ 2` Half-Dimension Key:** Allows immediate halving of measured workpiece diameters for radius calculations and depth of cut parameters without mental math.
 * **Conditional `INSERT CURR`:** The `CURR` button is strictly gated—visible only when entering axis coordinates or soft limits; hidden for pitch, pass counts, and speeds.
 * **Cursor Positioning & Direct Input:** Keypad display acts as an editable input allowing pointer focus and cursor editing.
 
@@ -53,10 +57,16 @@
 ## 4. Operational Modes & Dynamic Center Deck
 
 * **Dynamic Center Action Deck:**
-  * Situated above the jog D-pad. Houses large, high-visibility nudge buttons (`[ − ]` and `[ + ]`) to permit safe, rapid feed trimming while turning under chips.
-  * **In Gearbox Mode:** Houses `SYNC / ASYNC` feed toggle and `AXIS: Z / X` mutually exclusive selector.
-  * **In Turning / Facing Modes:** Strips away axis toggles; displays real-time cycle status (`PASS 02 / 06`) with large feed trim buttons active.
-* **Turning Mode Parameters:**
+  * Situated above the jog D-pad. Houses live operational controls only.
+  * **In Gearbox Mode:** Houses large feed nudge buttons (`[ − ]` and `[ + ]`), active axis feed readout, active axis direction toggle (`DIR: ← TO CHUCK / → TO TAIL`), and feed step override chips. (Setup toggles `SYNC/ASYNC` and `AXIS Z/X` are positioned in the right Mode Card).
+  * **In Turning / Facing Modes:** Displays real-time cycle status (`PASS 02 / 06`) with feed trim buttons active.
+  * **In Threading Mode:** Houses thread lead trim buttons when stopped; transitions to locked cycle telemetry (`THREADING RUNNING`, target depth, pass count) when active, with all parameter editing and nudge buttons removed.
+* **Mode Categorization & Iconography:**
+  * Operating modes are grouped into 3 distinct functional categories:
+    1. **Continuous / Geared Motion:** `⚙ GEARBOX`, `✛ JOYSTICK`
+    2. **Multi-Pass CNC Cycles:** `⇋ TURNING`, `⥮ FACING`, `⩚ THREADING`
+    3. **Contouring & Specialty:** `⊿ TAPER`, `⭳ CUTOFF`, `⎍ SLOTTING`, `◠ HALF-SPHERES`
+  * Cutoff / parting icon arrow points away from the operator into the cut (`↑` / `X-`).
   * `CUT PITCH` (`mm/rev` synchronized).
   * `LENGTH` (sets $Z_{\text{MIN}}$ shoulder stop relative to start).
   * `TOTAL DEPTH` (total diameter reduction $\Delta X$).
