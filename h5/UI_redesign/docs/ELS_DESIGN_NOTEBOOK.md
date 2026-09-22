@@ -309,6 +309,28 @@ Prior iterations dynamically mounted and unmounted the `Z UNIT: [ FEED ] [ TPI ]
    * The text badge `<span class="axis-tag-badge">INACTIVE</span>` was removed from the headers of both the Z Carriage and X Cross-Slide blocks.
    * Axis activity is already definitively communicated by the top toggle (`AXIS: Z` vs `AXIS: X`) and full-card dimming (`.dimmed-axis-row` at $0.45$ opacity). Removing the text badge eliminates visual noise and reflow jitter.
 
+---
+
+## 15. Unified Feed Step Architecture Across Modes (Gearbox, Turning, Facing)
+
+### Motivation & Machining Rationale
+* Synchronized lathe operations (Gearbox feeds, longitudinal Turning, and transverse Facing) all govern the same physical cutting parameter: feed per revolution ($mm/rev$ or $in/rev$).
+* Prior iterations maintained an inconsistent control model: Gearbox allowed user-selectable step cycling, whereas Turning and Facing relied on a hidden, hard-coded $0.005\text{ mm}$ nudge increment with no user feedback.
+* On the lathe, an operator tuning a finish cut or establishing chip curl needs the exact same fine ($0.01\text{ mm}$ / $0.001"$), medium ($0.05\text{ mm}$ / $0.002"$), rough ($0.10\text{ mm}$ / $0.005"$), or coarse ($0.20\text{ mm}$ / $0.010"$) feed step options regardless of whether cutting in continuous Gearbox or automated multi-pass Turning/Facing.
+
+### Implementation Standard
+1. **Identical 2-Button Dynamic Deck Control**:
+   * Turning and Facing action decks incorporate the exact same **2-button step control** beneath the feed readout:
+     * `[ STEP: ±0.05 mm ]` (or active unit): cycles through the curated 4-step progression ($0.010 \rightarrow 0.050 \rightarrow 0.100 \rightarrow 0.200\text{ mm}$ / $0.0010 \rightarrow 0.0020 \rightarrow 0.0050 \rightarrow 0.0100\text{ in}$).
+     * `[ ± CUST STEP ]`: opens the numeric keypad to specify non-standard increments.
+2. **Axis State Coupling**:
+   * **Turning (Z carriage motion)**: utilizes the shared Z-axis feed step progression (`state.feedStepIdxZ`, `state.customFeedStepZ`).
+   * **Facing (X cross-slide motion)**: utilizes the shared X-axis feed step progression (`state.feedStepIdxX`, `state.customFeedStepX`).
+   * *Benefit*: If an operator selects `±0.05 mm` for Z in Gearbox, switching to Turning preserves that exact step increment automatically.
+3. **Nudge Integration**:
+   * Tapping `—` or `+` in Turning or Facing trims the active feed rate (`turnPitch` or `facePitch`) by the exact active step delta, providing real-time feedback in both the dynamic deck and the right-hand mode parameters card.
+
+
 
 
 

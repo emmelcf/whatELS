@@ -708,6 +708,22 @@
     }
   }
   function getActiveGearStepInfo(){
+    if(state.mode === 'TURNING'){
+      var arr = state.unit === 'mm' ? FEED_STEPS_MM : FEED_STEPS_IN;
+      var idx = state.feedStepIdxZ;
+      var cust = state.customFeedStepZ;
+      var unitStr = state.unit === 'mm' ? ' mm' : ' in';
+      var val = cust !== null ? cust : arr[idx % arr.length];
+      return { val: val, isCustom: cust !== null, unitStr: unitStr, type: 'feed', axis: 'Z', arr: arr, idx: idx };
+    }
+    if(state.mode === 'FACING'){
+      var arr = state.unit === 'mm' ? FEED_STEPS_MM : FEED_STEPS_IN;
+      var idx = state.feedStepIdxX;
+      var cust = state.customFeedStepX;
+      var unitStr = state.unit === 'mm' ? ' mm' : ' in';
+      var val = cust !== null ? cust : arr[idx % arr.length];
+      return { val: val, isCustom: cust !== null, unitStr: unitStr, type: 'feed', axis: 'X', arr: arr, idx: idx };
+    }
     var isSync = state.gearboxMode === 'SYNC';
     var isZ = state.activeFeedAxis === 'Z';
     var isTpi = isZ && state.gearFeedUnitZ === 'TPI' && isSync;
@@ -884,36 +900,11 @@
         render();
       });
 
-      $('deckStepCycle').addEventListener('click', function(){
-        var info = getActiveGearStepInfo();
-        if(info.isCustom){
-          if(info.type === 'async'){
-            if(info.axis === 'Z') state.customAsyncStepZ = null; else state.customAsyncStepX = null;
-          } else if(info.type === 'tpi'){
-            state.customFeedStepTpi = null;
-          } else {
-            if(info.axis === 'Z') state.customFeedStepZ = null; else state.customFeedStepX = null;
-          }
-        } else {
-          var nextIdx = (info.idx + 1) % info.arr.length;
-          if(info.type === 'async'){
-            if(info.axis === 'Z') state.asyncStepIdxZ = nextIdx; else state.asyncStepIdxX = nextIdx;
-          } else if(info.type === 'tpi'){
-            state.feedStepTpiIdx = nextIdx;
-          } else {
-            if(info.axis === 'Z') state.feedStepIdxZ = nextIdx; else state.feedStepIdxX = nextIdx;
-          }
-        }
-        render();
-      });
-
-      $('deckStepCust').addEventListener('click', function(){
-        var info = getActiveGearStepInfo();
-        openKeypad('customFeedStep', info.val);
-      });
-
     } else if(state.mode === 'TURNING'){
       var pInfo = getTurnPasses();
+      var stepInfo = getActiveGearStepInfo();
+      var cycleLabel = 'STEP: ±' + stepInfo.val + (stepInfo.isCustom ? '*' : '') + stepInfo.unitStr;
+
       deck.innerHTML = '' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<span style="font-size:11px;font-weight:700;color:var(--dim);">TURNING FEED TRIM</span>' +
@@ -926,10 +917,21 @@
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+        '</div>' +
+        '<div class="deck-step-row">' +
+          '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            cycleLabel +
+          '</div>' +
+          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            '± CUST STEP' +
+          '</div>' +
         '</div>';
 
     } else if(state.mode === 'FACING'){
       var fpInfo = getFacePasses();
+      var stepInfo = getActiveGearStepInfo();
+      var cycleLabel = 'STEP: ±' + stepInfo.val + (stepInfo.isCustom ? '*' : '') + stepInfo.unitStr;
+
       deck.innerHTML = '' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<span style="font-size:11px;font-weight:700;color:var(--dim);">FACING FEED TRIM</span>' +
@@ -942,6 +944,14 @@
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+        '</div>' +
+        '<div class="deck-step-row">' +
+          '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            cycleLabel +
+          '</div>' +
+          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            '± CUST STEP' +
+          '</div>' +
         '</div>';
 
     } else if(state.mode === 'THREADING'){
@@ -998,6 +1008,39 @@
         '</div>';
     }
 
+    // Attach Unified Deck Step Handlers (Gearbox, Turning, Facing)
+    var stepCycleBtn = $('deckStepCycle');
+    var stepCustBtn = $('deckStepCust');
+    if(stepCycleBtn && stepCustBtn){
+      stepCycleBtn.addEventListener('click', function(){
+        var info = getActiveGearStepInfo();
+        if(info.isCustom){
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.customAsyncStepZ = null; else state.customAsyncStepX = null;
+          } else if(info.type === 'tpi'){
+            state.customFeedStepTpi = null;
+          } else {
+            if(info.axis === 'Z') state.customFeedStepZ = null; else state.customFeedStepX = null;
+          }
+        } else {
+          var nextIdx = (info.idx + 1) % info.arr.length;
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.asyncStepIdxZ = nextIdx; else state.asyncStepIdxX = nextIdx;
+          } else if(info.type === 'tpi'){
+            state.feedStepTpiIdx = nextIdx;
+          } else {
+            if(info.axis === 'Z') state.feedStepIdxZ = nextIdx; else state.feedStepIdxX = nextIdx;
+          }
+        }
+        render();
+      });
+
+      stepCustBtn.addEventListener('click', function(){
+        var info = getActiveGearStepInfo();
+        openKeypad('customFeedStep', info.val);
+      });
+    }
+
     // Attach Deck Nudge Handlers
     var btnMinus = $('deckNudgeMinus');
     var btnPlus = $('deckNudgePlus');
@@ -1020,11 +1063,13 @@
             else state.gearPitchX = Math.max(0.001, +(state.gearPitchX - delta).toFixed(4));
           }
         } else if(state.mode === 'TURNING'){
-          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
-          state.turnPitch = Math.max(0.005, +(state.turnPitch - step).toFixed(4));
+          var info = getActiveGearStepInfo();
+          var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+          state.turnPitch = Math.max(0.005, +(state.turnPitch - delta).toFixed(4));
         } else if(state.mode === 'FACING'){
-          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
-          state.facePitch = Math.max(0.005, +(state.facePitch - step).toFixed(4));
+          var info = getActiveGearStepInfo();
+          var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+          state.facePitch = Math.max(0.005, +(state.facePitch - delta).toFixed(4));
         } else if(state.mode === 'THREADING' && !isRun){
           if(state.threadUnit === 'tpi'){
             var currTpi = 25.4 / state.pitch;
@@ -1053,11 +1098,13 @@
             else state.gearPitchX = +(state.gearPitchX + delta).toFixed(4);
           }
         } else if(state.mode === 'TURNING'){
-          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
-          state.turnPitch = +(state.turnPitch + step).toFixed(4);
+          var info = getActiveGearStepInfo();
+          var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+          state.turnPitch = +(state.turnPitch + delta).toFixed(4);
         } else if(state.mode === 'FACING'){
-          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
-          state.facePitch = +(state.facePitch + step).toFixed(4);
+          var info = getActiveGearStepInfo();
+          var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+          state.facePitch = +(state.facePitch + delta).toFixed(4);
         } else if(state.mode === 'THREADING' && !isRun){
           if(state.threadUnit === 'tpi'){
             var currTpi = 25.4 / state.pitch;
