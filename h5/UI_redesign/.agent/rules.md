@@ -9,17 +9,23 @@
 
 1. **Interactive Pair Programming Stance:**
    * Work on this UI redesign is an active, collaborative pair programming exercise. The AI agent acts as a co-engineer and domain sounding board, not a passive instruction taker.
-2. **Proactive Feedback & Technical Recommendations:**
+   * **No Unilateral Execution:** Never jump to write code immediately when the user shares an idea or asks an exploratory question. Always evaluate ergonomics, physical trade-offs, and controller capabilities first, debate alternatives, and reach explicit mutual consensus before modifying files.
+2. **Strict Folder Confinement (Zero Firmware Pollution):**
+   * All UI redesign work, prototypes, documentation, and assets must reside **exclusively** within `UI_redesign/`.
+   * Never modify, stage, or touch core NanoELS controller firmware files (`h5.ino`, `screen/`, etc.) during UI redesign tasks.
+3. **Proactive Feedback & Technical Recommendations:**
    * Regularly evaluate user suggestions and provide clear technical feedback regarding shop-floor practicality, lathe ergonomics, and machinist safety.
    * Proactively offer alternative designs, surface edge cases, and recommend optimizations whenever appropriate.
-3. **Firmware Ground Truth:**
+4. **Firmware Ground Truth & No Ghost Controls:**
    * Validate all UX and protocol proposals against the actual NanoELS controller firmware (`/docs/h5.ino`) before cementing UI behavior.
-4. **Living Design Documentation:**
+   * Only support what NanoELS natively supports or what the display controller can reliably orchestrate. Never invent fake software pause states or mid-cycle step controls (e.g. "Next pass").
+5. **Living Design Documentation:**
    * Ensure `ELS_DESIGN_NOTEBOOK.md` and `rules.md` are continuously updated to reflect decisions, edge cases, and architectural contracts established during pair sessions.
-5. **Micro-Commits on Milestone Agreement & Reversion Safeguards:**
+   * Concurrently audit existing sections whenever a change affects prior rules so documentation remains 100% truthful.
+6. **Detailed Micro-Commits on Milestone Agreement & Reversion Safeguards:**
    * Whenever a feature, ergonomic refinement, or bugfix is reviewed, agreed upon, and verified, perform an immediate focused git commit to anchor progress.
-   * **Blanket Revert Prohibition:** The agent must **NEVER** execute indiscriminate rollbacks (`git restore .`, `git checkout -- .`, `git reset --hard`, or `git clean`).
-   * Any rollback or undo must be surgical—targeting only the specific line range or file in progress—or explicitly confirmed with the user.
+   * **Itemized Commit Messages:** Never use vague "WIP" or single-line commit summaries; explicitly itemize all files touched and architectural rationale.
+   * **Blanket Revert Prohibition:** The agent must **NEVER** execute indiscriminate rollbacks (`git restore .`, `git checkout -- .`, `git reset --hard`, or `git clean`). Any rollback must be surgical—targeting only the specific line range or file in progress—or explicitly confirmed with the user.
 
 ---
 
@@ -54,12 +60,19 @@
    * *Never invert up/down arrows. Up must always mean into the cut.*
 3. **Physical Apron Jog Cluster:**
    * The 3×3 D-pad and chamfer diagonal keys must remain **pinned to the bottom edge of the center column**, providing palm stability against the lathe bed rim during manual stepping.
-   * Step increment selector cycles on tap (`0.010` → `0.100` → `1.000`). Long-press (>600ms) summons the numeric keypad for custom increments.
+   * Step increment selector cycles on tap through discrete standard tables (Metric: `0.010 → 0.100 → 1.000 mm`; Imperial: `0.0010 → 0.0100 → 0.1000 in`). Long-press (>600ms) summons the numeric keypad for custom increments.
 4. **Universal Runstack Placement:**
-   * Bottom-right quadrant must always feature `START FEED` (Green / `#3ddc84`) directly stacked above `STOP` (Red / `#ff5252`). Never move or reorder this stack.
-5. **Numeric Keypad Architecture:**
-   * Standard 3×4 calculator layout with bottom row `[ CURR ] [ CLR ] [ ⌫ ]`.
-   * Opens clean and empty with placeholder `0`.
+   * Bottom-right quadrant must always feature `START FEED` / `START CYCLE` (Green / `#3ddc84`) directly stacked above `STOP` (Red / `#ff5252`), separated by a generous 12px safety gap. Never move or reorder this stack.
+   * `STOP` is permanent and stationary across all 9 modes; visually subdued when idle, illuminating vibrant red with an active glow during motion.
+5. **Universal Touch Target Geometry (5.0" 800×480 Standard):**
+   * Primary action buttons: Minimum height **44px–48px**, minimum width **56px–64px**.
+   * Secondary / setup chips: Minimum height **36px–38px**, minimum width **50px**.
+   * Minimum separation gap: **4px–6px** between touchable zones.
+   * Absolute rule: No interactive button may ever be rendered below 36px height or 48px width.
+6. **Numeric Keypad Architecture:**
+   * Standard 3×4 calculator layout with bottom quick-math row: `[ CURR ] [ ÷ 2 ] [ CLR ] [ ⌫ ]`.
+   * Opens pre-filled with the current value and fully selected for instant overwrite.
+   * `÷ 2` provides instant halving of workpiece diameters for radius calculations.
    * `INSERT CURR` is conditionally gated—visible only when editing coordinates or soft limits; hidden for pitch, DOC, speeds, or pass counts.
    * Direct focus and cursor repositioning supported.
 
@@ -68,9 +81,10 @@
 ## 3. Operational Modes & Dynamic Center Deck
 
 ### 3.1 Dynamic Center Action Deck
-Located directly above the jog D-pad. Houses large tactile `[ − ]` and `[ + ]` nudge buttons for live feed rate trimming:
-* **Gearbox Mode:** Dynamic deck shows `SYNC / ASYNC` toggle and `AXIS: Z / X` selector. The unselected axis DRO row in the left column dims to 35% opacity.
-* **Turning & Facing Modes:** Axis/sync toggles are stripped out. Center deck displays cycle status (`PASS 01 / N`) flanked by large feed nudge buttons.
+Located directly above the jog D-pad. Houses live operational apron controls only:
+* **Gearbox Mode:** Houses live feed rate nudge buttons `[ − ]` and `[ + ]`, active feed readout, active axis direction toggle (`DIR: ← TO CHUCK / → TO TAIL`), and discrete step override chips. (Setup toggles `SYNC/ASYNC`, `AXIS: Z/X`, and `Z UNIT: FEED/TPI` live in the top-aligned right Mode Card).
+* **Turning & Facing Modes:** Center deck displays real-time cycle status (`PASS 01 / N`) flanked by live feed nudge buttons.
+* **Threading Mode:** Displays thread lead trim when stopped; switches to locked cycle telemetry (`THREADING RUNNING`, target depth, pass count) when active. All parameter editing and nudge buttons are removed during a run.
 
 ### 3.2 Mode Parameters & Logic
 * **Turning Mode:**
@@ -80,7 +94,11 @@ Located directly above the jog D-pad. Houses large tactile `[ − ]` and `[ + ]`
   * Kinematic mirror of Turning: Cutting Axis = $X$, Infeed Axis = $Z$.
   * Parameters: `FACING FEED`, `FINAL Ø` / `STROKE`, `TOTAL DEPTH`, `MAX DEPTH/PASS`, `PASSES` (two-way coupled, editable to override), `RESTORE LIMITS`.
 * **Threading Mode:**
-  * Parameters: `THREAD PITCH`, `LENGTH`, `TOTAL DEPTH`, `PASSES`, `INFEED [RADIAL (90°) / COMPOUND (29.5°)]`, `RESTORE LIMITS`.
+  * Parameters: `LEAD / PITCH` (integer TPI preserved for imperial, mm pitch for metric), `PASS`, `PASS DEPTH`, `DIRECTION [RH / LH]`, `CYCLE INFEED [90° RADIAL]`.
+  * Pitch and pass depth are strictly locked during active cutting; only `STOP` is permitted.
+* **Mode Categorization & Cutoff Tool Alignment:**
+  * Categorized into 3 functional groups: Continuous/Geared (`GEARBOX`, `JOYSTICK`), Multi-Pass CNC (`TURNING`, `FACING`, `THREADING`), and Contouring/Specialty (`TAPER`, `CUTOFF`, `SLOTTING`, `SPHERE`).
+  * Cutoff / parting icon arrow points away from the operator into the cut (`↑` / `X-`).
 
 
 ---
@@ -134,6 +152,11 @@ Located directly above the jog D-pad. Houses large tactile `[ − ]` and `[ + ]`
 * [ ] Does the UI strictly fit within 800×480 with zero horizontal or vertical window scrollbars?
 * [ ] Are coordinate displays locked to 50px JetBrains Mono tabular figures with no auto-shrinking?
 * [ ] Is the D-pad pinned to the bottom of the center column with inverted cross-slide arrows (`↑` into cut, `↓` retract)?
+* [ ] Are all touch targets compliant with universal sizing standards ($\ge 38\text{px}$ secondary, $\ge 44–48\text{px}$ primary, $\ge 50\text{px}$ width)?
+* [ ] Are discrete standard step arrays maintained for metric vs. imperial (no awkward decimal conversions)?
+* [ ] Does Threading mode preserve integer TPI and strictly lock parameter editing during active cuts?
 * [ ] Does entering a feature dimension dynamically calculate and update the visible hardware limit chip?
 * [ ] Does the opt-in limit restore toggle preserve and reinstate previous envelopes on cycle finish and manual stop?
 * [ ] Does the jog pad allow backing out when an axis is resting against a soft limit?
+* [ ] Are all UI files, assets, and documentation strictly confined within `UI_redesign/`?
+* [ ] Has `ELS_DESIGN_NOTEBOOK.md` been updated to reflect all decisions and the true state of the UI?
