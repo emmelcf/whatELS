@@ -112,4 +112,27 @@ Currently, scales are conditionally compiled out via `#define HAS_DRO_Z false` a
    - Expose `jogHoldDelayMs` in the Web UI Settings tab and store in Preferences (NVS).
    - Allows machinists to customize the threshold between single-step taps and continuous jogging (e.g. 500ms for capacitive vs 1000ms for resistive).
 
+## 4. Angled / Flank Infeed for Automatic Threading (`MODE_THREAD`)
+
+### Motivation
+In `h5.ino` (`modeTurn()`), automatic threading currently executes **straight radial plunge infeed ($90^\circ$)**:
+- While NanoELS applies a quadratic de-gressing pass calculation (`fraction * fraction`) to reduce cut depth as thread depth increases, plunging straight down cuts simultaneously on both the leading and trailing edges of the tool insert.
+- On medium and coarse pitch threads, radial plunge creates excessive cutting pressure, chatter, poor surface finish, and premature insert tip chipping.
+- Standard lathe machining practice utilizes **modified flank infeed** (typically $29^\circ$ or $29.5^\circ$ for $60^\circ$ ISO Metric / UN threads, or $27^\circ$ for $55^\circ$ BSW/Whitworth), cutting primarily on the leading edge while lightly shaving the trailing flank.
+
+### Proposed Implementation
+1. **Configurable Thread Infeed Angle (`threadInfeedAngle`):**
+   - Add parameter in `Config.h` / Preferences with common presets:
+     - `0.0°` (Straight Radial Plunge — useful for brass, square threads, or very fine pitch)
+     - `29.0°` / `29.5°` (Modified Flank Infeed — industry standard for $60^\circ$ threads)
+     - `30.0°` (Full Flank Infeed)
+     - `27.0°` / `27.5°` (For $55^\circ$ British Standard / Whitworth)
+2. **Synchronized Infeed Geometry:**
+   - On each threading pass $i$, calculate both the radial plunge depth $\Delta X_i$ and the corresponding axial $Z$ start offset:
+     $$\Delta Z_{\text{offset}} = \Delta X_i \cdot \tan(\alpha)$$
+   - Direction rule: For external right-hand threads, shift $Z$ start slightly away from chuck (or toward chuck for internal) so tool cuts on the leading edge.
+3. **Spring Passes:**
+   - Support 1 or 2 final "spring passes" (repeated passes at final full depth without incremental infeed) to eliminate tool deflection and produce clean, burr-free flanks.
+
+
 

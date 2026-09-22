@@ -106,4 +106,109 @@ The system divides responsibilities between **Local Display Controller UI Logic*
   * **Display Controller Responsibility:** The ESP32-S3 display controller C/C++ firmware must evaluate limit contact locally from telemetry (`distanceToStop == 0` or comparing `pos` with active limit registers).
   * **Asymmetric Jog UI State Machine:** When limit contact is detected, the display controller's view logic is solely responsible for styling the tripping jog button red and locking out further steps into the wall, while guaranteeing the retreat jog button remains enabled and visually unobstructed so the operator can immediately jog away.
 
+---
+
+## 6. Physical Screen Geometry & Universal Touch Sizing Standards
+
+### Target Display Physics (5.0" 800×480)
+* **Physical Active Area:** $\approx 108.0 \text{ mm} \times 64.8 \text{ mm}$ ($4.25\text{"} \times 2.55\text{"}$).
+* **Pixel Density:** $\approx 187 \text{ DPI}$ ($\approx 0.135 \text{ mm/pixel}$).
+* **Vertical Canvas Budget:** Total 480px = 42px Top Bar + 30px Status Bar + **408px Active Main Viewport**.
+
+### Universal Minimum Touch Target Standards
+In shop environments with bare or gloved hands, touch targets must satisfy industrial ergonomic thresholds (ISO 9241-410):
+1. **Primary Action Targets (D-Pad, Start, Stop, Keypad Keys, Numeric Readouts):**
+   * Minimum Height: **42px – 48px** ($5.7 – 6.5 \text{ mm}$).
+   * Minimum Width: **56px – 64px** ($7.5 – 8.6 \text{ mm}$).
+2. **Secondary/Setup Touch Chips (Mode Toggles, Unit Selectors, Limit Chips):**
+   * Minimum Height: **36px – 38px** ($4.9 – 5.1 \text{ mm}$).
+   * Minimum Width: **50px** ($6.8 \text{ mm}$).
+   * Absolute rule: No interactive button may ever be rendered below 36px height or 48px width.
+3. **Touch Separation Padding:**
+   * Minimum inter-button gap: **4px – 6px** ($0.5 – 0.8 \text{ mm}$) to prevent unintended adjacent edge presses.
+
+---
+
+## 7. Motion State Machine & Radical Hardware Fidelity
+
+### Single Binary State Truth (`isOn`)
+* The core NanoELS motion firmware operates strictly on a binary state engine: `stopped` (`isOn == false`) or `running` (`isOn == true`).
+* **No Software Pause:** There is no native pause state in NanoELS core firmware. Fabricating a software "pause" in the display controller is prohibited because pausing spindle-synchronized motion risks tool breakage and positional drift.
+* **Universal Runstack Representation:**
+  * Idle / Stopped: Green `START FEED` / `START CYCLE` active; red `STOP` button visually subdued (maroon `#140d0e`).
+  * Running / Active: Green button transitions to dark active indicator (`FEEDING` / `CYCLE ACTIVE`); red `STOP` button illuminates vibrant red (`#ff5a5f`) with an active glow.
+  * Dedicated Stop Corner: The `STOP` button is permanently anchored in the bottom-right corner across all 9 modes so muscle memory never falters in an emergency.
+
+### No "Ghost Actions" During Autonomous Multi-Pass Cycles
+* When NanoELS executes an automated multi-pass cycle (such as `THREADING`, `TURNING`, or `FACING`), the motion trajectory is computed and executed autonomously by the ESP32 motion core.
+* **Prohibition of "Next Pass" or Mid-Cycle Step Commands:** The display controller has no real-time serial hooks to safely micro-step or skip passes without corrupting the motion state machine. Presenting a `NEXT PASS` button provides a false illusion of control. During active cycles, the UI strictly displays progress (`PASS 05 / 10`, current cut depth) and leaves the `STOP` button as the sole operator intervention.
+
+---
+
+## 8. Gearbox Mode: Setup vs. Live Operational Separation
+
+The Gearbox interface splits cleanly between setup configuration and live operational control to avoid duplicate or shifting buttons:
+
+### Mode Card (Right Column — 260px) = Configuration & Setup
+1. **Top-Aligned Flow:** All mode card items are top-aligned (`justify-content: flex-start`), ensuring fixed vertical spacing and leaving maximum clean space above the runstack.
+2. **Stationary Setup Toggles:** `SYNC / ASYNC` and `AXIS: Z / X` buttons utilize fixed flex basis (`flex: 1 1 0; min-width: 0;`), guaranteeing zero horizontal jumping or reflow when clicked.
+3. **Z Feed Unit Selection:** Provides mutually exclusive selection between `FEED` (mm/rev or in/rev) and `TPI` (threads/inch). In metric, feed is identical to lead pitch.
+4. **Feed Display Rows:** Features dedicated Z Carriage and X Cross-Slide blocks. The non-active axis is dimmed with an explicit `INACTIVE` badge; the active axis is highlighted without redundant text.
+
+### Dynamic Center Deck (Center Column — 202px) = Live Apron Controls
+1. **Live Feed Override / Nudge:** `[ − ]` and `[ + ]` nudge buttons for on-the-fly speed adjustments under chip load.
+2. **Active Axis Direction Toggle:** A single, prominent button displaying the current motion direction relative to the lathe bed:
+   * Z Axis: `DIR: ← TO CHUCK (Z−)` vs. `DIR: → TO TAIL (Z+)`
+   * X Axis: `DIR: ↑ TO CENTER (X−)` vs. `DIR: ↓ RETRACT (X+)`
+3. **Feed Step Increment Selection:**
+   * Avoids cramped 5-button rows. Uses 3 large, discrete touch chips (each $\ge 50\text{px}$ wide, $\ge 36\text{px}$ high).
+   * For arbitrary or non-standard feed rates, the operator taps the feed readout directly to open the numeric keypad.
+
+---
+
+## 9. Unit Systems, Standard Step Arrays & Input Ownership
+
+### Prevention of Awkward Unit Conversions
+Machinists do not work in arbitrary converted decimals (e.g. $0.010\text{ mm} \rightarrow 0.00039\text{"}$). The UI maintains distinct, discrete standard tables for metric vs. imperial operations:
+
+| Motion Type | Metric Standard Table | Imperial Standard Table |
+| :--- | :--- | :--- |
+| **Manual Jog D-Pad** | `1.000 mm`, `0.100 mm`, `0.010 mm` | `0.1000"`, `0.0100"`, `0.0010"` |
+| **Z Feed Rate Override** | `0.002`, `0.010`, `0.050 mm/rev` | `0.001"`, `0.003"`, `0.008" / rev` |
+| **X Cross Feed Override** | `0.001`, `0.005`, `0.020 mm/rev` | `0.0005"`, `0.001"`, `0.003" / rev` |
+| **Async Speed** | `5, 10, 25, 50 mm/min` | `0.2, 0.5, 1.0, 2.0 in/min` |
+
+### Parameter Ownership vs. Display Scaling
+* Machine coordinates, soft limits, and tool offsets dynamically convert between display units (`mm` and `in`).
+* Part dimension inputs (e.g., Turning Length, Facing Stroke) are treated as drawing specifications; all labels and properties adapt dynamically to the active unit using unified formatting helpers (`lenStr()` and `unitLabel()`), with zero hardcoded `mm` strings in view templates.
+
+---
+
+## 10. Threading Execution & TPI Display Architecture
+
+### Thread Pitch Fidelity
+* In imperial mode, screw threads are fundamentally specified in Threads Per Inch (TPI). Converting TPI to a decimal pitch (e.g. `16 TPI` $\rightarrow$ `1.5875 mm/rev`) is confusing and contrary to standard machine shop convention.
+* When TPI is selected in the thread pitch overlay, the UI preserves the exact TPI integer and unit string across the DRO, mode properties, and center action deck (e.g., `16 TPI`).
+* Metric threads are consistently formatted as `X.XXX mm pitch`.
+
+### Active Thread Cut Lockout
+* In NanoELS, threading requires rigid encoder phase lock between spindle pulses and leadscrew steps. 
+* Tapping the thread pitch readout or attempting to modify helix parameters during an active run is strictly locked out. The dynamic deck removes nudge buttons while the cycle is running, displaying cycle status and target depth only.
+
+---
+
+## 11. Machine Coordinate Reference Frame & Tooling Icons
+
+1. **Cutoff / Parting Tool Direction:**
+   * Lathe cutoff operations drive the blade inward from the front apron toward the spindle centerline ($X-$).
+   * The Cutoff icon arrow is oriented pointing away from the operator into the cut (`↑` / `transform: rotate(180deg)` on `⭳`), matching the physical tool trajectory.
+2. **Operator Cartesian Reference Frame:**
+   * All D-pad and chamfer labels feature explicit Cartesian signs matching the carriage perspective:
+     * `CHUCK (Z−)`: Headstock direction.
+     * `TAIL (Z+)`: Tailstock direction.
+     * `TO CTR (X−)`: Cross-slide moving into the workpiece (reducing diameter).
+     * `RETR (X+)`: Cross-slide backing out toward the operator (increasing diameter).
+     * Chamfer Northwest (`↖ Z− X−`): Simultaneous feed into workpiece toward chuck.
+     * Chamfer Southeast (`↘ Z+ X+`): Simultaneous retract away from workpiece toward tailstock.
+
 

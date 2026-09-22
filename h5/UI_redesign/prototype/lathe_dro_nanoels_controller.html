@@ -26,8 +26,8 @@
   html, body {
     margin: 0; padding: 0; background: #040607; color: var(--fg);
     font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-    min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    overflow: auto; padding: 18px 8px;
+    height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden;
   }
   .mono { font-family: 'JetBrains Mono', 'Consolas', monospace; font-variant-numeric: tabular-nums; }
 
@@ -36,6 +36,13 @@
     position: relative; width: 800px; height: 480px; flex: 0 0 auto;
     background: var(--bg); border-radius: 6px; overflow: hidden;
     box-shadow: 0 0 0 10px #161a1d, 0 0 0 12px #060708, 0 28px 56px rgba(0,0,0,.7);
+  }
+  @media (max-width: 820px), (max-height: 500px) {
+    .device {
+      box-shadow: none; border-radius: 0;
+      width: 100vw; height: 100vh;
+      max-width: 800px; max-height: 480px;
+    }
   }
 
   /* TOP BAR: Machine Status, Diagnostic indicators & Global toggles */
@@ -79,8 +86,8 @@
 
   /* DRO COLUMN: Static 50px font, non-shifting tabular width */
   .col-dro {
-    width: 338px; padding: 10px 14px; display: flex; flex-direction: column;
-    justify-content: center; gap: 26px; border-right: 1px solid var(--line);
+    width: 338px; padding: 8px 14px; display: flex; flex-direction: column;
+    justify-content: center; gap: 20px; border-right: 1px solid var(--line);
   }
   .axis-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; }
   .axis-letter { font-size: 22px; color: var(--dim); font-weight: 700; flex: 0 0 auto; }
@@ -88,13 +95,18 @@
     font-size: 50px; line-height: 1; font-weight: 600; letter-spacing: 0px;
     border-bottom: 1px dashed var(--dimmer); padding-bottom: 2px; white-space: nowrap; flex: 1; text-align: right;
   }
+  .dia-glyph.dia { color: var(--blue); }
+  .dia-glyph.rad { color: var(--amber); }
+
   .axis-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
   .chip-sm {
-    border: 1px solid var(--line); background: #12181d; border-radius: 3px; padding: 5px 8px;
-    font-size: 13px; color: var(--fg); min-height: 27px; display: inline-flex; align-items: center; justify-content: center;
-    min-width: 78px;
+    border: 1px solid var(--line); background: #12181d; border-radius: 4px; padding: 5px 8px;
+    font-size: 13px; color: var(--fg); min-height: 35px; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 80px;
   }
-  .chip-sm.blue { color: var(--blue); border-color: #234058; background: var(--blue-bg); font-weight: 700; min-width: 48px; }
+  .chip-sm.rep-toggle { min-width: 62px; font-weight: 700; letter-spacing: .4px; font-size: 12px; }
+  .chip-sm.rep-toggle.is-dia { color: var(--blue); border-color: #234058; background: var(--blue-bg); }
+  .chip-sm.rep-toggle.is-rad { color: var(--amber); border-color: #583e1c; background: #26190b; }
   .chip-sm.empty-limit { color: var(--dimmer); border-style: dashed; }
 
   /* CENTER COLUMN: Mode-Adaptive Dynamic Action Deck + Jog Cluster */
@@ -108,8 +120,9 @@
   }
   .deck-selectors { display: flex; gap: 4px; }
   .deck-toggle-btn {
-    flex: 1; background: #18222a; border: 1px solid var(--line); border-radius: 3px;
-    padding: 4px 0; font-size: 11px; font-weight: 700; color: var(--dim); text-align: center;
+    flex: 1 1 0; min-width: 0; background: #18222a; border: 1px solid var(--line); border-radius: 3px;
+    padding: 4px 0; font-size: 11.5px; font-weight: 700; color: var(--dim); text-align: center;
+    min-height: 28px; display: flex; align-items: center; justify-content: center;
   }
   .deck-toggle-btn.on { background: #0d1b28; border-color: #234058; color: var(--blue); }
   .deck-toggle-btn.axis-on { background: var(--green-bg); border-color: #1f3d2c; color: var(--green); }
@@ -166,13 +179,20 @@
   .up { grid-column: 2; grid-row: 1; } .down { grid-column: 2; grid-row: 3; }
   .left-a { grid-column: 1; grid-row: 2; } .right-a { grid-column: 3; grid-row: 2; }
 
-  /* LIVE CONTROLLER TELEMETRY BAR */
+  /* Live Controller Telemetry Bar */
   .status-deck {
-    height: 28px; border-top: 1px solid var(--line); background: #080c0e; display: flex; align-items: center;
-    padding: 0 12px; gap: 8px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: .3px;
+    height: 30px; border-top: 1px solid var(--line); background: #080c0e; display: flex; align-items: center;
+    padding: 0 8px 0 12px; gap: 8px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: .3px;
+    position: relative; overflow: hidden;
   }
-  .status-icon { color: var(--green); font-size: 11px; }
-  .status-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status-icon { color: var(--green); font-size: 11px; flex: 0 0 auto; }
+  .status-msg-wrap { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .status-msg { display: inline; }
+  .status-log-btn {
+    border: 1px solid var(--line); background: #11171d; border-radius: 3px; padding: 2px 7px;
+    font-size: 10px; font-weight: 700; color: var(--dim); flex: 0 0 auto; cursor: pointer;
+  }
+  .status-log-btn:active { color: var(--fg); background: #1b242e; }
 
   /* RIGHT COLUMN: Mode Config, Spindle and Action Deck */
   .col-info { width: 260px; padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
@@ -195,21 +215,22 @@
     display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
     border-bottom: 1px solid var(--line); background: #131a20;
   }
+  .mode-head.locked { opacity: .55; cursor: not-allowed; }
   .mode-head .name { font-size: 18px; font-weight: 700; color: var(--amber); letter-spacing: .4px; }
   .mode-head .chev { color: var(--dimmer); font-size: 13px; }
-  .mode-body { padding: 6px 8px; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+  .mode-body { padding: 6px 8px; flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; }
 
   /* Gearbox Feeds with Fixed Widths & Inactive Dimming */
-  .feed-block { padding: 4px 6px; border-radius: 3px; border: 1px solid transparent; transition: all .15s; }
+  .feed-block { padding: 5px 8px; border-radius: 3px; border: 1px solid transparent; transition: all .15s; }
   .feed-block.active-axis-row { background: #111921; border-color: #1e3140; }
   .feed-block.dimmed-axis-row { opacity: .45; }
   .feed-row-top {
     display: flex; justify-content: space-between; align-items: center;
     font-size: 11px; color: var(--dimmer); letter-spacing: .5px; margin-bottom: 2px; font-weight: 700;
   }
-  .feed-row-bottom { display: flex; align-items: center; gap: 5px; }
-  .feed-val-box { width: 56px; text-align: right; display: inline-block; }
-  .feed-unit-box { width: 52px; font-size: 11px; color: var(--dim); display: inline-block; }
+  .feed-row-bottom { display: flex; align-items: center; gap: 6px; }
+  .feed-val-box { text-align: left; display: inline-block; }
+  .feed-unit-box { font-size: 11px; color: var(--dim); display: inline-block; }
   .dir-chip-fixed {
     width: 86px; text-align: center; font-size: 11px; font-weight: 700; color: var(--dim);
     border: 1px solid var(--line); border-radius: 3px; padding: 3px 0; background: #12181d;
@@ -217,6 +238,16 @@
   .dir-chip-fixed.editable { color: var(--fg); cursor: pointer; }
   .axis-tag-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 700; border: 1px solid var(--line); color: var(--dimmer); }
   .axis-tag-badge.active { color: var(--green); border-color: #1f3d2c; background: var(--green-bg); }
+
+  /* Dynamic Deck Feed Step Chips (Glove-Friendly Touch Targets) */
+  .deck-step-row { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 2px 0; }
+  .deck-step-chip {
+    flex: 1; background: #131a20; border: 1px solid var(--line); border-radius: 4px;
+    min-height: 28px; padding: 3px 2px; font-size: 11.5px; font-weight: 700; color: var(--dim); text-align: center;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .deck-step-chip.active { background: #0d1e2c; border-color: #234768; color: var(--blue); }
+  .deck-step-chip:active { filter: brightness(1.25); }
 
   /* Mode Properties Table */
   .kv {
@@ -226,8 +257,8 @@
   .kv b { color: var(--fg); font-weight: 600; font-size: 14px; }
   .kv b.editable { border-bottom: 1px dashed var(--dimmer); cursor: pointer; }
   .toggle-chip {
-    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--line);
-    background: #141b21; color: var(--dim); cursor: pointer;
+    font-size: 13px; font-weight: 700; min-height: 30px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--line);
+    background: #141b21; color: var(--dim); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   }
   .toggle-chip.active { color: var(--green); border-color: #1f3d2c; background: var(--green-bg); }
   .inline-dir-chip {
@@ -237,16 +268,21 @@
   }
   .inline-dir-chip:active { filter: brightness(1.25); }
 
-
-  /* Universal Runstack */
-  .runstack { display: flex; flex-direction: column; gap: 5px; margin-top: auto; }
+  /* Universal Runstack: 12px safety gap, static STOP positioning */
+  .runstack { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
   .rbtn {
     border-radius: 4px; display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 15px; letter-spacing: 1px; height: 38px;
+    font-weight: 700; font-size: 15px; letter-spacing: 1px; height: 42px; user-select: none;
   }
-  .rbtn.start { background: var(--green); color: #08130d; }
-  .rbtn.pause { background: var(--amber); color: #2a1900; }
-  .rbtn.stop { background: var(--red); color: #2a0506; }
+  .rbtn.start { background: var(--green); color: #08130d; box-shadow: 0 2px 8px rgba(61,220,132,0.25); }
+  .rbtn.running { background: #132a1c; border: 1px solid #1f5033; color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,0.15); }
+  .rbtn.stop { font-size: 16px; font-weight: 800; }
+  .rbtn.stop.idle {
+    background: #140d0e; border: 1px solid #3d1b1f; color: #8a3c42; cursor: default;
+  }
+  .rbtn.stop.active {
+    background: var(--red); color: #2a0506; box-shadow: 0 0 14px rgba(255,90,95,0.45); cursor: pointer;
+  }
   .rbtn:active { filter: brightness(.85); }
 
   /* OVERLAYS & SHEETS */
@@ -269,21 +305,24 @@
   .sheet button.danger { color: var(--red); }
   .sheet button:active { opacity: .7; }
 
-  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
-  .mode-grid button { margin: 0; padding: 9px 0; font-size: 13px; }
+  .mode-cat-title { font-size: 10px; font-weight: 700; color: var(--dimmer); letter-spacing: .6px; margin: 7px 0 3px; text-transform: uppercase; }
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 4px; }
+  .mode-grid button { margin: 0; padding: 8px 4px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .mode-grid button .m-icon { font-size: 14px; opacity: .85; }
 
   /* Keypad (Standard Calculator Layout + Bottom Control Row) */
-  .kp-sheet { width: 250px; }
+  .kp-sheet { width: 260px; }
   .kp-input {
     width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 24px; text-align: right;
     padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 8px; background: #0a0d0f; color: var(--fg); outline: none;
   }
   .kp-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin-bottom: 7px; }
   .kp-grid button { margin: 0; padding: 9px 0; font-family: 'JetBrains Mono', monospace; font-size: 16px; }
-  .kp-bottom-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+  .kp-bottom-row { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 5px; margin-bottom: 8px; }
   .kp-bottom-row button { margin: 0; padding: 8px 0; font-size: 12px; font-weight: 700; }
   .kp-bottom-row .kp-curr-btn { color: var(--blue); }
   .kp-bottom-row .kp-curr-btn.hide { visibility: hidden; }
+  .kp-bottom-row .kp-half-btn { color: var(--amber); }
   .kp-actions { display: flex; gap: 6px; }
   .kp-actions button { flex: 1; margin: 0; }
 
@@ -330,7 +369,6 @@
       </div>
     </div>
     <div class="topbar-right">
-      <div class="chip tap chip-doc" id="docBtn">📖 LEDGER & GUIDE</div>
       <div class="chip tap" id="unitToggle">mm</div>
       <div class="chip icon tap" id="settingsBtn">⚙</div>
     </div>
@@ -357,11 +395,11 @@
           <div>
             <div class="axis-head">
               <div class="axis-letter">X</div>
-              <div class="axis-value mono tap" id="xValue">Ø26.438</div>
+              <div class="axis-value mono tap" id="xValue"><span class="dia-glyph dia">Ø</span>26.438</div>
             </div>
             <div class="axis-meta">
               <span class="chip-sm mono tap" id="lim-xMaxDia" data-bound="xMaxDia">Ø28.000</span>
-              <span class="chip-sm blue tap" id="repBadge">Ø / R</span>
+              <span class="chip-sm rep-toggle tap is-dia" id="repBadge">Ø DIA</span>
               <span class="chip-sm mono tap" id="lim-xMinDia" data-bound="xMinDia">Ø23.800</span>
             </div>
           </div>
@@ -378,23 +416,24 @@
           <!-- Jog Cluster Pinned to Bottom -->
           <div class="jog-cluster">
             <div class="chamfer-row">
-              <div class="chamfer-btn tap" data-diag="nw">↖ Z−X+</div>
-              <div class="chamfer-btn tap" data-diag="se">↘ Z+X−</div>
+              <div class="chamfer-btn tap" data-diag="nw">↖ Z− X−</div>
+              <div class="chamfer-btn tap" data-diag="se">↘ Z+ X+</div>
             </div>
 
             <!-- Inverted X arrows: UP = Into Cut / To Center, DOWN = Retract -->
             <div class="dpad">
               <div class="empty"></div>
-              <div class="btn up" data-axis="x" data-dir="1"><span class="arrow">↑</span><span class="axis-tag">TO CENTER</span></div>
+              <div class="btn up" data-axis="x" data-dir="1"><span class="arrow">↑</span><span class="axis-tag">TO CTR (X−)</span></div>
               <div class="empty"></div>
-              <div class="btn left-a" data-axis="z" data-dir="-1"><span class="arrow">←</span><span class="axis-tag">Z CHUCK</span></div>
+              <div class="btn left-a" data-axis="z" data-dir="-1"><span class="arrow">←</span><span class="axis-tag">CHUCK (Z−)</span></div>
               <div class="center tap" id="stepMain" title="Tap to cycle, Long-press to edit">
                 <span class="step-label">STEP</span>
                 <span class="step-value mono" id="stepValue">0.010</span>
+                <span class="step-hint" style="font-size:8px;color:var(--dimmer);letter-spacing:1px;line-height:1;">···</span>
               </div>
-              <div class="btn right-a" data-axis="z" data-dir="1"><span class="arrow">→</span><span class="axis-tag">Z TAIL</span></div>
+              <div class="btn right-a" data-axis="z" data-dir="1"><span class="arrow">→</span><span class="axis-tag">TAIL (Z+)</span></div>
               <div class="empty"></div>
-              <div class="btn down" data-axis="x" data-dir="-1"><span class="arrow">↓</span><span class="axis-tag">RETRACT</span></div>
+              <div class="btn down" data-axis="x" data-dir="-1"><span class="arrow">↓</span><span class="axis-tag">RETR (X+)</span></div>
               <div class="empty"></div>
             </div>
           </div>
@@ -406,7 +445,10 @@
       <!-- Live Controller Telemetry / Status Deck -->
       <div class="status-deck">
         <span class="status-icon">●</span>
-        <span class="status-msg mono" id="statusMessage">READY: GEARBOX SYNCHRONIZED TO SPINDLE</span>
+        <div class="status-msg-wrap">
+          <span class="status-msg mono" id="statusMessage">READY: GEARBOX SYNCHRONIZED TO SPINDLE</span>
+        </div>
+        <button class="status-log-btn tap" id="btnOpenLog">LOG</button>
       </div>
     </div>
 
@@ -457,20 +499,31 @@
 
   <!-- Mode Selector Overlay -->
   <div class="overlay" id="modeOverlay">
-    <div class="sheet">
+    <div class="sheet" style="width: 350px;">
       <h3>SELECT OPERATING MODE</h3>
+      
+      <div class="mode-cat-title">CONTINUOUS / GEARED MOTION</div>
       <div class="mode-grid">
-        <button data-mode="GEARBOX">GEARBOX</button>
-        <button data-mode="TURNING">TURNING</button>
-        <button data-mode="FACING">FACING</button>
-        <button data-mode="THREADING">THREADING</button>
-        <button data-mode="TAPER">TAPER</button>
-        <button data-mode="CUTOFF">CUTOFF</button>
-        <button data-mode="SLOTTING">SLOTTING</button>
-        <button data-mode="SPHERE">HALF-SPHERES</button>
-        <button data-mode="JOYSTICK">JOYSTICK</button>
+        <button data-mode="GEARBOX"><span class="m-icon">⚙</span> GEARBOX</button>
+        <button data-mode="JOYSTICK"><span class="m-icon">✛</span> JOYSTICK</button>
       </div>
-      <button class="cancel" id="modeCancel">CANCEL</button>
+
+      <div class="mode-cat-title">MULTI-PASS CNC CYCLES</div>
+      <div class="mode-grid">
+        <button data-mode="TURNING"><span class="m-icon">⇋</span> TURNING</button>
+        <button data-mode="FACING"><span class="m-icon">⥮</span> FACING</button>
+        <button data-mode="THREADING" style="grid-column: span 2;"><span class="m-icon">⩚</span> THREADING</button>
+      </div>
+
+      <div class="mode-cat-title">CONTOURING & SPECIALTY</div>
+      <div class="mode-grid">
+        <button data-mode="TAPER"><span class="m-icon">⊿</span> TAPER</button>
+        <button data-mode="CUTOFF"><span class="m-icon" style="display:inline-block; transform:rotate(180deg);">⭳</span> CUTOFF</button>
+        <button data-mode="SLOTTING"><span class="m-icon">⎍</span> SLOTTING</button>
+        <button data-mode="SPHERE"><span class="m-icon">◠</span> HALF-SPHERES</button>
+      </div>
+
+      <button class="cancel" id="modeCancel" style="margin-top: 6px;">CANCEL</button>
     </div>
   </div>
 
@@ -479,7 +532,17 @@
     <div class="sheet">
       <h3>SYSTEM SETTINGS</h3>
       <p style="font-size:13px;color:var(--dim);line-height:1.4">Backlash Z: 0.04mm, X: 0.02mm<br>Encoder: 2400 PPR Quadrature<br>Leadscrew: 2.000 mm Pitch<br>Controller: NanoELS H5 Multi-Axis</p>
+      <button id="openDocBtn" style="background:#17222c; border:1px solid #234058; color:var(--blue); margin-bottom:8px;">📖 DESIGN LEDGER & MANUAL</button>
       <button class="cancel" id="settingsClose">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- Controller Log History Overlay -->
+  <div class="overlay" id="logOverlay">
+    <div class="sheet" style="width: 360px;">
+      <h3>CONTROLLER MESSAGE LOG</h3>
+      <div id="logHistoryList" style="max-height: 220px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--dim); display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; padding: 8px; background: #0a0d0f; border: 1px solid var(--line); border-radius: 4px;"></div>
+      <button class="cancel" id="logCloseBtn">CLOSE</button>
     </div>
   </div>
 
@@ -504,7 +567,8 @@
       <input type="text" class="kp-input" id="kpInput" placeholder="0">
       <div class="kp-grid" id="kpGrid"></div>
       <div class="kp-bottom-row">
-        <button class="kp-curr-btn tap" id="kpCurrBtn">INSERT CURR</button>
+        <button class="kp-curr-btn tap" id="kpCurrBtn">CURR</button>
+        <button class="kp-half-btn tap" id="kpHalfBtn" title="Divide by 2">÷ 2</button>
         <button class="tap" id="kpClearBtn">CLR</button>
         <button class="tap" id="kpBkspBtn">⌫</button>
       </div>
@@ -544,15 +608,21 @@
     rpm: 0, turns: 0, angle: 0, spindleCycle: 0,
     
     // Operating Mode & State
-    mode: 'TURNING', // Start in Turning to showcase dimension-first model
-    runState: 'stopped', // 'stopped', 'running', 'paused'
+    mode: 'GEARBOX', // Default mode
+    runState: 'stopped', // strictly 'stopped' or 'running' (NanoELS hardware binary state)
     
     // Gearbox Mode
-    gearboxMode: 'SYNC', // 'SYNC' (mm/rev) or 'ASYNC' (mm/min)
+    gearboxMode: 'SYNC', // 'SYNC' (spindle synchronized) or 'ASYNC' (time-based)
     activeFeedAxis: 'Z', // 'Z' or 'X'
+    gearFeedUnitZ: 'FEED', // 'FEED' (mm/rev or in/rev), 'TPI' (threads/in)
     gearPitchZ: 0.100, gearDirZ: 'FWD',
     gearPitchX: 0.050, gearDirX: 'IN',
     asyncSpeedZ: 150, asyncSpeedX: 75,
+    feedStepZ: 0.010,
+    feedStepX: 0.005,
+    feedStepTpi: 1,
+    asyncStepZ: 10,
+    asyncStepX: 5,
     
     // Turning (Dimension-First Pattern)
     turnPitch: 0.080,
@@ -581,30 +651,68 @@
     faceSavedXMax: null,
     faceCurrentPass: 1,
 
-
-
     // Threading
-    pitch: 1.500, threadDir: 'RIGHT', pass: '05 / 10', depth: 0.082, pitchTab: 'metric',
+    pitch: 1.500, threadDir: 'RIGHT', pass: '05 / 10', depth: 0.082, pitchTab: 'metric', threadUnit: 'metric',
     
     // Other H5 Modes
     taperAngle: 5.71, taperLen: 25.0, taperDir: 'INT',
     cutoffFeed: 0.030, cutoffPeck: 1.200, cutoffRetract: 0.500,
     slotStrokes: 12, slotFeedPerStroke: 0.020, slotLen: 15.0,
     sphereRadius: 12.0, sphereType: 'CONVEX', sphereStep: 0.050,
-    joyDeadzone: 5, joyMaxRate: 800
+    joyDeadzone: 5, joyMaxRate: 800,
+
+    // Message History Log
+    msgLog: [
+      'SYSTEM BOOT: NANOELS H5 INITIALIZED',
+      'READY: GEARBOX SYNCHRONIZED TO SPINDLE'
+    ]
   };
+
+  var JOG_STEPS_MM = [1.000, 0.100, 0.010];
+  var JOG_STEPS_IN = [0.1000, 0.0100, 0.0010];
+  var FEED_STEPS_MM_Z = [0.001, 0.005, 0.010, 0.050];
+  var FEED_STEPS_IN_Z = [0.0002, 0.0005, 0.0010, 0.0020];
+  var FEED_STEPS_MM_X = [0.001, 0.005, 0.010, 0.020];
+  var FEED_STEPS_IN_X = [0.0001, 0.0002, 0.0005, 0.0010];
+  var TPI_STEPS = [0.5, 1, 2, 4];
+  var ASYNC_STEPS_MM = [5, 10, 25, 50];
+  var ASYNC_STEPS_IN = [0.2, 0.5, 1.0, 2.0];
 
   var METRIC_PITCHES = [0.5, 0.6, 0.7, 0.75, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
   var TPI_VALUES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28];
+  var pitchSelectTarget = 'modePitch'; // 'modePitch' or 'gearZ'
 
   function fmt(v, dp){ return v.toFixed(dp); }
   function toDisplayLen(mm){ return state.unit === 'mm' ? mm : mm / 25.4; }
   function lenStr(mm, dp){ dp = dp || (state.unit==='mm' ? 3 : 4); return fmt(toDisplayLen(mm), dp); }
   function unitLabel(){ return state.unit; }
+  function getActiveJogStepMm(){
+    if(state.unit === 'mm'){
+      return JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length];
+    } else {
+      return JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] * 25.4;
+    }
+  }
+  function getActiveJogStepDisplay(){
+    if(state.unit === 'mm'){
+      return fmt(JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length], 3);
+    } else {
+      return fmt(JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length], 4);
+    }
+  }
   function clamp(v, a, b){
     var lo = a===null ? -Infinity : Math.min(a,b);
     var hi = b===null ? Infinity : Math.max(a,b);
     return Math.min(Math.max(v, lo), hi);
+  }
+
+  function setStatusMsg(text){
+    $('statusMessage').textContent = text;
+    if(!state.msgLog) state.msgLog = [];
+    if(state.msgLog.length === 0 || state.msgLog[state.msgLog.length - 1] !== text){
+      state.msgLog.push(text);
+      if(state.msgLog.length > 40) state.msgLog.shift();
+    }
   }
 
   function limitText(bound){
@@ -618,6 +726,39 @@
     if(state.runState !== 'running') return false;
     if(state.mode === 'GEARBOX' && state.gearboxMode === 'ASYNC') return true;
     return state.spindleSimRunning;
+  }
+
+  // Gearbox Display Helpers
+  function getGearZDisplay(){
+    if(state.gearboxMode === 'ASYNC'){
+      return { val: state.asyncSpeedZ.toString(), unit: unitLabel() + '/min' };
+    }
+    if(state.gearFeedUnitZ === 'FEED'){
+      var fVal = state.unit === 'mm' ? state.gearPitchZ : state.gearPitchZ / 25.4;
+      return { val: fmt(fVal, state.unit === 'mm' ? 3 : 4), unit: unitLabel() + '/rev' };
+    }
+    // TPI
+    var tpi = state.gearPitchZ > 0 ? (25.4 / state.gearPitchZ) : 0;
+    var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
+    return { val: tpiStr, unit: 'TPI' };
+  }
+
+  function getGearXDisplay(){
+    if(state.gearboxMode === 'ASYNC'){
+      return { val: state.asyncSpeedX.toString(), unit: unitLabel() + '/min' };
+    }
+    var fVal = state.unit === 'mm' ? state.gearPitchX : state.gearPitchX / 25.4;
+    return { val: fmt(fVal, state.unit === 'mm' ? 3 : 4), unit: unitLabel() + '/rev' };
+  }
+
+  function getThreadPitchDisplay(){
+    if(state.threadUnit === 'tpi'){
+      var tpi = state.pitch > 0 ? (25.4 / state.pitch) : 0;
+      var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
+      return { val: tpiStr, unit: 'TPI', num: tpi };
+    } else {
+      return { val: lenStr(state.pitch), unit: unitLabel() + ' pitch', num: state.pitch };
+    }
   }
 
   // Two-way Pass Calculation for Turning & Facing
@@ -638,24 +779,22 @@
   function recalcTurnLimits(){
     if(state.turnDir === 'CHUCK'){
       state.zMin = +(state.z - state.turnLength).toFixed(3);
-      $('statusMessage').textContent = 'DIMENSION APPLIED: Z-MIN LIMIT SET TO ' + lenStr(state.zMin) + ' (CHUCK SHOULDER)';
+      setStatusMsg('DIMENSION APPLIED: Z-MIN LIMIT SET TO ' + lenStr(state.zMin) + ' (CHUCK SHOULDER)');
     } else {
       state.zMax = +(state.z + state.turnLength).toFixed(3);
-      $('statusMessage').textContent = 'DIMENSION APPLIED: Z-MAX LIMIT SET TO ' + lenStr(state.zMax) + ' (TAIL SHOULDER)';
+      setStatusMsg('DIMENSION APPLIED: Z-MAX LIMIT SET TO ' + lenStr(state.zMax) + ' (TAIL SHOULDER)');
     }
   }
 
   function recalcFaceLimits(){
     if(state.faceDir === 'CENTER'){
       state.xMinDia = Math.max(0, +(state.xDia - state.faceStroke).toFixed(3));
-      $('statusMessage').textContent = 'DIMENSION APPLIED: X-MIN LIMIT SET TO Ø' + lenStr(state.xMinDia) + ' (CENTER STOP)';
+      setStatusMsg('DIMENSION APPLIED: X-MIN LIMIT SET TO Ø' + lenStr(state.xMinDia) + ' (CENTER STOP)');
     } else {
       state.xMaxDia = +(state.xDia + state.faceStroke).toFixed(3);
-      $('statusMessage').textContent = 'DIMENSION APPLIED: X-MAX LIMIT SET TO Ø' + lenStr(state.xMaxDia) + ' (CLEARANCE STOP)';
+      setStatusMsg('DIMENSION APPLIED: X-MAX LIMIT SET TO Ø' + lenStr(state.xMaxDia) + ' (CLEARANCE STOP)');
     }
   }
-
-
 
   function renderDynamicDeck(){
     var deck = $('dynamicDeck');
@@ -663,33 +802,93 @@
 
     if(state.mode === 'GEARBOX'){
       var isSync = state.gearboxMode === 'SYNC';
-      var zVal = isSync ? fmt(state.gearPitchZ,3) : state.asyncSpeedZ;
-      var xVal = isSync ? fmt(state.gearPitchX,3) : state.asyncSpeedX;
-      var val = state.activeFeedAxis === 'Z' ? zVal : xVal;
-      var uLabel = isSync ? unitLabel()+'/rev' : unitLabel()+'/min';
+      var zDisp = getGearZDisplay();
+      var xDisp = getGearXDisplay();
+      var activeDisp = state.activeFeedAxis === 'Z' ? zDisp : xDisp;
+      var dirLabel = state.activeFeedAxis === 'Z' ? 
+        (state.gearDirZ === 'FWD' ? 'DIR: ← TO CHUCK (Z−)' : 'DIR: → TO TAIL (Z+)') :
+        (state.gearDirX === 'IN' ? 'DIR: ↑ TO CENTER (X−)' : 'DIR: ↓ RETRACT (X+)');
+
+      var stepOptions = [];
+      var activeStep = 0.010;
+      if(!isSync){
+        stepOptions = state.unit === 'mm' ? ASYNC_STEPS_MM : ASYNC_STEPS_IN;
+        activeStep = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
+      } else if(state.activeFeedAxis === 'Z'){
+        if(state.gearFeedUnitZ === 'FEED'){
+          stepOptions = state.unit === 'mm' ? FEED_STEPS_MM_Z : FEED_STEPS_IN_Z;
+          activeStep = state.feedStepZ;
+        } else {
+          stepOptions = TPI_STEPS;
+          activeStep = state.feedStepTpi;
+        }
+      } else { // X axis
+        stepOptions = state.unit === 'mm' ? FEED_STEPS_MM_X : FEED_STEPS_IN_X;
+        activeStep = state.feedStepX;
+      }
+
+      var stepChipsHTML = '<div class="deck-step-row">';
+      var matchedStep = false;
+      stepOptions.forEach(function(st){
+        var isAct = Math.abs(st - activeStep) < 0.00005;
+        if(isAct) matchedStep = true;
+        var stStr = st.toString();
+        var label = (state.gearFeedUnitZ === 'TPI' && isSync && state.activeFeedAxis === 'Z') ? (stStr + ' TPI') : stStr;
+        stepChipsHTML += '<div class="deck-step-chip tap ' + (isAct ? 'active' : '') + '" data-step="' + st + '">' + label + '</div>';
+      });
+      stepChipsHTML += '<div class="deck-step-chip tap ' + (!matchedStep ? 'active' : '') + '" id="deckCustStep" style="flex:0.85; font-size:10px; color:var(--blue);" title="Enter custom step">' + (!matchedStep ? activeStep.toString() : 'CUST') + '</div>';
+      stepChipsHTML += '</div>';
 
       deck.innerHTML = '' +
-        '<div class="deck-selectors">' +
-          '<div class="deck-toggle-btn tap ' + (isSync?'on':'') + '" id="btnDeckSync">' + (isSync?'SYNC FEED':'ASYNC FEED') + '</div>' +
-          '<div class="deck-toggle-btn tap axis-on" id="btnDeckAxis">AXIS: ' + state.activeFeedAxis + '</div>' +
+        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+          '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + state.activeFeedAxis + '-AXIS ' + (isSync ? (state.activeFeedAxis==='Z'?state.gearFeedUnitZ:'FEED') : 'ASYNC') + ' TRIM</span>' +
+          '<span style="font-size:10px; color:' + (state.activeFeedAxis==='Z'?'var(--green)':'var(--blue)') + '; font-weight:700;">' + (state.activeFeedAxis==='Z'?'Z CARRIAGE':'X CROSS') + '</span>' +
         '</div>' +
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout tap" id="deckReadout">' +
-            '<span class="deck-val mono">' + val + '</span>' +
-            '<span class="deck-unit">' + uLabel + '</span>' +
+            '<span class="deck-val mono">' + activeDisp.val + '</span>' +
+            '<span class="deck-unit">' + activeDisp.unit + '</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+        '</div>' +
+        stepChipsHTML +
+        '<div class="tap" id="deckToggleDir" style="background:#172129; border:1px solid #283744; border-radius:4px; padding:4px 0; text-align:center; font-size:11px; font-weight:700; color:var(--fg); margin-top:2px;">' +
+          dirLabel +
         '</div>';
 
-      $('btnDeckSync').addEventListener('click', function(){
-        state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
-        updateStatusMsg(); render();
+      $('deckToggleDir').addEventListener('click', function(){
+        if(state.activeFeedAxis === 'Z'){
+          state.gearDirZ = state.gearDirZ === 'FWD' ? 'REV' : 'FWD';
+        } else {
+          state.gearDirX = state.gearDirX === 'IN' ? 'OUT' : 'IN';
+        }
+        updateStatusMsg();
+        render();
       });
-      $('btnDeckAxis').addEventListener('click', function(){
-        state.activeFeedAxis = state.activeFeedAxis === 'Z' ? 'X' : 'Z';
-        updateStatusMsg(); render();
+
+      deck.querySelectorAll('.deck-step-chip[data-step]').forEach(function(chip){
+        chip.addEventListener('click', function(){
+          var s = parseFloat(chip.dataset.step);
+          if(!isSync){
+            if(state.activeFeedAxis === 'Z') state.asyncStepZ = s;
+            else state.asyncStepX = s;
+          } else if(state.activeFeedAxis === 'Z'){
+            if(state.gearFeedUnitZ === 'FEED') state.feedStepZ = s;
+            else state.feedStepTpi = s;
+          } else {
+            state.feedStepX = s;
+          }
+          render();
+        });
       });
+
+      var custBtn = $('deckCustStep');
+      if(custBtn){
+        custBtn.addEventListener('click', function(){
+          openKeypad('customFeedStep', activeStep);
+        });
+      }
 
     } else if(state.mode === 'TURNING'){
       var pInfo = getTurnPasses();
@@ -701,7 +900,7 @@
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout tap" id="deckReadout">' +
-            '<span class="deck-val mono">' + fmt(state.turnPitch,3) + '</span>' +
+            '<span class="deck-val mono">' + lenStr(state.turnPitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
@@ -717,11 +916,52 @@
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout tap" id="deckReadout">' +
-            '<span class="deck-val mono">' + fmt(state.facePitch,3) + '</span>' +
+            '<span class="deck-val mono">' + lenStr(state.facePitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
         '</div>';
+
+    } else if(state.mode === 'THREADING'){
+      var tp = getThreadPitchDisplay();
+      if(isRun){
+        deck.innerHTML = '' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREADING RUNNING</span>' +
+            '<span class="deck-pass-badge mono">PASS ' + state.pass + '</span>' +
+          '</div>' +
+          '<div class="deck-controls" style="opacity:0.95;">' +
+            '<div class="deck-readout" id="deckReadout" style="width:100%;">' +
+              '<span class="deck-val mono">' + tp.val + ' ' + tp.unit + '</span>' +
+              '<span class="deck-unit" style="color:var(--amber);">DEPTH: ' + lenStr(state.depth) + ' ' + unitLabel() + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:#0e161a; border:1px solid #1a2730; border-radius:4px; padding:6px 0; text-align:center; font-size:11px; font-weight:700; color:var(--dim); margin-top:2px;">' +
+            'CYCLE ACTIVE — AUTO INFEED' +
+          '</div>';
+      } else {
+        deck.innerHTML = '' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREAD LEAD TRIM</span>' +
+            '<span style="font-size:10px; color:var(--amber); font-weight:700;">' + (state.threadDir==='RIGHT'?'RH':'LH') + '</span>' +
+          '</div>' +
+          '<div class="deck-controls">' +
+            '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
+            '<div class="deck-readout tap" id="deckReadout">' +
+              '<span class="deck-val mono">' + tp.val + '</span>' +
+              '<span class="deck-unit">' + tp.unit + '</span>' +
+            '</div>' +
+            '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+          '</div>' +
+          '<div class="tap" id="deckToggleThreadDir" style="background:#172129; border:1px solid #283744; border-radius:4px; padding:4px 0; text-align:center; font-size:11px; font-weight:700; color:var(--fg); margin-top:2px;">' +
+            'DIR: ' + (state.threadDir==='RIGHT'?'← RIGHT HAND (RH)':'→ LEFT HAND (LH)') +
+          '</div>';
+
+        $('deckToggleThreadDir').addEventListener('click', function(){
+          state.threadDir = state.threadDir === 'RIGHT' ? 'LEFT' : 'RIGHT';
+          render();
+        });
+      }
 
     } else {
       deck.innerHTML = '' +
@@ -729,8 +969,8 @@
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout tap" id="deckReadout">' +
-            '<span class="deck-val mono">' + fmt(state.pitch,3) + '</span>' +
-            '<span class="deck-unit">mm pitch</span>' +
+            '<span class="deck-val mono">' + lenStr(state.pitch, 3) + '</span>' +
+            '<span class="deck-unit">' + unitLabel() + ' pitch</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
         '</div>';
@@ -745,18 +985,38 @@
       btnMinus.addEventListener('click', function(){
         if(state.mode === 'GEARBOX'){
           if(state.gearboxMode === 'SYNC'){
-            if(state.activeFeedAxis === 'Z') state.gearPitchZ = Math.max(0.005, +(state.gearPitchZ - 0.010).toFixed(3));
-            else state.gearPitchX = Math.max(0.005, +(state.gearPitchX - 0.005).toFixed(3));
+            if(state.activeFeedAxis === 'Z'){
+              if(state.gearFeedUnitZ === 'FEED'){
+                var delta = state.unit === 'mm' ? state.feedStepZ : state.feedStepZ * 25.4;
+                state.gearPitchZ = Math.max(0.001, +(state.gearPitchZ - delta).toFixed(4));
+              } else { // TPI: lower TPI = coarser thread
+                var currTpi = 25.4 / state.gearPitchZ;
+                var nextTpi = Math.max(1, +(currTpi - state.feedStepTpi).toFixed(1));
+                state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
+              }
+            } else {
+              var delta = state.unit === 'mm' ? state.feedStepX : state.feedStepX * 25.4;
+              state.gearPitchX = Math.max(0.001, +(state.gearPitchX - delta).toFixed(4));
+            }
           } else {
-            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ = Math.max(5, state.asyncSpeedZ - 10);
-            else state.asyncSpeedX = Math.max(5, state.asyncSpeedX - 5);
+            var stA = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
+            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ = Math.max(1, state.asyncSpeedZ - stA);
+            else state.asyncSpeedX = Math.max(1, state.asyncSpeedX - stA);
           }
         } else if(state.mode === 'TURNING'){
-          state.turnPitch = Math.max(0.005, +(state.turnPitch - 0.005).toFixed(3));
+          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
+          state.turnPitch = Math.max(0.005, +(state.turnPitch - step).toFixed(4));
         } else if(state.mode === 'FACING'){
-          state.facePitch = Math.max(0.005, +(state.facePitch - 0.005).toFixed(3));
-        } else if(state.mode === 'THREADING'){
-          state.pitch = Math.max(0.2, +(state.pitch - 0.05).toFixed(3));
+          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
+          state.facePitch = Math.max(0.005, +(state.facePitch - step).toFixed(4));
+        } else if(state.mode === 'THREADING' && !isRun){
+          if(state.threadUnit === 'tpi'){
+            var currTpi = 25.4 / state.pitch;
+            var nextTpi = Math.max(1, Math.round(currTpi) - 1);
+            state.pitch = +(25.4 / nextTpi).toFixed(4);
+          } else {
+            state.pitch = Math.max(0.2, +(state.pitch - 0.05).toFixed(3));
+          }
         }
         render();
       });
@@ -764,35 +1024,73 @@
       btnPlus.addEventListener('click', function(){
         if(state.mode === 'GEARBOX'){
           if(state.gearboxMode === 'SYNC'){
-            if(state.activeFeedAxis === 'Z') state.gearPitchZ = +(state.gearPitchZ + 0.010).toFixed(3);
-            else state.gearPitchX = +(state.gearPitchX + 0.005).toFixed(3);
+            if(state.activeFeedAxis === 'Z'){
+              if(state.gearFeedUnitZ === 'FEED'){
+                var delta = state.unit === 'mm' ? state.feedStepZ : state.feedStepZ * 25.4;
+                state.gearPitchZ = +(state.gearPitchZ + delta).toFixed(4);
+              } else { // TPI: higher TPI = finer thread
+                var currTpi = 25.4 / state.gearPitchZ;
+                var nextTpi = Math.min(80, +(currTpi + state.feedStepTpi).toFixed(1));
+                state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
+              }
+            } else {
+              var delta = state.unit === 'mm' ? state.feedStepX : state.feedStepX * 25.4;
+              state.gearPitchX = +(state.gearPitchX + delta).toFixed(4);
+            }
           } else {
-            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ += 10;
-            else state.asyncSpeedX += 5;
+            var stA = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
+            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ += stA;
+            else state.asyncSpeedX += stA;
           }
         } else if(state.mode === 'TURNING'){
-          state.turnPitch = +(state.turnPitch + 0.005).toFixed(3);
+          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
+          state.turnPitch = +(state.turnPitch + step).toFixed(4);
         } else if(state.mode === 'FACING'){
-          state.facePitch = +(state.facePitch + 0.005).toFixed(3);
-        } else if(state.mode === 'THREADING'){
-          state.pitch = +(state.pitch + 0.05).toFixed(3);
+          var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
+          state.facePitch = +(state.facePitch + step).toFixed(4);
+        } else if(state.mode === 'THREADING' && !isRun){
+          if(state.threadUnit === 'tpi'){
+            var currTpi = 25.4 / state.pitch;
+            var nextTpi = Math.min(80, Math.round(currTpi) + 1);
+            state.pitch = +(25.4 / nextTpi).toFixed(4);
+          } else {
+            state.pitch = +(state.pitch + 0.05).toFixed(3);
+          }
         }
         render();
       });
 
-      readout.addEventListener('click', function(){
-        if(state.mode === 'GEARBOX'){
-          var target = state.activeFeedAxis==='Z' ? (state.gearboxMode==='SYNC'?'gearPitchZ':'asyncSpeedZ') : (state.gearboxMode==='SYNC'?'gearPitchX':'asyncSpeedX');
-          var curr = state.activeFeedAxis==='Z' ? (state.gearboxMode==='SYNC'?state.gearPitchZ:state.asyncSpeedZ) : (state.gearboxMode==='SYNC'?state.gearPitchX:state.asyncSpeedX);
-          openKeypad(target, curr);
-        } else if(state.mode === 'TURNING'){
-          openKeypad('turnPitch', state.turnPitch);
-        } else if(state.mode === 'FACING'){
-          openKeypad('facePitch', state.facePitch);
-        } else if(state.mode === 'THREADING'){
-          openPitchSelect();
-        }
-      });
+      if(readout){
+        readout.addEventListener('click', function(){
+          if(state.mode === 'GEARBOX'){
+            if(state.activeFeedAxis === 'Z'){
+              if(state.gearboxMode === 'ASYNC'){
+                openKeypad('asyncSpeedZ', state.asyncSpeedZ);
+              } else if(state.gearFeedUnitZ === 'FEED'){
+                openKeypad('gearPitchZ', state.unit==='mm'?state.gearPitchZ:state.gearPitchZ/25.4);
+              } else {
+                openPitchSelect('gearZ', 'tpi');
+              }
+            } else {
+              if(state.gearboxMode === 'ASYNC'){
+                openKeypad('asyncSpeedX', state.asyncSpeedX);
+              } else {
+                openKeypad('gearPitchX', state.unit==='mm'?state.gearPitchX:state.gearPitchX/25.4);
+              }
+            }
+          } else if(state.mode === 'TURNING'){
+            openKeypad('turnPitch', state.unit==='mm'?state.turnPitch:state.turnPitch/25.4);
+          } else if(state.mode === 'FACING'){
+            openKeypad('facePitch', state.unit==='mm'?state.facePitch:state.facePitch/25.4);
+          } else if(state.mode === 'THREADING'){
+            if(isRun){
+              setStatusMsg('THREADING LOCKED: CANNOT CHANGE PITCH DURING ACTIVE RUN');
+            } else {
+              openPitchSelect('modePitch', state.threadUnit);
+            }
+          }
+        });
+      }
     }
   }
 
@@ -802,98 +1100,118 @@
 
     if(state.mode === 'GEARBOX'){
       var isSync = state.gearboxMode === 'SYNC';
-      var zVal = isSync ? fmt(state.gearPitchZ,3) : state.asyncSpeedZ;
-      var xVal = isSync ? fmt(state.gearPitchX,3) : state.asyncSpeedX;
-      var uLabel = isSync ? unitLabel()+'/rev' : unitLabel()+'/min';
+      var zDisp = getGearZDisplay();
+      var xDisp = getGearXDisplay();
       var zActive = state.activeFeedAxis === 'Z';
 
       return '' +
-        '<div class="feed-block ' + (zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
-          '<div class="feed-row-top">' +
-            '<span>Z CARRIAGE</span>' +
-            '<span class="axis-tag-badge ' + (zActive ? 'active' : '') + '">' + (zActive ? 'FEEDING' : 'IDLE') + '</span>' +
+        '<div style="display:flex; flex-direction:column; gap:5px;">' +
+          '<div style="display:flex; gap:4px;">' +
+            '<div class="deck-toggle-btn tap ' + (isSync?'on':'') + '" id="fld-gearSync">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
+            '<div class="deck-toggle-btn tap axis-on" id="fld-gearAxis">AXIS: ' + state.activeFeedAxis + '</div>' +
           '</div>' +
-          '<div class="feed-row-bottom">' +
-            '<b class="mono editable tap feed-val-box" id="fld-gearZ">' + zVal + '</b>' +
-            '<span class="feed-unit-box">' + uLabel + '</span>' +
-            '<span class="dir-chip-fixed editable tap" id="fld-dirZ">' + (state.gearDirZ==='FWD'?'← TO CHUCK':'→ TO TAIL') + '</span>' +
+
+          (isSync && zActive ? (
+            '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; margin:1px 0;">' +
+              '<span style="font-size:10px; font-weight:700; color:var(--dimmer);">Z UNIT:</span>' +
+              '<div style="display:flex; gap:3px; flex:1;">' +
+                '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center;">FEED</div>' +
+                '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='TPI'?'active':'') + '" id="fld-unitTpi" style="flex:1; text-align:center;">TPI</div>' +
+              '</div>' +
+            '</div>'
+          ) : '') +
+
+          '<div class="feed-block ' + (zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
+            '<div class="feed-row-top">' +
+              '<span>Z CARRIAGE</span>' +
+              (!zActive ? '<span class="axis-tag-badge">INACTIVE</span>' : '') +
+            '</div>' +
+            '<div class="feed-row-bottom">' +
+              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearZ">' + zDisp.val + '</b>' +
+              '<span class="feed-unit-box">' + zDisp.unit + '</span>' +
+            '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="feed-block ' + (!zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
-          '<div class="feed-row-top">' +
-            '<span>X CROSS-SLIDE</span>' +
-            '<span class="axis-tag-badge ' + (!zActive ? 'active' : '') + '">' + (!zActive ? 'FEEDING' : 'IDLE') + '</span>' +
-          '</div>' +
-          '<div class="feed-row-bottom">' +
-            '<b class="mono editable tap feed-val-box" id="fld-gearX">' + xVal + '</b>' +
-            '<span class="feed-unit-box">' + uLabel + '</span>' +
-            '<span class="dir-chip-fixed editable tap" id="fld-dirX">' + (state.gearDirX==='IN'?'↑ TO CENTER':'↓ RETRACT') + '</span>' +
+
+          '<div class="feed-block ' + (!zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
+            '<div class="feed-row-top">' +
+              '<span>X CROSS-SLIDE</span>' +
+              (zActive ? '<span class="axis-tag-badge">INACTIVE</span>' : '') +
+            '</div>' +
+            '<div class="feed-row-bottom">' +
+              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearX">' + xDisp.val + '</b>' +
+              '<span class="feed-unit-box">' + xDisp.unit + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>';
     }
 
     if(state.mode === 'TURNING'){
       var pInfo = getTurnPasses();
+      var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>CUT PITCH</span><b class="mono ' + ed + '" id="fld-turnPitch">' + fmt(state.turnPitch,3) + ' ' + unitLabel() + '/rev</b></div>' +
-        '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + fmt(state.turnLength,2) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-turnDepth">Ø ' + fmt(state.turnTotalDepth,3) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + fmt(state.turnMaxDoc,3) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-turnPasses">' + pInfo.count + ' @ Ø' + fmt(pInfo.doc,3) + '</b></div>' +
+        '<div class="kv"><span>CUT PITCH</span><b class="mono ' + ed + '" id="fld-turnPitch">' + lenStr(state.turnPitch, dp) + ' ' + unitLabel() + '/rev</b></div>' +
+        '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + lenStr(state.turnLength, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-turnDepth">Ø ' + lenStr(state.turnTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + lenStr(state.turnMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-turnPasses">' + pInfo.count + ' @ Ø' + lenStr(pInfo.doc, dp) + '</b></div>' +
         '<div class="kv"><span>RESTORE LIMITS</span><span class="toggle-chip ' + (state.turnRestoreLimits?'active':'') + ' tap" id="fld-turnRestore">' + (state.turnRestoreLimits?'ON FINISH: YES':'ON FINISH: NO') + '</span></div>';
     }
 
     if(state.mode === 'FACING'){
       var fpInfo = getFacePasses();
+      var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>FACING FEED</span><b class="mono ' + ed + '" id="fld-facePitch">' + fmt(state.facePitch,3) + ' ' + unitLabel() + '/rev</b></div>' +
-        '<div class="kv"><span>STROKE</span><span class="inline-dir-chip tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + fmt(state.faceStroke,2) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-faceDepth">' + fmt(state.faceTotalDepth,3) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + fmt(state.faceMaxDoc,3) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-facePasses">' + fpInfo.count + ' @ ' + fmt(fpInfo.doc,3) + '</b></div>' +
+        '<div class="kv"><span>FACING FEED</span><b class="mono ' + ed + '" id="fld-facePitch">' + lenStr(state.facePitch, dp) + ' ' + unitLabel() + '/rev</b></div>' +
+        '<div class="kv"><span>STROKE</span><span class="inline-dir-chip tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + lenStr(state.faceStroke, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-faceDepth">' + lenStr(state.faceTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + lenStr(state.faceMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>PASSES</span><b class="mono ' + ed + '" id="fld-facePasses">' + fpInfo.count + ' @ ' + lenStr(fpInfo.doc, dp) + '</b></div>' +
         '<div class="kv"><span>RESTORE LIMITS</span><span class="toggle-chip ' + (state.faceRestoreLimits?'active':'') + ' tap" id="fld-faceRestore">' + (state.faceRestoreLimits?'ON FINISH: YES':'ON FINISH: NO') + '</span></div>';
     }
 
-
     if(state.mode === 'THREADING'){
+      var tp = getThreadPitchDisplay();
       return '' +
-        '<div class="kv"><span>LEAD / PITCH</span><b class="mono ' + ed + '" id="fld-pitch">' + fmt(state.pitch,3) + ' mm</b></div>' +
-        '<div class="kv"><span>PASS</span><b class="mono">' + state.pass + '</b></div>' +
-        '<div class="kv"><span>PASS DEPTH</span><b class="mono">' + fmt(state.depth,3) + ' mm</b></div>' +
-        '<div class="kv"><span>DIRECTION</span><span class="dir-chip-fixed ' + ed + '" id="fld-threadDir">' + state.threadDir + '</span></div>';
+        '<div class="kv"><span>LEAD / PITCH</span><b class="mono ' + ed + '" id="fld-pitch">' + tp.val + ' ' + tp.unit + '</b></div>' +
+        '<div class="kv"><span>PASS</span><b class="mono">' + state.pass + ' (QUADRATIC)</b></div>' +
+        '<div class="kv"><span>PASS DEPTH</span><b class="mono">' + lenStr(state.depth) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>DIRECTION</span><span class="dir-chip-fixed ' + ed + '" id="fld-threadDir">' + state.threadDir + '</span></div>' +
+        '<div class="kv"><span>CYCLE INFEED</span><b class="mono" style="color:var(--dim)">90° RADIAL (AUTO)</b></div>';
     }
 
     if(state.mode === 'TAPER'){
       return '' +
         '<div class="kv"><span>TAPER ANGLE</span><b class="mono ' + ed + '" id="fld-taperAngle">' + fmt(state.taperAngle,2) + '°</b></div>' +
-        '<div class="kv"><span>LENGTH</span><b class="mono ' + ed + '" id="fld-taperLen">' + fmt(state.taperLen,1) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>LENGTH</span><b class="mono ' + ed + '" id="fld-taperLen">' + lenStr(state.taperLen, state.unit==='mm'?1:2) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TAPER SIDE</span><span class="dir-chip-fixed ' + ed + '" id="fld-taperDir">' + state.taperDir + '</span></div>';
     }
 
     if(state.mode === 'CUTOFF'){
+      var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>PLUNGE FEED</span><b class="mono ' + ed + '" id="fld-cutFeed">' + fmt(state.cutoffFeed,3) + ' ' + unitLabel() + '/rev</b></div>' +
-        '<div class="kv"><span>PECK DEPTH</span><b class="mono ' + ed + '" id="fld-cutPeck">' + fmt(state.cutoffPeck,2) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>RETRACT</span><b class="mono ' + ed + '" id="fld-cutRetract">' + fmt(state.cutoffRetract,2) + ' ' + unitLabel() + '</b></div>';
+        '<div class="kv"><span>PLUNGE FEED</span><b class="mono ' + ed + '" id="fld-cutFeed">' + lenStr(state.cutoffFeed, dp) + ' ' + unitLabel() + '/rev</b></div>' +
+        '<div class="kv"><span>PECK DEPTH</span><b class="mono ' + ed + '" id="fld-cutPeck">' + lenStr(state.cutoffPeck, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>RETRACT</span><b class="mono ' + ed + '" id="fld-cutRetract">' + lenStr(state.cutoffRetract, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>';
     }
 
     if(state.mode === 'SLOTTING'){
+      var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
         '<div class="kv"><span>TOTAL STROKES</span><b class="mono ' + ed + '" id="fld-slotStrokes">' + state.slotStrokes + '</b></div>' +
-        '<div class="kv"><span>FEED / STROKE</span><b class="mono ' + ed + '" id="fld-slotFeed">' + fmt(state.slotFeedPerStroke,3) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>STROKE LENGTH</span><b class="mono ' + ed + '" id="fld-slotLen">' + fmt(state.slotLen,1) + ' ' + unitLabel() + '</b></div>';
+        '<div class="kv"><span>FEED / STROKE</span><b class="mono ' + ed + '" id="fld-slotFeed">' + lenStr(state.slotFeedPerStroke, dp) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>STROKE LENGTH</span><b class="mono ' + ed + '" id="fld-slotLen">' + lenStr(state.slotLen, state.unit==='mm'?1:2) + ' ' + unitLabel() + '</b></div>';
     }
 
     if(state.mode === 'SPHERE'){
       return '' +
-        '<div class="kv"><span>SPHERE RADIUS</span><b class="mono ' + ed + '" id="fld-sphereRad">' + fmt(state.sphereRadius,2) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>SPHERE RADIUS</span><b class="mono ' + ed + '" id="fld-sphereRad">' + lenStr(state.sphereRadius, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>PROFILE</span><span class="dir-chip-fixed ' + ed + '" id="fld-sphereType">' + state.sphereType + '</span></div>' +
-        '<div class="kv"><span>ARC STEP</span><b class="mono ' + ed + '" id="fld-sphereStep">' + fmt(state.sphereStep,3) + ' ' + unitLabel() + '</b></div>';
+        '<div class="kv"><span>ARC STEP</span><b class="mono ' + ed + '" id="fld-sphereStep">' + lenStr(state.sphereStep, state.unit==='mm'?3:4) + ' ' + unitLabel() + '</b></div>';
     }
 
     if(state.mode === 'JOYSTICK'){
       return '' +
-        '<div class="kv"><span>MAX RAPID</span><b class="mono ' + ed + '" id="fld-joyRate">' + state.joyMaxRate + ' ' + unitLabel() + '/min</b></div>' +
+        '<div class="kv"><span>MAX RAPID</span><b class="mono ' + ed + '" id="fld-joyRate">' + lenStr(state.joyMaxRate, 0) + ' ' + unitLabel() + '/min</b></div>' +
         '<div class="kv"><span>DEADZONE</span><b class="mono ' + ed + '" id="fld-joyDead">' + state.joyDeadzone + ' %</b></div>' +
         '<div class="kv"><span>STATUS</span><b class="mono" style="color:var(--blue)">ANALOG READY</b></div>';
     }
@@ -901,17 +1219,34 @@
 
   function bindModeEvents(){
     if(state.mode === 'GEARBOX'){
+      $('fld-gearSync').addEventListener('click', function(){
+        state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
+        updateStatusMsg(); render();
+      });
+      $('fld-gearAxis').addEventListener('click', function(){
+        state.activeFeedAxis = state.activeFeedAxis === 'Z' ? 'X' : 'Z';
+        updateStatusMsg(); render();
+      });
+
+      var btnFeed = $('fld-unitFeed');
+      var btnTpi = $('fld-unitTpi');
+      if(btnFeed && btnTpi){
+        btnFeed.addEventListener('click', function(){ state.gearFeedUnitZ = 'FEED'; updateStatusMsg(); render(); });
+        btnTpi.addEventListener('click', function(){ state.gearFeedUnitZ = 'TPI'; updateStatusMsg(); render(); });
+      }
+
       $('fld-gearZ').addEventListener('click', function(){
-        openKeypad(state.gearboxMode==='SYNC'?'gearPitchZ':'asyncSpeedZ', state.gearboxMode==='SYNC'?state.gearPitchZ:state.asyncSpeedZ);
+        if(state.gearboxMode === 'ASYNC'){
+          openKeypad('asyncSpeedZ', state.asyncSpeedZ);
+        } else if(state.gearFeedUnitZ === 'FEED'){
+          openKeypad('gearPitchZ', state.gearPitchZ);
+        } else {
+          openPitchSelect('gearZ', 'tpi');
+        }
       });
       $('fld-gearX').addEventListener('click', function(){
-        openKeypad(state.gearboxMode==='SYNC'?'gearPitchX':'asyncSpeedX', state.gearboxMode==='SYNC'?state.gearPitchX:state.asyncSpeedX);
-      });
-      $('fld-dirZ').addEventListener('click', function(){
-        state.gearDirZ = state.gearDirZ === 'FWD' ? 'REV' : 'FWD'; render();
-      });
-      $('fld-dirX').addEventListener('click', function(){
-        state.gearDirX = state.gearDirX === 'IN' ? 'OUT' : 'IN'; render();
+        if(state.gearboxMode === 'ASYNC') openKeypad('asyncSpeedX', state.asyncSpeedX);
+        else openKeypad('gearPitchX', state.gearPitchX);
       });
       return;
     }
@@ -950,10 +1285,8 @@
         state.faceRestoreLimits = !state.faceRestoreLimits;
         updateStatusMsg(); render();
       });
-    }
-
- else if(state.mode === 'THREADING'){
-      $('fld-pitch').addEventListener('click', openPitchSelect);
+    } else if(state.mode === 'THREADING'){
+      $('fld-pitch').addEventListener('click', function(){ openPitchSelect('modePitch'); });
       $('fld-threadDir').addEventListener('click', function(){ state.threadDir = state.threadDir==='RIGHT'?'LEFT':'RIGHT'; render(); });
     } else if(state.mode === 'TAPER'){
       $('fld-taperAngle').addEventListener('click', function(){ openKeypad('taperAngle', state.taperAngle); });
@@ -978,35 +1311,43 @@
   }
 
   function updateStatusMsg(){
-    var msg = $('statusMessage');
     if(state.mode === 'GEARBOX'){
       if(state.gearboxMode === 'ASYNC'){
-        msg.textContent = 'ASYNC ACTIVE: ' + state.activeFeedAxis + '-AXIS MOTORIZED AT ' + (state.activeFeedAxis==='Z'?state.asyncSpeedZ:state.asyncSpeedX) + ' ' + unitLabel() + '/MIN';
+        setStatusMsg('ASYNC ACTIVE: ' + state.activeFeedAxis + '-AXIS MOTORIZED AT ' + (state.activeFeedAxis==='Z'?state.asyncSpeedZ:state.asyncSpeedX) + ' ' + unitLabel() + '/MIN');
       } else {
-        msg.textContent = 'SYNC ARMED: ' + state.activeFeedAxis + '-AXIS GEARED AT ' + (state.activeFeedAxis==='Z'?fmt(state.gearPitchZ,3):fmt(state.gearPitchX,3)) + ' ' + unitLabel() + '/REV';
+        var zDisp = getGearZDisplay();
+        var xDisp = getGearXDisplay();
+        var curDisp = state.activeFeedAxis === 'Z' ? zDisp : xDisp;
+        setStatusMsg('SYNC ARMED: ' + state.activeFeedAxis + '-AXIS GEARED AT ' + curDisp.val + ' ' + curDisp.unit);
       }
     } else if(state.mode === 'TURNING'){
       var p = getTurnPasses();
       var dirStr = state.turnDir === 'CHUCK' ? '← TO CHUCK' : '→ TO TAIL';
-      msg.textContent = 'TURNING: ' + fmt(state.turnLength,1) + 'mm ' + dirStr + ' | ' + p.count + ' PASSES (MAX DOC: Ø' + fmt(state.turnMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.turnRestoreLimits?'ON':'OFF');
+      setStatusMsg('TURNING: ' + fmt(state.turnLength,1) + 'mm ' + dirStr + ' | ' + p.count + ' PASSES (MAX DOC: Ø' + fmt(state.turnMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.turnRestoreLimits?'ON':'OFF'));
     } else if(state.mode === 'FACING'){
       var fp = getFacePasses();
       var fdirStr = state.faceDir === 'CENTER' ? '↑ TO CENTER' : '↓ RETRACT';
-      msg.textContent = 'FACING: Ø' + fmt(state.faceStroke,1) + 'mm ' + fdirStr + ' | ' + fp.count + ' PASSES (MAX DOC: ' + fmt(state.faceMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.faceRestoreLimits?'ON':'OFF');
+      setStatusMsg('FACING: Ø' + fmt(state.faceStroke,1) + 'mm ' + fdirStr + ' | ' + fp.count + ' PASSES (MAX DOC: ' + fmt(state.faceMaxDoc,3) + ') | RESTORE LIMITS: ' + (state.faceRestoreLimits?'ON':'OFF'));
+    } else if(state.mode === 'THREADING'){
+      setStatusMsg('AUTO THREADING: PITCH ' + fmt(state.pitch,3) + 'mm ' + state.threadDir + ' | 90° RADIAL PLUNGE INFEED');
     } else {
-      msg.textContent = 'CYCLE MODE: ' + state.mode + ' READY';
+      setStatusMsg('CYCLE MODE: ' + state.mode + ' READY');
     }
   }
 
-  // Universal Runstack: START FEED / PAUSE and STOP
+  // Universal Runstack: Binary START / STOP (matches NanoELS hardware state machine)
   function renderRunstack(){
     var isRun = state.runState === 'running';
+    var runText = isRun ? (state.mode === 'GEARBOX' ? 'FEEDING' : 'RUNNING') : (state.mode === 'GEARBOX' ? 'START FEED' : 'START CYCLE');
+    var runClass = isRun ? 'running' : 'start';
+    var stopClass = isRun ? 'active' : 'idle';
+
     $('runstackArea').innerHTML = '' +
-      '<div class="rbtn ' + (isRun?'pause':'start') + ' tap" id="btnRun">' + (isRun ? 'PAUSE FEED' : 'START FEED') + '</div>' +
-      '<div class="rbtn stop tap" id="btnStop">STOP</div>';
+      '<div class="rbtn ' + runClass + ' tap" id="btnRun">' + (isRun ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:8px; box-shadow:0 0 6px var(--green);"></span>' : '') + runText + '</div>' +
+      '<div class="rbtn stop ' + stopClass + ' ' + (isRun ? 'tap' : '') + '" id="btnStop">STOP</div>';
 
     $('btnRun').addEventListener('click', function(){
-      if(!isRun){
+      if(state.runState === 'stopped'){
         // Cache limits if opt-in restoration is active
         if(state.mode === 'TURNING' && state.turnRestoreLimits && state.turnSavedZMin === null && state.turnSavedZMax === null){
           state.turnSavedZMin = state.zMin;
@@ -1016,15 +1357,19 @@
           state.faceSavedXMax = state.xMaxDia;
         }
         state.runState = 'running';
+        setStatusMsg('CYCLE STARTED: ' + state.mode + ' ACTIVE');
       } else {
-        state.runState = 'paused';
+        stopCycle(true);
+        return;
       }
       syncSpindleSimulation();
       render();
     });
 
     $('btnStop').addEventListener('click', function(){
-      stopCycle(true);
+      if(state.runState !== 'stopped'){
+        stopCycle(true);
+      }
     });
   }
 
@@ -1037,13 +1382,13 @@
       state.zMax = state.turnSavedZMax;
       state.turnSavedZMin = null;
       state.turnSavedZMax = null;
-      $('statusMessage').textContent = 'TURNING ENDED: RESTORED Z LIMITS';
+      setStatusMsg('TURNING ENDED: RESTORED Z LIMITS');
     } else if(state.mode === 'FACING' && state.faceRestoreLimits && (state.faceSavedXMin !== null || state.faceSavedXMax !== null)){
       state.xMinDia = state.faceSavedXMin;
       state.xMaxDia = state.faceSavedXMax;
       state.faceSavedXMin = null;
       state.faceSavedXMax = null;
-      $('statusMessage').textContent = 'FACING ENDED: RESTORED X LIMITS';
+      setStatusMsg('FACING ENDED: RESTORED X LIMITS');
     }
 
     state.turnCurrentPass = 1;
@@ -1118,7 +1463,6 @@
     }
   }
 
-
   function updateJogAntiTrap(){
     var eps = 0.0005;
     var atZMin = (state.zMin !== null && state.z <= (state.zMin + eps));
@@ -1136,10 +1480,12 @@
     if(btnUp) btnUp.classList.toggle('limit-blocked', atXMin);
     if(btnDown) btnDown.classList.toggle('limit-blocked', atXMax);
 
+    // NW: Z- and X- (Into cut / To Center). Blocked if at Z-Min OR X-Min.
+    // SE: Z+ and X+ (Retract). Blocked if at Z-Max OR X-Max.
     var btnNw = document.querySelector('.chamfer-btn[data-diag="nw"]');
     var btnSe = document.querySelector('.chamfer-btn[data-diag="se"]');
-    if(btnNw) btnNw.classList.toggle('limit-blocked', atZMin || atXMax);
-    if(btnSe) btnSe.classList.toggle('limit-blocked', atZMax || atXMin);
+    if(btnNw) btnNw.classList.toggle('limit-blocked', atZMin || atXMin);
+    if(btnSe) btnSe.classList.toggle('limit-blocked', atZMax || atXMax);
   }
 
   function render(){
@@ -1147,33 +1493,35 @@
     $('lim-zMin').textContent = limitText('zMin'); $('lim-zMin').classList.toggle('empty-limit', state.zMin===null);
     $('lim-zMax').textContent = limitText('zMax'); $('lim-zMax').classList.toggle('empty-limit', state.zMax===null);
 
-    var xVal = state.xRep === 'diameter' ? state.xDia : state.xDia/2;
-    var prefix = state.xRep === 'diameter' ? 'Ø' : 'R';
-    $('xValue').textContent = prefix + lenStr(xVal);
+    var isDia = state.xRep === 'diameter';
+    var xVal = isDia ? state.xDia : state.xDia / 2;
+    var glyphClass = isDia ? 'dia' : 'rad';
+    var glyphChar = isDia ? 'Ø' : 'R';
+    $('xValue').innerHTML = '<span class="dia-glyph ' + glyphClass + '">' + glyphChar + '</span>' + lenStr(xVal);
     $('lim-xMaxDia').textContent = limitText('xMaxDia'); $('lim-xMaxDia').classList.toggle('empty-limit', state.xMaxDia===null);
     $('lim-xMinDia').textContent = limitText('xMinDia'); $('lim-xMinDia').classList.toggle('empty-limit', state.xMinDia===null);
+    $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
+    $('repBadge').className = 'chip-sm rep-toggle tap ' + (isDia ? 'is-dia' : 'is-rad');
 
-    $('stepValue').textContent = state.unit==='mm' ? fmt(state.steps[state.stepIdx],3) : fmt(state.steps[state.stepIdx]/25.4,4);
+    $('stepValue').textContent = getActiveJogStepDisplay();
 
     if(state.spindleCycle === 0){ $('spindleValue').textContent = fmt(state.rpm,0); $('spindleUnit').textContent = 'RPM'; }
     else if(state.spindleCycle === 1){ $('spindleValue').textContent = fmt(state.turns,2); $('spindleUnit').textContent = 'TURNS'; }
     else { $('spindleValue').textContent = fmt(state.angle,1); $('spindleUnit').textContent = '°'; }
 
     $('modeName').textContent = state.mode;
+    $('modeHead').classList.toggle('locked', state.runState === 'running');
     $('modeBody').innerHTML = modeBodyHTML();
     bindModeEvents();
     renderRunstack();
     renderDynamicDeck();
     updateJogAntiTrap();
 
-
     var sp = $('statusPill');
     if(isFeeding()){
       sp.className = 'pill running'; sp.innerHTML = '<span class="dot"></span>FEEDING';
     } else if(state.runState === 'running' && !state.spindleSimRunning && (state.mode!=='GEARBOX'||state.gearboxMode==='SYNC')){
       sp.className = 'pill paused'; sp.innerHTML = '<span class="dot"></span>ARMED (WAIT)';
-    } else if(state.runState === 'paused'){
-      sp.className = 'pill paused'; sp.innerHTML = '<span class="dot"></span>PAUSED';
     } else {
       sp.className = 'pill stopped'; sp.innerHTML = '<span class="dot"></span>STOPPED';
     }
@@ -1182,11 +1530,56 @@
   }
 
   // Header Handlers
-  $('unitToggle').addEventListener('click', function(){ state.unit = state.unit === 'mm' ? 'in' : 'mm'; render(); });
+  $('unitToggle').addEventListener('click', function(){ 
+    state.unit = state.unit === 'mm' ? 'in' : 'mm';
+    if(state.unit === 'in'){
+      state.feedStepZ = 0.0005;
+      state.feedStepX = 0.0002;
+      state.asyncStepZ = 0.5;
+      state.asyncStepX = 0.2;
+    } else {
+      state.feedStepZ = 0.010;
+      state.feedStepX = 0.005;
+      state.asyncStepZ = 10;
+      state.asyncStepX = 5;
+    }
+    render(); 
+  });
   $('settingsBtn').addEventListener('click', function(){ $('settingsOverlay').classList.add('show'); });
   $('settingsClose').addEventListener('click', function(){ $('settingsOverlay').classList.remove('show'); });
+  $('openDocBtn').addEventListener('click', function(){
+    $('settingsOverlay').classList.remove('show');
+    showDocTab('decisions');
+    $('docOverlay').classList.add('show');
+  });
 
-  $('modeHead').addEventListener('click', function(){ $('modeOverlay').classList.add('show'); });
+  // Message Log Overlay Handlers
+  $('btnOpenLog').addEventListener('click', function(){
+    var list = $('logHistoryList');
+    list.innerHTML = '';
+    if(!state.msgLog || state.msgLog.length === 0){
+      list.innerHTML = '<div style="color:var(--dimmer); padding:4px;">No messages logged yet.</div>';
+    } else {
+      for(var i = state.msgLog.length - 1; i >= 0; i--){
+        var row = document.createElement('div');
+        row.style.borderBottom = '1px solid #1a2228';
+        row.style.padding = '3px 0';
+        row.textContent = '• ' + state.msgLog[i];
+        list.appendChild(row);
+      }
+    }
+    $('logOverlay').classList.add('show');
+  });
+  $('logCloseBtn').addEventListener('click', function(){ $('logOverlay').classList.remove('show'); });
+
+  // Mode Selector with Running Lockout
+  $('modeHead').addEventListener('click', function(){
+    if(state.runState === 'running'){
+      setStatusMsg('MODE LOCKED: OPERATION ACTIVE — PRESS STOP FIRST');
+      return;
+    }
+    $('modeOverlay').classList.add('show');
+  });
   $('modeOverlay').querySelectorAll('button[data-mode]').forEach(function(b){
     b.addEventListener('click', function(){
       state.mode = b.dataset.mode;
@@ -1217,13 +1610,15 @@
     stepDidHold = false;
     stepHoldTimer = setTimeout(function(){
       stepDidHold = true;
-      openKeypad('step', state.steps[state.stepIdx]);
+      var curVal = state.unit === 'mm' ? JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length] : JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length];
+      openKeypad('step', curVal);
     }, 600);
   });
   $('stepMain').addEventListener('pointerup', function(){
     clearTimeout(stepHoldTimer);
     if(!stepDidHold){
-      state.stepIdx = (state.stepIdx + 1) % state.steps.length;
+      var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
+      state.stepIdx = (state.stepIdx + 1) % maxLen;
       render();
     }
   });
@@ -1299,10 +1694,10 @@
     function doStep(){
       var blk = isBlocked();
       if(blk){
-        $('statusMessage').textContent = 'LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT';
+        setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
-      var stepMm = state.steps[state.stepIdx];
+      var stepMm = getActiveJogStepMm();
       if(axis==='z'){ state.z = clamp(state.z + dir*stepMm, state.zMin, state.zMax); }
       else { 
         // dir=1 is UP (To Center, diameter decreases), dir=-1 is DOWN (Retract, diameter increases)
@@ -1315,7 +1710,7 @@
       e.preventDefault();
       var blk = isBlocked();
       if(blk){
-        $('statusMessage').textContent = 'LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT';
+        setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
       btn.classList.add('pressed');
@@ -1329,7 +1724,7 @@
     btn.addEventListener('pointercancel', stop);
   });
 
-  // Chamfer Jogging
+  // Chamfer Jogging (NW = Z- X- into cut; SE = Z+ X+ retract)
   document.querySelectorAll('.chamfer-btn[data-diag]').forEach(function(btn){
     var holdTimer=null, repeatTimer=null;
     var diag = btn.dataset.diag;
@@ -1339,17 +1734,17 @@
       var eps = 0.0005;
       if(zDir === -1 && state.zMin !== null && state.z <= (state.zMin + eps)) return 'Z MIN (CHUCK)';
       if(zDir === 1 && state.zMax !== null && state.z >= (state.zMax - eps)) return 'Z MAX (TAIL)';
-      if(xDir === 1 && state.xMinDia !== null && state.xDia <= (state.xMinDia + eps)) return 'X MIN (CENTER)';
-      if(xDir === -1 && state.xMaxDia !== null && state.xDia >= (state.xMaxDia - eps)) return 'X MAX (CLEARANCE)';
+      if(xDir === -1 && state.xMinDia !== null && state.xDia <= (state.xMinDia + eps)) return 'X MIN (CENTER)';
+      if(xDir === 1 && state.xMaxDia !== null && state.xDia >= (state.xMaxDia - eps)) return 'X MAX (CLEARANCE)';
       return null;
     }
     function doStep(){
       var blk = isBlocked();
       if(blk){
-        $('statusMessage').textContent = 'LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT';
+        setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
-      var stepMm = state.steps[state.stepIdx];
+      var stepMm = getActiveJogStepMm();
       state.z = clamp(state.z + zDir*stepMm, state.zMin, state.zMax);
       state.xDia = clamp(state.xDia + xDir*stepMm, state.xMinDia, state.xMaxDia);
       render();
@@ -1358,7 +1753,7 @@
       e.preventDefault();
       var blk = isBlocked();
       if(blk){
-        $('statusMessage').textContent = 'LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT';
+        setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
       btn.classList.add('pressed');
@@ -1383,17 +1778,39 @@
       var b = document.createElement('button');
       b.textContent = state.pitchTab==='metric' ? v.toFixed(2)+' mm' : v+' TPI';
       b.addEventListener('click', function(){
-        state.pitch = state.pitchTab==='metric' ? v : 25.4 / v;
+        var pMm = state.pitchTab==='metric' ? v : 25.4 / v;
+        if(pitchSelectTarget === 'gearZ'){
+          state.gearPitchZ = pMm;
+        } else {
+          state.pitch = pMm;
+          state.threadUnit = state.pitchTab;
+        }
         $('pitchOverlay').classList.remove('show');
+        updateStatusMsg();
         render();
       });
       grid.appendChild(b);
     });
   }
-  function openPitchSelect(){ renderPitchGrid(); $('pitchOverlay').classList.add('show'); }
+  function openPitchSelect(target, tab){
+    pitchSelectTarget = target || 'modePitch';
+    if(tab) state.pitchTab = tab;
+    else if(pitchSelectTarget === 'modePitch') state.pitchTab = state.threadUnit || 'metric';
+    renderPitchGrid();
+    $('pitchOverlay').classList.add('show');
+  }
   $('tabMetric').addEventListener('click', function(){ state.pitchTab='metric'; renderPitchGrid(); });
   $('tabTpi').addEventListener('click', function(){ state.pitchTab='tpi'; renderPitchGrid(); });
-  $('pitchCustomBtn').addEventListener('click', function(){ $('pitchOverlay').classList.remove('show'); openKeypad('pitch', state.pitch); });
+  $('pitchCustomBtn').addEventListener('click', function(){
+    $('pitchOverlay').classList.remove('show');
+    if(pitchSelectTarget === 'gearZ'){
+      var curVal = state.gearFeedUnitZ === 'TPI' ? (state.gearPitchZ > 0 ? +(25.4 / state.gearPitchZ).toFixed(1) : 16) : toDisplayLen(state.gearPitchZ);
+      openKeypad('gearPitchZ', curVal);
+    } else {
+      var curVal = state.pitchTab === 'tpi' ? (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(1) : 16) : toDisplayLen(state.pitch);
+      openKeypad('pitch', curVal);
+    }
+  });
   $('pitchCancelBtn').addEventListener('click', function(){ $('pitchOverlay').classList.remove('show'); });
 
   // Calculator Keypad Engine
@@ -1431,7 +1848,18 @@
   }
   buildKeypad();
 
-  // Bottom row handlers: Backspace and Clear
+  // Bottom row handlers: Half, Backspace, and Clear
+  $('kpHalfBtn').addEventListener('click', function(e){
+    e.preventDefault();
+    var inp = $('kpInput');
+    var v = parseFloat(inp.value !== '' ? inp.value : '0');
+    if(!isNaN(v)){
+      inp.value = +(v / 2).toFixed(4);
+      inp.focus();
+      inp.select();
+    }
+  });
+
   $('kpBkspBtn').addEventListener('click', function(e){
     e.preventDefault();
     var inp = $('kpInput');
@@ -1464,24 +1892,36 @@
     cutoffPeck:'PECK DEPTH', cutoffRetract:'RETRACT DIST', slotStrokes:'TOTAL STROKES',
     slotFeedPerStroke:'STROKE FEED', slotLen:'STROKE LENGTH', sphereRadius:'SPHERE RADIUS',
     sphereStep:'ARC STEP', joyMaxRate:'MAX JOYSTICK SPEED', joyDeadzone:'JOYSTICK DEADZONE',
-    coordZ:'SET Z COORDINATE', coordX:'SET X COORDINATE', limitTarget:'SET LIMIT'
+    coordZ:'SET Z COORDINATE', coordX:'SET X COORDINATE', limitTarget:'SET LIMIT',
+    customFeedStep:'CUSTOM FEED STEP'
   };
 
   function openKeypad(target, defaultVal){
     kpTarget = target;
-    kpInitialVal = defaultVal !== undefined ? +defaultVal.toFixed(3) : 0;
+    kpInitialVal = defaultVal !== undefined ? +defaultVal.toFixed(4) : 0;
     
-    // Field opens clean and empty
-    $('kpInput').value = '';
+    // Field opens pre-filled and fully selected so typing immediately overwrites it
+    $('kpInput').value = defaultVal !== undefined ? defaultVal.toString() : '';
     var isIntegerCount = (target==='turnPasses' || target==='facePasses' || target==='slotStrokes');
-    $('kpTitle').textContent = (kpTitles[target] || 'INPUT') + (isIntegerCount ? ' (COUNT)' : ' (' + unitLabel() + ')');
+    var unitStr = ' (' + unitLabel() + ')';
+    if(isIntegerCount) unitStr = ' (COUNT)';
+    else if(target === 'pitch' && state.pitchTab === 'tpi') unitStr = ' (TPI)';
+    else if(target === 'gearPitchZ' && state.gearFeedUnitZ === 'TPI') unitStr = ' (TPI)';
+    else if(target === 'customFeedStep'){
+      unitStr = ' (' + (state.gearboxMode === 'ASYNC' ? (unitLabel() + '/min') : (state.gearFeedUnitZ === 'TPI' && state.activeFeedAxis === 'Z' ? 'TPI' : unitLabel() + '/rev')) + ')';
+    }
+
+    $('kpTitle').textContent = (kpTitles[target] || 'INPUT') + unitStr;
     
     // Strictly gate INSERT CURR: only show for coordinates and software limits
     var isCoordinate = (target==='coordZ' || target==='coordX' || target==='limitTarget');
     $('kpCurrBtn').classList.toggle('hide', !isCoordinate);
 
     $('kpOverlay').classList.add('show');
-    setTimeout(function(){ $('kpInput').focus(); }, 50);
+    setTimeout(function(){
+      $('kpInput').focus();
+      $('kpInput').select();
+    }, 60);
   }
 
   $('kpCurrBtn').addEventListener('click', function(){
@@ -1499,8 +1939,20 @@
       if(kpTarget==='coordZ'){ state.z = mm; }
       else if(kpTarget==='coordX'){ state.xDia = state.xRep==='diameter' ? mm : mm*2; }
       else if(kpTarget==='limitTarget'){ state[limitTarget] = mm; }
-      else if(kpTarget==='step'){ state.steps[state.stepIdx] = mm; }
-      else if(kpTarget==='gearPitchZ'){ state.gearPitchZ = mm; }
+      else if(kpTarget==='step'){
+        if(state.unit === 'mm'){
+          JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length] = Math.abs(v);
+        } else {
+          JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = Math.abs(v);
+        }
+      }
+      else if(kpTarget==='gearPitchZ'){
+        if(state.gearFeedUnitZ === 'TPI'){
+          state.gearPitchZ = +(25.4 / Math.max(0.1, v)).toFixed(4);
+        } else {
+          state.gearPitchZ = mm;
+        }
+      }
       else if(kpTarget==='gearPitchX'){ state.gearPitchX = mm; }
       else if(kpTarget==='asyncSpeedZ'){ state.asyncSpeedZ = Math.round(v); }
       else if(kpTarget==='asyncSpeedX'){ state.asyncSpeedX = Math.round(v); }
@@ -1538,8 +1990,29 @@
         state.facePasses = Math.max(1, Math.round(v));
         state.faceMaxDoc = +(state.faceTotalDepth / state.facePasses).toFixed(3);
       }
-
-      else if(kpTarget==='pitch'){ state.pitch = mm; }
+      else if(kpTarget==='pitch'){
+        if(state.pitchTab === 'tpi'){
+          state.pitch = +(25.4 / Math.max(0.1, v)).toFixed(4);
+          state.threadUnit = 'tpi';
+        } else {
+          state.pitch = mm;
+          state.threadUnit = 'metric';
+        }
+      }
+      else if(kpTarget==='customFeedStep'){
+        var sVal = Math.abs(v);
+        if(state.mode === 'GEARBOX'){
+          if(state.gearboxMode === 'ASYNC'){
+            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ = sVal;
+            else state.asyncSpeedX = sVal;
+          } else if(state.activeFeedAxis === 'Z'){
+            if(state.gearFeedUnitZ === 'FEED') state.feedStepZ = sVal;
+            else state.feedStepTpi = sVal;
+          } else {
+            state.feedStepX = sVal;
+          }
+        }
+      }
       else if(kpTarget==='taperAngle'){ state.taperAngle = v; }
       else if(kpTarget==='taperLen'){ state.taperLen = mm; }
       else if(kpTarget==='cutoffFeed'){ state.cutoffFeed = mm; }
@@ -1567,8 +2040,8 @@
     '<p>Machinists think in part dimensions (e.g. 25mm long tenon) rather than machine stop coordinates. Typing <code>LENGTH = 25.0 mm</code> calculates <code>Z_MIN = Z_CURRENT - 25.0 mm</code> instantly, eliminating air-cutting jog math while updating the limit chip visibly.</p>' +
     '<h4>4. Derived Passes vs. Independent Locks</h4>' +
     '<p>NanoELS calculates passes automatically based on <code>TOTAL DEPTH</code> and <code>MAX DOC</code>. Because pass count is mathematically constrained by machine rigidity ceilings, pass count is displayed as a derived calculation rather than an unconstrained input.</p>' +
-    '<h4>5. Operator-Aligned Inverted X Direction Arrows</h4>' +
-    '<p>From the operator apron perspective: <code>↑ TO CENTER</code> drives the cross-slide into the cut (reducing diameter), while <code>↓ RETRACT</code> backs the cross-slide toward the operator (increasing diameter).</p>' +
+    '<h4>5. Operator-Aligned Coordinate Directions</h4>' +
+    '<p>From the operator apron perspective: <code>↑ TO CENTER (X−)</code> drives the cross-slide into the cut (reducing diameter), while <code>↓ RETRACT (X+)</code> backs the cross-slide toward the operator (increasing diameter). Northwest chamfer is <code>↖ Z− X−</code> (chuck and into cut).</p>' +
     '<h4>6. Tabular Monospace Readout Stability</h4>' +
     '<p>Axis fonts are locked at 50px JetBrains Mono with tabular figures. Digits never snap, shrink, or twitch as coordinates transition through negative signs or extra integer places.</p>';
 
@@ -1583,8 +2056,9 @@
     '</ul>' +
     '<h4>Gearbox Mode</h4>' +
     '<ul>' +
-      '<li>Toggle between <code>SYNC FEED</code> (mm/rev locked to spindle) and <code>ASYNC FEED</code> (mm/min constant velocity) in the center deck.</li>' +
-      '<li>Tap <code>AXIS: Z</code> / <code>AXIS: X</code> to switch the active powerfeed axis. The unselected axis row dims to 45% opacity.</li>' +
+      '<li>Toggle between <code>SYNC (SPINDLE)</code> (feed locked to spindle) and <code>ASYNC (TIME)</code> (constant mm/min) in the right card.</li>' +
+      '<li>In Sync mode, toggle Z units between <code>FEED</code> (mm/rev), <code>PITCH</code> (mm lead), and <code>TPI</code> (threads/inch).</li>' +
+      '<li>Use center deck nudge buttons <code>[ − ]</code> and <code>[ + ]</code> for live feed override and <code>DIRECTION</code> toggle.</li>' +
     '</ul>';
 
   function showDocTab(which){
@@ -1593,10 +2067,6 @@
     $('docContent').innerHTML = which==='decisions' ? ledgerContent : manualContent;
   }
 
-  $('docBtn').addEventListener('click', function(){
-    showDocTab('decisions');
-    $('docOverlay').classList.add('show');
-  });
   $('tabDocDecisions').addEventListener('click', function(){ showDocTab('decisions'); });
   $('tabDocManual').addEventListener('click', function(){ showDocTab('manual'); });
   $('docClose').addEventListener('click', function(){ $('docOverlay').classList.remove('show'); });
@@ -1605,6 +2075,7 @@
   updateStatusMsg();
   render();
 })();
+
 </script>
 </body>
 </html>
