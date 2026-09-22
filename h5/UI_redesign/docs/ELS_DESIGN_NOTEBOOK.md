@@ -221,4 +221,50 @@ Machinists do not work in arbitrary converted decimals (e.g. $0.010\text{ mm} \r
      * Chamfer Northwest (`↖ Z− X−`): Simultaneous feed into workpiece toward chuck.
      * Chamfer Southeast (`↘ Z+ X+`): Simultaneous retract away from workpiece toward tailstock.
 
+---
+
+## 12. Universal Touch Sizing & Ergonomic Standards
+
+### Physical Screen Ergonomics & Pixel Density
+* **Target Hardware**: 5.0" diagonal display, $800 \times 480$ resolution ($108.0 \times 64.8\text{ mm}$, $187.3\text{ DPI}$, $0.135\text{ mm/px}$).
+* **Touch Target Floor**:
+  * Bare adult finger contact area averages $7–9\text{ mm}$ ($52–67\text{ px}$). Shop-gloved fingers require tactile targets $\ge 5.0\text{ mm}$ ($38\text{ px}$) height with minimum touch gaps $\ge 4–6\text{ px}$.
+  * Elements smaller than $30\text{ px}$ ($4.0\text{ mm}$) cause frequent mis-taps and operator frustration on a machine lathe.
+
+### Tiered Sizing Floor
+1. **Primary Industrial Actions ($\ge 44–48\text{ px}$ height)**:
+   * Runstack buttons (`START FEED / START CYCLE`: $46\text{ px}$, `STOP`: $46\text{ px}$).
+   * Jog cluster D-pad buttons ($50–56\text{ px}$ height, $56–64\text{ px}$ width).
+   * Jog step selector center button ($56\text{ px} \times 64\text{ px}$).
+   * Action deck nudge buttons (`−` / `+`: $46\text{ px} \times 46\text{ px}$).
+   * DRO axis zero buttons ($44\text{ px} \times 44\text{ px}$).
+   * Numeric keypad keys ($44–48\text{ px}$).
+2. **Secondary Setup & Configuration Targets ($\ge 38\text{ px}$ height, $\ge 50\text{ px}$ width)**:
+   * DRO software limit chips (`chip-sm`: $82\text{ px} \times 38\text{ px}$).
+   * Diameter/Radius representation toggle (`repBadge`: $68\text{ px} \times 38\text{ px}$).
+   * Mode setup card toggle buttons (`SYNC / ASYNC`, `AXIS: Z / X`: $38\text{ px}$ height, full flex width).
+   * Action deck step selection chips ($63\text{ px} \times 38\text{ px}$).
+   * Action deck direction toggle button (`deckToggleDir`: $38\text{ px}$ height).
+   * Chamfer diagonal jog buttons ($38\text{ px}$ height).
+3. **Tertiary / Header / Status Targets**:
+   * Top bar chips (`UNIT`, `MODE`, `SETTINGS`: $35\text{ px}$ height within $42\text{ px}$ bar).
+   * Status deck message log trigger (`LOG`: $24\text{ px} \times 48\text{ px}$).
+
+### Three-Element Preset Sizing in Dynamic Deck
+* The center dynamic action deck has a fixed width of $202\text{ px}$ (internal canvas $\approx 190\text{ px}$ after padding and gaps).
+* A 5-button row yielded touch widths $<36\text{ px}$ ($4.8\text{ mm}$), violating glove ergonomics.
+* The deck standardizes on **3 curated preset chips** ($\approx 63\text{ px}$ width $\times 38\text{ px}$ height), harmonizing with the 3 jog step chips:
+  * **Metric Z Feed**: `[0.002, 0.010, 0.050 mm/rev]`
+  * **Imperial Z Feed**: `[0.001, 0.003, 0.008 in/rev]`
+  * **Metric X Feed**: `[0.001, 0.005, 0.020 mm/rev]`
+  * **Imperial X Feed**: `[0.0005, 0.0010, 0.0030 in/rev]`
+  * **TPI Step**: `[1, 2, 4 TPI]`
+  * **Async Feed (Metric)**: `[10, 25, 50 mm/min]`
+  * **Async Feed (Imperial)**: `[0.5, 1.0, 2.0 in/min]`
+* Custom feed rates are entered by tapping the primary `#deckReadout` directly to invoke the numeric keypad, eliminating redundant `CUST` chips.
+
+### Hardware State Alignment & Cycle Autonomy
+* Features non-existent in NanoELS firmware (such as manual `NEXT PASS` buttons during synchronized threading) are strictly forbidden.
+* Active multi-pass threading displays a dedicated `CYCLE ACTIVE — AUTO INFEED` status banner with hardware parameter lockout until the cycle completes or the operator aborts.
+
 
