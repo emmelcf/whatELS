@@ -250,21 +250,42 @@ Machinists do not work in arbitrary converted decimals (e.g. $0.010\text{ mm} \r
    * Top bar chips (`UNIT`, `MODE`, `SETTINGS`: $35\text{ px}$ height within $42\text{ px}$ bar).
    * Status deck message log trigger (`LOG`: $24\text{ px} \times 48\text{ px}$).
 
-### Three-Element Preset Sizing in Dynamic Deck
-* The center dynamic action deck has a fixed width of $202\text{ px}$ (internal canvas $\approx 190\text{ px}$ after padding and gaps).
-* A 5-button row yielded touch widths $<36\text{ px}$ ($4.8\text{ mm}$), violating glove ergonomics.
-* The deck standardizes on **3 curated preset chips** ($\approx 63\text{ px}$ width $\times 38\text{ px}$ height), harmonizing with the 3 jog step chips:
-  * **Metric Z Feed**: `[0.002, 0.010, 0.050 mm/rev]`
-  * **Imperial Z Feed**: `[0.001, 0.003, 0.008 in/rev]`
-  * **Metric X Feed**: `[0.001, 0.005, 0.020 mm/rev]`
-  * **Imperial X Feed**: `[0.0005, 0.0010, 0.0030 in/rev]`
-  * **TPI Step**: `[1, 2, 4 TPI]`
-  * **Async Feed (Metric)**: `[10, 25, 50 mm/min]`
-  * **Async Feed (Imperial)**: `[0.5, 1.0, 2.0 in/min]`
-* Custom feed rates are entered by tapping the primary `#deckReadout` directly to invoke the numeric keypad, eliminating redundant `CUST` chips.
+### Two-Button Step Progression Layout in Dynamic Deck
+* The center dynamic action deck has a fixed width of $202\text{ px}$ (internal canvas $\approx 192\text{ px}$ after padding and border gaps).
+* Multiple discrete chips (3 to 5 chips in a row) forced button widths down to $34\text{–}60\text{ px}$, causing frequent miss-taps with shop fingers.
+* The deck standardizes on a **generous 2-button layout** where each button receives **$96\text{ px}$ width $\times 38\text{ px}$ height** ($13.0\text{ mm} \times 5.1\text{ mm}$ physically on the 5" screen):
+  1. **Step Progression Cycle Button (`#deckStepCycle`)**: Displays the active increment and unit directly on its face (e.g. `STEP: ±0.05 mm`). Tapping it advances cleanly through a curated 4-step standard progression:
+     * **Metric Feeds ($mm/rev$)**: `[0.010, 0.050, 0.100, 0.200]` (fine finishing tweak $\rightarrow$ medium finish $\rightarrow$ roughing $\rightarrow$ coarse).
+     * **Imperial Feeds ($in/rev$)**: `[0.0010, 0.0020, 0.0050, 0.0100]` ($1\text{ thou}$ fine $\rightarrow$ $2\text{ thou}$ finish $\rightarrow$ $5\text{ thou}$ rough $\rightarrow$ $10\text{ thou}$ coarse).
+     * **TPI Increments**: `[1, 2, 4, 8 TPI]`.
+     * **Async Jog Feeds ($mm/min$ / $in/min$)**: `[10, 25, 50, 100 mm/min]` / `[0.5, 1.0, 2.0, 5.0 in/min]`.
+  2. **Custom Step Button (`#deckStepCust`)**: Labeled `± CUST STEP`. Tapping it opens the calculator keypad to input a non-standard step increment (e.g., $0.035\text{ mm}$). When a custom step is active, the cycle button displays `STEP: ±0.035* mm`, and tapping the cycle button immediately resets back to the standard progression.
+* **Separation of Concerns**: Setting a custom *step increment* (via `± CUST STEP`) is explicitly decoupled from setting the *absolute feed rate* (which is done by tapping the primary `#deckReadout`).
 
 ### Hardware State Alignment & Cycle Autonomy
 * Features non-existent in NanoELS firmware (such as manual `NEXT PASS` buttons during synchronized threading) are strictly forbidden.
 * Active multi-pass threading displays a dedicated `CYCLE ACTIVE — AUTO INFEED` status banner with hardware parameter lockout until the cycle completes or the operator aborts.
+
+---
+
+## 13. Safety-Critical Running Lockout: Silent Disable vs. Warning Banners
+
+### Safety Philosophy
+On an operating metal lathe, visual occlusion and surprise modal dialogs are severe safety hazards:
+* If a tool is cutting near a chuck or shoulder, an operator who accidentally touches the mode header must **never** be met with a modal dialog, toast notification, or warning banner.
+* Warning banners occlude the live coordinate displays, distract the operator's eye, and can block or delay access to the red **STOP** button.
+
+### Implementation Standard
+1. **Visual Indication Without Occlusion**:
+   * When an operation is active (`state.runState === 'running'`), the mode header (`#modeHead`) is rendered in a locked state:
+     * Subtly dimmed background and opacity (`0.55`).
+     * Explicit padlock icon appended to the header title: `GEARBOX 🔒`.
+     * Non-interactive pointer cursor (`cursor: not-allowed`).
+2. **Silent No-Op Handler**:
+   * Tapping `#modeHead` while running performs a silent `return;`.
+   * Zero toasts, zero alerts, and zero popup banners appear.
+3. **Unobstructed Operator Control**:
+   * The operator's only options during active motion are to trim allowed runtime parameters (such as feed rate via `+`/`-`) or hit the large, permanently anchored red **STOP** button.
+
 
 

@@ -619,11 +619,17 @@
     gearPitchZ: 0.100, gearDirZ: 'FWD',
     gearPitchX: 0.050, gearDirX: 'IN',
     asyncSpeedZ: 150, asyncSpeedX: 75,
-    feedStepZ: 0.010,
-    feedStepX: 0.005,
-    feedStepTpi: 1,
-    asyncStepZ: 25,
-    asyncStepX: 10,
+    // Step Progression State (4-step standard cycles)
+    feedStepIdxZ: 1,       // 0: 0.010, 1: 0.050, 2: 0.100, 3: 0.200 (or in: 0.001, 0.002, 0.005, 0.010)
+    feedStepIdxX: 1,
+    feedStepTpiIdx: 0,     // 0: 1, 1: 2, 2: 4, 3: 8
+    asyncStepIdxZ: 1,      // 0: 10, 1: 25, 2: 50, 3: 100 (or in: 0.5, 1.0, 2.0, 5.0)
+    asyncStepIdxX: 0,
+    customFeedStepZ: null, // null when using standard cycle, number when custom
+    customFeedStepX: null,
+    customFeedStepTpi: null,
+    customAsyncStepZ: null,
+    customAsyncStepX: null,
     
     // Turning (Dimension-First Pattern)
     turnPitch: 0.080,
@@ -671,13 +677,13 @@
 
   var JOG_STEPS_MM = [1.000, 0.100, 0.010];
   var JOG_STEPS_IN = [0.1000, 0.0100, 0.0010];
-  var FEED_STEPS_MM_Z = [0.002, 0.010, 0.050];
-  var FEED_STEPS_IN_Z = [0.001, 0.003, 0.008];
-  var FEED_STEPS_MM_X = [0.001, 0.005, 0.020];
-  var FEED_STEPS_IN_X = [0.0005, 0.0010, 0.0030];
-  var TPI_STEPS = [1, 2, 4];
-  var ASYNC_STEPS_MM = [10, 25, 50];
-  var ASYNC_STEPS_IN = [0.5, 1.0, 2.0];
+
+  // 4 Standard Step Progressions (Lathe Ergonomic Standard)
+  var FEED_STEPS_MM = [0.010, 0.050, 0.100, 0.200];
+  var FEED_STEPS_IN = [0.0010, 0.0020, 0.0050, 0.0100];
+  var TPI_STEPS = [1, 2, 4, 8];
+  var ASYNC_STEPS_MM = [10, 25, 50, 100];
+  var ASYNC_STEPS_IN = [0.5, 1.0, 2.0, 5.0];
 
   var METRIC_PITCHES = [0.5, 0.6, 0.7, 0.75, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
   var TPI_VALUES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28];
@@ -699,6 +705,33 @@
       return fmt(JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length], 3);
     } else {
       return fmt(JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length], 4);
+    }
+  }
+  function getActiveGearStepInfo(){
+    var isSync = state.gearboxMode === 'SYNC';
+    var isZ = state.activeFeedAxis === 'Z';
+    var isTpi = isZ && state.gearFeedUnitZ === 'TPI' && isSync;
+    
+    if(!isSync){
+      var arr = state.unit === 'mm' ? ASYNC_STEPS_MM : ASYNC_STEPS_IN;
+      var idx = isZ ? state.asyncStepIdxZ : state.asyncStepIdxX;
+      var cust = isZ ? state.customAsyncStepZ : state.customAsyncStepX;
+      var unitStr = state.unit === 'mm' ? ' mm/m' : ' in/m';
+      var val = cust !== null ? cust : arr[idx % arr.length];
+      return { val: val, isCustom: cust !== null, unitStr: unitStr, type: 'async', axis: isZ ? 'Z' : 'X', arr: arr, idx: idx };
+    } else if(isTpi){
+      var arr = TPI_STEPS;
+      var idx = state.feedStepTpiIdx;
+      var cust = state.customFeedStepTpi;
+      var val = cust !== null ? cust : arr[idx % arr.length];
+      return { val: val, isCustom: cust !== null, unitStr: ' TPI', type: 'tpi', axis: 'Z', arr: arr, idx: idx };
+    } else {
+      var arr = state.unit === 'mm' ? FEED_STEPS_MM : FEED_STEPS_IN;
+      var idx = isZ ? state.feedStepIdxZ : state.feedStepIdxX;
+      var cust = isZ ? state.customFeedStepZ : state.customFeedStepX;
+      var unitStr = state.unit === 'mm' ? ' mm' : ' in';
+      var val = cust !== null ? cust : arr[idx % arr.length];
+      return { val: val, isCustom: cust !== null, unitStr: unitStr, type: 'feed', axis: isZ ? 'Z' : 'X', arr: arr, idx: idx };
     }
   }
   function clamp(v, a, b){
@@ -810,32 +843,18 @@
         (state.gearDirZ === 'FWD' ? 'DIR: ← TO CHUCK (Z−)' : 'DIR: → TO TAIL (Z+)') :
         (state.gearDirX === 'IN' ? 'DIR: ↑ TO CENTER (X−)' : 'DIR: ↓ RETRACT (X+)');
 
-      var stepOptions = [];
-      var activeStep = 0.010;
-      if(!isSync){
-        stepOptions = state.unit === 'mm' ? ASYNC_STEPS_MM : ASYNC_STEPS_IN;
-        activeStep = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
-      } else if(state.activeFeedAxis === 'Z'){
-        if(state.gearFeedUnitZ === 'FEED'){
-          stepOptions = state.unit === 'mm' ? FEED_STEPS_MM_Z : FEED_STEPS_IN_Z;
-          activeStep = state.feedStepZ;
-        } else {
-          stepOptions = TPI_STEPS;
-          activeStep = state.feedStepTpi;
-        }
-      } else { // X axis
-        stepOptions = state.unit === 'mm' ? FEED_STEPS_MM_X : FEED_STEPS_IN_X;
-        activeStep = state.feedStepX;
-      }
+      var stepInfo = getActiveGearStepInfo();
+      var cycleLabel = 'STEP: ±' + stepInfo.val + (stepInfo.isCustom ? '*' : '') + stepInfo.unitStr;
 
-      var stepChipsHTML = '<div class="deck-step-row">';
-      stepOptions.forEach(function(st){
-        var isAct = Math.abs(st - activeStep) < 0.00005;
-        var stStr = st.toString();
-        var label = (state.gearFeedUnitZ === 'TPI' && isSync && state.activeFeedAxis === 'Z') ? (stStr + ' TPI') : stStr;
-        stepChipsHTML += '<div class="deck-step-chip tap ' + (isAct ? 'active' : '') + '" data-step="' + st + '">' + label + '</div>';
-      });
-      stepChipsHTML += '</div>';
+      var stepChipsHTML = '' +
+        '<div class="deck-step-row">' +
+          '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            cycleLabel +
+          '</div>' +
+          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+            '± CUST STEP' +
+          '</div>' +
+        '</div>';
 
       deck.innerHTML = '' +
         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
@@ -865,20 +884,32 @@
         render();
       });
 
-      deck.querySelectorAll('.deck-step-chip[data-step]').forEach(function(chip){
-        chip.addEventListener('click', function(){
-          var s = parseFloat(chip.dataset.step);
-          if(!isSync){
-            if(state.activeFeedAxis === 'Z') state.asyncStepZ = s;
-            else state.asyncStepX = s;
-          } else if(state.activeFeedAxis === 'Z'){
-            if(state.gearFeedUnitZ === 'FEED') state.feedStepZ = s;
-            else state.feedStepTpi = s;
+      $('deckStepCycle').addEventListener('click', function(){
+        var info = getActiveGearStepInfo();
+        if(info.isCustom){
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.customAsyncStepZ = null; else state.customAsyncStepX = null;
+          } else if(info.type === 'tpi'){
+            state.customFeedStepTpi = null;
           } else {
-            state.feedStepX = s;
+            if(info.axis === 'Z') state.customFeedStepZ = null; else state.customFeedStepX = null;
           }
-          render();
-        });
+        } else {
+          var nextIdx = (info.idx + 1) % info.arr.length;
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.asyncStepIdxZ = nextIdx; else state.asyncStepIdxX = nextIdx;
+          } else if(info.type === 'tpi'){
+            state.feedStepTpiIdx = nextIdx;
+          } else {
+            if(info.axis === 'Z') state.feedStepIdxZ = nextIdx; else state.feedStepIdxX = nextIdx;
+          }
+        }
+        render();
+      });
+
+      $('deckStepCust').addEventListener('click', function(){
+        var info = getActiveGearStepInfo();
+        openKeypad('customFeedStep', info.val);
       });
 
     } else if(state.mode === 'TURNING'){
@@ -975,24 +1006,18 @@
     if(btnMinus && btnPlus){
       btnMinus.addEventListener('click', function(){
         if(state.mode === 'GEARBOX'){
-          if(state.gearboxMode === 'SYNC'){
-            if(state.activeFeedAxis === 'Z'){
-              if(state.gearFeedUnitZ === 'FEED'){
-                var delta = state.unit === 'mm' ? state.feedStepZ : state.feedStepZ * 25.4;
-                state.gearPitchZ = Math.max(0.001, +(state.gearPitchZ - delta).toFixed(4));
-              } else { // TPI: lower TPI = coarser thread
-                var currTpi = 25.4 / state.gearPitchZ;
-                var nextTpi = Math.max(1, +(currTpi - state.feedStepTpi).toFixed(1));
-                state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
-              }
-            } else {
-              var delta = state.unit === 'mm' ? state.feedStepX : state.feedStepX * 25.4;
-              state.gearPitchX = Math.max(0.001, +(state.gearPitchX - delta).toFixed(4));
-            }
-          } else {
-            var stA = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
-            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ = Math.max(1, state.asyncSpeedZ - stA);
-            else state.asyncSpeedX = Math.max(1, state.asyncSpeedX - stA);
+          var info = getActiveGearStepInfo();
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.asyncSpeedZ = Math.max(1, state.asyncSpeedZ - info.val);
+            else state.asyncSpeedX = Math.max(1, state.asyncSpeedX - info.val);
+          } else if(info.type === 'tpi'){
+            var currTpi = 25.4 / state.gearPitchZ;
+            var nextTpi = Math.max(1, +(currTpi - info.val).toFixed(1));
+            state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
+          } else { // SYNC FEED
+            var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+            if(info.axis === 'Z') state.gearPitchZ = Math.max(0.001, +(state.gearPitchZ - delta).toFixed(4));
+            else state.gearPitchX = Math.max(0.001, +(state.gearPitchX - delta).toFixed(4));
           }
         } else if(state.mode === 'TURNING'){
           var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
@@ -1014,24 +1039,18 @@
 
       btnPlus.addEventListener('click', function(){
         if(state.mode === 'GEARBOX'){
-          if(state.gearboxMode === 'SYNC'){
-            if(state.activeFeedAxis === 'Z'){
-              if(state.gearFeedUnitZ === 'FEED'){
-                var delta = state.unit === 'mm' ? state.feedStepZ : state.feedStepZ * 25.4;
-                state.gearPitchZ = +(state.gearPitchZ + delta).toFixed(4);
-              } else { // TPI: higher TPI = finer thread
-                var currTpi = 25.4 / state.gearPitchZ;
-                var nextTpi = Math.min(80, +(currTpi + state.feedStepTpi).toFixed(1));
-                state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
-              }
-            } else {
-              var delta = state.unit === 'mm' ? state.feedStepX : state.feedStepX * 25.4;
-              state.gearPitchX = +(state.gearPitchX + delta).toFixed(4);
-            }
-          } else {
-            var stA = state.activeFeedAxis === 'Z' ? state.asyncStepZ : state.asyncStepX;
-            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ += stA;
-            else state.asyncSpeedX += stA;
+          var info = getActiveGearStepInfo();
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.asyncSpeedZ += info.val;
+            else state.asyncSpeedX += info.val;
+          } else if(info.type === 'tpi'){
+            var currTpi = 25.4 / state.gearPitchZ;
+            var nextTpi = Math.min(80, +(currTpi + info.val).toFixed(1));
+            state.gearPitchZ = +(25.4 / nextTpi).toFixed(4);
+          } else { // SYNC FEED
+            var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+            if(info.axis === 'Z') state.gearPitchZ = +(state.gearPitchZ + delta).toFixed(4);
+            else state.gearPitchX = +(state.gearPitchX + delta).toFixed(4);
           }
         } else if(state.mode === 'TURNING'){
           var step = state.unit === 'mm' ? 0.005 : (0.0005 * 25.4);
@@ -1500,7 +1519,7 @@
     else if(state.spindleCycle === 1){ $('spindleValue').textContent = fmt(state.turns,2); $('spindleUnit').textContent = 'TURNS'; }
     else { $('spindleValue').textContent = fmt(state.angle,1); $('spindleUnit').textContent = '°'; }
 
-    $('modeName').textContent = state.mode;
+    $('modeName').textContent = state.mode + (state.runState === 'running' ? ' 🔒' : '');
     $('modeHead').classList.toggle('locked', state.runState === 'running');
     $('modeBody').innerHTML = modeBodyHTML();
     bindModeEvents();
@@ -1523,17 +1542,10 @@
   // Header Handlers
   $('unitToggle').addEventListener('click', function(){ 
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
-    if(state.unit === 'in'){
-      state.feedStepZ = 0.003;
-      state.feedStepX = 0.0010;
-      state.asyncStepZ = 1.0;
-      state.asyncStepX = 0.5;
-    } else {
-      state.feedStepZ = 0.010;
-      state.feedStepX = 0.005;
-      state.asyncStepZ = 25;
-      state.asyncStepX = 10;
-    }
+    state.customFeedStepZ = null;
+    state.customFeedStepX = null;
+    state.customAsyncStepZ = null;
+    state.customAsyncStepX = null;
     render(); 
   });
   $('settingsBtn').addEventListener('click', function(){ $('settingsOverlay').classList.add('show'); });
@@ -1563,12 +1575,9 @@
   });
   $('logCloseBtn').addEventListener('click', function(){ $('logOverlay').classList.remove('show'); });
 
-  // Mode Selector with Running Lockout
+  // Mode Selector with Running Lockout (Silent disable, zero banners/popups to obstruct operator)
   $('modeHead').addEventListener('click', function(){
-    if(state.runState === 'running'){
-      setStatusMsg('MODE LOCKED: OPERATION ACTIVE — PRESS STOP FIRST');
-      return;
-    }
+    if(state.runState === 'running') return;
     $('modeOverlay').classList.add('show');
   });
   $('modeOverlay').querySelectorAll('button[data-mode]').forEach(function(b){
@@ -1992,15 +2001,16 @@
       }
       else if(kpTarget==='customFeedStep'){
         var sVal = Math.abs(v);
-        if(state.mode === 'GEARBOX'){
-          if(state.gearboxMode === 'ASYNC'){
-            if(state.activeFeedAxis === 'Z') state.asyncSpeedZ = sVal;
-            else state.asyncSpeedX = sVal;
-          } else if(state.activeFeedAxis === 'Z'){
-            if(state.gearFeedUnitZ === 'FEED') state.feedStepZ = sVal;
-            else state.feedStepTpi = sVal;
+        if(sVal > 0){
+          var info = getActiveGearStepInfo();
+          if(info.type === 'async'){
+            if(info.axis === 'Z') state.customAsyncStepZ = sVal;
+            else state.customAsyncStepX = sVal;
+          } else if(info.type === 'tpi'){
+            state.customFeedStepTpi = sVal;
           } else {
-            state.feedStepX = sVal;
+            if(info.axis === 'Z') state.customFeedStepZ = sVal;
+            else state.customFeedStepX = sVal;
           }
         }
       }
