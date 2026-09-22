@@ -287,5 +287,28 @@ On an operating metal lathe, visual occlusion and surprise modal dialogs are sev
 3. **Unobstructed Operator Control**:
    * The operator's only options during active motion are to trim allowed runtime parameters (such as feed rate via `+`/`-`) or hit the large, permanently anchored red **STOP** button.
 
+---
+
+## 14. Gearbox Card Layout Stability & Zero-Jitter Control Architecture
+
+### Rationale & Problem Statement
+Prior iterations dynamically mounted and unmounted the `Z UNIT: [ FEED ] [ TPI ]` toggle row based on conditional state (`isSync && zActive ? ... : ''`).
+* Whenever the operator toggled between `AXIS: Z` and `AXIS: X`, or between `SYNC` and `ASYNC`, the dynamic insertion/removal caused the Z Carriage and X Cross-Slide blocks to jump vertically by $\approx 44\text{ px}$.
+* Furthermore, placing the Z feed unit toggle *above* both feed blocks created a visual disconnect between the control and the carriage parameter it governed.
+
+### Implementation Standard
+1. **Visual Proximity & Inline Coupling**:
+   * The `[ FEED ] [ TPI ]` unit toggle row is permanently housed **inside** the `Z CARRIAGE` block directly beneath the Z feed readout.
+   * This provides immediate cognitive coupling: the operator sees at a glance that `FEED / TPI` applies strictly to Z-axis carriage motion.
+2. **Deactivation Over Dynamic Unmounting**:
+   * When Z is inactive (`AXIS: X`) or when operating in `ASYNC` mode:
+     * The toggle row is **not** removed from the DOM.
+     * It remains strictly rendered in place with dimmed styling (`opacity: 0.35; pointer-events: none;`).
+   * Because element height is static, toggling between Z and X axes or between SYNC and ASYNC modes produces **zero layout shift (zero jitter)**.
+3. **Removal of Redundant 'INACTIVE' Badges**:
+   * The text badge `<span class="axis-tag-badge">INACTIVE</span>` was removed from the headers of both the Z Carriage and X Cross-Slide blocks.
+   * Axis activity is already definitively communicated by the top toggle (`AXIS: Z` vs `AXIS: X`) and full-card dimming (`.dimmed-axis-row` at $0.45$ opacity). Removing the text badge eliminates visual noise and reflow jitter.
+
+
 
 

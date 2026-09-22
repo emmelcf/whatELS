@@ -1113,39 +1113,32 @@
       var zDisp = getGearZDisplay();
       var xDisp = getGearXDisplay();
       var zActive = state.activeFeedAxis === 'Z';
+      var zUnitDisabled = !isSync || !zActive;
 
       return '' +
-        '<div style="display:flex; flex-direction:column; gap:5px;">' +
+        '<div style="display:flex; flex-direction:column; gap:6px;">' +
           '<div style="display:flex; gap:4px;">' +
             '<div class="deck-toggle-btn tap ' + (isSync?'on':'') + '" id="fld-gearSync">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
             '<div class="deck-toggle-btn tap axis-on" id="fld-gearAxis">AXIS: ' + state.activeFeedAxis + '</div>' +
           '</div>' +
 
-          (isSync && zActive ? (
-            '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; margin:1px 0;">' +
-              '<span style="font-size:10px; font-weight:700; color:var(--dimmer);">Z UNIT:</span>' +
-              '<div style="display:flex; gap:3px; flex:1;">' +
-                '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center;">FEED</div>' +
-                '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='TPI'?'active':'') + '" id="fld-unitTpi" style="flex:1; text-align:center;">TPI</div>' +
-              '</div>' +
-            '</div>'
-          ) : '') +
-
           '<div class="feed-block ' + (zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
             '<div class="feed-row-top">' +
               '<span>Z CARRIAGE</span>' +
-              (!zActive ? '<span class="axis-tag-badge">INACTIVE</span>' : '') +
             '</div>' +
             '<div class="feed-row-bottom">' +
               '<b class="mono ' + ed + ' feed-val-box" id="fld-gearZ">' + zDisp.val + '</b>' +
               '<span class="feed-unit-box">' + zDisp.unit + '</span>' +
+            '</div>' +
+            '<div style="display:flex; gap:4px; margin-top:5px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
+              '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
+              '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='TPI'?'active':'') + '" id="fld-unitTpi" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">TPI</div>' +
             '</div>' +
           '</div>' +
 
           '<div class="feed-block ' + (!zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
             '<div class="feed-row-top">' +
               '<span>X CROSS-SLIDE</span>' +
-              (zActive ? '<span class="axis-tag-badge">INACTIVE</span>' : '') +
             '</div>' +
             '<div class="feed-row-bottom">' +
               '<b class="mono ' + ed + ' feed-val-box" id="fld-gearX">' + xDisp.val + '</b>' +
