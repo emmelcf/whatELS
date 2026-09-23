@@ -391,3 +391,244 @@ Prior iterations dynamically mounted and unmounted the `Z UNIT: [ FEED ] [ TPI ]
    * The top horizontal tick line aligns directly with the vertical centerline of the `MAX DOC / PASS` value.
    * The bottom horizontal tick line aligns directly with the vertical centerline of the `PASSES` value.
    * Spacing between rows inside the bracket group matches the card's standard `6px` gap, ensuring clean rhythm and alignment across all rows.
+
+395: ---
+396: 
+397: ## 19. Gearbox Feed vs. Pitch Architecture & Handedness Support
+398: 
+399: ### Motivation & Machining Rationale
+400: * In prior iterations, Gearbox mode offered `[ FEED ]` vs `[ TPI ]` unit buttons. Because metric threads are expressed in pitch ($mm$), combining $mm/rev$ and metric pitch created ambiguity: "Feed" is an arbitrary tool advance rate where handedness is meaningless (direction is simply dictated by the joystick/jog), whereas "Pitch" is a strict 1:1 spindle-synchronized screw-cutting lead requiring explicit Right-Hand (RH) or Left-Hand (LH) synchronization.
+401: * Tapping `TPI` previously only converted the numeric feed value to TPI rather than opening thread lead selection.
+402: 
+403: ### Implementation Standard
+404: 1. **Unit Mode Bifurcation (`[ FEED ]` vs `[ PITCH ]`)**:
+405:    * Replaced the inline toggle with:
+406:      $$\mathbf{[ FEED ]} \quad \Big| \quad \mathbf{[ PITCH ]}$$
+407:    * **When in `FEED`**: Displays pure power turning/facing advance rate (e.g. `0.100 mm/rev` or `0.004 in/rev`). Tapping opens the numeric keypad. Motion direction is governed exclusively by directional controls.
+408:    * **When in `PITCH`**: Displays leadscrew thread lead with explicit handedness (e.g. `1.50 mm (RH)` or `16 TPI (LH)`). Tapping opens the rich Thread Selector modal.
+409: 2. **Firmware Gearing Contract (`h5.ino`)**:
+410:    * Selecting Left-Hand (LH) thread synchronization negates `dupr` (`setDupr(-dupr)`), which directs NanoELS to feed the carriage in reverse relative to forward spindle rotation (`posFromSpindle()`).
+411: 3. **Taper Exclusion from Gearbox**:
+412:    * Tapered pipe threads (1:16 cone) require simultaneous 2-axis CNC coordination and automatic retraction, which cannot be managed during single-axis manual gearbox feeding. Tapered threading is strictly reserved for automated **Threading Mode (`MODE_THREAD`)**.
+413: 
+414: ---
+415: 
+416: ## 20. Conversational Fastener Library vs. Freeform Pitch Architecture
+417: 
+418: ### Motivation & Mental Model
+419: * Machinists on manual lathes traditionally look up pitch, tap drill, and minor/major diameters in physical handbook tables.
+420: * A modern conversational interface should allow picking standard fasteners (`M12 × 1.75`, `1/2"-13 UNC`, `1/2"-14 NPT`) and automatically compute all required NanoELS parameters without manual calculation.
+421: 
+422: ### Implementation Standard
+423: 1. **Dual Modal Operation (`[ STANDARD LIBRARY ]` vs `[ FREEFORM PITCH ]`)**:
+424:    * **`[ STANDARD LIBRARY ]`**:
+425:      * **ISO Metric (M)**: M3 to M24+ (coarse and fine pitch selections). Calculates standard $60^\circ$ external infeed depth ($h = 0.6134 \times P$) and internal depth ($h = 0.5413 \times P$).
+426:      * **Unified Inch (UN)**: #4 to 1-1/2"+ (UNC Coarse and UNF Fine selections). Pre-fills TPI and decimal depth.
+427:      * **NPT Pipe (ASME B1.20.1)**: 1/8" to 2" nominal pipe sizes. Pre-fills standard TPI (27, 18, 14, 11.5), activates **1:16 taper ratio (`coneRatio = 0.0625`)** pursuant to `h5.ino` line 9260, and pre-fills standard pipe depth ($h = 0.8000 \times P$) and effective length ($L_2$).
+428:      * **BSPT Pipe (ISO 7-1)**: 1/8" to 1" standard pipe sizes ($55^\circ$ Whitworth profile on 1:16 taper).
+429:    * **`[ FREEFORM PITCH ]`**:
+430:      * Unconstrained manual entry: quick-select grid for Metric pitches and Imperial TPIs, plus a numeric keypad for non-standard pitches or leadscrews. Cuts whatever is in the machine envelope without stock dimension constraints.
+431: 2. **Multi-Start Threading (`starts`)**:
+432:    * Threading Mode exposes an editable `STARTS` property (default `1`, supporting 1 to 124 per `STARTS_MAX` in `h5.ino`).
+433:    * Effective spindle lead is computed as `pitch * starts` (`h5.ino` line 7248), with angular spindle indexing handled by `spindleModulo`.
+434: 
+435: ---
+436: 
+437: ## 21. Directional Independence: Handedness vs. Cut Direction (Blind Hole Safety)
+438: 
+439: ### Motivation & Safety Rationale
+440: * Thread Handedness (the spiral orientation: Right-Hand vs. Left-Hand) is fundamentally distinct from Cut Direction (the carriage feed vector: Toward Chuck vs. Toward Tailstock).
+441: * Threading blind internal holes towards the chuck at high speeds carries catastrophic collision risk if the boring bar over-travels the bottom.
+442: * Machinists mitigate this by starting the tool inside the relief groove at the bottom of the blind hole and **feeding outward toward the tailstock into open air (Inside-Out)**.
+443: 
+444: ### Implementation Standard
+445: 1. **Independent Toggle Separation**:
+446:    * **Handedness**: `[ RIGHT-HAND (RH) ]` vs `[ LEFT-HAND (LH) ]`.
+447:    * **Cut Direction**: `[ ← TO CHUCK (Z−) ]` (Standard Outside-In) vs `[ → TO TAIL (Z+) ]` (Blind Hole Safe Inside-Out).
+448: 2. **Spindle Kinematic Guidance**:
+449:    * When cutting an RH thread outward (`→ TO TAIL`), the UI displays an intuitive operational advisory:
+450:      * *“Spindle: REVERSE (CW) — Cutting outward from blind bottom into open clearance.”*
+451:    * When cutting an LH thread outward (`→ TO TAIL`), the spindle runs in standard Forward (CCW).
+452: 3. **Firmware Stop Alignment (`h5.ino`)**:
+453:    * `getPassModeZStart()` in `h5.ino` selects `z.rightStop` when pitch sign is positive, and `z.leftStop` when negative.
+454:    * Selecting `→ TO TAIL` feeds toward the right stop, guaranteeing safe clearance.
+455: 
+456: ---
+457: 
+458: ## 22. Human-in-the-Loop "Skim Verify" Zeroing & Runout Elimination Workflow
+459: 
+460: ### Motivation & Machining Rationale
+461: * On a manual lathe, mid-cycle tool changes between a turning tool and a threading tool ruin coordinate integrity unless complex tool tables are maintained.
+462: * Using the **threading tool to take a single light clean-up skim pass** across the stock diameter prior to threading guarantees 3 critical physical conditions:
+463:   1. Eliminates 3-jaw chuck runout, making the outer diameter 100% concentric with the spindle axis.
+464:   2. Establishes the exact high-limit Major Diameter (6g / 2A fit) to prevent thread crest binding.
+465:   3. Calibrates the physical tool tip position to the absolute micron ($0.000\text{ mm}$ offset error).
+466: 
+467: ### Implementation Standard
+468: 1. **Opt-In `SKIM VERIFY` Property**:
+469:    * Threading mode card includes a high-visibility toggle chip: `[ SKIM VERIFY: ON / OFF ]` (defaulting to `ON`).
+470: 2. **Two-Stage Execution Sequence**:
+471:    * **Stage 1 (Skim Pass)**: Upon pressing `START CYCLE`, the controller feeds the tool along the full thread length, taking a light $0.10 - 0.15\text{ mm}$ DOC cut down to the target Major Diameter (or the 1:16 cone for NPT).
+472:    * **Stage 2 (Interactive Confirmation Modal)**:
+473:      * Upon completing the skim pass, the tool retracts to safe clearance and the controller displays a modal:
+474:        > **SKIM PASS COMPLETE: Tool skimmed to Ø [Major OD].**  
+475:        > *Did the tool take a light continuous cut across the full length?*  
+476:        > `[ ✕ ABORT / CHECK OD ]` &emsp; `[ ✓ CONFIRM & THREAD ]`
+477:      * **If Aborted**: Cycle halts safely before cutting any threads, preventing part damage if the stock was undersized.
+478:      * **If Confirmed**: The controller immediately initiates the synchronized multi-pass threading cycle with 100% verified zeroing.
+479: 3. **Single-Tool Workflow**:
+   * Precludes tool changes, eliminating QCTP offset drift and re-touching errors.
+
+---
+
+## 23. Firmware Implementation Specification: Translating to `h5.ino`
+
+### Data Structures & State Variables
+To support these conversational features in `h5.ino`, the controller firmware state maps as follows:
+
+```c
+typedef struct {
+  // Conversational Pitch & Geometry
+  float pitch;           // Thread pitch in mm (e.g., 1.75 for M12)
+  int starts;            // Multi-start count: 1 to 124 (default 1)
+  float totalDepth;      // Total radial cutting depth in mm (e.g. 1.073mm)
+  int passes;            // Total number of roughing/finishing passes
+  float coneRatio;       // 0 for straight threads, 0.0625 for NPT/BSPT 1:16 taper
+  
+  // Directional & Kinematic Controls
+  uint8_t handedness;    // THREAD_HAND_RIGHT (0) or THREAD_HAND_LEFT (1)
+  uint8_t cutDirection;  // CUT_DIR_TOWARD_CHUCK (0) or CUT_DIR_TOWARD_TAIL (1)
+  uint8_t internal;      // 0 for external OD, 1 for internal ID
+  
+  // Skim Verification Stage
+  bool skimVerifyEnabled;// true: prompt for human verification after initial pass
+  uint8_t cycleStage;    // STAGE_IDLE, STAGE_SKIM_PASS, STAGE_AWAIT_VERIFY, STAGE_THREADING
+} thread_conversational_t;
+```
+
+### Motion Kinematics & Directional Logic in `h5.ino`
+1. **Pass Start / End Boundaries (`getPassModeZStart()` / `getPassModeZEnd()`)**:
+   * **`CUT_DIR_TOWARD_CHUCK` (Z−)**:
+     - `startZ = z.rightStop`
+     - `targetZ = z.leftStop`
+     - Carriage travels in the negative Z direction.
+   * **`CUT_DIR_TOWARD_TAIL` (Z+)** (Inside-out for blind holes):
+     - `startZ = z.leftStop`
+     - `targetZ = z.rightStop`
+     - Carriage travels in the positive Z direction.
+2. **Leadscrew Synchronization (`setDupr`)**:
+   * For **Right-Hand (RH)** cutting toward chuck (Forward spindle CCW): `dupr = pitch * starts`.
+   * For **Right-Hand (RH)** cutting toward tailstock: To cut an RH thread moving toward the tailstock, the spindle must rotate in Reverse (CW), which preserves the right-hand helical advance angle. `dupr` sign is set to maintain pitch synchronization with reversed encoder counts.
+   * For **Left-Hand (LH)** cutting toward chuck: Spindle runs Forward (CCW) with inverted carriage travel `setDupr(-pitch * starts)`.
+3. **Tapered 2-Axis Tracking (`coneRatio`)**:
+   * Per `h5.ino` line 9260, `MODE_THREAD` calculates the instantaneous X position as:
+     $$X(z) = X_{base} \pm (\text{coneRatio} \times \Delta z)$$
+   * For standard 1:16 pipe threads (NPT & BSPT), `coneRatio = 0.0625` ($1/16$ on diameter, or $1/32$ on radius).
+   * Toolpost remains rigidly square ($90^\circ$) to the lathe bed; all taper geometry is generated purely through 2-axis coordinated stepper/servo interpolation.
+4. **Skim Verification Cycle State Machine**:
+   * **`STAGE_SKIM_PASS`**: Tool positions at $X = X_{stock}$, feeds across Z at standard turning feed rate (e.g., $0.10\text{ mm/rev}$), truing the OD to exact target size.
+   * **Retract & Dwell**: Carriage retracts X by `retractDist`, moves Z back to `startZ`, and issues an event: `EVENT_SKIM_COMPLETE`.
+   * **`STAGE_AWAIT_VERIFY`**: Steppers are held energized. The screen displays the confirmation modal. Spindle continues spinning or pauses depending on user preference.
+   * **Operator Confirmation**:
+      - If operator taps `CONFIRM`: `cycleStage = STAGE_THREADING`. Multi-pass threading commences from the newly trued zero.
+      - If operator taps `ABORT`: Cycle aborts immediately, steppers release or return to standby, allowing operator to inspect stock or adjust tooling.
+
+---
+
+## 24. Conversational Threading UI Redesign & Stock Preparation Bridge
+
+### Ergonomic & Screen Real-Estate Motivation
+The physical 5-inch 800×480 screen cannot comfortably accommodate a monolithic thread configuration form containing standard library grids, pitch options, handedness, direction, starts, and blueprint tables simultaneously without severe vertical scrolling and visual clutter. Furthermore, displaying standards committee jargon such as "1st Choice" and "2nd Choice" ISO fasteners creates cognitive friction for lathe operators, who think primarily in diameter ranges (e.g. "I am making an M10 thread").
+
+### Architectural Innovations
+
+#### 1. Progressive 4-Stage Selection Flow
+The configuration overlay is structured as a stepped progressive wizard that fits strictly within $\le 450\text{ px}$ vertical height:
+* **Stage 1 (Family)**: Selection between `METRIC (M)`, `UN INCH`, `NPT PIPE`, `BSPT (R/Rc)`, and `FREEFORM / CUSTOM PITCH`.
+* **Stage 2 (Diameter / Size Range)**:
+  - Sizes are categorized into intuitive diameter bands:
+    - Metric: `M1 – M6`, `M7 – M12`, `M14 – M24`, `M27 – M42`.
+    - UN: `#4 – 3/8″`, `7/16″ – 3/4″`, `7/8″ – 1-1/2″`.
+    - Pipe: `1/8″ – 1/2″`, `3/4″ – 2″`.
+  - Common fasteners are presented immediately in a 4-column touch grid.
+  - A `[ + MORE SIZES ]` toggle reveals 3rd-choice secondary sizes (e.g., M13, M15, M17, M19, M25, M28, M32) styled with distinctive dashed borders.
+  - A dedicated `[ ENTER CUSTOM Ø… ]` keypad button allows operators to turn non-standard diameters (e.g. Ø 15.0 mm or Ø 49.5 mm) with automatic ISO 60° thread calculation.
+* **Stage 3 (Pitch & Infeed)**:
+  - Displays Coarse / Standard pitch alongside Fine and Extra-Fine options, showing calculated radial infeed depth ($h_{ext} = 0.6134 \times P$) and estimated pass counts.
+  - For pipe threads (NPT / BSPT), explicitly highlights the **$1:16\text{ Taper Cone Ratio } (1^\circ 47' / 1.79^\circ)$** and thread engagement length ($L_2$).
+  - Provides a direct `[ CUSTOM PITCH / KEYPAD… ]` button for arbitrary leads.
+* **Stage 4 (Machining Strategy & Handedness)**:
+  - High-visibility toggle chips for:
+    - `EXTERNAL (OD)` vs `INTERNAL (ID)`
+    - `RIGHT-HAND (RH)` vs `LEFT-HAND (LH)`
+    - `← TO CHUCK (Z−)` vs `→ TO TAIL (BLIND HOLE)`
+    - `SKIM PASS: ON/OFF`
+  - **Thread Cut Length**: Dedicated input box with direct keypad editing and automatic pipe thread ($L_2$) presets.
+  - **Conditional Multi-Start Selector (`STARTS`)**:
+    - Standard fasteners (Metric, UN, Pipe) are strictly single-start ($N = 1$).
+    - Selecting `CUSTOM` thread family reveals the `STARTS` stepper (`[ − ]  1 START  [ + ]` / tap to enter 1–9) alongside Thread Length in Step 4.
+    - Automatically computes and displays **Effective Lead** ($\text{Lead} = \text{Pitch} \times \text{Starts}$) in the live advisory banner and Blueprint summary card.
+  - Real-time kinematic safety warning when cutting RH threads towards the tailstock (`⚠ Spindle: REVERSE (CW) — Cutting outward from blind hole`).
+
+#### 2. Anchored Dark Blueprint Card
+Docked permanently at the bottom of the modal across all 4 stages:
+* **Row 1**: Full thread specification and handedness (e.g. `M12 × 1.75 (EXTERNAL, RH)`).
+* **Row 2**: Recommended stock preparation OD with ISO 6g tolerance limits (e.g. `Ø 11.70 – 11.97 mm`) and target root diameter (`Ø 9.85 mm`), or tap drill diameter for internal threads.
+* **Row 3**: Total radial infeed depth, pass count, and spindle direction badge (`FORWARD (CCW)` or `REVERSE (CW)` / `1:16 TAPER (1.79°)`).
+
+#### 3. Glove-Friendly Navigation Pattern
+* **Back Button**: Large touch target in top-left showing the contextual previous stage name (`← CANCEL` $\rightarrow$ `← FAMILY` $\rightarrow$ `← SIZES` $\rightarrow$ `← PITCH`).
+* **Close Button**: Clean, universal `[ ✕ ]` close icon in the top right.
+
+#### 4. Center Column Spindle Kinematic & Lead Deck
+In `THREADING` mode, the center action deck replaces redundant pitch nudge buttons with:
+* Real-time **Spindle Kinematic Indicator** (`FORWARD (CCW)` or `REVERSE (CW)` badge with directional glyphs `↺` / `↻`).
+* **Dynamic Blueprint Card**: Displays `SPEC`, `EFFECTIVE LEAD` (pitch $\times$ starts), `RADIAL INFEED`, and `PASSES`.
+* Tap-to-configure binding: Tapping the center blueprint card immediately re-opens the thread configuration wizard.
+
+#### 5. Threading Mode Card: Inline Starts Stepper
+* The redundant `PROFILE` row is eliminated.
+* `STARTS` is converted into an inline glove-friendly stepper: `[ − ]  1 START  [ + ]`, bounded strictly between 1 and 9 starts.
+
+#### 6. "Prepare Stock" Cross-Mode Workflow Bridge
+A major point of failure in lathe screw cutting is improper stock diameter prior to thread engagement. The `[ PREPARE STOCK ➔ ]` action button establishes an intelligent bridge across controller modes:
+* **For Straight Threads (Metric, UN, Freeform)**:
+  1. Saves thread specification and target stock OD (e.g. Ø 11.90 mm for M12).
+  2. Automatically switches the lathe controller into **`TURNING` mode**.
+  3. Pre-populates `TOTAL DEPTH` based on the difference between the current measured X diameter and target prep OD ($\Delta X = X_{current} - X_{target}$).
+  4. Pre-configures pass count based on `MAX DOC`.
+  5. Displays an advisory status: `PREPARE STOCK: SWITCHED TO TURNING (TARGET OD: Ø 11.97 mm FOR M12 × 1.75)`.
+* **For Pipe Threads (NPT, BSPT)**:
+  1. Saves thread specification.
+  2. Automatically switches the lathe controller into **`TAPER` mode**.
+  3. Pre-populates the exact 1:16 taper cone angle: **$1.79^\circ$ ($1^\circ 47'$)**.
+  4. Pre-populates taper stroke length to the standard pipe thread engagement length ($L_2$).
+  5. Displays an advisory status: `PREPARE STOCK: SWITCHED TO TAPER (1.79° / 1:16 CONE, L=13.6mm FOR 1/2" NPT)`.
+
+---
+
+## 7.5. Gearbox Leadscrew Quick-Change Pitch Engine (Independent from Threading Wizard)
+
+In **Gearbox Mode**, the lathe spindle and leadscrew are electronically coupled as a digital quick-change gearbox. Unlike Conversational Threading, which is part-geometry driven (specifying standard fastener diameters, tolerance classes, tap drills, and multi-pass radial infeed depths), Gearbox mode is purely a leadscrew transmission ratio.
+
+### Design Principles:
+1. **No Workpiece Fastener Jargon or Diameter Pre-requisites:**
+   * Labels like "COMMON", "COARSE", or "FINE" only have meaning when tied to a specific bolt diameter (e.g. M8 coarse vs fine). For pure leadscrew pitch selection, diameter is completely irrelevant.
+   * Pitch ranges are presented as clean, purely numeric bands:
+     * **Metric:** `0.25 – 0.80`, `1.00 – 2.50`, `3.00 – 6.00`.
+     * **Inch:** `64 – 28`, `27 – 12`, `11.5 – 4`.
+2. **Simplified Unit Toggles:**
+   * Buttons are cleanly labeled `METRIC` and `INCH` (omitting parenthetical `(mm)` and `(TPI)`).
+3. **Action-Trigger Custom Pitch Keypad:**
+   * The `[ CUSTOM PITCH ✎ ]` button is a pure action trigger (no complex dynamic selection state) maintaining a compact intrinsic width (`flex: 0 0 auto; width: auto;`).
+   * Tapping it opens the calculator keypad pre-populated with the active pitch value (in mm or TPI based on the active unit toggle) and fully selected, allowing immediate from-scratch numeric entry or quick value adjustment.
+4. **Single-Tap Immediate Execution:**
+   * Tapping any standard pitch instantly applies the pitch to the active carriage axis and dismisses the modal, updating the dynamic deck and setting the leadscrew gear ratio in a single tap without requiring confirmation steps or blueprint rendering.
+5. **Touch Interaction Routing (Feed vs. Pitch):**
+   * **Center Column Dynamic Deck Readout:** Tapping the live readout routes based on the active axis gearing mode:
+     * In `FEED` mode (`mm/rev` or `in/rev`) $\rightarrow$ opens the numeric keypad for direct feed rate entry.
+     * In `PITCH` mode (leadscrew threading synchronization) $\rightarrow$ opens the Gearbox Pitch Modal.
+   * **Right Mode Card Controls:**
+     * Tapping `[ FEED ]` switches to Feed mode and immediately brings up the numeric keypad.
+     * Tapping `[ PITCH ]` switches to Pitch mode and brings up the Gearbox Pitch Modal.
+     * Tapping the Z feed value box routes to the keypad in FEED mode or the Pitch Modal in PITCH mode.

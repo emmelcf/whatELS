@@ -350,15 +350,534 @@
   .kp-bottom-row .kp-curr-btn { color: var(--blue); }
   .kp-bottom-row .kp-curr-btn.hide { visibility: hidden; }
   .kp-bottom-row .kp-half-btn { color: var(--amber); }
+  .kp-bottom-row .kp-half-btn.hide { visibility: hidden; }
   .kp-actions { display: flex; gap: 6px; }
   .kp-actions button { flex: 1; margin: 0; }
 
-  .pitch-sheet { width: 280px; }
-  .tab-row { display: flex; gap: 6px; margin-bottom: 8px; }
-  .tab-row button { margin: 0; padding: 8px 0; font-size: 13px; }
-  .tab-row button.active { background: #0d1b28; border-color: #234058; color: var(--blue); }
-  .preset-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 8px; }
-  .preset-grid button { margin: 0; padding: 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  /* Progressive Thread Configuration Modal */
+  .pitch-sheet {
+    width: 560px;
+    max-height: 462px;
+    padding: 8px 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    box-sizing: border-box;
+  }
+  .wiz-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    padding: 0 32px 3px 0;
+    margin-bottom: 0px;
+    min-height: 35px;
+    box-sizing: border-box;
+  }
+  .wiz-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--fg);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sheet button.wiz-close-mark,
+  .wiz-close-mark {
+    position: absolute !important;
+    top: -2px !important;
+    right: -2px !important;
+    width: 28px !important;
+    height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    color: var(--dim) !important;
+    font-size: 20px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-weight: 300 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    transition: color 0.15s ease;
+    z-index: 20;
+  }
+  .sheet button.wiz-close-mark:hover,
+  .wiz-close-mark:hover {
+    color: #fff !important;
+  }
+  .sheet button.wiz-back-btn,
+  .wiz-back-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    min-height: 32px !important;
+    min-width: 72px !important;
+    margin: 0 !important;
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    background: #151f28 !important;
+    border: 1px solid #283a4c !important;
+    color: #9cb1c9 !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    gap: 4px;
+    letter-spacing: 0.3px !important;
+    transition: all 0.15s ease;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+  }
+  .sheet button.wiz-back-btn:hover,
+  .wiz-back-btn:hover {
+    color: #fff !important;
+    border-color: var(--blue) !important;
+    background: #1f3040 !important;
+  }
+  .wiz-stage-body {
+    min-height: 170px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    margin-top: 1px;
+  }
+  .wiz-family-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  .sheet button.wiz-family-btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 84px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
+    background: #11181f !important;
+    border: 1px solid #202d38 !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    font-size: 14.5px !important;
+    font-weight: 800 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    color: var(--fg) !important;
+    letter-spacing: 0.5px !important;
+    transition: all 0.15s ease;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+  .sheet button.wiz-family-btn:hover {
+    background: #182532 !important;
+    border-color: var(--blue) !important;
+    color: #fff !important;
+  }
+  .wiz-range-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: 42px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+  }
+  .sheet button.wiz-range-btn,
+  .wiz-range-btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 84px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    color: var(--dim) !important;
+    cursor: pointer;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+  }
+  .sheet button.wiz-range-btn.active,
+  .wiz-range-btn.active {
+    background: #0e273a !important;
+    border-color: #2a618d !important;
+    color: var(--blue) !important;
+  }
+  .sheet button#btnSizeMore,
+  .wiz-grid button#btnSizeMore,
+  #btnSizeMore {
+    display: none !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    width: auto !important;
+    min-width: 110px !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    background: #141d24 !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    color: var(--dim) !important;
+    cursor: pointer !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    transition: all 0.15s ease;
+  }
+  .sheet button#btnSizeMore.show,
+  .wiz-grid button#btnSizeMore.show,
+  #btnSizeMore.show {
+    display: inline-flex !important;
+  }
+  .sheet button#btnSizeMore:hover,
+  .wiz-grid button#btnSizeMore:hover,
+  #btnSizeMore:hover {
+    color: #fff !important;
+    border-color: var(--blue) !important;
+  }
+  .wiz-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 68px);
+    justify-content: space-between;
+    row-gap: 8px;
+    width: 100%;
+    max-height: 152px;
+    overflow-y: auto;
+    padding-right: 2px;
+    box-sizing: border-box;
+  }
+  .sheet button.wiz-grid-btn,
+  .wiz-grid button {
+    width: 68px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    background: #141d24 !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+  }
+  .wiz-grid button.active {
+    background: #0e273a !important;
+    border-color: #2a618d !important;
+    color: var(--blue) !important;
+  }
+  .wiz-grid button.choice3 {
+    border-style: dashed !important;
+    color: #a0aec0 !important;
+  }
+  .wiz-pitch-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    max-height: 150px;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  .sheet div.wiz-pitch-item,
+  .wiz-pitch-item {
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    padding: 0 16px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    width: auto !important;
+    min-width: 110px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+  }
+  .sheet div.wiz-pitch-item:hover,
+  .wiz-pitch-item:hover {
+    background: #16222b !important;
+    border-color: var(--blue) !important;
+  }
+  .sheet div.wiz-pitch-item.active,
+  .wiz-pitch-item.active {
+    background: #0e273a !important;
+    border-color: #2a618d !important;
+  }
+  .wiz-pitch-item .p-title {
+    font-size: 15px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--fg);
+    letter-spacing: 0.5px;
+  }
+  .wiz-pitch-item .p-type {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  
+  /* Taller Blueprint Card with Clear, Highly Readable Typography */
+  .blueprint-card {
+    background: #080c10;
+    border: 1px solid #1f2c38;
+    border-radius: 5px;
+    padding: 9px 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 84px;
+    box-sizing: border-box;
+  }
+  .bp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #141d26;
+    padding-bottom: 4px;
+  }
+  .bp-header .bp-title-lbl {
+    font-size: 11px;
+    font-weight: 800;
+    color: #627280;
+    letter-spacing: 0.5px;
+  }
+  .bp-header .bp-title-val {
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--blue);
+  }
+  .bp-body-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr 1.05fr 1fr;
+    gap: 6px;
+    align-items: center;
+  }
+  .bp-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .bp-cell .bp-lbl {
+    font-size: 11px;
+    font-weight: 800;
+    color: #627280;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .bp-cell .bp-val {
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--fg);
+    white-space: nowrap;
+  }
+  .thread-cfg-row { display: flex; gap: 6px; width: 100%; box-sizing: border-box; }
+  .thread-cfg-row .toggle-chip {
+    flex: 1 !important;
+    min-width: 0 !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 4px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+  }
+  .wiz-action-row { display: flex; gap: 8px; width: 100%; margin-top: 4px; box-sizing: border-box; }
+  .wiz-action-row button {
+    margin: 0 !important;
+    flex: 1;
+    height: 42px !important;
+    min-height: 42px !important;
+    font-size: 13.5px !important;
+    font-weight: 800 !important;
+    display: flex;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+  .wiz-action-row button:disabled,
+  .wiz-action-row button.disabled {
+    opacity: 0.35 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+  }
+
+  /* Dedicated Gearbox Leadscrew Pitch Modal */
+  .gear-pitch-sheet {
+    width: 540px;
+    max-height: 290px;
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    box-sizing: border-box;
+  }
+  .sheet button.gear-unit-btn,
+  .gear-unit-btn {
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 16px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    color: var(--dim) !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.15s ease !important;
+  }
+  .sheet button.gear-unit-btn.active,
+  .gear-unit-btn.active {
+    background: #0e273a !important;
+    border-color: #2a618d !important;
+    color: var(--blue) !important;
+  }
+  .sheet button.gear-custom-btn,
+  .gear-custom-btn {
+    height: 38px !important;
+    min-height: 38px !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    padding: 0 14px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    color: var(--dim) !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    transition: all 0.15s ease !important;
+  }
+  .sheet button.gear-custom-btn:hover,
+  .gear-custom-btn:hover {
+    color: #fff !important;
+    border-color: var(--blue) !important;
+  }
+  .sheet button.gear-range-btn,
+  .gear-range-btn {
+    flex: 1 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 8px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    color: var(--dim) !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.15s ease !important;
+  }
+  .sheet button.gear-range-btn.active,
+  .gear-range-btn.active {
+    background: #0e273a !important;
+    border-color: #2a618d !important;
+    color: var(--blue) !important;
+  }
+  .gear-pitch-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .sheet button.gear-pitch-btn,
+  .gear-pitch-btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 14.5px !important;
+    font-weight: 700 !important;
+    background: #141d24 !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+    color: var(--fg) !important;
+    transition: all 0.12s ease !important;
+  }
+  .sheet button.gear-pitch-btn:hover,
+  .gear-pitch-btn:hover {
+    border-color: var(--blue) !important;
+    background: #1a2734 !important;
+    color: #fff !important;
+  }
+  .sheet button.gear-pitch-btn.active,
+  .gear-pitch-btn.active {
+    background: #0e2e1d !important;
+    border-color: #1f5033 !important;
+    color: var(--green) !important;
+    box-shadow: inset 0 0 6px rgba(38,166,91,0.2) !important;
+  }
+
+  .skim-sheet { width: 380px; text-align: center; }
+  .skim-sheet h3 { color: var(--amber); font-size: 15px; margin-bottom: 6px; }
 
   /* Slide-Over System Manual & Design Ledger */
   .doc-sheet {
@@ -573,17 +1092,157 @@
     </div>
   </div>
 
-  <!-- Thread Pitch Overlay -->
+  <!-- Progressive Thread Configuration Modal -->
   <div class="overlay" id="pitchOverlay">
     <div class="sheet pitch-sheet">
-      <h3>THREAD PITCH</h3>
-      <div class="tab-row">
-        <button id="tabMetric">METRIC</button>
-        <button id="tabTpi">TPI</button>
+      <!-- Universal Wizard Navigation Header with Integrated Back Button Chip -->
+      <div class="wiz-nav">
+        <button class="wiz-back-btn" id="btnThreadNavBack" style="display:none;">← BACK</button>
+        <div class="wiz-title" id="wizStageTitle">STEP 1: THREAD FAMILY</div>
+        <button class="wiz-close-mark" id="btnThreadNavClose" title="Close">✕</button>
       </div>
-      <div class="preset-grid" id="pitchGrid"></div>
-      <button id="pitchCustomBtn">CUSTOM PITCH…</button>
-      <button class="cancel" id="pitchCancelBtn">CANCEL</button>
+
+      <!-- STAGE 1: THREAD FAMILY SELECTION (Concise single row) -->
+      <div id="threadStageFamily" class="wiz-stage-body" style="display:flex; flex-direction:column; justify-content:flex-start;">
+        <div class="wiz-family-row">
+          <button class="wiz-family-btn" data-family="METRIC">METRIC</button>
+          <button class="wiz-family-btn" data-family="UN">INCH</button>
+          <button class="wiz-family-btn" data-family="NPT">NPT</button>
+          <button class="wiz-family-btn" data-family="BSPT">BSPT</button>
+          <button class="wiz-family-btn" data-family="FREEFORM">CUSTOM</button>
+        </div>
+      </div>
+
+      <!-- STAGE 2: DIAMETER / SIZE RANGE SELECTION -->
+      <div id="threadStageSize" class="wiz-stage-body" style="display:none; flex-direction:column; gap:6px;">
+        <!-- Range Tabs Row -->
+        <div class="wiz-range-row" id="wizRangeRow"></div>
+        <!-- Size Buttons Grid -->
+        <div class="wiz-grid" id="wizSizeGrid"></div>
+        <button id="btnSizeMore" class="tap" style="display:none;">+ MORE SIZES</button>
+      </div>
+
+      <!-- STAGE 3: PITCH SELECTION -->
+      <div id="threadStagePitch" class="wiz-stage-body" style="display:none; flex-direction:column; gap:6px;">
+        <div id="wizPitchGrid" class="wiz-pitch-list"></div>
+        <div style="display:flex; justify-content:center; width:100%;">
+          <button id="btnCustomPitchEntry" style="display:none; height:42px !important; min-height:42px !important; width:auto !important; min-width:200px; padding:0 20px; font-size:13.5px; font-weight:700; background:#141d24; border:1px solid var(--line); border-radius:4px; margin-top:4px; align-items:center; justify-content:center;">CUSTOM PITCH / KEYPAD…</button>
+        </div>
+      </div>
+
+      <!-- STAGE 4: MACHINING STRATEGY & HANDEDNESS -->
+      <div id="threadStageSetup" class="wiz-stage-body" style="display:none; flex-direction:column; gap:8px;">
+        <!-- 4 Strategy Chips in Single Row -->
+        <div class="thread-cfg-row">
+          <div class="toggle-chip tap active" id="btnWizSide">EXTERNAL</div>
+          <div class="toggle-chip tap active" id="btnWizHandedness">RIGHT (RH)</div>
+          <div class="toggle-chip tap" id="btnWizCutDir">← TO CHUCK</div>
+          <div class="toggle-chip tap active" id="btnWizSkimVerify">SKIM PASS</div>
+        </div>
+
+        <!-- Parameter Row: THREAD LENGTH & Optional STARTS (for Custom Multi-Start) -->
+        <div style="display:flex; gap:8px; width:100%; box-sizing:border-box;">
+          <div id="btnWizLengthBox" class="tap" style="flex:1; display:flex; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 12px; height:42px; box-sizing:border-box; cursor:pointer;">
+            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">THREAD LENGTH</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="mono" id="wizLengthVal" style="font-size:16px; font-weight:800; color:var(--blue);">20.00</span>
+              <span id="wizLengthUnit" style="font-size:11.5px; font-weight:700; color:var(--dim);">mm</span>
+              <span style="font-size:10px; padding:2px 5px; background:#182635; border:1px solid #28445e; border-radius:3px; color:var(--blue); font-weight:700;">EDIT ✎</span>
+            </div>
+          </div>
+
+          <div id="wizStartsRow" style="flex:1; display:none; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 10px; height:42px; box-sizing:border-box;">
+            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">STARTS</span>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button class="tap" id="btnWizStartsMinus" style="width:30px; height:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>
+              <span class="mono tap" id="wizStartsVal" style="min-width:68px; text-align:center; font-weight:700; font-size:12.5px; color:var(--blue); cursor:pointer;" title="Tap to enter via numpad">1 START</span>
+              <button class="tap" id="btnWizStartsPlus" style="width:30px; height:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="wizSetupAdvisory" style="font-size:11px; color:var(--dimmer); min-height:14px; font-style:italic;"></div>
+      </div>
+
+      <!-- ANCHORED BLUEPRINT SUMMARY CARD (Taller with larger, readable typography) -->
+      <div class="blueprint-card" id="wizBlueprintCard" style="margin-bottom:0;">
+        <div class="bp-header">
+          <span class="bp-title-lbl">SPECIFICATION:</span>
+          <span class="bp-title-val" id="wbpName">—</span>
+        </div>
+        <div class="bp-body-grid">
+          <div class="bp-cell">
+            <span class="bp-lbl">PREP STOCK</span>
+            <span class="bp-val" id="wbpStock">—</span>
+          </div>
+          <div class="bp-cell">
+            <span class="bp-lbl">TARGET ROOT</span>
+            <span class="bp-val" id="wbpRoot">—</span>
+          </div>
+          <div class="bp-cell">
+            <span class="bp-lbl">INFEED DEPTH</span>
+            <span class="bp-val" id="wbpDepth">—</span>
+          </div>
+          <div class="bp-cell">
+            <span class="bp-lbl">FEED DIR</span>
+            <span class="bp-val" id="wbpKinematics">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM ACTION ROW (Cancel on steps 1-3; full actions on step 4) -->
+      <div class="wiz-action-row">
+        <button class="cancel" id="btnWizCancel" style="flex:1; min-width:0; padding:9px 0;">CANCEL</button>
+        <button id="btnWizPrepareStock" style="display:none; flex:1; min-width:0; background:#1b2838; border:1px solid #2d5580; color:var(--blue); font-weight:800; padding:9px 0;">PREPARE STOCK ➔</button>
+        <button id="btnWizApply" style="display:none; flex:1; min-width:0; background:#0e2e1d; border:1px solid #1f5033; color:var(--green); font-weight:800; padding:9px 0;">SAVE &amp; THREAD</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dedicated Gearbox Leadscrew Pitch Modal (No Blueprint Panel, Instant 1-Tap) -->
+  <div class="overlay" id="gearPitchOverlay">
+    <div class="sheet gear-pitch-sheet">
+      <div class="wiz-nav" style="border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:8px;">
+        <div class="wiz-title" style="font-size:14px; letter-spacing:0.5px;">GEARBOX LEADSCREW PITCH</div>
+        <button class="wiz-close-mark" id="btnGearPitchClose" title="Close">✕</button>
+      </div>
+
+      <!-- Unit Selector & Custom Keypad Trigger Row -->
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button class="gear-unit-btn active" id="btnGearUnitMm">METRIC</button>
+          <button class="gear-unit-btn" id="btnGearUnitIn">INCH</button>
+        </div>
+        <button id="btnGearCustomKeypad" class="tap gear-custom-btn">
+          <span>CUSTOM PITCH ✎</span>
+        </button>
+      </div>
+
+      <!-- Range Tabs Row -->
+      <div class="gear-range-row" id="gearRangeRow" style="display:flex; gap:6px; margin-bottom:10px;">
+        <!-- Injected via JS based on selected unit -->
+      </div>
+
+      <!-- Pitch Grid (Instant 1-Tap Selection) -->
+      <div class="gear-pitch-grid" id="gearPitchGrid">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Skim Pass Verification Modal -->
+  <div class="overlay" id="skimVerifyOverlay">
+    <div class="sheet skim-sheet">
+      <div style="font-size:24px; margin-bottom:4px;">🔍</div>
+      <h3>SKIM PASS VERIFICATION</h3>
+      <div style="font-size:13.5px; line-height:1.45; color:var(--fg); margin:8px 0 14px; text-align:left; background:#0a0e12; padding:10px; border-radius:4px; border:1px solid var(--line);">
+        Tool skimmed workpiece to <b class="mono" id="skimTargetDia" style="color:var(--blue);">Ø 11.88 mm</b>.<br><br>
+        Did the tool take a <b style="color:var(--green);">light, continuous cut</b> across the entire thread length?
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button id="skimConfirmBtn" style="background:var(--green); color:#08130d; font-weight:800; font-size:14px; padding:12px 0;">✓ YES, CLEAN SURFACE (THREAD)</button>
+        <button id="skimAbortBtn" class="danger" style="background:#220c0e; border:1px solid #5a1e24; color:var(--red); padding:10px 0;">✕ NO, CUT AIR / ABORT (CHECK OD)</button>
+      </div>
     </div>
   </div>
 
@@ -641,7 +1300,9 @@
     // Gearbox Mode
     gearboxMode: 'SYNC', // 'SYNC' (spindle synchronized) or 'ASYNC' (time-based)
     activeFeedAxis: 'Z', // 'Z' or 'X'
-    gearFeedUnitZ: 'FEED', // 'FEED' (mm/rev or in/rev), 'TPI' (threads/in)
+    gearFeedModeZ: 'FEED', // 'FEED' (mm/rev or in/rev), 'PITCH' (leadscrew thread sync)
+    gearThreadHandedness: 'RH', // 'RH' or 'LH'
+    gearThreadUnit: 'metric', // 'metric' or 'tpi'
     gearPitchZ: 0.100, gearDirZ: 'FWD',
     gearPitchX: 0.050, gearDirX: 'IN',
     asyncSpeedZ: 150, asyncSpeedX: 75,
@@ -684,8 +1345,30 @@
     faceSavedXMax: null,
     faceCurrentPass: 1,
 
-    // Threading
-    pitch: 1.500, threadDir: 'RIGHT', pass: '05 / 10', depth: 0.082, pitchTab: 'metric', threadUnit: 'metric',
+    // Threading (Conversational + Safety Features)
+    pitch: 1.750,
+    threadStandard: 'METRIC', // 'METRIC', 'UN', 'NPT', 'BSPT', 'FREEFORM'
+    threadStandardName: 'M12 × 1.75',
+    threadSizeIdx: 6,
+    threadPitchSubIdx: 0,
+    threadSide: 'EXTERNAL', // 'EXTERNAL' or 'INTERNAL'
+    threadHandedness: 'RIGHT', // 'RIGHT' (RH) or 'LEFT' (LH)
+    threadDir: 'RIGHT', // mirrors threadHandedness for backwards compat
+    threadCutDir: 'CHUCK', // 'CHUCK' (outside-in / Z-) or 'TAIL' (inside-out / Z+ blind hole safe)
+    threadProfile: 'STRAIGHT', // 'STRAIGHT' or 'NPT 1:16'
+    threadConeRatio: 0, // 0 for straight, 0.0625 for NPT/BSPT
+    threadStarts: 1, // 1 to 124
+    threadTotalDepth: 1.073, // mm (calculated from standard)
+    threadTargetStockDia: 11.90, // target prep OD
+    threadTargetRootDia: 9.85,
+    threadPassCount: 8,
+    threadCurrentPass: 1,
+    threadSkimVerify: true, // Human-in-the-loop skim verification pass
+    threadSkimStage: 'IDLE', // 'IDLE', 'SKIMMING', 'VERIFY_PROMPT', 'THREADING'
+    pass: '01 / 08',
+    depth: 1.073,
+    pitchTab: 'metric',
+    threadUnit: 'metric',
     
     // Other H5 Modes
     taperAngle: 5.71, taperLen: 25.0, taperDir: 'INT',
@@ -699,6 +1382,144 @@
       'SYSTEM BOOT: NANOELS H5 INITIALIZED',
       'READY: GEARBOX SYNCHRONIZED TO SPINDLE'
     ]
+  };
+
+  // Standard Fasteners Dataset with Ranges & 3rd-Choice Secondary Sizes
+  var THREAD_FAMILIES = {
+    METRIC: {
+      name: 'METRIC',
+      ranges: [
+        { label: '≤ M6', minDia: 1, maxDia: 6 },
+        { label: 'M7 – M12', minDia: 7, maxDia: 12 },
+        { label: 'M14 – M24', minDia: 14, maxDia: 24 },
+        { label: 'M27 – M42', minDia: 27, maxDia: 42 }
+      ],
+      sizes: [
+        // ≤ M6 (M1 to M6 in ascending diameter order)
+        { size: 'M1', dia: 1.0, rangeIdx: 0, choice: 3, pitches: [0.25], stockMin: 0.89, stockMax: 0.98 },
+        { size: 'M1.2', dia: 1.2, rangeIdx: 0, choice: 3, pitches: [0.25], stockMin: 1.09, stockMax: 1.18 },
+        { size: 'M1.4', dia: 1.4, rangeIdx: 0, choice: 3, pitches: [0.30], stockMin: 1.29, stockMax: 1.38 },
+        { size: 'M1.6', dia: 1.6, rangeIdx: 0, choice: 3, pitches: [0.35, 0.20], stockMin: 1.49, stockMax: 1.58 },
+        { size: 'M1.8', dia: 1.8, rangeIdx: 0, choice: 3, pitches: [0.35, 0.20], stockMin: 1.69, stockMax: 1.78 },
+        { size: 'M2', dia: 2.0, rangeIdx: 0, choice: 3, pitches: [0.40, 0.25], stockMin: 1.88, stockMax: 1.98 },
+        { size: 'M2.2', dia: 2.2, rangeIdx: 0, choice: 3, pitches: [0.45, 0.25], stockMin: 2.08, stockMax: 2.18 },
+        { size: 'M2.5', dia: 2.5, rangeIdx: 0, choice: 3, pitches: [0.45, 0.35], stockMin: 2.38, stockMax: 2.48 },
+        { size: 'M3', dia: 3.0, rangeIdx: 0, choice: 1, pitches: [0.50, 0.35], stockMin: 2.87, stockMax: 2.98 },
+        { size: 'M3.2', dia: 3.2, rangeIdx: 0, choice: 3, pitches: [0.50, 0.35], stockMin: 3.07, stockMax: 3.18 },
+        { size: 'M3.5', dia: 3.5, rangeIdx: 0, choice: 2, pitches: [0.60, 0.35], stockMin: 3.35, stockMax: 3.48 },
+        { size: 'M4', dia: 4.0, rangeIdx: 0, choice: 1, pitches: [0.70, 0.50], stockMin: 3.84, stockMax: 3.98 },
+        { size: 'M5', dia: 5.0, rangeIdx: 0, choice: 1, pitches: [0.80, 0.50], stockMin: 4.83, stockMax: 4.98 },
+        { size: 'M6', dia: 6.0, rangeIdx: 0, choice: 1, pitches: [1.00, 0.75], stockMin: 5.79, stockMax: 5.97 },
+        // M7 - M12
+        { size: 'M6.5', dia: 6.5, rangeIdx: 1, choice: 3, pitches: [1.00, 0.75], stockMin: 6.29, stockMax: 6.47 },
+        { size: 'M7', dia: 7.0, rangeIdx: 1, choice: 2, pitches: [1.00, 0.75], stockMin: 6.79, stockMax: 6.97 },
+        { size: 'M7.5', dia: 7.5, rangeIdx: 1, choice: 3, pitches: [1.00, 0.75], stockMin: 7.29, stockMax: 7.47 },
+        { size: 'M8', dia: 8.0, rangeIdx: 1, choice: 1, pitches: [1.25, 1.00, 0.75], stockMin: 7.76, stockMax: 7.97 },
+        { size: 'M8.5', dia: 8.5, rangeIdx: 1, choice: 3, pitches: [1.25, 1.00], stockMin: 8.26, stockMax: 8.47 },
+        { size: 'M9', dia: 9.0, rangeIdx: 1, choice: 2, pitches: [1.25, 1.00, 0.75], stockMin: 8.76, stockMax: 8.97 },
+        { size: 'M10', dia: 10.0, rangeIdx: 1, choice: 1, pitches: [1.50, 1.25, 1.00, 0.75], stockMin: 9.73, stockMax: 9.97 },
+        { size: 'M11', dia: 11.0, rangeIdx: 1, choice: 2, pitches: [1.50, 1.25, 1.00], stockMin: 10.73, stockMax: 10.97 },
+        { size: 'M12', dia: 12.0, rangeIdx: 1, choice: 1, pitches: [1.75, 1.50, 1.25, 1.00], stockMin: 11.70, stockMax: 11.97 },
+        // M14 - M24
+        { size: 'M13', dia: 13.0, rangeIdx: 2, choice: 3, pitches: [1.50, 1.25], stockMin: 12.73, stockMax: 12.97 },
+        { size: 'M14', dia: 14.0, rangeIdx: 2, choice: 1, pitches: [2.00, 1.50, 1.25, 1.00], stockMin: 13.68, stockMax: 13.96 },
+        { size: 'M15', dia: 15.0, rangeIdx: 2, choice: 3, pitches: [1.50, 1.00], stockMin: 14.73, stockMax: 14.97 },
+        { size: 'M16', dia: 16.0, rangeIdx: 2, choice: 1, pitches: [2.00, 1.50, 1.00], stockMin: 15.68, stockMax: 15.96 },
+        { size: 'M17', dia: 17.0, rangeIdx: 2, choice: 3, pitches: [1.50, 1.00], stockMin: 16.73, stockMax: 16.97 },
+        { size: 'M18', dia: 18.0, rangeIdx: 2, choice: 2, pitches: [2.50, 2.00, 1.50, 1.00], stockMin: 17.62, stockMax: 17.96 },
+        { size: 'M19', dia: 19.0, rangeIdx: 2, choice: 3, pitches: [1.50, 1.00], stockMin: 18.73, stockMax: 18.97 },
+        { size: 'M20', dia: 20.0, rangeIdx: 2, choice: 1, pitches: [2.50, 2.00, 1.50, 1.00], stockMin: 19.62, stockMax: 19.96 },
+        { size: 'M22', dia: 22.0, rangeIdx: 2, choice: 2, pitches: [2.50, 2.00, 1.50, 1.00], stockMin: 21.62, stockMax: 21.96 },
+        { size: 'M24', dia: 24.0, rangeIdx: 2, choice: 1, pitches: [3.00, 2.00, 1.50, 1.00], stockMin: 23.58, stockMax: 23.95 },
+        { size: 'M25', dia: 25.0, rangeIdx: 2, choice: 3, pitches: [2.00, 1.50], stockMin: 24.68, stockMax: 24.96 },
+        // M27 - M42
+        { size: 'M26', dia: 26.0, rangeIdx: 3, choice: 3, pitches: [1.50], stockMin: 25.73, stockMax: 25.97 },
+        { size: 'M27', dia: 27.0, rangeIdx: 3, choice: 2, pitches: [3.00, 2.00, 1.50], stockMin: 26.58, stockMax: 26.95 },
+        { size: 'M28', dia: 28.0, rangeIdx: 3, choice: 3, pitches: [2.00, 1.50], stockMin: 27.68, stockMax: 27.96 },
+        { size: 'M30', dia: 30.0, rangeIdx: 3, choice: 1, pitches: [3.50, 3.00, 2.00, 1.50], stockMin: 29.53, stockMax: 29.95 },
+        { size: 'M32', dia: 32.0, rangeIdx: 3, choice: 3, pitches: [2.00, 1.50], stockMin: 31.68, stockMax: 31.96 },
+        { size: 'M33', dia: 33.0, rangeIdx: 3, choice: 2, pitches: [3.50, 3.00, 2.00, 1.50], stockMin: 32.53, stockMax: 32.95 },
+        { size: 'M35', dia: 35.0, rangeIdx: 3, choice: 3, pitches: [1.50], stockMin: 34.73, stockMax: 34.97 },
+        { size: 'M36', dia: 36.0, rangeIdx: 3, choice: 1, pitches: [4.00, 3.00, 2.00, 1.50], stockMin: 35.47, stockMax: 35.94 },
+        { size: 'M38', dia: 38.0, rangeIdx: 3, choice: 3, pitches: [1.50], stockMin: 37.73, stockMax: 37.97 },
+        { size: 'M39', dia: 39.0, rangeIdx: 3, choice: 2, pitches: [4.00, 3.00, 2.00, 1.50], stockMin: 38.47, stockMax: 38.94 },
+        { size: 'M40', dia: 40.0, rangeIdx: 3, choice: 3, pitches: [3.00, 2.00, 1.50], stockMin: 39.58, stockMax: 39.95 },
+        { size: 'M42', dia: 42.0, rangeIdx: 3, choice: 1, pitches: [4.50, 4.00, 3.00, 2.00, 1.50], stockMin: 41.41, stockMax: 41.94 }
+      ]
+    },
+    UN: {
+      name: 'INCH',
+      ranges: [
+        { label: '#4 – 3/8″', minDia: 0.1, maxDia: 0.38 },
+        { label: '7/16″ – 3/4″', minDia: 0.4, maxDia: 0.76 },
+        { label: '7/8″ – 1-1/2″', minDia: 0.8, maxDia: 1.6 }
+      ],
+      sizes: [
+        { size: '#4', dia: 2.84, rangeIdx: 0, choice: 1, pitches: [{ tpi: 40, type: 'UNC' }, { tpi: 48, type: 'UNF' }], stockMin: 2.68, stockMax: 2.81 },
+        { size: '#6', dia: 3.51, rangeIdx: 0, choice: 1, pitches: [{ tpi: 32, type: 'UNC' }, { tpi: 40, type: 'UNF' }], stockMin: 3.33, stockMax: 3.48 },
+        { size: '#8', dia: 4.17, rangeIdx: 0, choice: 1, pitches: [{ tpi: 32, type: 'UNC' }, { tpi: 36, type: 'UNF' }], stockMin: 3.99, stockMax: 4.14 },
+        { size: '#10', dia: 4.83, rangeIdx: 0, choice: 1, pitches: [{ tpi: 24, type: 'UNC' }, { tpi: 32, type: 'UNF' }], stockMin: 4.62, stockMax: 4.79 },
+        { size: '1/4″', dia: 6.35, rangeIdx: 0, choice: 1, pitches: [{ tpi: 20, type: 'UNC' }, { tpi: 28, type: 'UNF' }], stockMin: 6.12, stockMax: 6.32 },
+        { size: '5/16″', dia: 7.94, rangeIdx: 0, choice: 1, pitches: [{ tpi: 18, type: 'UNC' }, { tpi: 24, type: 'UNF' }], stockMin: 7.69, stockMax: 7.90 },
+        { size: '3/8″', dia: 9.53, rangeIdx: 0, choice: 1, pitches: [{ tpi: 16, type: 'UNC' }, { tpi: 24, type: 'UNF' }], stockMin: 9.25, stockMax: 9.49 },
+        // Range 1
+        { size: '7/16″', dia: 11.11, rangeIdx: 1, choice: 1, pitches: [{ tpi: 14, type: 'UNC' }, { tpi: 20, type: 'UNF' }], stockMin: 10.82, stockMax: 11.07 },
+        { size: '1/2″', dia: 12.70, rangeIdx: 1, choice: 1, pitches: [{ tpi: 13, type: 'UNC' }, { tpi: 20, type: 'UNF' }], stockMin: 12.38, stockMax: 12.66 },
+        { size: '9/16″', dia: 14.29, rangeIdx: 1, choice: 2, pitches: [{ tpi: 12, type: 'UNC' }, { tpi: 18, type: 'UNF' }], stockMin: 13.94, stockMax: 14.24 },
+        { size: '5/8″', dia: 15.88, rangeIdx: 1, choice: 1, pitches: [{ tpi: 11, type: 'UNC' }, { tpi: 18, type: 'UNF' }], stockMin: 15.52, stockMax: 15.83 },
+        { size: '3/4″', dia: 19.05, rangeIdx: 1, choice: 1, pitches: [{ tpi: 10, type: 'UNC' }, { tpi: 16, type: 'UNF' }], stockMin: 18.66, stockMax: 19.00 },
+        // Range 2
+        { size: '7/8″', dia: 22.23, rangeIdx: 2, choice: 1, pitches: [{ tpi: 9, type: 'UNC' }, { tpi: 14, type: 'UNF' }], stockMin: 21.80, stockMax: 22.17 },
+        { size: '1″', dia: 25.40, rangeIdx: 2, choice: 1, pitches: [{ tpi: 8, type: 'UNC' }, { tpi: 12, type: 'UNF' }], stockMin: 24.96, stockMax: 25.34 },
+        { size: '1-1/8″', dia: 28.58, rangeIdx: 2, choice: 2, pitches: [{ tpi: 7, type: 'UNC' }, { tpi: 12, type: 'UNF' }], stockMin: 28.08, stockMax: 28.51 },
+        { size: '1-1/4″', dia: 31.75, rangeIdx: 2, choice: 1, pitches: [{ tpi: 7, type: 'UNC' }, { tpi: 12, type: 'UNF' }], stockMin: 31.25, stockMax: 31.68 },
+        { size: '1-1/2″', dia: 38.10, rangeIdx: 2, choice: 1, pitches: [{ tpi: 6, type: 'UNC' }, { tpi: 12, type: 'UNF' }], stockMin: 37.52, stockMax: 38.02 }
+      ]
+    },
+    NPT: {
+      name: 'NPT',
+      ranges: [
+        { label: '1/8″ – 1/2″', minDia: 10, maxDia: 22 },
+        { label: '3/4″ – 2″', minDia: 23, maxDia: 61 }
+      ],
+      sizes: [
+        { size: '1/8″', tpi: 27, rangeIdx: 0, choice: 1, pipeOd: 10.29, smallOd: 9.96, l2: 6.7, passes: 10 },
+        { size: '1/4″', tpi: 18, rangeIdx: 0, choice: 1, pipeOd: 13.72, smallOd: 13.26, l2: 10.2, passes: 12 },
+        { size: '3/8″', tpi: 18, rangeIdx: 0, choice: 1, pipeOd: 17.15, smallOd: 16.66, l2: 10.4, passes: 12 },
+        { size: '1/2″', tpi: 14, rangeIdx: 0, choice: 1, pipeOd: 21.34, smallOd: 20.73, l2: 13.6, passes: 14 },
+        { size: '3/4″', tpi: 14, rangeIdx: 1, choice: 1, pipeOd: 26.67, smallOd: 26.04, l2: 14.2, passes: 14 },
+        { size: '1″', tpi: 11.5, rangeIdx: 1, choice: 1, pipeOd: 33.40, smallOd: 32.59, l2: 17.3, passes: 16 },
+        { size: '1-1/4″', tpi: 11.5, rangeIdx: 1, choice: 2, pipeOd: 42.16, smallOd: 41.31, l2: 18.0, passes: 16 },
+        { size: '1-1/2″', tpi: 11.5, rangeIdx: 1, choice: 2, pipeOd: 48.26, smallOd: 47.38, l2: 18.4, passes: 16 },
+        { size: '2″', tpi: 11.5, rangeIdx: 1, choice: 2, pipeOd: 60.33, smallOd: 59.41, l2: 19.2, passes: 18 }
+      ]
+    },
+    BSPT: {
+      name: 'BSPT',
+      ranges: [
+        { label: '1/8″ – 1/2″', minDia: 9, maxDia: 22 },
+        { label: '3/4″ – 2″', minDia: 23, maxDia: 61 }
+      ],
+      sizes: [
+        { size: '1/8″', tpi: 28, rangeIdx: 0, choice: 1, pipeOd: 9.73, smallOd: 9.40, l2: 6.5, passes: 10 },
+        { size: '1/4″', tpi: 19, rangeIdx: 0, choice: 1, pipeOd: 13.16, smallOd: 12.70, l2: 9.7, passes: 12 },
+        { size: '3/8″', tpi: 19, rangeIdx: 0, choice: 1, pipeOd: 16.66, smallOd: 16.20, l2: 10.1, passes: 12 },
+        { size: '1/2″', tpi: 14, rangeIdx: 0, choice: 1, pipeOd: 20.96, smallOd: 20.35, l2: 13.2, passes: 14 },
+        { size: '3/4″', tpi: 14, rangeIdx: 1, choice: 1, pipeOd: 26.44, smallOd: 25.80, l2: 14.0, passes: 14 },
+        { size: '1″', tpi: 11, rangeIdx: 1, choice: 1, pipeOd: 33.25, smallOd: 32.40, l2: 16.8, passes: 16 },
+        { size: '1-1/4″', tpi: 11, rangeIdx: 1, choice: 2, pipeOd: 41.91, smallOd: 41.05, l2: 17.5, passes: 16 },
+        { size: '1-1/2″', tpi: 11, rangeIdx: 1, choice: 2, pipeOd: 47.80, smallOd: 46.90, l2: 18.0, passes: 16 },
+        { size: '2″', tpi: 11, rangeIdx: 1, choice: 2, pipeOd: 59.61, smallOd: 58.70, l2: 19.0, passes: 18 }
+      ]
+    }
+  };
+
+  // Backwards compatibility alias for STD_THREADS
+  var STD_THREADS = {
+    METRIC: THREAD_FAMILIES.METRIC.sizes,
+    UN: THREAD_FAMILIES.UN.sizes,
+    NPT: THREAD_FAMILIES.NPT.sizes,
+    BSPT: THREAD_FAMILIES.BSPT.sizes
   };
 
   var JOG_STEPS_MM = [1.000, 0.100, 0.010];
@@ -809,14 +1630,19 @@
     if(state.gearboxMode === 'ASYNC'){
       return { val: state.asyncSpeedZ.toString(), unit: unitLabel() + '/min' };
     }
-    if(state.gearFeedUnitZ === 'FEED'){
+    if(state.gearFeedModeZ === 'FEED'){
       var fVal = state.unit === 'mm' ? state.gearPitchZ : state.gearPitchZ / 25.4;
       return { val: fmt(fVal, state.unit === 'mm' ? 3 : 4), unit: unitLabel() + '/rev' };
     }
-    // TPI
-    var tpi = state.gearPitchZ > 0 ? (25.4 / state.gearPitchZ) : 0;
-    var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
-    return { val: tpiStr, unit: 'TPI' };
+    // PITCH Mode (Screw cutting synchronization with handedness)
+    var hand = ' (' + (state.gearThreadHandedness || 'RH') + ')';
+    if(state.gearThreadUnit === 'tpi'){
+      var tpi = state.gearPitchZ > 0 ? (25.4 / state.gearPitchZ) : 0;
+      var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
+      return { val: tpiStr, unit: 'TPI' + hand };
+    } else {
+      return { val: lenStr(state.gearPitchZ), unit: unitLabel() + hand };
+    }
   }
 
   function getGearXDisplay(){
@@ -828,12 +1654,13 @@
   }
 
   function getThreadPitchDisplay(){
+    var hand = state.threadHandedness === 'RIGHT' ? 'RH' : 'LH';
     if(state.threadUnit === 'tpi'){
       var tpi = state.pitch > 0 ? (25.4 / state.pitch) : 0;
       var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
-      return { val: tpiStr, unit: 'TPI', num: tpi };
+      return { val: tpiStr, unit: 'TPI (' + hand + ')', num: tpi };
     } else {
-      return { val: lenStr(state.pitch), unit: unitLabel() + ' pitch', num: state.pitch };
+      return { val: lenStr(state.pitch), unit: unitLabel() + ' (' + hand + ')', num: state.pitch };
     }
   }
 
@@ -900,7 +1727,7 @@
 
       deck.innerHTML = '' +
         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-          '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + state.activeFeedAxis + '-AXIS ' + (isSync ? (state.activeFeedAxis==='Z'?state.gearFeedUnitZ:'FEED') : 'ASYNC') + ' TRIM</span>' +
+          '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + state.activeFeedAxis + '-AXIS ' + (isSync ? (state.activeFeedAxis==='Z'?state.gearFeedModeZ:'FEED') : 'ASYNC') + ' TRIM</span>' +
           '<span style="font-size:10px; color:' + (state.activeFeedAxis==='Z'?'var(--green)':'var(--blue)') + '; font-weight:700;">' + (state.activeFeedAxis==='Z'?'Z CARRIAGE':'X CROSS') + '</span>' +
         '</div>' +
         '<div class="deck-controls">' +
@@ -998,27 +1825,33 @@
             'CYCLE ACTIVE — AUTO INFEED' +
           '</div>';
       } else {
+        var isReverseSpindle = (state.threadCutDir === 'TAIL' && state.threadHandedness === 'RIGHT') || (state.threadCutDir === 'CHUCK' && state.threadHandedness === 'LEFT');
+        var spindleText = isReverseSpindle ? 'SPINDLE: REVERSE (CW)' : 'SPINDLE: FORWARD (CCW)';
+        var spindleColor = isReverseSpindle ? 'var(--amber)' : 'var(--green)';
+        var spindleBg = isReverseSpindle ? 'rgba(255,160,0,0.1)' : 'rgba(38,166,91,0.12)';
+        var spindleBorder = isReverseSpindle ? 'rgba(255,160,0,0.3)' : 'rgba(38,166,91,0.3)';
+
+        var leadMm = state.pitch * state.threadStarts;
+        var specStr = state.threadStandardName || (tp.val + ' ' + tp.unit);
+        var feedStr = state.threadCutDir === 'CHUCK' ? '← TO CHUCK (Z−)' : '→ TO TAIL (Z+)';
+        var threadLenMm = state.threadLength || 20.0;
+
         deck.innerHTML = '' +
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREAD LEAD TRIM</span>' +
-            '<span style="font-size:10px; color:var(--amber); font-weight:700;">' + (state.threadDir==='RIGHT'?'RH':'LH') + '</span>' +
+            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREAD SPEC & LEAD</span>' +
+            '<span style="font-size:10px; color:var(--blue); font-weight:700;">' + (state.threadHandedness==='RIGHT'?'RH':'LH') + ' · ' + (state.threadCutDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span>' +
           '</div>' +
-          '<div class="deck-controls">' +
-            '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
-            '<div class="deck-readout tap" id="deckReadout">' +
-              '<span class="deck-val mono">' + tp.val + '</span>' +
-              '<span class="deck-unit">' + tp.unit + '</span>' +
-            '</div>' +
-            '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+          '<div class="blueprint-card tap" id="deckThreadBp" style="margin:3px 0; padding:8px 10px; gap:5px; cursor:pointer;" title="Tap to configure thread">' +
+            '<div class="row"><span>SPEC:</span><b style="color:var(--blue); font-size:13.5px;">' + specStr + '</b></div>' +
+            '<div class="row"><span>FEED / LEN:</span><b class="mono">' + (state.threadCutDir==='CHUCK'?'← CHUCK (Z−)':'→ TAIL (Z+)') + ' · ' + lenStr(threadLenMm, 1) + ' ' + unitLabel() + '</b></div>' +
+            '<div class="row"><span>RADIAL INFEED:</span><b class="mono">' + lenStr(state.threadTotalDepth) + ' ' + unitLabel() + '</b><span>PASSES:</span><b class="mono">' + state.threadPassCount + 'P</b></div>' +
           '</div>' +
-          '<div class="tap" id="deckToggleThreadDir" style="background:#172129; border:1px solid #283744; border-radius:4px; min-height:38px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--fg); margin-top:2px;">' +
-            'DIR: ' + (state.threadDir==='RIGHT'?'← RIGHT HAND (RH)':'→ LEFT HAND (LH)') +
+          '<div style="background:#0e1d15; border:1px solid #1f4a2d; border-radius:4px; min-height:36px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; font-weight:800; color:var(--green); margin-top:2px;">' +
+            '<span style="font-size:12px; letter-spacing:0.3px;">FEED DIR: ' + feedStr + '</span>' +
           '</div>';
 
-        $('deckToggleThreadDir').addEventListener('click', function(){
-          state.threadDir = state.threadDir === 'RIGHT' ? 'LEFT' : 'RIGHT';
-          render();
-        });
+        var bpCard = $('deckThreadBp');
+        if(bpCard) bpCard.addEventListener('click', function(){ openPitchSelect('modePitch'); });
       }
 
     } else {
@@ -1149,10 +1982,10 @@
             if(state.activeFeedAxis === 'Z'){
               if(state.gearboxMode === 'ASYNC'){
                 openKeypad('asyncSpeedZ', state.asyncSpeedZ);
-              } else if(state.gearFeedUnitZ === 'FEED'){
-                openKeypad('gearPitchZ', state.unit==='mm'?state.gearPitchZ:state.gearPitchZ/25.4);
+              } else if(state.gearFeedModeZ === 'FEED'){
+                openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
               } else {
-                openPitchSelect('gearZ', 'tpi');
+                openGearboxPitchModal();
               }
             } else {
               if(state.gearboxMode === 'ASYNC'){
@@ -1204,8 +2037,8 @@
               '<span class="feed-unit-box">' + zDisp.unit + '</span>' +
             '</div>' +
             '<div style="display:flex; gap:4px; margin-top:5px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
-              '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
-              '<div class="toggle-chip tap ' + (state.gearFeedUnitZ==='TPI'?'active':'') + '" id="fld-unitTpi" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">TPI</div>' +
+              '<div class="toggle-chip tap ' + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
+              '<div class="toggle-chip tap ' + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
             '</div>' +
           '</div>' +
 
@@ -1250,12 +2083,21 @@
 
     if(state.mode === 'THREADING'){
       var tp = getThreadPitchDisplay();
+      var specLabel = state.threadStandardName ? state.threadStandardName : (tp.val + ' ' + tp.unit);
+      var leadMm = state.pitch * state.threadStarts;
       return '' +
-        '<div class="kv"><span>LEAD / PITCH</span><b class="mono ' + ed + '" id="fld-pitch">' + tp.val + ' ' + tp.unit + '</b></div>' +
-        '<div class="kv"><span>PASS</span><b class="mono">' + state.pass + ' (QUADRATIC)</b></div>' +
-        '<div class="kv"><span>PASS DEPTH</span><b class="mono">' + lenStr(state.depth) + ' ' + unitLabel() + '</b></div>' +
-        '<div class="kv"><span>DIRECTION</span><span class="dir-chip-fixed ' + ed + '" id="fld-threadDir">' + state.threadDir + '</span></div>' +
-        '<div class="kv"><span>CYCLE INFEED</span><b class="mono" style="color:var(--dim)">90° RADIAL (AUTO)</b></div>';
+        '<div class="kv"><span>SPEC / LEAD</span><b class="mono ' + ed + '" id="fld-pitch" style="font-size:13.5px; color:var(--blue);">' + specLabel + '</b></div>' +
+        '<div class="kv"><span>STARTS</span>' +
+          '<div style="display:flex; align-items:center; gap:4px;">' +
+            '<button class="tap" id="btnStartsMinus" style="width:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>' +
+            '<span class="mono" style="min-width:68px; text-align:center; font-weight:700; font-size:12.5px; color:var(--fg);">' + state.threadStarts + (state.threadStarts > 1 ? ' (' + fmt(leadMm, 2) + 'mm)' : ' START') + '</span>' +
+            '<button class="tap" id="btnStartsPlus" style="width:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="kv"><span>HANDEDNESS</span><span class="inline-dir-chip tap" id="fld-threadHandedness" style="min-height:34px; padding:2px 10px;">' + (state.threadHandedness==='RIGHT'?'RH (RIGHT HAND)':'LH (LEFT HAND)') + '</span></div>' +
+        '<div class="kv"><span>CUT DIRECTION</span><span class="inline-dir-chip tap" id="fld-threadCutDir" style="min-height:34px; padding:2px 10px;">' + (state.threadCutDir==='CHUCK'?'← TO CHUCK':'→ TO TAIL (BLIND HOLE)') + '</span></div>' +
+        '<div class="kv"><span>SKIM VERIFY</span><span class="toggle-chip ' + (state.threadSkimVerify?'active':'') + ' tap" id="fld-threadSkim" style="min-height:34px; padding:2px 10px;">' + (state.threadSkimVerify?'VERIFY PASS: ON':'VERIFY PASS: OFF') + '</span></div>' +
+        '<div class="kv"><span>DEPTH / PASSES</span><b class="mono ' + ed + '" id="fld-threadDepth">' + lenStr(state.threadTotalDepth) + ' ' + unitLabel() + ' (' + state.threadPassCount + 'P)</b></div>';
     }
 
     if(state.mode === 'TAPER'){
@@ -1308,24 +2150,34 @@
       });
 
       var btnFeed = $('fld-unitFeed');
-      var btnTpi = $('fld-unitTpi');
-      if(btnFeed && btnTpi){
-        btnFeed.addEventListener('click', function(){ state.gearFeedUnitZ = 'FEED'; updateStatusMsg(); render(); });
-        btnTpi.addEventListener('click', function(){ state.gearFeedUnitZ = 'TPI'; updateStatusMsg(); render(); });
+      var btnPitch = $('fld-unitPitch');
+      if(btnFeed && btnPitch){
+        btnFeed.addEventListener('click', function(){ 
+          state.gearFeedModeZ = 'FEED'; 
+          updateStatusMsg(); 
+          render(); 
+          openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
+        });
+        btnPitch.addEventListener('click', function(){ 
+          state.gearFeedModeZ = 'PITCH'; 
+          updateStatusMsg(); 
+          render(); 
+          openGearboxPitchModal();
+        });
       }
 
       $('fld-gearZ').addEventListener('click', function(){
         if(state.gearboxMode === 'ASYNC'){
           openKeypad('asyncSpeedZ', state.asyncSpeedZ);
-        } else if(state.gearFeedUnitZ === 'FEED'){
-          openKeypad('gearPitchZ', state.gearPitchZ);
+        } else if(state.gearFeedModeZ === 'FEED'){
+          openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
         } else {
-          openPitchSelect('gearZ', 'tpi');
+          openGearboxPitchModal();
         }
       });
       $('fld-gearX').addEventListener('click', function(){
         if(state.gearboxMode === 'ASYNC') openKeypad('asyncSpeedX', state.asyncSpeedX);
-        else openKeypad('gearPitchX', state.gearPitchX);
+        else openKeypad('gearPitchX', state.unit==='mm'?state.gearPitchX:state.gearPitchX/25.4);
       });
       return;
     }
@@ -1369,7 +2221,40 @@
       });
     } else if(state.mode === 'THREADING'){
       $('fld-pitch').addEventListener('click', function(){ openPitchSelect('modePitch'); });
-      $('fld-threadDir').addEventListener('click', function(){ state.threadDir = state.threadDir==='RIGHT'?'LEFT':'RIGHT'; render(); });
+      var btnStartsMinus = $('btnStartsMinus');
+      var btnStartsPlus = $('btnStartsPlus');
+      if(btnStartsMinus){
+        btnStartsMinus.addEventListener('click', function(){
+          state.threadStarts = Math.max(1, state.threadStarts - 1);
+          render();
+        });
+      }
+      if(btnStartsPlus){
+        btnStartsPlus.addEventListener('click', function(){
+          state.threadStarts = Math.min(9, state.threadStarts + 1);
+          render();
+        });
+      }
+      var elHand = $('fld-threadHandedness');
+      if(elHand) elHand.addEventListener('click', function(){
+        state.threadHandedness = (state.threadHandedness === 'RIGHT' ? 'LEFT' : 'RIGHT');
+        state.threadDir = state.threadHandedness;
+        updateStatusMsg(); render();
+      });
+      var elCutDir = $('fld-threadCutDir');
+      if(elCutDir) elCutDir.addEventListener('click', function(){
+        state.threadCutDir = (state.threadCutDir === 'CHUCK' ? 'TAIL' : 'CHUCK');
+        updateStatusMsg(); render();
+      });
+      var elSkim = $('fld-threadSkim');
+      if(elSkim) elSkim.addEventListener('click', function(){
+        state.threadSkimVerify = !state.threadSkimVerify;
+        updateStatusMsg(); render();
+      });
+      var elDepth = $('fld-threadDepth');
+      if(elDepth) elDepth.addEventListener('click', function(){
+        openKeypad('threadTotalDepth', toDisplayLen(state.threadTotalDepth));
+      });
     } else if(state.mode === 'TAPER'){
       $('fld-taperAngle').addEventListener('click', function(){ openKeypad('taperAngle', state.taperAngle); });
       $('fld-taperLen').addEventListener('click', function(){ openKeypad('taperLen', state.taperLen); });
@@ -1438,9 +2323,21 @@
         } else if(state.mode === 'FACING' && state.faceRestoreLimits && state.faceSavedXMin === null && state.faceSavedXMax === null){
           state.faceSavedXMin = state.xMinDia;
           state.faceSavedXMax = state.xMaxDia;
+        } else if(state.mode === 'THREADING'){
+          if(state.threadSkimVerify){
+            state.threadSkimStage = 'SKIMMING';
+            state.threadCurrentPass = 0;
+            state.pass = 'SKIM';
+            setStatusMsg('THREADING STAGE 1/2: EXECUTING SKIM PASS AT PRE-TURN OD');
+          } else {
+            state.threadSkimStage = 'THREADING';
+            state.threadCurrentPass = 1;
+            state.pass = '01 / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
+            setStatusMsg('THREADING: PASS 01 OF ' + state.threadPassCount);
+          }
         }
         state.runState = 'running';
-        setStatusMsg('CYCLE STARTED: ' + state.mode + ' ACTIVE');
+        if(state.mode !== 'THREADING') setStatusMsg('CYCLE STARTED: ' + state.mode + ' ACTIVE');
       } else {
         stopCycle(true);
         return;
@@ -1476,6 +2373,8 @@
 
     state.turnCurrentPass = 1;
     state.faceCurrentPass = 1;
+    state.threadSkimStage = 'IDLE';
+    state.threadCurrentPass = 1;
     syncSpindleSimulation();
     render();
   }
@@ -1537,6 +2436,50 @@
                 state.z -= fpInfo.doc;
               } else {
                 stopCycle(false);
+              }
+            }
+          } else if(state.mode === 'THREADING'){
+            var zDirSign = (state.threadCutDir === 'CHUCK' ? -1 : 1);
+            var lead = state.pitch * (state.threadStarts || 1);
+            var stepZ = zDirSign * lead * revDelta;
+            state.z = clamp(state.z + stepZ, state.zMin, state.zMax);
+
+            // Coordinated 2-axis taper if coneRatio != 0
+            if(state.threadConeRatio && state.threadConeRatio !== 0){
+              var dx = (state.threadCutDir === 'CHUCK' ? -1 : 1) * (state.threadConeRatio * Math.abs(stepZ));
+              state.xDia = clamp(state.xDia + dx, state.xMinDia, state.xMaxDia);
+            }
+
+            var hitEnd = state.threadCutDir === 'CHUCK' ? (state.z === state.zMin) : (state.z === state.zMax);
+            if(hitEnd){
+              if(state.threadSkimStage === 'SKIMMING'){
+                state.runState = 'stopped';
+                state.threadSkimStage = 'VERIFY_PROMPT';
+                state.z = state.threadCutDir === 'CHUCK' ? (state.zMax !== null ? state.zMax : -4.000)
+                                                        : (state.zMin !== null ? state.zMin : -42.000);
+                var stockLabel = state.threadStandardName ? 
+                  (STD_THREADS[state.threadStandard] && STD_THREADS[state.threadStandard][state.threadSizeIdx] ? 
+                    'Ø ' + STD_THREADS[state.threadStandard][state.threadSizeIdx].stockMin + ' – ' + STD_THREADS[state.threadStandard][state.threadSizeIdx].stockMax + ' mm' :
+                    'Ø ' + lenStr(state.xDia) + ' ' + unitLabel()) :
+                  ('Ø ' + lenStr(state.xDia) + ' ' + unitLabel());
+                $('skimTargetDia').textContent = stockLabel;
+                $('skimVerifyOverlay').classList.add('show');
+                setStatusMsg('SKIM PASS COMPLETE: AWAITING OPERATOR VERIFICATION');
+              } else if(state.threadSkimStage === 'THREADING'){
+                if(state.threadCurrentPass < state.threadPassCount){
+                  state.threadCurrentPass++;
+                  state.pass = (state.threadCurrentPass < 10 ? '0' : '') + state.threadCurrentPass + ' / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
+                  state.z = state.threadCutDir === 'CHUCK' ? (state.zMax !== null ? state.zMax : -4.000)
+                                                          : (state.zMin !== null ? state.zMin : -42.000);
+                  var infeedPerPass = state.threadTotalDepth / state.threadPassCount;
+                  if(state.threadSide === 'INTERNAL') state.xDia += (infeedPerPass * 2);
+                  else state.xDia -= (infeedPerPass * 2);
+                  setStatusMsg('THREADING: PASS ' + state.threadCurrentPass + ' OF ' + state.threadPassCount);
+                } else {
+                  stopCycle(false);
+                  state.threadSkimStage = 'IDLE';
+                  setStatusMsg('THREADING COMPLETE: FINISHED ' + state.threadPassCount + ' PASSES');
+                }
               }
             }
           }
@@ -1844,51 +2787,791 @@
     btn.addEventListener('pointercancel', stop);
   });
 
-  // Thread Pitch Selector
-  function renderPitchGrid(){
-    $('tabMetric').classList.toggle('active', state.pitchTab==='metric');
-    $('tabTpi').classList.toggle('active', state.pitchTab==='tpi');
-    var grid = $('pitchGrid');
-    grid.innerHTML = '';
-    var values = state.pitchTab==='metric' ? METRIC_PITCHES : TPI_VALUES;
-    values.forEach(function(v){
-      var b = document.createElement('button');
-      b.textContent = state.pitchTab==='metric' ? v.toFixed(2)+' mm' : v+' TPI';
-      b.addEventListener('click', function(){
-        var pMm = state.pitchTab==='metric' ? v : 25.4 / v;
-        if(pitchSelectTarget === 'gearZ'){
-          state.gearPitchZ = pMm;
+  // Progressive Thread Configuration Wizard Engine
+  var wizStage = 1; // 1: Family, 2: Size, 3: Pitch, 4: Strategy
+  var wizFamily = 'METRIC'; // 'METRIC', 'UN', 'NPT', 'BSPT', 'FREEFORM'
+  var wizRangeIdx = 1; // Default range (M7 - M12)
+  var wizShowMore = false; // Toggle 3rd-choice sizes
+  var wizSizeItem = null;
+  var wizPitchIdx = 0;
+  var wizCustomDia = null;
+  var wizCustomPitch = null;
+  var wizSide = 'EXTERNAL';
+  var wizHandedness = 'RIGHT';
+  var wizCutDir = 'CHUCK';
+  var wizSkimVerify = true;
+  var wizThreadLength = 20.0;
+  var wizStarts = 1;
+  var wizFreeTab = 'metric';
+  var wizFreePitchMm = 1.75;
+  var pitchSelectTarget = 'modePitch'; // 'modePitch' or 'gearZ'
+
+  function getWizBlueprint(){
+    var name = '';
+    var pitchMm = 1.0;
+    var stockMin = 0, stockMax = 0, targetRoot = 0, infeedDepth = 0, passes = 8;
+    var coneRatio = 0;
+    var profile = '60° ISO';
+    var l2 = 0;
+
+    if(wizFamily === 'FREEFORM'){
+      pitchMm = wizFreePitchMm;
+      var pStr = wizFreeTab === 'metric' ? pitchMm.toFixed(2) + ' mm' : +(25.4 / pitchMm).toFixed(1) + ' TPI';
+      var leadMm = pitchMm * (wizStarts || 1);
+      name = 'CUSTOM ' + pStr + (wizStarts > 1 ? ' (' + wizStarts + ' STARTS, LEAD ' + leadMm.toFixed(2) + ' mm)' : '');
+      coneRatio = 0;
+      profile = '60° FORM';
+      infeedDepth = +(0.6134 * pitchMm).toFixed(3);
+      passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+      var curDia = state.xDia > 0 ? state.xDia : 20.0;
+      if(wizSide === 'EXTERNAL'){
+        stockMin = +(curDia - 0.15).toFixed(2);
+        stockMax = +curDia.toFixed(2);
+        targetRoot = +(curDia - 2 * infeedDepth).toFixed(2);
+      } else {
+        stockMin = +curDia.toFixed(2);
+        stockMax = +curDia.toFixed(2);
+        targetRoot = +(curDia + 2 * infeedDepth).toFixed(2);
+      }
+    } else if(wizSizeItem){
+      var item = wizSizeItem;
+      if(wizFamily === 'METRIC'){
+        var p = item.pitches[wizPitchIdx] || item.pitches[0];
+        pitchMm = typeof p === 'number' ? p : (wizCustomPitch || 1.75);
+        name = item.size + ' × ' + pitchMm.toFixed(2);
+        coneRatio = 0;
+        profile = '60° ISO';
+        if(wizSide === 'EXTERNAL'){
+          stockMin = item.stockMin;
+          stockMax = item.stockMax;
+          infeedDepth = +(0.6134 * pitchMm).toFixed(3);
+          targetRoot = +(item.dia - 2 * infeedDepth).toFixed(2);
+          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
         } else {
-          state.pitch = pMm;
-          state.threadUnit = state.pitchTab;
+          var tapDrill = +(item.dia - pitchMm).toFixed(2);
+          stockMin = tapDrill;
+          stockMax = tapDrill;
+          infeedDepth = +(0.5413 * pitchMm).toFixed(3);
+          targetRoot = item.dia;
+          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
         }
-        $('pitchOverlay').classList.remove('show');
-        updateStatusMsg();
+      } else if(wizFamily === 'UN'){
+        var pObj = item.pitches[wizPitchIdx] || item.pitches[0];
+        var tpi = pObj.tpi;
+        pitchMm = +(25.4 / tpi).toFixed(4);
+        name = item.size + '-' + tpi + ' ' + (pObj.type || 'UN');
+        coneRatio = 0;
+        profile = '60° UN';
+        if(wizSide === 'EXTERNAL'){
+          stockMin = item.stockMin;
+          stockMax = item.stockMax;
+          infeedDepth = +(0.6134 * pitchMm).toFixed(3);
+          targetRoot = +(item.dia - 2 * infeedDepth).toFixed(2);
+          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+        } else {
+          var tapDrill = +(item.dia - pitchMm).toFixed(2);
+          stockMin = tapDrill;
+          stockMax = tapDrill;
+          infeedDepth = +(0.5413 * pitchMm).toFixed(3);
+          targetRoot = item.dia;
+          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+        }
+      } else if(wizFamily === 'NPT'){
+        var tpi = item.tpi;
+        pitchMm = +(25.4 / tpi).toFixed(4);
+        name = item.size + '-' + tpi + ' NPT';
+        coneRatio = 0.0625;
+        profile = 'NPT 1:16';
+        infeedDepth = +(0.8000 * pitchMm).toFixed(3);
+        passes = item.passes || 12;
+        stockMin = item.smallOd;
+        stockMax = item.pipeOd;
+        targetRoot = +(item.pipeOd - 2 * infeedDepth).toFixed(2);
+        l2 = item.l2;
+      } else if(wizFamily === 'BSPT'){
+        var tpi = item.tpi;
+        pitchMm = +(25.4 / tpi).toFixed(4);
+        name = item.size + '-' + tpi + ' BSPT (R/Rc)';
+        coneRatio = 0.0625;
+        profile = 'BSPT 1:16';
+        infeedDepth = +(0.6403 * pitchMm).toFixed(3);
+        passes = item.passes || 12;
+        stockMin = item.smallOd;
+        stockMax = item.pipeOd;
+        targetRoot = +(item.pipeOd - 2 * infeedDepth).toFixed(2);
+        l2 = item.l2;
+      }
+    }
+
+    return {
+      family: wizFamily,
+      name: name || (wizFamily + ' THREAD'),
+      pitchMm: pitchMm,
+      infeedDepth: infeedDepth,
+      passes: passes,
+      stockMin: stockMin,
+      stockMax: stockMax,
+      targetRoot: targetRoot,
+      coneRatio: coneRatio,
+      profile: profile,
+      side: wizSide,
+      handedness: wizHandedness,
+      cutDir: wizCutDir,
+      skimVerify: wizSkimVerify,
+      length: wizThreadLength || 20.0,
+      l2: l2,
+      starts: (wizFamily === 'FREEFORM' ? (wizStarts || 1) : 1)
+    };
+  }
+
+  function updateWizBlueprintCard(){
+    if(wizStage === 1){
+      // Step 1: Nothing selected yet
+      $('wbpName').textContent = '—';
+      $('wbpStock').textContent = '—';
+      $('wbpRoot').textContent = '—';
+      $('wbpDepth').textContent = '—';
+      $('wbpKinematics').textContent = '—';
+      $('wbpKinematics').style.color = 'var(--dimmer)';
+      return;
+    }
+
+    if(wizStage === 2){
+      // Step 2: Family selected, waiting for Diameter/Size
+      var famName = THREAD_FAMILIES[wizFamily] ? THREAD_FAMILIES[wizFamily].name : wizFamily;
+      $('wbpName').textContent = famName;
+      $('wbpStock').textContent = '—';
+      $('wbpRoot').textContent = '—';
+      $('wbpDepth').textContent = '—';
+      $('wbpKinematics').textContent = '—';
+      $('wbpKinematics').style.color = 'var(--dimmer)';
+      return;
+    }
+
+    if(wizStage === 3){
+      // Step 3: Diameter selected, waiting for Pitch
+      var sLabel = wizSizeItem ? wizSizeItem.size : (wizFamily === 'FREEFORM' ? 'FREEFORM' : 'CUSTOM');
+      $('wbpName').textContent = sLabel;
+      $('wbpStock').textContent = '—';
+      $('wbpRoot').textContent = '—';
+      $('wbpDepth').textContent = '—';
+      $('wbpKinematics').textContent = '—';
+      $('wbpKinematics').style.color = 'var(--dimmer)';
+      return;
+    }
+
+    // Step 4: Full Blueprint available
+    var bp = getWizBlueprint();
+    if(!bp) return;
+
+    $('wbpName').textContent = bp.name + ' (' + bp.side + ', ' + (bp.handedness==='RIGHT'?'RH':'LH') + ')';
+    var stockTarget = bp.side === 'EXTERNAL' ? (bp.stockMax || bp.dia || 0) : bp.stockMin;
+    $('wbpStock').textContent = 'Ø ' + fmt(stockTarget, 2) + ' mm';
+    $('wbpRoot').textContent = 'Ø ' + fmt(bp.targetRoot, 2) + ' mm';
+
+    $('wbpDepth').textContent = lenStr(bp.infeedDepth) + ' ' + unitLabel() + ' (' + bp.passes + ' PASSES)';
+    
+    var feedText = bp.cutDir === 'CHUCK' ? '← TO CHUCK (Z−)' : '→ TO TAIL (Z+)';
+    $('wbpKinematics').textContent = feedText;
+    $('wbpKinematics').style.color = 'var(--fg)';
+  }
+
+  function setWizardStage(stage){
+    wizStage = stage;
+    $('threadStageFamily').style.display = wizStage === 1 ? 'flex' : 'none';
+    $('threadStageSize').style.display = wizStage === 2 ? 'flex' : 'none';
+    $('threadStagePitch').style.display = wizStage === 3 ? 'flex' : 'none';
+    $('threadStageSetup').style.display = wizStage === 4 ? 'flex' : 'none';
+
+    var backBtn = $('btnThreadNavBack');
+    var title = $('wizStageTitle');
+
+    if(wizStage === 1){
+      if(backBtn) backBtn.style.display = 'none';
+      title.textContent = 'STEP 1: THREAD FAMILY';
+
+      document.querySelectorAll('.wiz-family-btn').forEach(function(btn){
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+        btn.title = '';
+      });
+    } else if(wizStage === 2){
+      if(backBtn){
+        backBtn.style.display = 'inline-flex';
+        backBtn.textContent = '← FAMILY';
+      }
+      var famName = THREAD_FAMILIES[wizFamily] ? THREAD_FAMILIES[wizFamily].name : wizFamily;
+      title.textContent = 'STEP 2: ' + famName + ' DIAMETER';
+      renderStage2Sizes();
+    } else if(wizStage === 3){
+      if(backBtn){
+        backBtn.style.display = 'inline-flex';
+        backBtn.textContent = '← SIZES';
+      }
+      var sLabel = wizSizeItem ? wizSizeItem.size : 'CUSTOM';
+      title.textContent = 'STEP 3: ' + sLabel + ' PITCH';
+      renderStage3Pitch();
+    } else if(wizStage === 4){
+      if(backBtn){
+        backBtn.style.display = 'inline-flex';
+        backBtn.textContent = '← PITCH';
+      }
+      title.textContent = 'STEP 4: MACHINING STRATEGY';
+      renderStage4Setup();
+    }
+
+    // Bottom action buttons: only show and enable on final step (Step 4) once all required parameters are chosen
+    var prepBtn = $('btnWizPrepareStock');
+    var applyBtn = $('btnWizApply');
+    var isReady = (wizStage === 4);
+    if(prepBtn){
+      prepBtn.style.setProperty('display', isReady ? 'flex' : 'none', 'important');
+      prepBtn.disabled = !isReady;
+    }
+    if(applyBtn){
+      applyBtn.style.setProperty('display', isReady ? 'flex' : 'none', 'important');
+      applyBtn.disabled = !isReady;
+      applyBtn.textContent = 'SAVE & THREAD';
+    }
+
+    updateWizBlueprintCard();
+  }
+
+  function renderStage2Sizes(){
+    var fam = THREAD_FAMILIES[wizFamily];
+    if(!fam) return;
+
+    // 1. Render Range Pills
+    var rangeRow = $('wizRangeRow');
+    rangeRow.innerHTML = '';
+    (fam.ranges || []).forEach(function(r, idx){
+      var btn = document.createElement('button');
+      btn.className = 'wiz-range-btn' + (idx === wizRangeIdx ? ' active' : '');
+      btn.textContent = r.label;
+      btn.addEventListener('click', function(){
+        wizRangeIdx = idx;
+        renderStage2Sizes();
+      });
+      rangeRow.appendChild(btn);
+    });
+
+    // 2. Render Size Grid
+    var sizeGrid = $('wizSizeGrid');
+    var moreBtn = $('btnSizeMore');
+    if(moreBtn && moreBtn.parentElement === sizeGrid){
+      sizeGrid.removeChild(moreBtn);
+    }
+    sizeGrid.innerHTML = '';
+    var filtered = fam.sizes.filter(function(s){
+      if(s.rangeIdx !== wizRangeIdx) return false;
+      if(!wizShowMore && s.choice === 3) return false;
+      return true;
+    });
+
+    // Sort strictly by ascending diameter/OD
+    filtered.sort(function(a, b){
+      var da = a.dia !== undefined ? a.dia : (a.pipeOd !== undefined ? a.pipeOd : 0);
+      var db = b.dia !== undefined ? b.dia : (b.pipeOd !== undefined ? b.pipeOd : 0);
+      return da - db;
+    });
+
+    // If current selected item is not in this range, pick first in range
+    if(filtered.length > 0 && (!wizSizeItem || wizSizeItem.rangeIdx !== wizRangeIdx)){
+      wizSizeItem = filtered[0];
+      wizPitchIdx = 0;
+    }
+
+    filtered.forEach(function(item){
+      var btn = document.createElement('button');
+      btn.textContent = item.size;
+      if(wizSizeItem && wizSizeItem.size === item.size) btn.classList.add('active');
+      if(item.choice === 3) btn.classList.add('choice3');
+      btn.addEventListener('click', function(){
+        wizSizeItem = item;
+        wizPitchIdx = 0;
+        if((wizFamily === 'NPT' || wizFamily === 'BSPT') && item.l2){
+          wizThreadLength = item.l2;
+        }
+        updateWizBlueprintCard();
+        setWizardStage(3);
+      });
+      sizeGrid.appendChild(btn);
+    });
+
+    // 3. More toggle button status, placement & label
+    if(moreBtn){
+      var hasMore = fam.sizes.some(function(s){ return s.rangeIdx === wizRangeIdx && s.choice === 3; });
+      if(hasMore){
+        moreBtn.classList.add('show');
+        moreBtn.textContent = wizShowMore ? '− LESS SIZES' : '+ MORE SIZES';
+        moreBtn.style.color = wizShowMore ? 'var(--blue)' : 'var(--dim)';
+        moreBtn.style.borderColor = wizShowMore ? '#2a618d' : 'var(--line)';
+        moreBtn.style.background = wizShowMore ? '#0e273a' : '#141d24';
+
+        // Right align: In 6-col grid, col 5-6 fits on current row if empty, or drops to next row
+        moreBtn.style.gridColumn = '5 / 7';
+        moreBtn.style.justifySelf = 'end';
+        sizeGrid.appendChild(moreBtn);
+      } else {
+        moreBtn.classList.remove('show');
+      }
+    }
+  }
+
+  function renderStage3Pitch(){
+    var pitchList = $('wizPitchGrid');
+    pitchList.innerHTML = '';
+    var customPitchBtn = $('btnCustomPitchEntry');
+
+    if(wizFamily === 'FREEFORM'){
+      if(customPitchBtn) customPitchBtn.style.display = 'inline-flex';
+      var presets = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+      var grid = document.createElement('div');
+      grid.className = 'wiz-grid';
+      presets.forEach(function(p){
+        var b = document.createElement('button');
+        b.textContent = p.toFixed(2);
+        if(Math.abs(wizFreePitchMm - p) < 0.01) b.classList.add('active');
+        b.addEventListener('click', function(){
+          wizFreePitchMm = p;
+          wizFreeTab = 'metric';
+          updateWizBlueprintCard();
+          setWizardStage(4);
+        });
+        grid.appendChild(b);
+      });
+      pitchList.appendChild(grid);
+      return;
+    }
+
+    // Hide custom pitch entry for all standard families
+    if(customPitchBtn) customPitchBtn.style.display = 'none';
+    if(!wizSizeItem) return;
+
+    if(wizFamily === 'METRIC'){
+      (wizSizeItem.pitches || []).forEach(function(p, idx){
+        var item = document.createElement('div');
+        item.className = 'wiz-pitch-item' + (idx === wizPitchIdx ? ' active' : '');
+        item.innerHTML = '<span class="p-title">' + p.toFixed(2) + '</span>' +
+                         '<span class="p-type" style="color:' + (idx === 0 ? 'var(--blue)' : 'var(--dim)') + ';">' +
+                         (idx === 0 ? 'COARSE' : 'FINE') + '</span>';
+        item.addEventListener('click', function(){
+          wizPitchIdx = idx;
+          updateWizBlueprintCard();
+          setWizardStage(4);
+        });
+        pitchList.appendChild(item);
+      });
+    } else if(wizFamily === 'UN'){
+      (wizSizeItem.pitches || []).forEach(function(pObj, idx){
+        var tpi = pObj.tpi;
+        var item = document.createElement('div');
+        item.className = 'wiz-pitch-item' + (idx === wizPitchIdx ? ' active' : '');
+        item.innerHTML = '<span class="p-title">' + tpi + ' TPI</span>' +
+                         '<span class="p-type" style="color:' + (idx === 0 ? 'var(--blue)' : 'var(--dim)') + ';">' + pObj.type + '</span>';
+        item.addEventListener('click', function(){
+          wizPitchIdx = idx;
+          updateWizBlueprintCard();
+          setWizardStage(4);
+        });
+        pitchList.appendChild(item);
+      });
+    } else if(wizFamily === 'NPT' || wizFamily === 'BSPT'){
+      var item = document.createElement('div');
+      item.className = 'wiz-pitch-item active';
+      item.innerHTML = '<span class="p-title">' + wizSizeItem.tpi + ' TPI</span>' +
+                       '<span class="p-type" style="color:var(--amber);">1:16 TAPER</span>';
+      item.addEventListener('click', function(){
+        updateWizBlueprintCard();
+        setWizardStage(4);
+      });
+      pitchList.appendChild(item);
+    }
+  }
+
+  function renderStage4Setup(){
+    $('btnWizSide').textContent = wizSide === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL';
+    $('btnWizSide').classList.toggle('active', wizSide === 'EXTERNAL');
+    $('btnWizHandedness').textContent = wizHandedness === 'RIGHT' ? 'RIGHT (RH)' : 'LEFT (LH)';
+    $('btnWizHandedness').classList.toggle('active', wizHandedness === 'RIGHT');
+    $('btnWizCutDir').textContent = wizCutDir === 'CHUCK' ? '← TO CHUCK' : '→ TO TAIL';
+    $('btnWizSkimVerify').textContent = 'SKIM PASS';
+    $('btnWizSkimVerify').classList.toggle('active', wizSkimVerify);
+
+    var lenDisplay = toDisplayLen(wizThreadLength);
+    if($('wizLengthVal')) $('wizLengthVal').textContent = fmt(lenDisplay, state.unit === 'mm' ? 2 : 3);
+    if($('wizLengthUnit')) $('wizLengthUnit').textContent = unitLabel();
+
+    var isCustom = (wizFamily === 'FREEFORM');
+    if($('wizStartsRow')){
+      $('wizStartsRow').style.display = isCustom ? 'flex' : 'none';
+    }
+    if($('wizStartsVal')){
+      $('wizStartsVal').textContent = wizStarts + (wizStarts > 1 ? ' STARTS' : ' START');
+    }
+
+    var note = '';
+    if(wizFamily === 'NPT' || wizFamily === 'BSPT'){
+      var l2Val = (wizSizeItem && wizSizeItem.l2) ? wizSizeItem.l2 : 10.2;
+      note = 'Standard 1:16 pipe engagement length (L2 = ' + l2Val + ' mm)';
+    } else if(isCustom && wizStarts > 1){
+      var effLead = wizFreePitchMm * wizStarts;
+      note = 'Multi-Start: ' + wizStarts + ' starts × ' + wizFreePitchMm.toFixed(2) + ' mm = Lead ' + effLead.toFixed(2) + ' mm/rev';
+    }
+    if($('wizSetupAdvisory')) $('wizSetupAdvisory').textContent = note;
+  }
+
+  // Dedicated Gearbox Leadscrew Quick-Change Pitch Engine (No Blueprint, 1-Tap)
+  var GEARBOX_METRIC_RANGES = [
+    { label: '0.25 – 0.80', pitches: [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60, 0.70, 0.75, 0.80] },
+    { label: '1.00 – 2.50', pitches: [1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50] },
+    { label: '3.00 – 6.00', pitches: [3.00, 3.50, 4.00, 4.50, 5.00, 5.50, 6.00] }
+  ];
+
+  var GEARBOX_INCH_RANGES = [
+    { label: '64 – 28', pitches: [64, 56, 48, 44, 40, 36, 32, 28] },
+    { label: '27 – 12', pitches: [27, 24, 20, 18, 16, 14, 13, 12] },
+    { label: '11.5 – 4', pitches: [11.5, 11, 10, 9, 8, 7, 6, 5, 4] }
+  ];
+
+  var gearPitchUnit = 'metric';
+  var gearPitchRangeIdx = 1;
+
+  function openGearboxPitchModal(){
+    gearPitchUnit = (state.gearThreadUnit === 'tpi') ? 'tpi' : 'metric';
+    var curPitch = state.gearPitchZ;
+    if(gearPitchUnit === 'metric'){
+      gearPitchRangeIdx = 1;
+      if(curPitch < 1.0) gearPitchRangeIdx = 0;
+      else if(curPitch > 2.5) gearPitchRangeIdx = 2;
+    } else {
+      var curTpi = curPitch > 0 ? (25.4 / curPitch) : 16;
+      gearPitchRangeIdx = 1;
+      if(curTpi > 27) gearPitchRangeIdx = 0;
+      else if(curTpi < 12) gearPitchRangeIdx = 2;
+    }
+    renderGearboxPitchModal();
+    $('gearPitchOverlay').classList.add('show');
+  }
+
+  function renderGearboxPitchModal(){
+    $('btnGearUnitMm').classList.toggle('active', gearPitchUnit === 'metric');
+    $('btnGearUnitIn').classList.toggle('active', gearPitchUnit === 'tpi');
+
+    var ranges = (gearPitchUnit === 'metric') ? GEARBOX_METRIC_RANGES : GEARBOX_INCH_RANGES;
+    if(gearPitchRangeIdx >= ranges.length) gearPitchRangeIdx = 0;
+
+    var rangeRow = $('gearRangeRow');
+    rangeRow.innerHTML = '';
+    ranges.forEach(function(r, idx){
+      var b = document.createElement('button');
+      b.className = 'gear-range-btn' + (idx === gearPitchRangeIdx ? ' active' : '');
+      b.textContent = r.label;
+      b.addEventListener('click', function(){
+        gearPitchRangeIdx = idx;
+        renderGearboxPitchModal();
+      });
+      rangeRow.appendChild(b);
+    });
+
+    var grid = $('gearPitchGrid');
+    grid.innerHTML = '';
+    var curRange = ranges[gearPitchRangeIdx];
+    curRange.pitches.forEach(function(pVal){
+      var btn = document.createElement('button');
+      btn.className = 'gear-pitch-btn';
+
+      var isCur = false;
+      if(gearPitchUnit === 'metric'){
+        btn.textContent = pVal.toFixed(2);
+        isCur = (state.gearThreadUnit !== 'tpi' && Math.abs(state.gearPitchZ - pVal) < 0.005);
+      } else {
+        btn.textContent = pVal + ' TPI';
+        var tpi = state.gearPitchZ > 0 ? +(25.4 / state.gearPitchZ).toFixed(1) : 0;
+        isCur = (state.gearThreadUnit === 'tpi' && Math.abs(tpi - pVal) < 0.1);
+      }
+
+      if(isCur) btn.classList.add('active');
+
+      btn.addEventListener('click', function(){
+        if(gearPitchUnit === 'metric'){
+          state.gearPitchZ = pVal;
+          state.gearThreadUnit = 'metric';
+        } else {
+          state.gearPitchZ = +(25.4 / pVal).toFixed(4);
+          state.gearThreadUnit = 'tpi';
+        }
+        state.gearFeedModeZ = 'PITCH';
+        setStatusMsg('GEARBOX PITCH SET: ' + (gearPitchUnit==='metric' ? pVal.toFixed(2)+' mm' : pVal+' TPI') + ' (' + (state.gearThreadHandedness||'RH') + ')');
+        $('gearPitchOverlay').classList.remove('show');
         render();
       });
-      grid.appendChild(b);
+
+      grid.appendChild(btn);
     });
   }
+
+  $('btnGearUnitMm').addEventListener('click', function(){
+    gearPitchUnit = 'metric';
+    gearPitchRangeIdx = 1;
+    renderGearboxPitchModal();
+  });
+  $('btnGearUnitIn').addEventListener('click', function(){
+    gearPitchUnit = 'tpi';
+    gearPitchRangeIdx = 1;
+    renderGearboxPitchModal();
+  });
+  $('btnGearPitchClose').addEventListener('click', function(){
+    $('gearPitchOverlay').classList.remove('show');
+  });
+  $('btnGearCustomKeypad').addEventListener('click', function(){
+    $('gearPitchOverlay').classList.remove('show');
+    var curVal = (gearPitchUnit === 'tpi') ?
+      (state.gearPitchZ > 0 ? +(25.4 / state.gearPitchZ).toFixed(1) : 16) :
+      (state.gearPitchZ > 0 ? +state.gearPitchZ.toFixed(2) : 1.50);
+    openKeypad('gearPitchZ_custom', curVal);
+  });
+
   function openPitchSelect(target, tab){
     pitchSelectTarget = target || 'modePitch';
-    if(tab) state.pitchTab = tab;
-    else if(pitchSelectTarget === 'modePitch') state.pitchTab = state.threadUnit || 'metric';
-    renderPitchGrid();
+    wizSide = state.threadSide || 'EXTERNAL';
+    wizHandedness = state.threadHandedness || 'RIGHT';
+    wizCutDir = state.threadCutDir || 'CHUCK';
+    wizSkimVerify = state.threadSkimVerify !== undefined ? state.threadSkimVerify : true;
+    wizFreePitchMm = state.pitch || 1.75;
+    wizStarts = state.threadStarts || 1;
+    wizShowMore = false;
+
+    wizFamily = (state.threadStandard && THREAD_FAMILIES[state.threadStandard]) ? state.threadStandard : 'METRIC';
+    var fam = THREAD_FAMILIES[wizFamily];
+    var sIdx = state.threadSizeIdx || 0;
+    wizSizeItem = (fam && fam.sizes) ? (fam.sizes[sIdx] || fam.sizes[0]) : null;
+    wizRangeIdx = wizSizeItem ? wizSizeItem.rangeIdx : 1;
+    wizPitchIdx = state.threadPitchSubIdx || 0;
+
+    if(wizSizeItem && (wizFamily === 'NPT' || wizFamily === 'BSPT') && wizSizeItem.l2){
+      wizThreadLength = wizSizeItem.l2;
+    } else {
+      wizThreadLength = state.threadLength || 20.0;
+    }
+
+    // Always start at Step 1: Family Selection
+    setWizardStage(1);
+
     $('pitchOverlay').classList.add('show');
   }
-  $('tabMetric').addEventListener('click', function(){ state.pitchTab='metric'; renderPitchGrid(); });
-  $('tabTpi').addEventListener('click', function(){ state.pitchTab='tpi'; renderPitchGrid(); });
-  $('pitchCustomBtn').addEventListener('click', function(){
-    $('pitchOverlay').classList.remove('show');
-    if(pitchSelectTarget === 'gearZ'){
-      var curVal = state.gearFeedUnitZ === 'TPI' ? (state.gearPitchZ > 0 ? +(25.4 / state.gearPitchZ).toFixed(1) : 16) : toDisplayLen(state.gearPitchZ);
-      openKeypad('gearPitchZ', curVal);
-    } else {
-      var curVal = state.pitchTab === 'tpi' ? (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(1) : 16) : toDisplayLen(state.pitch);
-      openKeypad('pitch', curVal);
+
+  // Wizard Navigation Listeners
+  $('btnThreadNavBack').addEventListener('click', function(){
+    if(wizStage === 2){
+      setWizardStage(1);
+    } else if(wizStage === 3){
+      if(wizFamily === 'FREEFORM') setWizardStage(1);
+      else setWizardStage(2);
+    } else if(wizStage === 4){
+      setWizardStage(3);
     }
   });
-  $('pitchCancelBtn').addEventListener('click', function(){ $('pitchOverlay').classList.remove('show'); });
+
+  $('btnThreadNavClose').addEventListener('click', function(){
+    $('pitchOverlay').classList.remove('show');
+  });
+
+  $('btnWizCancel').addEventListener('click', function(){
+    $('pitchOverlay').classList.remove('show');
+  });
+
+  // Family selection buttons in Stage 1
+  document.querySelectorAll('.wiz-family-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var famKey = btn.dataset.family;
+      wizFamily = famKey;
+      wizRangeIdx = 0;
+      wizShowMore = false;
+      if(wizFamily === 'FREEFORM'){
+        setWizardStage(3);
+      } else {
+        var fam = THREAD_FAMILIES[wizFamily];
+        if(fam && fam.sizes.length > 0){
+          wizRangeIdx = fam.ranges.length > 1 ? 1 : 0;
+          wizSizeItem = fam.sizes.find(function(s){ return s.rangeIdx === wizRangeIdx; }) || fam.sizes[0];
+          wizPitchIdx = 0;
+        }
+        setWizardStage(2);
+      }
+    });
+  });
+
+  // Stage 2: More sizes toggle
+  $('btnSizeMore').addEventListener('click', function(){
+    wizShowMore = !wizShowMore;
+    renderStage2Sizes();
+  });
+
+  // Stage 2: Custom Diameter Entry (if element present)
+  if($('btnSizeCustom')){
+    $('btnSizeCustom').addEventListener('click', function(){
+      $('pitchOverlay').classList.remove('show');
+      openKeypad('threadCustomDia', '');
+    });
+  }
+
+  // Stage 3: Custom Pitch Entry
+  $('btnCustomPitchEntry').addEventListener('click', function(){
+    $('pitchOverlay').classList.remove('show');
+    var curVal = state.threadUnit === 'tpi' ? (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(1) : 16) : toDisplayLen(state.pitch);
+    openKeypad('pitch', curVal);
+  });
+
+  // Stage 4: Strategy Toggles
+  $('btnWizSide').addEventListener('click', function(){
+    wizSide = wizSide === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
+    renderStage4Setup();
+    updateWizBlueprintCard();
+  });
+  $('btnWizHandedness').addEventListener('click', function(){
+    wizHandedness = wizHandedness === 'RIGHT' ? 'LEFT' : 'RIGHT';
+    renderStage4Setup();
+    updateWizBlueprintCard();
+  });
+  $('btnWizCutDir').addEventListener('click', function(){
+    wizCutDir = wizCutDir === 'CHUCK' ? 'TAIL' : 'CHUCK';
+    renderStage4Setup();
+    updateWizBlueprintCard();
+  });
+  $('btnWizSkimVerify').addEventListener('click', function(){
+    wizSkimVerify = !wizSkimVerify;
+    renderStage4Setup();
+    updateWizBlueprintCard();
+  });
+
+  if($('btnWizLengthBox')){
+    $('btnWizLengthBox').addEventListener('click', function(){
+      $('pitchOverlay').classList.remove('show');
+      openKeypad('wizThreadLength', toDisplayLen(wizThreadLength));
+    });
+  }
+
+  if($('btnWizStartsMinus')){
+    $('btnWizStartsMinus').addEventListener('click', function(){
+      wizStarts = Math.max(1, wizStarts - 1);
+      renderStage4Setup();
+      updateWizBlueprintCard();
+    });
+  }
+  if($('btnWizStartsPlus')){
+    $('btnWizStartsPlus').addEventListener('click', function(){
+      wizStarts = Math.min(9, wizStarts + 1);
+      renderStage4Setup();
+      updateWizBlueprintCard();
+    });
+  }
+  if($('wizStartsVal')){
+    $('wizStartsVal').addEventListener('click', function(){
+      $('pitchOverlay').classList.remove('show');
+      openKeypad('wizThreadStarts', wizStarts);
+    });
+  }
+
+  function commitThreadSettingsFromWiz(bp){
+    if(pitchSelectTarget === 'gearZ'){
+      state.gearPitchZ = bp.pitchMm;
+      state.gearThreadHandedness = bp.handedness === 'RIGHT' ? 'RH' : 'LH';
+      state.gearFeedModeZ = 'PITCH';
+      state.gearThreadUnit = (bp.family === 'UN') ? 'tpi' : 'metric';
+      setStatusMsg('GEARBOX PITCH SET: ' + bp.name + ' (' + state.gearThreadHandedness + ')');
+    } else {
+      state.threadStandard = bp.family;
+      state.threadStandardName = bp.name;
+      state.pitch = bp.pitchMm;
+      state.threadStarts = bp.starts || wizStarts || 1;
+      if(wizSizeItem && THREAD_FAMILIES[bp.family]){
+        state.threadSizeIdx = THREAD_FAMILIES[bp.family].sizes.indexOf(wizSizeItem);
+      }
+      state.threadPitchSubIdx = wizPitchIdx;
+      state.threadSide = bp.side;
+      state.threadHandedness = bp.handedness;
+      state.threadDir = bp.handedness;
+      state.threadCutDir = bp.cutDir;
+      state.threadSkimVerify = bp.skimVerify;
+      state.threadProfile = bp.profile;
+      state.threadConeRatio = bp.coneRatio;
+      state.threadTotalDepth = bp.infeedDepth;
+      state.threadPassCount = bp.passes;
+      state.threadTargetStockDia = bp.stockMax;
+      state.threadTargetRootDia = bp.targetRoot;
+      state.threadLength = bp.length || wizThreadLength || 20.0;
+      state.threadUnit = (bp.family === 'UN' || bp.family === 'NPT') ? 'tpi' : 'metric';
+      state.pass = '01 / ' + (bp.passes < 10 ? '0' : '') + bp.passes;
+      setStatusMsg('CONVERSATIONAL THREAD SET: ' + bp.name + ' (' + bp.handedness + ', L=' + fmt(state.threadLength, 1) + 'mm)');
+    }
+  }
+
+  // Action: SAVE & THREAD
+  $('btnWizApply').addEventListener('click', function(){
+    if(wizStage !== 4) return;
+    var bp = getWizBlueprint();
+    if(!bp) return;
+    commitThreadSettingsFromWiz(bp);
+    $('pitchOverlay').classList.remove('show');
+    updateStatusMsg();
+    render();
+  });
+
+  // Action: PREPARE STOCK Bridge
+  $('btnWizPrepareStock').addEventListener('click', function(){
+    if(wizStage !== 4) return;
+    var bp = getWizBlueprint();
+    if(!bp) return;
+    commitThreadSettingsFromWiz(bp);
+    
+    if(bp.coneRatio > 0){
+      // Pipe Thread -> TAPER Mode
+      state.mode = 'TAPER';
+      state.taperAngle = 1.79; // 1:16 Cone Ratio (1 deg 47 min)
+      state.taperLen = bp.l2 || 15.0;
+      state.taperDir = bp.side === 'EXTERNAL' ? 'INT' : 'EXT';
+      setStatusMsg('PREPARE STOCK: SWITCHED TO TAPER (1.79° / 1:16 CONE, L=' + state.taperLen + 'mm FOR ' + bp.name + ')');
+    } else {
+      // Straight Thread -> TURNING Mode
+      state.mode = 'TURNING';
+      var targetOd = bp.side === 'EXTERNAL' ? bp.stockMax : bp.stockMin;
+      var deltaDia = +(state.xDia - targetOd).toFixed(3);
+      if(deltaDia > 0.05){
+        state.turnTotalDepth = deltaDia;
+      } else {
+        state.turnTotalDepth = 0.400; // Finish skim allowance
+      }
+      state.turnPasses = Math.max(2, Math.round(state.turnTotalDepth / state.turnMaxDoc));
+      state.turnType = bp.side;
+      setStatusMsg('PREPARE STOCK: SWITCHED TO TURNING (TARGET ' + (bp.side==='EXTERNAL'?'OD':'ID') + ': Ø' + fmt(targetOd,2) + ' mm FOR ' + bp.name + ')');
+    }
+
+    $('pitchOverlay').classList.remove('show');
+    updateStatusMsg();
+    render();
+  });
+
+  // Skim Pass Verification Modal Handlers
+  $('skimConfirmBtn').addEventListener('click', function(){
+    $('skimVerifyOverlay').classList.remove('show');
+    state.threadSkimStage = 'THREADING';
+    state.threadCurrentPass = 1;
+    state.pass = '01 / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
+    state.runState = 'running';
+    setStatusMsg('SKIM VERIFIED: STARTING MULTI-PASS THREADING (STAGE 2/2)');
+    syncSpindleSimulation();
+    render();
+  });
+
+  $('skimAbortBtn').addEventListener('click', function(){
+    $('skimVerifyOverlay').classList.remove('show');
+    state.threadSkimStage = 'IDLE';
+    state.runState = 'stopped';
+    setStatusMsg('THREADING ABORTED BY OPERATOR: INSPECT STOCK / ADJUST TOOLING');
+    syncSpindleSimulation();
+    render();
+  });
 
   // Calculator Keypad Engine
   var kpTarget = null, kpInitialVal = 0;
@@ -1965,25 +3648,32 @@
     turnPitch:'TURNING FEED', turnLength:'TURNING LENGTH', turnTotalDepth:'TOTAL DEPTH (Ø)',
     turnMaxDoc:'MAX DOC / PASS (Ø)', turnPasses:'TURNING PASSES', facePitch:'FACING FEED', faceStroke:'FACING STROKE (Ø)',
     faceTotalDepth:'TOTAL FACING DEPTH', faceMaxDoc:'MAX DOC / PASS', facePasses:'FACING PASSES', pitch:'THREAD PITCH',
+    threadStarts:'THREAD STARTS (1-9)', threadTotalDepth:'THREAD TOTAL DEPTH', threadCustomDia:'CUSTOM THREAD DIAMETER',
+    wizThreadLength:'THREAD LENGTH',
     taperAngle:'TAPER ANGLE', taperLen:'TAPER LENGTH', cutoffFeed:'PLUNGE FEED',
     cutoffPeck:'PECK DEPTH', cutoffRetract:'RETRACT DIST', slotStrokes:'TOTAL STROKES',
     slotFeedPerStroke:'STROKE FEED', slotLen:'STROKE LENGTH', sphereRadius:'SPHERE RADIUS',
     sphereStep:'ARC STEP', joyMaxRate:'MAX JOYSTICK SPEED', joyDeadzone:'JOYSTICK DEADZONE',
     coordZ:'SET Z COORDINATE', coordX:'SET X COORDINATE', limitTarget:'SET LIMIT',
-    customFeedStep:'CUSTOM FEED STEP'
+    customFeedStep:'CUSTOM FEED STEP', gearPitchZ_custom:'CUSTOM GEAR PITCH',
+    wizThreadStarts:'THREAD STARTS (1-9)'
   };
 
   function openKeypad(target, defaultVal){
     kpTarget = target;
-    kpInitialVal = defaultVal !== undefined ? +defaultVal.toFixed(4) : 0;
+    kpInitialVal = (defaultVal !== undefined && defaultVal !== '') ? +parseFloat(defaultVal).toFixed(4) : 0;
     
     // Field opens pre-filled and fully selected so typing immediately overwrites it
     $('kpInput').value = defaultVal !== undefined ? defaultVal.toString() : '';
-    var isIntegerCount = (target==='turnPasses' || target==='facePasses' || target==='slotStrokes');
+    var isIntegerCount = (target==='turnPasses' || target==='facePasses' || target==='slotStrokes' || target==='threadStarts' || target==='wizThreadStarts');
     var unitStr = ' (' + unitLabel() + ')';
     if(isIntegerCount) unitStr = ' (COUNT)';
     else if(target === 'pitch' && state.pitchTab === 'tpi') unitStr = ' (TPI)';
-    else if(target === 'gearPitchZ' && state.gearFeedUnitZ === 'TPI') unitStr = ' (TPI)';
+    else if(target === 'gearPitchZ'){
+      if(state.gearFeedModeZ === 'PITCH' && state.gearThreadUnit === 'tpi') unitStr = ' (TPI)';
+      else unitStr = ' (' + unitLabel() + '/rev)';
+    }
+    else if(target === 'gearPitchZ_custom') unitStr = ' (' + (gearPitchUnit === 'tpi' ? 'TPI' : unitLabel()) + ')';
     else if(target === 'customFeedStep'){
       unitStr = ' (' + (state.gearboxMode === 'ASYNC' ? (unitLabel() + '/min') : (state.gearFeedUnitZ === 'TPI' && state.activeFeedAxis === 'Z' ? 'TPI' : unitLabel() + '/rev')) + ')';
     }
@@ -1993,6 +3683,10 @@
     // Strictly gate INSERT CURR: only show for coordinates and software limits
     var isCoordinate = (target==='coordZ' || target==='coordX' || target==='limitTarget');
     $('kpCurrBtn').classList.toggle('hide', !isCoordinate);
+
+    // Hide ÷ 2 button for custom diameter
+    var hideHalf = (target === 'threadCustomDia');
+    $('kpHalfBtn').classList.toggle('hide', hideHalf);
 
     $('kpOverlay').classList.add('show');
     setTimeout(function(){
@@ -2007,7 +3701,14 @@
     $('kpInput').setSelectionRange($('kpInput').value.length, $('kpInput').value.length);
   });
 
-  $('kpCancel').addEventListener('click', function(){ $('kpOverlay').classList.remove('show'); });
+  $('kpCancel').addEventListener('click', function(){
+    $('kpOverlay').classList.remove('show');
+    if(kpTarget === 'gearPitchZ_custom'){
+      $('gearPitchOverlay').classList.add('show');
+    } else if(kpTarget === 'wizThreadLength' || kpTarget === 'wizThreadStarts' || kpTarget === 'pitch' || kpTarget === 'threadCustomDia'){
+      $('pitchOverlay').classList.add('show');
+    }
+  });
   $('kpConfirm').addEventListener('click', function(){
     var raw = $('kpInput').value;
     var v = parseFloat(raw !== '' ? raw : '0');
@@ -2024,11 +3725,24 @@
         }
       }
       else if(kpTarget==='gearPitchZ'){
-        if(state.gearFeedUnitZ === 'TPI'){
+        if(state.gearFeedModeZ === 'PITCH' && state.gearThreadUnit === 'tpi'){
           state.gearPitchZ = +(25.4 / Math.max(0.1, v)).toFixed(4);
         } else {
-          state.gearPitchZ = mm;
+          state.gearPitchZ = Math.max(0.001, Math.abs(mm));
         }
+        render();
+      }
+      else if(kpTarget==='gearPitchZ_custom'){
+        if(gearPitchUnit === 'tpi'){
+          state.gearPitchZ = +(25.4 / Math.max(0.1, v)).toFixed(4);
+          state.gearThreadUnit = 'tpi';
+        } else {
+          state.gearPitchZ = Math.max(0.01, Math.abs(mm));
+          state.gearThreadUnit = 'metric';
+        }
+        state.gearFeedModeZ = 'PITCH';
+        setStatusMsg('GEARBOX PITCH SET: ' + (gearPitchUnit==='metric' ? state.gearPitchZ.toFixed(2)+' mm' : v+' TPI') + ' (' + (state.gearThreadHandedness||'RH') + ')');
+        render();
       }
       else if(kpTarget==='gearPitchX'){ state.gearPitchX = mm; }
       else if(kpTarget==='asyncSpeedZ'){ state.asyncSpeedZ = Math.round(v); }
@@ -2075,6 +3789,50 @@
           state.pitch = mm;
           state.threadUnit = 'metric';
         }
+        wizFreePitchMm = state.pitch;
+        wizCustomPitch = state.pitch;
+        updateWizBlueprintCard();
+        setWizardStage(4);
+        $('pitchOverlay').classList.add('show');
+      }
+      else if(kpTarget==='threadCustomDia'){
+        var custDia = Math.abs(mm);
+        if(custDia > 0){
+          var coarseP = +(0.1 * custDia).toFixed(2);
+          if(coarseP < 0.25) coarseP = 0.25;
+          var fineP = +(0.075 * custDia).toFixed(2);
+          wizSizeItem = {
+            size: 'Ø' + fmt(custDia, 2),
+            dia: custDia,
+            rangeIdx: 0,
+            choice: 1,
+            pitches: [coarseP, fineP],
+            stockMin: +(custDia - 0.15).toFixed(2),
+            stockMax: +custDia.toFixed(2)
+          };
+          wizPitchIdx = 0;
+          setWizardStage(3);
+          $('pitchOverlay').classList.add('show');
+        }
+      }
+      else if(kpTarget==='wizThreadLength'){
+        wizThreadLength = Math.max(0.1, Math.abs(mm));
+        renderStage4Setup();
+        updateWizBlueprintCard();
+        $('pitchOverlay').classList.add('show');
+      }
+      else if(kpTarget==='wizThreadStarts'){
+        wizStarts = Math.max(1, Math.min(9, Math.round(v)));
+        renderStage4Setup();
+        updateWizBlueprintCard();
+        $('pitchOverlay').classList.add('show');
+      }
+      else if(kpTarget==='threadStarts'){
+        state.threadStarts = Math.max(1, Math.min(9, Math.round(v)));
+      }
+      else if(kpTarget==='threadTotalDepth'){
+        state.threadTotalDepth = Math.abs(mm);
+        state.threadPassCount = Math.max(6, Math.min(14, Math.round(state.threadTotalDepth / 0.12)));
       }
       else if(kpTarget==='customFeedStep'){
         var sVal = Math.abs(v);
