@@ -704,3 +704,143 @@ Single-point threading is the most demanding operation on an electronic leadscre
 ### 4. Future Firmware Enhancement Note: Compound Flank Infeed (29.5°)
 * Stock NanoELS `h5.ino` currently executes 90° radial plunge infeed.
 * Future firmware upgrades will introduce true modified compound flank infeed (29°–29.5°), synchronizing an incremental Z advance ($\Delta Z = \Delta X \tan(29.5^\circ)$) on each pass to cut cleanly on the leading tool flank only.
+
+---
+
+## 7.7. Taper & Cone Machining Architecture: Electronic Taper Attachment vs. Automated Canned Taper Cycle
+
+In standard lathe machining, turning a taper can range from a single manual chamfer to roughing out an entire Morse taper arbor from solid cylindrical bar stock. Investigating the stock NanoELS firmware (`h5.ino` lines 9308–9356) reveals that `MODE_CONE` is architecturally an **Electronic Taper Attachment (Continuous 2-Axis Gearbox)**, not an automated canned cycle (`isPassMode()` returns `false`).
+
+To provide both quick manual capability and full hands-off automation, the UI redesign establishes a clean architectural division:
+1. **Simple Continuous Taper** is incorporated directly into **Gearbox Mode** (`AXIS: [ Z | X | Z+X TAPER ]`).
+2. **Automated Taper Mode** is elevated into a full conversational multi-pass cycle in the **Contouring & Specialty** section, orchestrated by the display controller with hardware soft-stop protection and live cutting adjustments.
+
+---
+
+### 1. Geometric Parameter Equations & Linked Bidirectional Calculator
+A lathe taper has mutually dependent geometric parameters. Specifying any valid combination dynamically calculates and updates the others in real time:
+
+$$\text{Cone Ratio } C = \frac{D_{\text{large}} - d_{\text{small}}}{L} = 2 \times \tan\left(\theta_{\text{half}}\right)$$
+$$\theta_{\text{half}} = \arctan\left(\frac{C}{2}\right) = \arctan\left(\frac{D_{\text{large}} - d_{\text{small}}}{2L}\right)$$
+$$d_{\text{small}} = D_{\text{large}} - (C \times L) = D_{\text{large}} - 2L\tan\left(\theta_{\text{half}}\right)$$
+$$D_{\text{large}} = d_{\text{small}} + (C \times L) = d_{\text{small}} + 2L\tan\left(\theta_{\text{half}}\right)$$
+
+#### Built-in Machinist Presets
+* **Pipe Threads**: NPT / BSPT ($1:16$, $C = 0.0625$, $\theta = 1.7899^\circ$)
+* **Morse Tapers (MT0–MT6)**:
+  * `MT0`: $1:19.212$ ($C \approx 0.05205$)
+  * `MT1`: $1:20.047$ ($C \approx 0.04988$)
+  * `MT2`: $1:20.020$ ($C \approx 0.04995$)
+  * `MT3`: $1:19.922$ ($C \approx 0.05020$)
+  * `MT4`: $1:19.254$ ($C \approx 0.05194$)
+  * `MT5`: $1:19.004$ ($C \approx 0.05262$)
+* **Machine Tool Standards**: R8 ($16^\circ 51'$ included, $C \approx 0.2963$), Brown & Sharpe ($1:24$, $C \approx 0.04167$), ISO 7:24 ($C \approx 0.29167$)
+* **Standard Chamfers**: $45^\circ$ ($C = 2.0$), $30^\circ$ ($C = 1.1547$), $60^\circ$ ($C = 3.4641$)
+
+---
+
+### 2. Execution Architecture: Macro Orchestration vs. G-Code Generation
+
+#### Zero-WiFi Rule for Machine Control Plane
+* In the stock NanoELS firmware, G-code input is only accepted over WebSockets (`WiFi`). The physical serial link (`Serial1`, Pins 44 & 43) is strictly a binary packet bus.
+* **Workshop Reliability Mandate**: Running an automated cutting cycle over wireless Wi-Fi in an industrial or home workshop with electrical motor/VFD EMI noise introduces unacceptable failure modes (packet drops, latency jitter, stalled cuts).
+* The machine control plane between the Display Controller (ESP32-S3) and the NanoELS Core (ESP32) is **strictly wired over physical UART serial (`Serial1`)**.
+
+#### Why G-Code is Discarded for Taper Mode
+Beyond the Wi-Fi dependency, `MODE_GCODE` locks out on-the-fly feed adjustments (`h5.ino` line 6212: `if (mode == MODE_GCODE) return false;`) and lacks real-time feed override multipliers. If chatter develops during a heavy cut, the operator cannot touch the feed rate without aborting the program.
+
+The **Display Controller Macro Architecture** operates 100% over the wired serial bus by stringing together passes while leveraging native ESP32 firmware features:
+
+#### A. Hardware-Level Soft-Stop Safety
+* In `h5.ino` (lines 9322–9352), `modeCone()` translates `z.leftStop` / `z.rightStop` into spindle pulse limits (`spindleMin` / `spindleMax`).
+* When cutting reaches the end of the taper ($Z_{\text{end}}$), the ESP32 motion loop **instantaneously clamps axis steps at the hardware level**.
+* The carriage physically stops in place. Over-travel, shoulder gouging, and chuck collisions are physically impossible, completely independent of display latency or Wi-Fi jitter.
+
+#### B. Display Role: Air Moves Only
+Because the cut stroke terminates safely in hardware, the display controller only orchestrates non-cutting repositioning in air:
+1. Observes $Z$ at limit $\rightarrow$ sends `OFF`.
+2. Commands cross-slide $+X$ rapid retract (clearance).
+3. Commands carriage $+Z$ rapid return to $Z_{\text{start}}$.
+4. Commands cross-slide $-X$ infeed to next pass depth.
+5. Sends `ON` and engages `MODE_CONE` for the next pass.
+
+---
+
+### 3. Dynamic Live In-Cut and Between-Pass Adjustments
+
+A manual machinist on an ELS demands tactile, adaptive control over cutting conditions:
+
+#### 1. Live In-Cut Feed Rate Adjustment
+* During any pass while cutting, the operator can press **`+`** / **`-`** (or nudge the joystick) to adjust `dupr` (feed rate per revolution) in real time.
+* If chatter occurs or surface finish needs improvement, the operator immediately tunes the chip load without pausing the cut.
+
+#### 2. Dynamic Between-Pass Depth of Cut (DOC) & Pass Rescheduling
+* Between passes (during retract/return or while paused), the dynamic deck presents live supervisory controls:
+  * `CURRENT PASS: 02 / 05`
+  * `REMAINING STOCK: 1.200 mm`
+  * `NEXT DOC: 0.400 mm` `[ − ]` `[ + ]`
+  * `PASSES REMAINING: 3` `[ − ]` `[ + ]`
+* **Real-Time Redistribution**:
+  * If the tool handled Pass 1 easily, the operator can bump DOC up; the controller immediately reduces remaining passes.
+  * If the machine vibrated or motor bogged, the operator taps `DOC −` or `PASSES +`; the controller recalculates:
+    $$\text{DOC}_{\text{new}} = \frac{\Delta X_{\text{remaining}}}{N_{\text{remaining}}}$$
+  * The cycle adapts dynamically to real cutting feedback without resetting or losing coordinate reference.
+
+#### 3. Dedicated Finish Pass
+* When remaining depth reaches the pre-set finish allowance (default: $0.10\text{ mm}$ / $0.004''$), the controller automatically switches to the designated finish feed rate (e.g. $0.05\text{ mm/rev}$) to yield a mirror surface before parking at safe Z.
+
+---
+
+## 7.8. Gearbox Simple Taper & Axis Isolation Architecture
+
+### 1. Simple Taper Integration (`AXIS: Z+X (TAPER)`)
+* In everyday lathe workflows, machinists frequently need quick, single-pass tapers, chamfers, or deburring without setting up a full multi-pass automated cycle.
+* Gearbox Mode natively incorporates **Simple Taper** as the third axis option (`AXIS: [ Z | X | Z+X (TAPER) ]`), mapping directly to the firmware's `MODE_CONE` (`h5.ino` lines 9308–9356).
+* The Z leadscrew acts as the primary driving axis synchronized to spindle rotation (`dupr`), while the X cross-slide operates as an electronic slave governed by the ratio $C = 2\tan(\theta_{\text{half}})$.
+
+### 2. Strict Axis Isolation (Contextual Card Properties)
+* To eliminate cognitive clutter and prevent accidental misconfiguration of inactive axes:
+  * **When `AXIS: Z` is selected**: The mode card renders *only* Z leadscrew / carriage properties (Feed vs Pitch toggle, feed rate, and thread lead). Inactive X cross-feed properties are completely hidden.
+  * **When `AXIS: X` is selected**: The mode card renders *only* X cross-slide properties. Inactive Z leadscrew properties are completely hidden.
+  * **When `AXIS: Z+X (TAPER)` is selected**: The mode card displays the Z primary driving feed row alongside the slave Taper configuration block.
+
+### 3. Direction Control Placement in Mode Card
+* The feed direction selection button (`DIR: ← CHUCK (Z−)` / `DIR: → TAIL (Z+)` for Z and `DIR: ↑ CENTER (X−)` / `DIR: ↓ RETRACT (X+)` for X) is located directly at the top of the Gearbox mode card.
+* **Safety Lockout**: To prevent accidental tool reversal during spindle rotation, the direction toggle is strictly interactive only when the motion controller is stopped (`state.runState !== 'running'`). During active cutting, the chip is dimmed (`opacity: 0.45`) and pointer events are locked.
+
+### 4. Unified Compact Taper Display & Dedicated Edit Button Row
+* To maximize readability and provide generous touch ergonomics:
+  * The Taper block integrates the **Preset Name / Type** (e.g. `TAPER: 1:16 PIPE` or `TAPER: CUSTOM`), **Half-Angle** (e.g. `1.79°`), and **Cone Ratio** (e.g. `1:16 (0.0625)`) into a single, cohesive readout card spanning the full width of the block.
+  * **Dedicated Edit Row**: Directly below the readout card, a dedicated action row positions the **`[ ✎ EDIT ]`** button aligned to the bottom right ($36\text{ px}$ height, amber fill, dark bold text).
+  * Tapping either the readout card or the dedicated `[ ✎ EDIT ]` button opens the Taper Selection modal.
+
+### 5. Dedicated Taper Selection Modal & Triple-Linked Custom Calculator
+* Tapping the edit button or the taper card opens the `GEARBOX TAPER SELECTION` modal:
+  * **Standard Presets Tab**: Instant 1-tap selection of machine tapers:
+    * Pipe Threads: `1:16 PIPE` (NPT / BSPT, 1.79°)
+    * Morse Tapers: `MT1` through `MT5` (1:20 to 1:19)
+    * Metric Standards: `1:20`, `1:10`, `1:5`
+    * Standard Chamfers: `45° CHAMFER` (1:1), `30° BEVEL`, `60° CENTER`
+  * **Triple-Linked Custom Tab**: Live three-way recalculation across:
+    * **Half-Angle $\theta$**: Machine cone angle in degrees ($0.05° - 85.00°$).
+    * **Proportional Ratio ($1 : K$)**: Shop-standard ratio where $K = 1 / (2\tan\theta)$.
+    * **Decimal Ratio $C$**: Decimal ratio $C = 2\tan\theta$.
+    * Editing any of the three inputs instantly recalculates the other two in real-time.
+
+### 6. Center Column Dynamic Deck Decluttering
+* The center column Dynamic Deck focuses strictly on active feed rate adjustment and jog control.
+* Verbose explanatory snippets, parenthetical duplication, and multi-word headers (e.g., `2-AXIS TAPER TRIM (MT3 MORSE TAPER 3)`) have been eliminated in favor of a clean, minimalist header:
+  * Left: `FEED RATE` (or `THREAD LEAD` in Pitch mode, `ASYNC SPEED` in Async mode).
+  * Right: Compact colored badge (`Z+X TAPER` in amber, `Z-AXIS` in green, or `X-AXIS` in blue).
+
+### 7. Cone Slope Direction (Normal vs. Inverted Trapezoid Glyphs)
+* To visually indicate the cone slope direction without cryptic text snippets or small micro-text:
+  * **NORMAL (Taller toward Chuck)**: Rendered with an inline SVG trapezoid whose left side is taller than its right side (`polygon points="3,2 25,6 25,12 3,16"`), indicating a cone expanding toward the spindle.
+  * **INVERT (Taller toward Tailstock)**: Rendered with an inverted SVG trapezoid whose right side is taller than its left side (`polygon points="3,6 25,2 25,16 3,12"`), indicating a cone expanding toward the tailstock.
+  * Tapping the chip toggles `state.gearTaperInvert` and instantly updates the graphic glyph and cross-feed sign kinematics.
+
+---
+
+## 13. Component Consistency & Global Typography Inheritance
+* In web-based embedded interfaces, standard `<button>` elements do not inherit `font-family` from `body` by default, causing browser engines to fall back to desktop system fonts (e.g. Arial 900) instead of the design system's condensed sans-serif.
+* A universal reset rule `button, input, select, textarea { font-family: inherit; }` enforces consistent typography (`Barlow Condensed`) across all dialog sheets, modal calculators, and action triggers.

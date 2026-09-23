@@ -23,6 +23,7 @@
     --green-bg: #0d2116;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  button, input, select, textarea { font-family: inherit; }
   html, body {
     margin: 0; padding: 0; background: #040607; color: var(--fg);
     font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
@@ -1281,6 +1282,64 @@
     </div>
   </div>
 
+  <!-- Dedicated Gearbox Taper Modal (Standard Presets & Linked Custom Angle/Ratio Calculator) -->
+  <div class="overlay" id="gearTaperOverlay">
+    <div class="sheet" style="width: 480px; max-width: 95vw; background: #0f141a; border: 1px solid var(--line); border-radius: 8px; padding: 14px;">
+      <div class="wiz-nav" style="border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:10px;">
+        <div class="wiz-title" style="font-size:14px; letter-spacing:0.5px; color:var(--amber);">GEARBOX TAPER SELECTION</div>
+        <button class="wiz-close-mark" id="btnGearTaperClose" title="Close">✕</button>
+      </div>
+
+      <!-- Tab Buttons: PRESETS vs CUSTOM CALCULATOR -->
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <button class="toggle-chip active tap" id="btnTaperTabPresets" style="flex:1; min-height:36px; font-weight:700; font-size:12px;">STANDARD PRESETS</button>
+        <button class="toggle-chip tap" id="btnTaperTabCustom" style="flex:1; min-height:36px; font-weight:700; font-size:12px;">CUSTOM (LINKED ANGLE/RATIO)</button>
+      </div>
+
+      <!-- Presets View -->
+      <div id="taperPresetsView" style="display:flex; flex-direction:column; gap:8px;">
+        <div style="font-size:11px; font-weight:700; color:var(--dim); text-transform:uppercase;">Select Standard Machine / Pipe Taper:</div>
+        <div id="gearTaperPresetsGrid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; max-height:260px; overflow-y:auto;">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Custom Linked View (Triple Linked Inputs: Angle, Proportional Ratio 1:K, Decimal Ratio C) -->
+      <div id="taperCustomView" style="display:none; flex-direction:column; gap:10px;">
+        <div style="font-size:12px; color:var(--dim); line-height:1.4;">
+          Enter any parameter below. The other two calculate automatically in real time:
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+          <!-- 1. Taper Half-Angle -->
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; font-weight:700; color:var(--amber);">ANGLE (°)</span>
+            <input type="number" step="0.01" id="customTaperAngleInp" style="width:100%; height:42px; background:#141c24; border:1px solid #283744; border-radius:4px; color:var(--amber); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; padding:0 6px;" placeholder="1.79">
+            <span style="font-size:9.5px; color:var(--dim);">Half-angle θ</span>
+          </div>
+
+          <!-- 2. Proportional Ratio 1:K (Denominator) -->
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; font-weight:700; color:var(--green);">RATIO (1 : K)</span>
+            <div style="display:flex; align-items:center; background:#141c24; border:1px solid #283744; border-radius:4px; height:42px; padding:0 6px;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; color:var(--dim); margin-right:4px;">1 :</span>
+              <input type="number" step="0.01" id="customTaperKInp" style="width:100%; height:100%; background:transparent; border:none; color:var(--green); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; outline:none;" placeholder="16.0">
+            </div>
+            <span style="font-size:9.5px; color:var(--dim);">e.g. 16 for 1:16</span>
+          </div>
+
+          <!-- 3. Decimal Ratio C -->
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; font-weight:700; color:var(--blue);">DECIMAL (C)</span>
+            <input type="number" step="0.0001" id="customTaperRatioInp" style="width:100%; height:42px; background:#141c24; border:1px solid #283744; border-radius:4px; color:var(--blue); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; padding:0 6px;" placeholder="0.0625">
+            <span style="font-size:9.5px; color:var(--dim);">ΔDia / Length</span>
+          </div>
+        </div>
+        <div id="customTaperRatioSummary" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--dim); text-align:right;">Ratio: 1:16.000 (0.06250)</div>
+        <button id="btnApplyCustomTaper" style="background:#1a2e22; border:1px solid #2e6040; color:var(--green); font-weight:800; font-size:13px; height:42px; border-radius:4px; margin-top:4px; cursor:pointer;">✓ APPLY CUSTOM TAPER</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Skim Pass Verification Modal -->
   <div class="overlay" id="skimVerifyOverlay">
     <div class="sheet skim-sheet">
@@ -1334,6 +1393,32 @@
 (function(){
   var $ = function(id){ return document.getElementById(id); };
 
+  // Standard Taper Presets for Gearbox 2-Axis Mode
+  var TAPER_PRESETS = [
+    { name: '1:16 PIPE', ratio: 0.0625, angle: 1.79, desc: 'NPT / BSPT 1:16' },
+    { name: 'MT1 (1:20.0)', ratio: 0.04988, angle: 1.43, desc: 'Morse Taper 1' },
+    { name: 'MT2 (1:20.0)', ratio: 0.04995, angle: 1.43, desc: 'Morse Taper 2' },
+    { name: 'MT3 (1:19.9)', ratio: 0.05020, angle: 1.44, desc: 'Morse Taper 3' },
+    { name: 'MT4 (1:19.3)', ratio: 0.05194, angle: 1.49, desc: 'Morse Taper 4' },
+    { name: 'MT5 (1:19.0)', ratio: 0.05263, angle: 1.51, desc: 'Morse Taper 5' },
+    { name: '1:20 METRIC', ratio: 0.0500, angle: 1.43, desc: 'Metric Standard 1:20' },
+    { name: '1:10 METRIC', ratio: 0.1000, angle: 2.86, desc: 'Metric Standard 1:10' },
+    { name: '1:5 METRIC', ratio: 0.2000, angle: 5.71, desc: 'Metric Standard 1:5' },
+    { name: '45° CHAMFER', ratio: 2.0000, angle: 45.00, desc: '1:1 45° Chamfer' },
+    { name: '30° BEVEL', ratio: 1.1547, angle: 30.00, desc: '30° Bevel' },
+    { name: '60° CENTER', ratio: 1.1547, angle: 30.00, desc: '60° Included Center' }
+  ];
+
+  function formatTaperRatio(r){
+    if(!r || r <= 0) return '1:--';
+    if(r >= 1.99 && r <= 2.01) return '1:1 (45°)';
+    var k = 1 / r;
+    if(Math.abs(k - Math.round(k)) < 0.05){
+      return '1:' + Math.round(k);
+    }
+    return '1:' + k.toFixed(2);
+  }
+
   // Core State Engine
   var state = {
     unit: 'mm',
@@ -1350,7 +1435,12 @@
     
     // Gearbox Mode
     gearboxMode: 'SYNC', // 'SYNC' (spindle synchronized) or 'ASYNC' (time-based)
-    activeFeedAxis: 'Z', // 'Z' or 'X'
+    activeFeedAxis: 'Z', // 'Z', 'X', or 'Z+X' (2-Axis Taper)
+    gearTaperPresetIdx: 0,
+    gearTaperRatio: 0.0625,
+    gearTaperAngle: 1.79,
+    gearTaperSide: 'EXTERNAL', // 'EXTERNAL' or 'INTERNAL'
+    gearTaperInvert: false, // false: Normal (larger at chuck), true: Inverted (smaller at chuck)
     gearFeedModeZ: 'FEED', // 'FEED' (mm/rev or in/rev), 'PITCH' (leadscrew thread sync)
     gearThreadHandedness: 'RH', // 'RH' or 'LH'
     gearThreadUnit: 'metric', // 'metric' or 'tpi'
@@ -1622,7 +1712,7 @@
       return { val: val, isCustom: cust !== null, unitStr: unitStr, type: 'feed', axis: 'X', arr: arr, idx: idx };
     }
     var isSync = state.gearboxMode === 'SYNC';
-    var isZ = state.activeFeedAxis === 'Z';
+    var isZ = state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X';
     var isTpi = isZ && state.gearFeedUnitZ === 'TPI' && isSync;
     
     if(!isSync){
@@ -1757,10 +1847,13 @@
       var isSync = state.gearboxMode === 'SYNC';
       var zDisp = getGearZDisplay();
       var xDisp = getGearXDisplay();
-      var activeDisp = state.activeFeedAxis === 'Z' ? zDisp : xDisp;
-      var dirLabel = state.activeFeedAxis === 'Z' ? 
-        (state.gearDirZ === 'FWD' ? 'DIR: ← TO CHUCK (Z−)' : 'DIR: → TO TAIL (Z+)') :
-        (state.gearDirX === 'IN' ? 'DIR: ↑ TO CENTER (X−)' : 'DIR: ↓ RETRACT (X+)');
+      var isTaper = state.activeFeedAxis === 'Z+X';
+      var activeDisp = (state.activeFeedAxis === 'Z' || isTaper) ? zDisp : xDisp;
+      var dirLabel = isTaper ? 
+        ('DIR: ' + (state.gearDirZ === 'FWD' ? '← TO CHUCK (Z−)' : '→ TO TAIL (Z+)') + ' | ' + (state.gearTaperSide === 'EXTERNAL' ? 'EXT' : 'INT')) :
+        (state.activeFeedAxis === 'Z' ? 
+          (state.gearDirZ === 'FWD' ? 'DIR: ← TO CHUCK (Z−)' : 'DIR: → TO TAIL (Z+)') :
+          (state.gearDirX === 'IN' ? 'DIR: ↑ TO CENTER (X−)' : 'DIR: ↓ RETRACT (X+)'));
 
       var stepInfo = getActiveGearStepInfo();
       var cycleLabel = 'STEP: ±' + stepInfo.val + (stepInfo.isCustom ? '*' : '') + stepInfo.unitStr;
@@ -1775,10 +1868,15 @@
           '</div>' +
         '</div>';
 
+      var deckHeaderLeft = (!isSync) ? 'ASYNC SPEED' : (state.gearFeedModeZ === 'PITCH' && state.activeFeedAxis === 'Z' ? 'THREAD LEAD' : 'FEED RATE');
+      var deckHeaderRight = isTaper ?
+        '<span style="font-size:10.5px; color:var(--amber); font-weight:700;">Z+X TAPER</span>' :
+        '<span style="font-size:10.5px; color:' + (state.activeFeedAxis==='Z'?'var(--green)':'var(--blue)') + '; font-weight:700;">' + state.activeFeedAxis + '-AXIS</span>';
+
       deck.innerHTML = '' +
         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-          '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + state.activeFeedAxis + '-AXIS ' + (isSync ? (state.activeFeedAxis==='Z'?state.gearFeedModeZ:'FEED') : 'ASYNC') + ' TRIM</span>' +
-          '<span style="font-size:10px; color:' + (state.activeFeedAxis==='Z'?'var(--green)':'var(--blue)') + '; font-weight:700;">' + (state.activeFeedAxis==='Z'?'Z CARRIAGE':'X CROSS') + '</span>' +
+          '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + deckHeaderLeft + '</span>' +
+          deckHeaderRight +
         '</div>' +
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
@@ -1788,21 +1886,7 @@
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
         '</div>' +
-        stepChipsHTML +
-        '<div class="' + (!isRun ? 'tap' : '') + '" id="deckToggleDir" style="background:#172129; border:1px solid #283744; border-radius:4px; min-height:38px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--fg); margin-top:2px;' + (isRun ? ' opacity:0.45; cursor:not-allowed;' : '') + '">' +
-          dirLabel +
-        '</div>';
-
-      $('deckToggleDir').addEventListener('click', function(){
-        if(state.runState === 'running') return;
-        if(state.activeFeedAxis === 'Z'){
-          state.gearDirZ = state.gearDirZ === 'FWD' ? 'REV' : 'FWD';
-        } else {
-          state.gearDirX = state.gearDirX === 'IN' ? 'OUT' : 'IN';
-        }
-        updateStatusMsg();
-        render();
-      });
+        stepChipsHTML;
 
     } else if(state.mode === 'TURNING'){
       var pInfo = getTurnPasses();
@@ -2056,7 +2140,7 @@
         readout.addEventListener('click', function(){
           if(isRun) return;
           if(state.mode === 'GEARBOX'){
-            if(state.activeFeedAxis === 'Z'){
+            if(state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X'){
               if(state.gearboxMode === 'ASYNC'){
                 openKeypad('asyncSpeedZ', state.asyncSpeedZ);
               } else if(state.gearFeedModeZ === 'FEED'){
@@ -2094,40 +2178,89 @@
     if(state.mode === 'GEARBOX'){
       var isSync = state.gearboxMode === 'SYNC';
       var zDisp = getGearZDisplay();
-      var xDisp = getGearXDisplay();
       var zActive = state.activeFeedAxis === 'Z';
-      var zUnitDisabled = !isSync || !zActive || isRun;
+      var xActive = state.activeFeedAxis === 'X';
+      var isTaper = state.activeFeedAxis === 'Z+X';
+      var zUnitDisabled = !isSync || isRun;
+      var axisBtnLabel = isTaper ? 'AXIS: Z+X (TAPER)' : ('AXIS: ' + state.activeFeedAxis);
+
+      var dirLabel = '';
+      if(zActive){
+        dirLabel = state.gearDirZ === 'FWD' ? 'DIR: ← CHUCK (Z−)' : 'DIR: → TAIL (Z+)';
+      } else if(xActive){
+        dirLabel = state.gearDirX === 'IN' ? 'DIR: ↑ CENTER (X−)' : 'DIR: ↓ RETRACT (X+)';
+      } else {
+        dirLabel = state.gearDirZ === 'FWD' ? 'DIR: ← CHUCK (Z−)' : 'DIR: → TAIL (Z+)';
+      }
+
+      var presetName = (state.gearTaperPresetIdx >= 0 && state.gearTaperPresetIdx < TAPER_PRESETS.length) 
+        ? TAPER_PRESETS[state.gearTaperPresetIdx].name 
+        : 'CUSTOM';
+
+      var normalConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,2 25,6 25,12 3,16" fill="currentColor" fill-opacity="0.25"/></svg>';
+      var invertConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,6 25,2 25,16 3,12" fill="currentColor" fill-opacity="0.25"/></svg>';
 
       return '' +
         '<div style="display:flex; flex-direction:column; gap:6px;">' +
           '<div style="display:flex; gap:4px;">' +
-            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync"' + (isRun?' style="opacity:0.45; cursor:not-allowed;"':'') + '>' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
-            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + 'axis-on" id="fld-gearAxis"' + (isRun?' style="opacity:0.45; cursor:not-allowed;"':'') + '>AXIS: ' + state.activeFeedAxis + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + 'axis-on" id="fld-gearAxis" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + axisBtnLabel + '</div>' +
           '</div>' +
 
-          '<div class="feed-block ' + (zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
-            '<div class="feed-row-top">' +
-              '<span>Z CARRIAGE</span>' +
-            '</div>' +
-            '<div class="feed-row-bottom">' +
-              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearZ"' + (isRun?' style="cursor:default;"':'') + '>' + zDisp.val + '</b>' +
-              '<span class="feed-unit-box">' + zDisp.unit + '</span>' +
-            '</div>' +
-            '<div style="display:flex; gap:4px; margin-top:5px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
-              '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
-              '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
-            '</div>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; background:#12181f; border:1px solid #1f2c38; border-radius:4px; padding:5px 8px; min-height:38px;">' +
+            '<span style="font-size:11px; font-weight:700; color:var(--dim); letter-spacing:0.3px;">FEED DIRECTION</span>' +
+            '<span class="inline-dir-chip ' + (!isRun?'tap':'') + '" id="fld-gearDir" style="background:#182430; border:1px solid #2e4559; color:var(--blue); font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:3px;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' + dirLabel + '</span>' +
           '</div>' +
 
-          '<div class="feed-block ' + (!zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
-            '<div class="feed-row-top">' +
-              '<span>X CROSS-SLIDE</span>' +
-            '</div>' +
-            '<div class="feed-row-bottom">' +
-              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearX"' + (isRun?' style="cursor:default;"':'') + '>' + xDisp.val + '</b>' +
-              '<span class="feed-unit-box">' + xDisp.unit + '</span>' +
-            '</div>' +
-          '</div>' +
+          (zActive ? 
+            '<div class="feed-block active-axis-row" style="background:#111921; border:1px solid #1e3140; border-radius:4px; padding:8px;">' +
+              '<div style="display:flex; gap:4px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
+                '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
+                '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
+              '</div>' +
+              (state.gearFeedModeZ === 'PITCH' ?
+                '<div style="display:flex; justify-content:space-between; align-items:center; background:#0e141a; border:1px solid #1b2632; border-radius:3px; padding:8px 10px; margin-top:8px;">' +
+                  '<div style="display:flex; flex-direction:column;">' +
+                    '<span style="font-size:9.5px; color:var(--dim); font-weight:700;">THREAD LEAD</span>' +
+                    '<b class="mono" style="font-size:16px; color:var(--fg); margin-top:2px;">' + zDisp.val + ' ' + zDisp.unit + ' (' + (state.gearThreadHandedness||'RH') + ')</b>' +
+                  '</div>' +
+                  '<button class="tap" id="btnEditPitch" style="background:#1b2836; color:var(--blue); border:1px solid #2e4559; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer;"' + (isRun?' disabled style="opacity:0.45;"':'') + '>✎ PITCH</button>' +
+                '</div>' : '') +
+            '</div>' 
+          : xActive ?
+            ''
+          : 
+            '<div class="feed-block active-axis-row" style="border-color: rgba(255, 179, 0, 0.4); background: rgba(255, 179, 0, 0.03); border-radius:4px; padding:6px; display:flex; flex-direction:column; gap:6px;">' +
+              '<div style="display:flex; gap:6px;">' +
+                '<div class="inline-dir-chip ' + (!isRun?'tap ':'') + '" id="fld-gearTaperSide" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; background:#18222a; border:1px solid #283744; border-radius:4px; color:var(--amber); font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' +
+                  (state.gearTaperSide==='EXTERNAL'?'EXT (OD)':'INT (ID)') +
+                '</div>' +
+                '<div class="inline-dir-chip ' + (!isRun?'tap ':'') + '" id="fld-gearTaperInvert" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; gap:8px; background:#18222a; border:1px solid #283744; border-radius:4px; color:var(--blue); font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '" title="Toggle Cone Slope Direction">' +
+                  (state.gearTaperInvert ? invertConeSvg : normalConeSvg) +
+                  '<span>' + (state.gearTaperInvert ? 'INVERT' : 'NORMAL') + '</span>' +
+                '</div>' +
+              '</div>' +
+
+              '<div id="boxTaperValues" class="' + (!isRun?'tap':'') + '" style="background:#111822; border:1px solid #223446; border-radius:4px; padding:8px 10px; cursor:pointer;" title="Tap to edit taper parameters">' +
+                '<div style="display:flex; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; font-weight:700; color:var(--dim); letter-spacing:0.4px;">TAPER:</span>' +
+                  '<b style="font-size:12.5px; color:var(--amber); letter-spacing:0.3px;">' + presetName + '</b>' +
+                '</div>' +
+                '<div style="display:flex; align-items:baseline; gap:8px; margin-top:2px;">' +
+                  '<span class="mono" style="font-size:16px; font-weight:700; color:var(--fg);">' + fmt(state.gearTaperAngle, 2) + '°</span>' +
+                  '<span style="color:var(--dim); font-size:11px;">·</span>' +
+                  '<span class="mono" style="font-size:15px; font-weight:700; color:var(--blue);">' + formatTaperRatio(state.gearTaperRatio) + '</span>' +
+                  '<span class="mono" style="font-size:10.5px; color:var(--dimmer);">(' + state.gearTaperRatio.toFixed(4) + ')</span>' +
+                '</div>' +
+              '</div>' +
+
+              '<div style="display:flex; justify-content:flex-end;">' +
+                '<button class="tap" id="btnOpenTaperModal" style="background:var(--amber); color:#120e02; font-family:inherit; font-weight:700; font-size:13px; letter-spacing:0.5px; padding:6px 14px; border:none; border-radius:4px; min-height:36px; cursor:pointer; display:flex; align-items:center; gap:6px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '" title="Edit Taper Parameters"' + (isRun?' disabled':'') + '>' +
+                  '<span style="font-size:13px;">✎</span><span>EDIT</span>' +
+                '</button>' +
+              '</div>' +
+            '</div>'
+          ) +
         '</div>';
     }
 
@@ -2233,14 +2366,38 @@
     if(state.runState === 'running') return; // Field editing locked during cycle execution
 
     if(state.mode === 'GEARBOX'){
-      $('fld-gearSync').addEventListener('click', function(){
-        state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
-        updateStatusMsg(); render();
-      });
-      $('fld-gearAxis').addEventListener('click', function(){
-        state.activeFeedAxis = state.activeFeedAxis === 'Z' ? 'X' : 'Z';
-        updateStatusMsg(); render();
-      });
+      var btnSync = $('fld-gearSync');
+      if(btnSync){
+        btnSync.addEventListener('click', function(){
+          state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
+          updateStatusMsg(); render();
+        });
+      }
+
+      var btnAxis = $('fld-gearAxis');
+      if(btnAxis){
+        btnAxis.addEventListener('click', function(){
+          if(state.activeFeedAxis === 'Z') state.activeFeedAxis = 'X';
+          else if(state.activeFeedAxis === 'X') state.activeFeedAxis = 'Z+X';
+          else state.activeFeedAxis = 'Z';
+          updateStatusMsg(); render();
+        });
+      }
+
+      var btnGearDir = $('fld-gearDir');
+      if(btnGearDir){
+        btnGearDir.addEventListener('click', function(){
+          if(state.runState === 'running') return;
+          if(state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X'){
+            state.gearDirZ = (state.gearDirZ === 'FWD' ? 'REV' : 'FWD');
+            setStatusMsg('Z FEED DIRECTION: ' + (state.gearDirZ==='FWD'?'← TO CHUCK (Z−)':'→ TO TAIL (Z+)'));
+          } else {
+            state.gearDirX = (state.gearDirX === 'IN' ? 'OUT' : 'IN');
+            setStatusMsg('X FEED DIRECTION: ' + (state.gearDirX==='IN'?'↑ TO CENTER (X−)':'↓ RETRACT (X+)'));
+          }
+          render();
+        });
+      }
 
       var btnFeed = $('fld-unitFeed');
       var btnPitch = $('fld-unitPitch');
@@ -2259,19 +2416,66 @@
         });
       }
 
-      $('fld-gearZ').addEventListener('click', function(){
-        if(state.gearboxMode === 'ASYNC'){
-          openKeypad('asyncSpeedZ', state.asyncSpeedZ);
-        } else if(state.gearFeedModeZ === 'FEED'){
-          openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
-        } else {
+      var btnGearZ = $('fld-gearZ');
+      if(btnGearZ){
+        btnGearZ.addEventListener('click', function(){
+          if(state.gearboxMode === 'ASYNC'){
+            openKeypad('asyncSpeedZ', state.asyncSpeedZ);
+          } else if(state.gearFeedModeZ === 'FEED'){
+            openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
+          } else {
+            openGearboxPitchModal();
+          }
+        });
+      }
+
+      var btnGearX = $('fld-gearX');
+      if(btnGearX){
+        btnGearX.addEventListener('click', function(){
+          if(state.gearboxMode === 'ASYNC') openKeypad('asyncSpeedX', state.asyncSpeedX);
+          else openKeypad('gearPitchX', state.unit==='mm'?state.gearPitchX:state.gearPitchX/25.4);
+        });
+      }
+
+      var btnOpenTaper = $('btnOpenTaperModal');
+      if(btnOpenTaper){
+        btnOpenTaper.addEventListener('click', function(e){
+          e.stopPropagation();
+          openGearboxTaperModal();
+        });
+      }
+
+      var boxTaper = $('boxTaperValues');
+      if(boxTaper){
+        boxTaper.addEventListener('click', function(){
+          openGearboxTaperModal();
+        });
+      }
+
+      var btnEditPitch = $('btnEditPitch');
+      if(btnEditPitch){
+        btnEditPitch.addEventListener('click', function(){
           openGearboxPitchModal();
-        }
-      });
-      $('fld-gearX').addEventListener('click', function(){
-        if(state.gearboxMode === 'ASYNC') openKeypad('asyncSpeedX', state.asyncSpeedX);
-        else openKeypad('gearPitchX', state.unit==='mm'?state.gearPitchX:state.gearPitchX/25.4);
-      });
+        });
+      }
+
+      var btnTaperSide = $('fld-gearTaperSide');
+      if(btnTaperSide){
+        btnTaperSide.addEventListener('click', function(){
+          state.gearTaperSide = state.gearTaperSide === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
+          setStatusMsg('TAPER PROFILE: ' + (state.gearTaperSide==='EXTERNAL'?'EXTERNAL (OD TAPER)':'INTERNAL (ID BORE TAPER)'));
+          render();
+        });
+      }
+
+      var btnTaperInvert = $('fld-gearTaperInvert');
+      if(btnTaperInvert){
+        btnTaperInvert.addEventListener('click', function(){
+          state.gearTaperInvert = !state.gearTaperInvert;
+          setStatusMsg('TAPER CONE SLOPE: ' + (state.gearTaperInvert ? 'INVERTED (TALLER AT TAILSTOCK)' : 'NORMAL (TALLER AT CHUCK)'));
+          render();
+        });
+      }
       return;
     }
 
@@ -2356,8 +2560,15 @@
       } else {
         var zDisp = getGearZDisplay();
         var xDisp = getGearXDisplay();
-        var curDisp = state.activeFeedAxis === 'Z' ? zDisp : xDisp;
-        setStatusMsg('SYNC ARMED: ' + state.activeFeedAxis + '-AXIS GEARED AT ' + curDisp.val + ' ' + curDisp.unit);
+        if(state.activeFeedAxis === 'Z+X'){
+          var taperPresetName = (state.gearTaperPresetIdx >= 0 && state.gearTaperPresetIdx < TAPER_PRESETS.length) 
+            ? TAPER_PRESETS[state.gearTaperPresetIdx].name 
+            : 'CUSTOM TAPER';
+          setStatusMsg('SYNC ARMED: 2-AXIS TAPER (Z: ' + zDisp.val + ' ' + zDisp.unit + ' | SLAVE X: ' + taperPresetName + ' ' + fmt(state.gearTaperAngle,2) + '°)');
+        } else {
+          var curDisp = state.activeFeedAxis === 'Z' ? zDisp : xDisp;
+          setStatusMsg('SYNC ARMED: ' + state.activeFeedAxis + '-AXIS GEARED AT ' + curDisp.val + ' ' + curDisp.unit);
+        }
       }
     } else if(state.mode === 'TURNING'){
       var p = getTurnPasses();
@@ -2473,6 +2684,17 @@
               var dx = (state.gearDirX==='IN' ? -1 : 1) * state.gearPitchX * revDelta;
               state.xDia = clamp(state.xDia + dx, state.xMinDia, state.xMaxDia);
               if(state.xDia === state.xMinDia || state.xDia === state.xMaxDia) state.runState = 'stopped';
+            } else if(state.activeFeedAxis === 'Z+X'){
+              var dz = (state.gearDirZ==='FWD' ? -1 : 1) * state.gearPitchZ * revDelta;
+              state.z = clamp(state.z + dz, state.zMin, state.zMax);
+              var coneRatio = state.gearTaperRatio || 0.0625;
+              var taperSideSign = (state.gearTaperSide === 'INTERNAL' ? 1 : -1);
+              if(state.gearTaperInvert) taperSideSign = -taperSideSign;
+              var dx = Math.abs(dz) * coneRatio * taperSideSign;
+              state.xDia = clamp(state.xDia + dx, state.xMinDia, state.xMaxDia);
+              if(state.z === state.zMin || state.z === state.zMax || (state.xMinDia !== null && state.xDia === state.xMinDia) || (state.xMaxDia !== null && state.xDia === state.xMaxDia)){
+                state.runState = 'stopped';
+              }
             }
           } else if(state.mode === 'TURNING'){
             var zDirSign = (state.turnDir === 'CHUCK' ? -1 : 1);
@@ -3433,6 +3655,145 @@
     openKeypad('gearPitchZ_custom', curVal);
   });
 
+  // Dedicated Gearbox Taper Selection Modal (Presets + Linked Calculator)
+  function openGearboxTaperModal(){
+    if(state.runState === 'running') return;
+    $('btnTaperTabPresets').classList.add('active');
+    $('btnTaperTabCustom').classList.remove('active');
+    $('taperPresetsView').style.display = 'flex';
+    $('taperCustomView').style.display = 'none';
+    renderGearboxTaperPresets();
+    $('gearTaperOverlay').classList.add('show');
+  }
+
+  function renderGearboxTaperPresets(){
+    var grid = $('gearTaperPresetsGrid');
+    if(!grid) return;
+    grid.innerHTML = '';
+    TAPER_PRESETS.forEach(function(p, idx){
+      var b = document.createElement('button');
+      b.className = 'gear-pitch-btn';
+      b.style.display = 'flex';
+      b.style.flexDirection = 'column';
+      b.style.alignItems = 'flex-start';
+      b.style.justifyContent = 'center';
+      b.style.minHeight = '48px';
+      b.style.padding = '5px 8px';
+      b.style.textAlign = 'left';
+      
+      var isCur = (state.gearTaperPresetIdx === idx) || (Math.abs(state.gearTaperRatio - p.ratio) < 0.0005);
+      if(isCur) b.classList.add('active');
+
+      b.innerHTML = '<div style="display:flex; justify-content:space-between; width:100%; align-items:center;">' +
+        '<b style="font-size:12px; color:var(--fg);">' + p.name + '</b>' +
+        '<span style="font-size:10px; font-weight:700; color:var(--amber); font-family:\'JetBrains Mono\',monospace;">' + p.angle.toFixed(2) + '°</span>' +
+      '</div>' +
+      '<div style="display:flex; justify-content:space-between; width:100%; font-size:10px; color:var(--dim); font-family:\'JetBrains Mono\',monospace; margin-top:2px;">' +
+        '<span>' + p.desc + '</span>' +
+        '<span style="color:var(--blue); font-weight:600;">' + formatTaperRatio(p.ratio) + '</span>' +
+      '</div>';
+
+      b.addEventListener('click', function(){
+        state.gearTaperPresetIdx = idx;
+        state.gearTaperRatio = p.ratio;
+        state.gearTaperAngle = p.angle;
+        setStatusMsg('TAPER SET: ' + p.name + ' (' + p.angle.toFixed(2) + '°, ' + formatTaperRatio(p.ratio) + ')');
+        $('gearTaperOverlay').classList.remove('show');
+        render();
+      });
+      grid.appendChild(b);
+    });
+  }
+
+  $('btnTaperTabPresets').addEventListener('click', function(){
+    this.classList.add('active');
+    $('btnTaperTabCustom').classList.remove('active');
+    $('taperPresetsView').style.display = 'flex';
+    $('taperCustomView').style.display = 'none';
+  });
+
+  $('btnTaperTabCustom').addEventListener('click', function(){
+    this.classList.add('active');
+    $('btnTaperTabPresets').classList.remove('active');
+    $('taperPresetsView').style.display = 'none';
+    $('taperCustomView').style.display = 'flex';
+    var r = state.gearTaperRatio;
+    var k = r > 0 ? (1 / r) : 16;
+    $('customTaperAngleInp').value = state.gearTaperAngle.toFixed(2);
+    $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
+    $('customTaperRatioInp').value = r.toFixed(5);
+    $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+  });
+
+  $('btnGearTaperClose').addEventListener('click', function(){
+    $('gearTaperOverlay').classList.remove('show');
+  });
+
+  $('gearTaperOverlay').addEventListener('click', function(e){
+    if(e.target === this) this.classList.remove('show');
+  });
+
+  var customTaperInpActive = false;
+  $('customTaperAngleInp').addEventListener('input', function(){
+    if(customTaperInpActive) return;
+    customTaperInpActive = true;
+    var ang = parseFloat(this.value);
+    if(!isNaN(ang) && ang > 0 && ang < 89.9){
+      var r = 2 * Math.tan(ang * Math.PI / 180);
+      var k = 1 / r;
+      $('customTaperRatioInp').value = r.toFixed(5);
+      $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
+      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+    }
+    customTaperInpActive = false;
+  });
+
+  $('customTaperKInp').addEventListener('input', function(){
+    if(customTaperInpActive) return;
+    customTaperInpActive = true;
+    var k = parseFloat(this.value);
+    if(!isNaN(k) && k > 0){
+      var r = 1 / k;
+      var ang = Math.atan(r / 2) * (180 / Math.PI);
+      $('customTaperAngleInp').value = ang.toFixed(2);
+      $('customTaperRatioInp').value = r.toFixed(5);
+      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+    }
+    customTaperInpActive = false;
+  });
+
+  $('customTaperRatioInp').addEventListener('input', function(){
+    if(customTaperInpActive) return;
+    customTaperInpActive = true;
+    var r = parseFloat(this.value);
+    if(!isNaN(r) && r > 0){
+      var k = 1 / r;
+      var ang = Math.atan(r / 2) * (180 / Math.PI);
+      $('customTaperAngleInp').value = ang.toFixed(2);
+      $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
+      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+    }
+    customTaperInpActive = false;
+  });
+
+  $('btnApplyCustomTaper').addEventListener('click', function(){
+    var ang = parseFloat($('customTaperAngleInp').value);
+    var r = parseFloat($('customTaperRatioInp').value);
+    if(isNaN(ang) || ang <= 0 || ang >= 89.9){
+      setStatusMsg('INVALID TAPER ANGLE (Must be 0.1° to 88°)');
+      return;
+    }
+    if(isNaN(r) || r <= 0){
+      r = 2 * Math.tan(ang * Math.PI / 180);
+    }
+    state.gearTaperAngle = +ang.toFixed(2);
+    state.gearTaperRatio = +r.toFixed(5);
+    state.gearTaperPresetIdx = -1; // custom
+    setStatusMsg('CUSTOM TAPER SET: ' + state.gearTaperAngle.toFixed(2) + '° (' + formatTaperRatio(state.gearTaperRatio) + ')');
+    $('gearTaperOverlay').classList.remove('show');
+    render();
+  });
+
   function openThreadWizard(mode){
     if(state.runState === 'running') return;
     pitchSelectTarget = 'modePitch';
@@ -3813,6 +4174,7 @@
     threadStarts:'THREAD STARTS (1-9)', threadTotalDepth:'THREAD TOTAL DEPTH', threadCustomDia:'CUSTOM THREAD DIAMETER',
     wizThreadLength:'THREAD LENGTH',
     taperAngle:'TAPER ANGLE', taperLen:'TAPER LENGTH', cutoffFeed:'PLUNGE FEED',
+    gearTaperAngle:'TAPER CONE ANGLE',
     cutoffPeck:'PECK DEPTH', cutoffRetract:'RETRACT DIST', slotStrokes:'TOTAL STROKES',
     slotFeedPerStroke:'STROKE FEED', slotLen:'STROKE LENGTH', sphereRadius:'SPHERE RADIUS',
     sphereStep:'ARC STEP', joyMaxRate:'MAX JOYSTICK SPEED', joyDeadzone:'JOYSTICK DEADZONE',
@@ -4020,6 +4382,20 @@
         }
       }
       else if(kpTarget==='taperAngle'){ state.taperAngle = v; }
+      else if(kpTarget==='gearTaperAngle'){
+        state.gearTaperAngle = Math.abs(v);
+        state.gearTaperRatio = +(2 * Math.tan((state.gearTaperAngle * Math.PI) / 180)).toFixed(5);
+        var matchIdx = -1;
+        for(var i = 0; i < TAPER_PRESETS.length; i++){
+          if(Math.abs(TAPER_PRESETS[i].angle - state.gearTaperAngle) < 0.05){
+            matchIdx = i;
+            break;
+          }
+        }
+        if(matchIdx !== -1){
+          state.gearTaperPresetIdx = matchIdx;
+        }
+      }
       else if(kpTarget==='taperLen'){ state.taperLen = mm; }
       else if(kpTarget==='cutoffFeed'){ state.cutoffFeed = mm; }
       else if(kpTarget==='cutoffPeck'){ state.cutoffPeck = mm; }
