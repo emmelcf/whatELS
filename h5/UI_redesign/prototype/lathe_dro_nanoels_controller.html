@@ -251,6 +251,40 @@
   .deck-step-chip.active { background: #0d1e2c; border-color: #234768; color: var(--blue); }
   .deck-step-chip:active { filter: brightness(1.25); }
 
+  /* Threading Mode Action Bar */
+  .thread-action-bar { display: flex; gap: 6px; width: 100%; margin-bottom: 4px; }
+  .thread-act-btn {
+    flex: 1; min-height: 36px; border-radius: 4px; font-family: inherit; font-size: 12.5px;
+    font-weight: 700; letter-spacing: 0.3px; display: flex; align-items: center; justify-content: center;
+    gap: 5px; cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .thread-act-btn.new { background: #112519; border: 1px solid #1f4a2d; color: var(--green); }
+  .thread-act-btn.new:active { background: #183824; }
+  .thread-act-btn.edit { background: #122130; border: 1px solid #1f3b54; color: var(--blue); }
+  .thread-act-btn.edit:active { background: #193147; }
+  .thread-act-btn.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+  /* Threading Cycle Monitor (Center Deck) */
+  .deck-thread-mon { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .deck-thread-mon .mon-head {
+    display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a252f; padding-bottom: 3px;
+  }
+  .deck-thread-mon .mon-title { font-size: 11px; font-weight: 800; color: var(--dim); letter-spacing: 0.5px; }
+  .deck-thread-mon .mon-status-pill { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 3px; }
+  .deck-thread-mon .mon-status-pill.ready { background: rgba(255, 180, 84, 0.12); border: 1px solid rgba(255, 180, 84, 0.3); color: var(--amber); }
+  .deck-thread-mon .mon-status-pill.active { background: rgba(61, 220, 132, 0.15); border: 1px solid rgba(61, 220, 132, 0.4); color: var(--green); }
+  .deck-thread-mon .mon-row { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--dim); }
+  .deck-thread-mon .mon-row b { color: var(--fg); font-weight: 700; }
+  .thread-phase-strip { display: flex; gap: 3px; width: 100%; margin: 2px 0; }
+  .thread-phase-strip .phase-chip {
+    flex: 1; text-align: center; font-size: 9.5px; font-weight: 700; padding: 3px 0;
+    background: #0f161c; border: 1px solid #1c2730; border-radius: 2px; color: var(--dimmer);
+  }
+  .thread-phase-strip .phase-chip.active { background: #0d2719; border-color: #235836; color: var(--green); font-weight: 800; }
+  .thread-phase-strip .phase-chip.done { background: #111a22; color: var(--dim); }
+  .thread-mini-bar { width: 100%; height: 4px; background: #141c22; border-radius: 2px; overflow: hidden; margin-top: 1px; }
+  .thread-mini-bar .fill { height: 100%; background: var(--green); transition: width 0.15s; }
+
   /* Mode Properties Table */
   .kv {
     display: flex; justify-content: space-between; align-items: center; font-size: 13px;
@@ -1140,24 +1174,34 @@
           <div class="toggle-chip tap active" id="btnWizSkimVerify">SKIM PASS</div>
         </div>
 
-        <!-- Parameter Row: THREAD LENGTH & Optional STARTS (for Custom Multi-Start) -->
+        <!-- Parameter Row: THREAD LENGTH & PASSES Stepper -->
         <div style="display:flex; gap:8px; width:100%; box-sizing:border-box;">
-          <div id="btnWizLengthBox" class="tap" style="flex:1; display:flex; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 12px; height:42px; box-sizing:border-box; cursor:pointer;">
-            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">THREAD LENGTH</span>
+          <div id="btnWizLengthBox" class="tap" style="flex:1; display:flex; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 12px; height:42px; box-sizing:border-box; cursor:pointer;" title="Tap to enter length">
+            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">LENGTH</span>
             <div style="display:flex; align-items:center; gap:6px;">
               <span class="mono" id="wizLengthVal" style="font-size:16px; font-weight:800; color:var(--blue);">20.00</span>
               <span id="wizLengthUnit" style="font-size:11.5px; font-weight:700; color:var(--dim);">mm</span>
-              <span style="font-size:10px; padding:2px 5px; background:#182635; border:1px solid #28445e; border-radius:3px; color:var(--blue); font-weight:700;">EDIT ✎</span>
+              <span style="font-size:10px; padding:2px 5px; background:#182635; border:1px solid #28445e; border-radius:3px; color:var(--blue); font-weight:700;">✎</span>
             </div>
           </div>
 
-          <div id="wizStartsRow" style="flex:1; display:none; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 10px; height:42px; box-sizing:border-box;">
-            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">STARTS</span>
+          <div id="wizPassesBox" style="flex:1; display:flex; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 8px; height:42px; box-sizing:border-box;">
+            <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">PASSES</span>
             <div style="display:flex; align-items:center; gap:4px;">
-              <button class="tap" id="btnWizStartsMinus" style="width:30px; height:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>
-              <span class="mono tap" id="wizStartsVal" style="min-width:68px; text-align:center; font-weight:700; font-size:12.5px; color:var(--blue); cursor:pointer;" title="Tap to enter via numpad">1 START</span>
-              <button class="tap" id="btnWizStartsPlus" style="width:30px; height:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>
+              <button class="tap" id="btnWizPassesMinus" style="width:28px; height:28px; min-height:28px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>
+              <span class="mono tap" id="wizPassesVal" style="min-width:76px; text-align:center; font-weight:700; font-size:12px; color:var(--amber); cursor:pointer;" title="Tap to enter passes via numpad">11 (AUTO)</span>
+              <button class="tap" id="btnWizPassesPlus" style="width:28px; height:28px; min-height:28px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Optional Starts Row for Multi-Start -->
+        <div id="wizStartsRow" style="display:none; align-items:center; justify-content:space-between; background:#11181f; border:1px solid var(--line); border-radius:4px; padding:0 10px; height:38px; box-sizing:border-box;">
+          <span style="font-size:11.5px; font-weight:800; color:var(--dim); letter-spacing:0.4px;">STARTS</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <button class="tap" id="btnWizStartsMinus" style="width:28px; height:28px; min-height:28px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>
+            <span class="mono tap" id="wizStartsVal" style="min-width:68px; text-align:center; font-weight:700; font-size:12.5px; color:var(--blue); cursor:pointer;" title="Tap to enter via numpad">1 START</span>
+            <button class="tap" id="btnWizStartsPlus" style="width:28px; height:28px; min-height:28px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>
           </div>
         </div>
 
@@ -1360,12 +1404,11 @@
     threadStarts: 1, // 1 to 124
     threadTotalDepth: 1.073, // mm (calculated from standard)
     threadTargetStockDia: 11.90, // target prep OD
-    threadTargetRootDia: 9.85,
-    threadPassCount: 8,
+    threadPassCount: 11,
     threadCurrentPass: 1,
     threadSkimVerify: true, // Human-in-the-loop skim verification pass
     threadSkimStage: 'IDLE', // 'IDLE', 'SKIMMING', 'VERIFY_PROMPT', 'THREADING'
-    pass: '01 / 08',
+    pass: '01 / 11',
     depth: 1.073,
     pitchTab: 'metric',
     threadUnit: 'metric',
@@ -1808,50 +1851,74 @@
         '</div>';
 
     } else if(state.mode === 'THREADING'){
-      var tp = getThreadPitchDisplay();
+      var totPass = state.threadPassCount || 11;
       if(isRun){
+        var curPass = state.threadCurrentPass || 1;
+        var isSkim = (state.threadSkimStage === 'SKIMMING');
+        var passLabel = isSkim ? 'SKIM PASS' : ('PASS ' + (curPass < 10 ? '0' : '') + curPass + ' / ' + (totPass < 10 ? '0' : '') + totPass);
+        
+        // Quadratic infeed depth calculation matching NanoELS h5.ino line 9236
+        var fraction = (totPass - curPass) / totPass;
+        fraction = fraction * fraction;
+        var curInfeed = isSkim ? 0 : state.threadTotalDepth * (1 - fraction);
+        var pct = isSkim ? 12 : Math.max(8, Math.round((curPass / totPass) * 100));
+
         deck.innerHTML = '' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREADING RUNNING</span>' +
-            '<span class="deck-pass-badge mono">PASS ' + state.pass + '</span>' +
-          '</div>' +
-          '<div class="deck-controls" style="opacity:0.95;">' +
-            '<div class="deck-readout" id="deckReadout" style="width:100%;">' +
-              '<span class="deck-val mono">' + tp.val + ' ' + tp.unit + '</span>' +
-              '<span class="deck-unit" style="color:var(--amber);">DEPTH: ' + lenStr(state.depth) + ' ' + unitLabel() + '</span>' +
+          '<div class="deck-thread-mon">' +
+            '<div class="mon-head">' +
+              '<span class="mon-title">THREADING RUNNING</span>' +
+              '<span class="mon-status-pill active mono">' + passLabel + '</span>' +
             '</div>' +
-          '</div>' +
-          '<div style="background:#0e161a; border:1px solid #1a2730; border-radius:4px; min-height:38px; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700; color:var(--dim); margin-top:2px;">' +
-            'CYCLE ACTIVE — AUTO INFEED' +
+            '<div class="thread-phase-strip">' +
+              '<span class="phase-chip ' + (curPass > 0 ? 'done' : 'active') + '">1. INFEED</span>' +
+              '<span class="phase-chip active">2. CUT (' + (state.threadCutDir==='CHUCK'?'Z−':'Z+') + ')</span>' +
+              '<span class="phase-chip">3. RETRACT</span>' +
+              '<span class="phase-chip">4. RETURN</span>' +
+            '</div>' +
+            '<div class="mon-row" style="margin-top:2px;">' +
+              '<span>INFEED DEPTH:</span>' +
+              '<b class="mono" style="color:var(--amber);">' + lenStr(curInfeed, 3) + ' / ' + lenStr(state.threadTotalDepth, 3) + ' ' + unitLabel() + '</b>' +
+            '</div>' +
+            '<div class="thread-mini-bar">' +
+              '<div class="fill" style="width:' + pct + '%;"></div>' +
+            '</div>' +
+            '<div class="mon-row" style="font-size:10.5px; margin-top:2px;">' +
+              '<span>SYNC STATUS:</span>' +
+              '<b class="mono" style="color:var(--green);">LEADSCRW LOCKED · ' + (state.spindleRpm || 240) + ' RPM</b>' +
+            '</div>' +
           '</div>';
       } else {
+        var nextPassLabel = (state.threadSkimVerify && state.threadSkimStage !== 'THREADING') ? 
+          'STAGE 1 (SKIM VERIFY)' : 
+          ('PASS 01 OF ' + (totPass < 10 ? '0' : '') + totPass);
         var isReverseSpindle = (state.threadCutDir === 'TAIL' && state.threadHandedness === 'RIGHT') || (state.threadCutDir === 'CHUCK' && state.threadHandedness === 'LEFT');
-        var spindleText = isReverseSpindle ? 'SPINDLE: REVERSE (CW)' : 'SPINDLE: FORWARD (CCW)';
-        var spindleColor = isReverseSpindle ? 'var(--amber)' : 'var(--green)';
-        var spindleBg = isReverseSpindle ? 'rgba(255,160,0,0.1)' : 'rgba(38,166,91,0.12)';
-        var spindleBorder = isReverseSpindle ? 'rgba(255,160,0,0.3)' : 'rgba(38,166,91,0.3)';
-
-        var leadMm = state.pitch * state.threadStarts;
-        var specStr = state.threadStandardName || (tp.val + ' ' + tp.unit);
-        var feedStr = state.threadCutDir === 'CHUCK' ? '← TO CHUCK (Z−)' : '→ TO TAIL (Z+)';
+        var spindleText = isReverseSpindle ? 'SPINDLE: CW (REV)' : 'SPINDLE: CCW (FWD)';
         var threadLenMm = state.threadLength || 20.0;
+        var zTarget = state.threadCutDir === 'CHUCK' ? -threadLenMm : threadLenMm;
 
         deck.innerHTML = '' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<span style="font-size:11px; font-weight:700; color:var(--dim);">THREAD SPEC & LEAD</span>' +
-            '<span style="font-size:10px; color:var(--blue); font-weight:700;">' + (state.threadHandedness==='RIGHT'?'RH':'LH') + ' · ' + (state.threadCutDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span>' +
-          '</div>' +
-          '<div class="blueprint-card tap" id="deckThreadBp" style="margin:3px 0; padding:8px 10px; gap:5px; cursor:pointer;" title="Tap to configure thread">' +
-            '<div class="row"><span>SPEC:</span><b style="color:var(--blue); font-size:13.5px;">' + specStr + '</b></div>' +
-            '<div class="row"><span>FEED / LEN:</span><b class="mono">' + (state.threadCutDir==='CHUCK'?'← CHUCK (Z−)':'→ TAIL (Z+)') + ' · ' + lenStr(threadLenMm, 1) + ' ' + unitLabel() + '</b></div>' +
-            '<div class="row"><span>RADIAL INFEED:</span><b class="mono">' + lenStr(state.threadTotalDepth) + ' ' + unitLabel() + '</b><span>PASSES:</span><b class="mono">' + state.threadPassCount + 'P</b></div>' +
-          '</div>' +
-          '<div style="background:#0e1d15; border:1px solid #1f4a2d; border-radius:4px; min-height:36px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; font-weight:800; color:var(--green); margin-top:2px;">' +
-            '<span style="font-size:12px; letter-spacing:0.3px;">FEED DIR: ' + feedStr + '</span>' +
+          '<div class="deck-thread-mon">' +
+            '<div class="mon-head">' +
+              '<span class="mon-title">THREADING PROGRAM</span>' +
+              '<span class="mon-status-pill ready">● READY</span>' +
+            '</div>' +
+            '<div class="mon-row" style="margin-top:3px;">' +
+              '<span>NEXT PASS:</span>' +
+              '<b class="mono" style="color:var(--blue); font-size:12.5px;">' + nextPassLabel + '</b>' +
+            '</div>' +
+            '<div class="mon-row">' +
+              '<span>ENVELOPE:</span>' +
+              '<b class="mono">Z 0.0 → ' + lenStr(zTarget, 1) + ' ' + unitLabel() + ' (' + (state.threadCutDir==='CHUCK'?'Z−':'Z+') + ')</b>' +
+            '</div>' +
+            '<div class="mon-row">' +
+              '<span>SPINDLE:</span>' +
+              '<b class="mono" style="color:' + (isReverseSpindle ? 'var(--amber)' : 'var(--green)') + ';">' + spindleText + '</b>' +
+            '</div>' +
+            '<div class="mon-row" style="font-size:10.5px; color:var(--dimmer); margin-top:2px;">' +
+              '<span>MOTION:</span>' +
+              '<span>AUTO CYCLE · LEADSCRW SYNC</span>' +
+            '</div>' +
           '</div>';
-
-        var bpCard = $('deckThreadBp');
-        if(bpCard) bpCard.addEventListener('click', function(){ openPitchSelect('modePitch'); });
       }
 
     } else {
@@ -2082,22 +2149,36 @@
     }
 
     if(state.mode === 'THREADING'){
+      var isRun = state.runState === 'running';
+      var disCls = isRun ? 'disabled' : '';
       var tp = getThreadPitchDisplay();
       var specLabel = state.threadStandardName ? state.threadStandardName : (tp.val + ' ' + tp.unit);
-      var leadMm = state.pitch * state.threadStarts;
+      var leadMm = state.pitch * (state.threadStarts || 1);
+      var sideLabel = state.threadSide === 'INTERNAL' ? 'INTERNAL (NUT)' : 'EXTERNAL (BOLT)';
+      var handLabel = (state.threadHandedness === 'RIGHT' ? 'RH' : 'LH');
+      var cutLabel = state.threadCutDir === 'CHUCK' ? '← TO CHUCK (Z−)' : '→ TO TAIL (Z+)';
+      var passCount = state.threadPassCount || 11;
+      var infeedDepth = state.threadTotalDepth || 1.073;
+      var stockDia = state.threadTargetStockDia || (state.xDia > 0 ? state.xDia : 12.0);
+      var rootDia = state.threadTargetRootDia || (state.threadSide === 'INTERNAL' ? (stockDia + 2*infeedDepth) : (stockDia - 2*infeedDepth));
+
       return '' +
-        '<div class="kv"><span>SPEC / LEAD</span><b class="mono ' + ed + '" id="fld-pitch" style="font-size:13.5px; color:var(--blue);">' + specLabel + '</b></div>' +
-        '<div class="kv"><span>STARTS</span>' +
-          '<div style="display:flex; align-items:center; gap:4px;">' +
-            '<button class="tap" id="btnStartsMinus" style="width:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">−</button>' +
-            '<span class="mono" style="min-width:68px; text-align:center; font-weight:700; font-size:12.5px; color:var(--fg);">' + state.threadStarts + (state.threadStarts > 1 ? ' (' + fmt(leadMm, 2) + 'mm)' : ' START') + '</span>' +
-            '<button class="tap" id="btnStartsPlus" style="width:30px; min-height:30px; padding:0; font-size:16px; font-weight:800; background:#141c22; border:1px solid var(--line); border-radius:3px; color:var(--fg); cursor:pointer;">+</button>' +
-          '</div>' +
+        '<div class="thread-action-bar">' +
+          '<button class="thread-act-btn new tap ' + disCls + '" id="btnThreadNew">+ NEW THREAD</button>' +
+          '<button class="thread-act-btn edit tap ' + disCls + '" id="btnThreadEdit">✎ EDIT SETUP</button>' +
         '</div>' +
-        '<div class="kv"><span>HANDEDNESS</span><span class="inline-dir-chip tap" id="fld-threadHandedness" style="min-height:34px; padding:2px 10px;">' + (state.threadHandedness==='RIGHT'?'RH (RIGHT HAND)':'LH (LEFT HAND)') + '</span></div>' +
-        '<div class="kv"><span>CUT DIRECTION</span><span class="inline-dir-chip tap" id="fld-threadCutDir" style="min-height:34px; padding:2px 10px;">' + (state.threadCutDir==='CHUCK'?'← TO CHUCK':'→ TO TAIL (BLIND HOLE)') + '</span></div>' +
-        '<div class="kv"><span>SKIM VERIFY</span><span class="toggle-chip ' + (state.threadSkimVerify?'active':'') + ' tap" id="fld-threadSkim" style="min-height:34px; padding:2px 10px;">' + (state.threadSkimVerify?'VERIFY PASS: ON':'VERIFY PASS: OFF') + '</span></div>' +
-        '<div class="kv"><span>DEPTH / PASSES</span><b class="mono ' + ed + '" id="fld-threadDepth">' + lenStr(state.threadTotalDepth) + ' ' + unitLabel() + ' (' + state.threadPassCount + 'P)</b></div>';
+        '<div style="background:#0a0e12; border:1px solid #1a2530; border-radius:4px; padding:6px 8px; display:flex; flex-direction:column; gap:3px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #141d24; padding-bottom:4px;">' +
+            '<b style="font-size:14.5px; color:var(--blue); letter-spacing:0.3px;">' + specLabel + '</b>' +
+            '<span style="font-size:10px; font-weight:700; color:var(--dim); background:#121a22; border:1px solid #1f2c38; padding:1px 6px; border-radius:3px;">' + sideLabel + ' · ' + handLabel + '</span>' +
+          '</div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>PITCH / LEAD</span><b class="mono" style="font-size:12.5px;">' + fmt(state.pitch, 3) + ' mm' + (state.threadStarts > 1 ? ' (' + state.threadStarts + 'S / ' + fmt(leadMm, 2) + 'mm)' : '') + '</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>FEED DIR / LEN</span><b class="mono" style="font-size:12.5px;">' + cutLabel + ' · ' + lenStr(state.threadLength || 20.0, 1) + ' ' + unitLabel() + '</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>STOCK (PREP Ø)</span><b class="mono" style="font-size:12.5px;">Ø ' + fmt(stockDia, 2) + ' mm</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>TARGET ROOT Ø</span><b class="mono" style="font-size:12.5px;">Ø ' + fmt(rootDia, 2) + ' mm</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>INFEED / PASSES</span><b class="mono" style="font-size:12.5px; color:var(--amber);">' + lenStr(infeedDepth, 3) + ' ' + unitLabel() + ' (' + passCount + 'P)</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>SKIM VERIFY</span><span class="mono" style="font-size:11.5px; font-weight:700; color:' + (state.threadSkimVerify ? 'var(--green)' : 'var(--dimmer)') + ';">' + (state.threadSkimVerify ? 'STAGE 1: ENABLED' : 'DISABLED') + '</span></div>' +
+        '</div>';
     }
 
     if(state.mode === 'TAPER'){
@@ -2220,41 +2301,22 @@
         updateStatusMsg(); render();
       });
     } else if(state.mode === 'THREADING'){
-      $('fld-pitch').addEventListener('click', function(){ openPitchSelect('modePitch'); });
-      var btnStartsMinus = $('btnStartsMinus');
-      var btnStartsPlus = $('btnStartsPlus');
-      if(btnStartsMinus){
-        btnStartsMinus.addEventListener('click', function(){
-          state.threadStarts = Math.max(1, state.threadStarts - 1);
-          render();
+      var btnNew = $('btnThreadNew');
+      var btnEdit = $('btnThreadEdit');
+      if(btnNew){
+        btnNew.addEventListener('click', function(e){
+          e.stopPropagation();
+          if(state.runState === 'running') return;
+          openThreadWizard('NEW');
         });
       }
-      if(btnStartsPlus){
-        btnStartsPlus.addEventListener('click', function(){
-          state.threadStarts = Math.min(9, state.threadStarts + 1);
-          render();
+      if(btnEdit){
+        btnEdit.addEventListener('click', function(e){
+          e.stopPropagation();
+          if(state.runState === 'running') return;
+          openThreadWizard('EDIT');
         });
       }
-      var elHand = $('fld-threadHandedness');
-      if(elHand) elHand.addEventListener('click', function(){
-        state.threadHandedness = (state.threadHandedness === 'RIGHT' ? 'LEFT' : 'RIGHT');
-        state.threadDir = state.threadHandedness;
-        updateStatusMsg(); render();
-      });
-      var elCutDir = $('fld-threadCutDir');
-      if(elCutDir) elCutDir.addEventListener('click', function(){
-        state.threadCutDir = (state.threadCutDir === 'CHUCK' ? 'TAIL' : 'CHUCK');
-        updateStatusMsg(); render();
-      });
-      var elSkim = $('fld-threadSkim');
-      if(elSkim) elSkim.addEventListener('click', function(){
-        state.threadSkimVerify = !state.threadSkimVerify;
-        updateStatusMsg(); render();
-      });
-      var elDepth = $('fld-threadDepth');
-      if(elDepth) elDepth.addEventListener('click', function(){
-        openKeypad('threadTotalDepth', toDisplayLen(state.threadTotalDepth));
-      });
     } else if(state.mode === 'TAPER'){
       $('fld-taperAngle').addEventListener('click', function(){ openKeypad('taperAngle', state.taperAngle); });
       $('fld-taperLen').addEventListener('click', function(){ openKeypad('taperLen', state.taperLen); });
@@ -2471,9 +2533,12 @@
                   state.pass = (state.threadCurrentPass < 10 ? '0' : '') + state.threadCurrentPass + ' / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
                   state.z = state.threadCutDir === 'CHUCK' ? (state.zMax !== null ? state.zMax : -4.000)
                                                           : (state.zMin !== null ? state.zMin : -42.000);
-                  var infeedPerPass = state.threadTotalDepth / state.threadPassCount;
-                  if(state.threadSide === 'INTERNAL') state.xDia += (infeedPerPass * 2);
-                  else state.xDia -= (infeedPerPass * 2);
+                  var N = state.threadPassCount;
+                  var fracPrev = (N - (state.threadCurrentPass - 1)) / N;
+                  var fracCur = (N - state.threadCurrentPass) / N;
+                  var deltaInfeed = state.threadTotalDepth * ((fracPrev * fracPrev) - (fracCur * fracCur));
+                  if(state.threadSide === 'INTERNAL') state.xDia += (deltaInfeed * 2);
+                  else state.xDia -= (deltaInfeed * 2);
                   setStatusMsg('THREADING: PASS ' + state.threadCurrentPass + ' OF ' + state.threadPassCount);
                 } else {
                   stopCycle(false);
@@ -2804,12 +2869,20 @@
   var wizStarts = 1;
   var wizFreeTab = 'metric';
   var wizFreePitchMm = 1.75;
-  var pitchSelectTarget = 'modePitch'; // 'modePitch' or 'gearZ'
+  var wizPasses = null;
+  var wizPassesCustom = false;
+  var wizEditSession = false;
+
+  function calcAutoPasses(infeedDepth, side){
+    var base = Math.round(infeedDepth / 0.10);
+    if(side === 'INTERNAL') base += 2;
+    return Math.max(6, Math.min(18, base));
+  }
 
   function getWizBlueprint(){
     var name = '';
     var pitchMm = 1.0;
-    var stockMin = 0, stockMax = 0, targetRoot = 0, infeedDepth = 0, passes = 8;
+    var stockMin = 0, stockMax = 0, targetRoot = 0, infeedDepth = 0, passes = 11;
     var coneRatio = 0;
     var profile = '60° ISO';
     var l2 = 0;
@@ -2822,7 +2895,7 @@
       coneRatio = 0;
       profile = '60° FORM';
       infeedDepth = +(0.6134 * pitchMm).toFixed(3);
-      passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+      passes = (wizPassesCustom && wizPasses) ? wizPasses : calcAutoPasses(infeedDepth, wizSide);
       var curDia = state.xDia > 0 ? state.xDia : 20.0;
       if(wizSide === 'EXTERNAL'){
         stockMin = +(curDia - 0.15).toFixed(2);
@@ -2846,14 +2919,14 @@
           stockMax = item.stockMax;
           infeedDepth = +(0.6134 * pitchMm).toFixed(3);
           targetRoot = +(item.dia - 2 * infeedDepth).toFixed(2);
-          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+          passes = (wizPassesCustom && wizPasses) ? wizPasses : calcAutoPasses(infeedDepth, wizSide);
         } else {
           var tapDrill = +(item.dia - pitchMm).toFixed(2);
           stockMin = tapDrill;
           stockMax = tapDrill;
           infeedDepth = +(0.5413 * pitchMm).toFixed(3);
           targetRoot = item.dia;
-          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+          passes = (wizPassesCustom && wizPasses) ? wizPasses : calcAutoPasses(infeedDepth, wizSide);
         }
       } else if(wizFamily === 'UN'){
         var pObj = item.pitches[wizPitchIdx] || item.pitches[0];
@@ -2867,14 +2940,14 @@
           stockMax = item.stockMax;
           infeedDepth = +(0.6134 * pitchMm).toFixed(3);
           targetRoot = +(item.dia - 2 * infeedDepth).toFixed(2);
-          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+          passes = (wizPassesCustom && wizPasses) ? wizPasses : calcAutoPasses(infeedDepth, wizSide);
         } else {
           var tapDrill = +(item.dia - pitchMm).toFixed(2);
           stockMin = tapDrill;
           stockMax = tapDrill;
           infeedDepth = +(0.5413 * pitchMm).toFixed(3);
           targetRoot = item.dia;
-          passes = Math.max(6, Math.min(14, Math.round(infeedDepth / 0.12)));
+          passes = (wizPassesCustom && wizPasses) ? wizPasses : calcAutoPasses(infeedDepth, wizSide);
         }
       } else if(wizFamily === 'NPT'){
         var tpi = item.tpi;
@@ -2883,7 +2956,7 @@
         coneRatio = 0.0625;
         profile = 'NPT 1:16';
         infeedDepth = +(0.8000 * pitchMm).toFixed(3);
-        passes = item.passes || 12;
+        passes = (wizPassesCustom && wizPasses) ? wizPasses : (item.passes || calcAutoPasses(infeedDepth, wizSide));
         stockMin = item.smallOd;
         stockMax = item.pipeOd;
         targetRoot = +(item.pipeOd - 2 * infeedDepth).toFixed(2);
@@ -2895,7 +2968,7 @@
         coneRatio = 0.0625;
         profile = 'BSPT 1:16';
         infeedDepth = +(0.6403 * pitchMm).toFixed(3);
-        passes = item.passes || 12;
+        passes = (wizPassesCustom && wizPasses) ? wizPasses : (item.passes || calcAutoPasses(infeedDepth, wizSide));
         stockMin = item.smallOd;
         stockMax = item.pipeOd;
         targetRoot = +(item.pipeOd - 2 * infeedDepth).toFixed(2);
@@ -3014,7 +3087,7 @@
     } else if(wizStage === 4){
       if(backBtn){
         backBtn.style.display = 'inline-flex';
-        backBtn.textContent = '← PITCH';
+        backBtn.textContent = wizEditSession ? '← NEW SPEC' : '← PITCH';
       }
       title.textContent = 'STEP 4: MACHINING STRATEGY';
       renderStage4Setup();
@@ -3202,6 +3275,12 @@
     if($('wizLengthVal')) $('wizLengthVal').textContent = fmt(lenDisplay, state.unit === 'mm' ? 2 : 3);
     if($('wizLengthUnit')) $('wizLengthUnit').textContent = unitLabel();
 
+    var bp = getWizBlueprint();
+    var pCount = (wizPassesCustom && wizPasses) ? wizPasses : (bp ? bp.passes : 11);
+    if($('wizPassesVal')){
+      $('wizPassesVal').textContent = pCount + (wizPassesCustom ? ' (MANUAL)' : ' (AUTO)');
+    }
+
     var isCustom = (wizFamily === 'FREEFORM');
     if($('wizStartsRow')){
       $('wizStartsRow').style.display = isCustom ? 'flex' : 'none';
@@ -3332,33 +3411,55 @@
     openKeypad('gearPitchZ_custom', curVal);
   });
 
-  function openPitchSelect(target, tab){
-    pitchSelectTarget = target || 'modePitch';
-    wizSide = state.threadSide || 'EXTERNAL';
-    wizHandedness = state.threadHandedness || 'RIGHT';
-    wizCutDir = state.threadCutDir || 'CHUCK';
-    wizSkimVerify = state.threadSkimVerify !== undefined ? state.threadSkimVerify : true;
-    wizFreePitchMm = state.pitch || 1.75;
-    wizStarts = state.threadStarts || 1;
+  function openThreadWizard(mode){
+    pitchSelectTarget = 'modePitch';
     wizShowMore = false;
 
-    wizFamily = (state.threadStandard && THREAD_FAMILIES[state.threadStandard]) ? state.threadStandard : 'METRIC';
-    var fam = THREAD_FAMILIES[wizFamily];
-    var sIdx = state.threadSizeIdx || 0;
-    wizSizeItem = (fam && fam.sizes) ? (fam.sizes[sIdx] || fam.sizes[0]) : null;
-    wizRangeIdx = wizSizeItem ? wizSizeItem.rangeIdx : 1;
-    wizPitchIdx = state.threadPitchSubIdx || 0;
-
-    if(wizSizeItem && (wizFamily === 'NPT' || wizFamily === 'BSPT') && wizSizeItem.l2){
-      wizThreadLength = wizSizeItem.l2;
-    } else {
+    if(mode === 'EDIT'){
+      wizEditSession = true;
+      wizSide = state.threadSide || 'EXTERNAL';
+      wizHandedness = state.threadHandedness || 'RIGHT';
+      wizCutDir = state.threadCutDir || 'CHUCK';
+      wizSkimVerify = state.threadSkimVerify !== undefined ? state.threadSkimVerify : true;
+      wizStarts = state.threadStarts || 1;
       wizThreadLength = state.threadLength || 20.0;
+      wizPasses = state.threadPassCount || 11;
+      wizPassesCustom = true;
+      wizFamily = (state.threadStandard && THREAD_FAMILIES[state.threadStandard]) ? state.threadStandard : 'METRIC';
+      var fam = THREAD_FAMILIES[wizFamily];
+      var sIdx = state.threadSizeIdx || 0;
+      wizSizeItem = (fam && fam.sizes) ? (fam.sizes[sIdx] || fam.sizes[0]) : null;
+      wizRangeIdx = wizSizeItem ? wizSizeItem.rangeIdx : 1;
+      wizPitchIdx = state.threadPitchSubIdx || 0;
+      if(wizFamily === 'FREEFORM'){
+        wizFreePitchMm = state.pitch || 1.75;
+      }
+      setWizardStage(4);
+      updateWizBlueprintCard();
+    } else {
+      // 'NEW' mode - start fresh from Step 1
+      wizEditSession = false;
+      wizSide = 'EXTERNAL';
+      wizHandedness = 'RIGHT';
+      wizCutDir = 'CHUCK';
+      wizSkimVerify = true;
+      wizStarts = 1;
+      wizThreadLength = 20.0;
+      wizPasses = null;
+      wizPassesCustom = false;
+      wizFamily = 'METRIC';
+      wizRangeIdx = 1;
+      wizPitchIdx = 0;
+      var fam = THREAD_FAMILIES['METRIC'];
+      wizSizeItem = (fam && fam.sizes) ? fam.sizes[0] : null;
+      setWizardStage(1);
     }
-
-    // Always start at Step 1: Family Selection
-    setWizardStage(1);
-
     $('pitchOverlay').classList.add('show');
+  }
+
+  function openPitchSelect(target, tab){
+    openThreadWizard('NEW');
+    pitchSelectTarget = target || 'modePitch';
   }
 
   // Wizard Navigation Listeners
@@ -3369,7 +3470,13 @@
       if(wizFamily === 'FREEFORM') setWizardStage(1);
       else setWizardStage(2);
     } else if(wizStage === 4){
-      setWizardStage(3);
+      if(wizEditSession){
+        // Start thread selection over while preserving machining strategy settings!
+        setWizardStage(1);
+      } else {
+        if(wizFamily === 'FREEFORM') setWizardStage(1);
+        else setWizardStage(3);
+      }
     }
   });
 
@@ -3426,6 +3533,9 @@
   // Stage 4: Strategy Toggles
   $('btnWizSide').addEventListener('click', function(){
     wizSide = wizSide === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
+    if(!wizPassesCustom){
+      wizPasses = null; // Re-calculate with +2 offset for internal
+    }
     renderStage4Setup();
     updateWizBlueprintCard();
   });
@@ -3449,6 +3559,35 @@
     $('btnWizLengthBox').addEventListener('click', function(){
       $('pitchOverlay').classList.remove('show');
       openKeypad('wizThreadLength', toDisplayLen(wizThreadLength));
+    });
+  }
+
+  if($('btnWizPassesMinus')){
+    $('btnWizPassesMinus').addEventListener('click', function(){
+      var bp = getWizBlueprint();
+      var cur = (wizPassesCustom && wizPasses) ? wizPasses : (bp ? bp.passes : 11);
+      wizPasses = Math.max(1, cur - 1);
+      wizPassesCustom = true;
+      renderStage4Setup();
+      updateWizBlueprintCard();
+    });
+  }
+  if($('btnWizPassesPlus')){
+    $('btnWizPassesPlus').addEventListener('click', function(){
+      var bp = getWizBlueprint();
+      var cur = (wizPassesCustom && wizPasses) ? wizPasses : (bp ? bp.passes : 11);
+      wizPasses = Math.min(30, cur + 1);
+      wizPassesCustom = true;
+      renderStage4Setup();
+      updateWizBlueprintCard();
+    });
+  }
+  if($('wizPassesVal')){
+    $('wizPassesVal').addEventListener('click', function(){
+      var bp = getWizBlueprint();
+      var cur = (wizPassesCustom && wizPasses) ? wizPasses : (bp ? bp.passes : 11);
+      $('pitchOverlay').classList.remove('show');
+      openKeypad('wizPasses', cur);
     });
   }
 
@@ -3821,6 +3960,13 @@
         updateWizBlueprintCard();
         $('pitchOverlay').classList.add('show');
       }
+      else if(kpTarget==='wizPasses'){
+        wizPasses = Math.max(1, Math.min(30, Math.round(v)));
+        wizPassesCustom = true;
+        renderStage4Setup();
+        updateWizBlueprintCard();
+        $('pitchOverlay').classList.add('show');
+      }
       else if(kpTarget==='wizThreadStarts'){
         wizStarts = Math.max(1, Math.min(9, Math.round(v)));
         renderStage4Setup();
@@ -3832,7 +3978,7 @@
       }
       else if(kpTarget==='threadTotalDepth'){
         state.threadTotalDepth = Math.abs(mm);
-        state.threadPassCount = Math.max(6, Math.min(14, Math.round(state.threadTotalDepth / 0.12)));
+        state.threadPassCount = Math.max(6, Math.min(18, Math.round(state.threadTotalDepth / 0.10)));
       }
       else if(kpTarget==='customFeedStep'){
         var sVal = Math.abs(v);

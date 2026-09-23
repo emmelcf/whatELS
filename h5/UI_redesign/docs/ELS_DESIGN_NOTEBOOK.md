@@ -632,3 +632,47 @@ In **Gearbox Mode**, the lathe spindle and leadscrew are electronically coupled 
      * Tapping `[ FEED ]` switches to Feed mode and immediately brings up the numeric keypad.
      * Tapping `[ PITCH ]` switches to Pitch mode and brings up the Gearbox Pitch Modal.
      * Tapping the Z feed value box routes to the keypad in FEED mode or the Pitch Modal in PITCH mode.
+
+---
+
+## 7.6. Threading Mode Ergonomic Architecture & Pass Scheduling
+
+Single-point threading is the most demanding operation on an electronic leadscrew. Adjusting kinematic parameters (pitch, lead, direction, passes) on the fly while a thread is running or armed is hazardous. The UI enforces a strict separation between **Program Configuration (Right Column Mode Card)** and **Live Execution Monitoring (Center Dynamic Deck)**.
+
+### 1. Right Column Mode Card: Read-Only Program Specification
+* **Dedicated Header Action Bar:**
+  * `[+ NEW THREAD]`: Starts the 4-stage Thread Configuration Wizard from scratch at Step 1 (Thread Family).
+  * `[✎ EDIT SETUP]`: Pre-loads the stored thread properties and immediately opens Step 4 (Machining Strategy & Review) for instant fine-tuning.
+  * Both actions are locked during motion (`state.runState === 'running'`).
+* **Authoritative Read-Only Summary Card:**
+  * Replaces loose inline steppers (`+`/`−`) and tap-to-edit fields with a clean, high-contrast readout: Thread Identity, Pitch & Lead, Feed Direction & Length, Prep Stock OD, Target Root OD, Total Infeed & Passes, and Skim Pass status.
+  * Eliminates operator error from accidental inline edits that bypass standard root diameter and pitch calculations.
+
+### 2. Center Column Dynamic Deck: Cycle & Program Progress Monitor
+* **Height Budgeting (<100px):**
+  * Stripped of redundant blueprint cards and hazardous on-the-fly `FEED DIR` toggles, preventing vertical overflow and leaving ample room for the anchored jog cluster below.
+* **When Stopped / Ready:**
+  * Shows `PROGRAM STATUS: ● READY`.
+  * Displays next required action (`NEXT: STAGE 1 (SKIM VERIFY)` or `PASS 01 OF 11`), Z motion envelope (`Z 0.00 → -20.00 mm`), and required spindle rotation (`SPINDLE: CCW (FWD)`).
+* **When Running:**
+  * Displays active pass badge (`PASS 03 / 11`).
+  * 4-phase micro motion indicator: `[1. INFEED] → [2. CUT Z−] → [3. RETRACT] → [4. RETURN]` tracking active leadscrew synchronization.
+  * Live quadratic infeed depth progress (`X: -0.450 / -1.075 mm`) with micro progress bar.
+
+### 3. Pass Scheduling & Small Lathe Optimization
+* **NanoELS Native Quadratic Diminishing Infeed (`h5.ino` line 9236):**
+  $$\text{fraction} = \left(\frac{\text{turnPasses} - \text{opIndex}}{\text{turnPasses}}\right)^2$$
+  $$\text{auxPos} = \text{auxEndStop} - (\text{auxEndStop} - \text{auxStartStop}) \times \text{fraction}$$
+* **Benchtop Lathe Bias (0.10 mm Divisor):**
+  * Standard tooling tables (Sandvik) recommend ~0.12 mm average DOC. On small benchtop lathes (Mini Lathes, Precision Matthews, Sieg) with 300–750W motors, the initial quadratic bite at 0.12 mm can induce belt slip or motor bogging.
+  * Shifting the base divisor to `0.10 mm` (e.g. 11 passes on M12 instead of 9) drops peak cutting torque by ~25%, producing quieter cuts, better finish, and preventing motor stalls.
+* **Internal Threading Offset (+2 Passes):**
+  * Single-point internal threading uses slender boring bars prone to cantilever deflection and chatter. The wizard automatically adds **+2 passes** when `wizSide === 'INTERNAL'`.
+* **Step 4 Passes Control:**
+  * Operators can override pass count via `[ − ]` and `[ + ]` or keypad. Manually overridden counts are tagged `(MANUAL)`, while calculated counts are tagged `(AUTO)`. Toggling `EXTERNAL` $\rightleftharpoons$ `INTERNAL` dynamically recalculates the passes (+2 for internal) if in `(AUTO)` mode.
+* **State Retention on Edit Back Navigation:**
+  * Clicking `← BACK` from Step 4 during an `[✎ EDIT]` session restarts thread selection (Step 1) while preserving all machining strategy settings (length, internal/external, handedness, direction, passes, skim verify).
+
+### 4. Future Firmware Enhancement Note: Compound Flank Infeed (29.5°)
+* Stock NanoELS `h5.ino` currently executes 90° radial plunge infeed.
+* Future firmware upgrades will introduce true modified compound flank infeed (29°–29.5°), synchronizing an incremental Z advance ($\Delta Z = \Delta X \tan(29.5^\circ)$) on each pass to cut cleanly on the leading tool flank only.
