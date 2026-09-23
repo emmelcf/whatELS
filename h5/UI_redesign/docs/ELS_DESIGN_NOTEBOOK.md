@@ -268,24 +268,52 @@ Machinists do not work in arbitrary converted decimals (e.g. $0.010\text{ mm} \r
 
 ---
 
-## 13. Safety-Critical Running Lockout: Silent Disable vs. Warning Banners
+## 13. Safety-Critical Running Lockout: Modal/Popup Prohibition & STOP Button Protection
 
 ### Safety Philosophy
 On an operating metal lathe, visual occlusion and surprise modal dialogs are severe safety hazards:
-* If a tool is cutting near a chuck or shoulder, an operator who accidentally touches the mode header must **never** be met with a modal dialog, toast notification, or warning banner.
-* Warning banners occlude the live coordinate displays, distract the operator's eye, and can block or delay access to the red **STOP** button.
+* If a tool is cutting near a chuck or shoulder, an accidental touch on any part of the screen must **never** be met with a modal dialog, keypad popup, toast notification, or warning banner.
+* Full-screen overlays (`.overlay` with `inset: 0; z-index: 99;`) completely occlude the live DRO coordinates and **physically cover the red STOP button**, blocking emergency intervention until the operator finds and dismisses the dialog.
+* In machining, every millisecond counts: the operator's path to the permanently anchored red **STOP** button must remain 100% unobstructed, 100% visible, and 100% tactile at all times during active motion.
 
-### Implementation Standard
-1. **Visual Indication Without Occlusion**:
-   * When an operation is active (`state.runState === 'running'`), the mode header (`#modeHead`) is rendered in a locked state:
-     * Subtly dimmed background and opacity (`0.55`).
-     * Explicit padlock icon appended to the header title: `GEARBOX 🔒`.
-     * Non-interactive pointer cursor (`cursor: not-allowed`).
-2. **Silent No-Op Handler**:
-   * Tapping `#modeHead` while running performs a silent `return;`.
-   * Zero toasts, zero alerts, and zero popup banners appear.
-3. **Unobstructed Operator Control**:
-   * The operator's only options during active motion are to trim allowed runtime parameters (such as feed rate via `+`/`-`) or hit the large, permanently anchored red **STOP** button.
+### Multi-Tiered Implementation Standard (Defense-in-Depth)
+
+1. **Defensive Core Engine Guards**:
+   * All overlay-opening entry points enforce an unconditional silent return if `state.runState === 'running'`:
+     * Numeric Keypad: `openKeypad()`
+     * Gearbox Quick-Change Pitch: `openGearboxPitchModal()`
+     * Threading Wizard / Pitch Selector: `openThreadWizard()`, `openPitchSelect()`
+     * DRO Coordinate Setting: `openAxisOverlay()`
+     * Soft Limit Setting: `openLimitOverlay()`
+   * This guarantees that even if a stray touch event fires, zero modals can ever mount while the spindle or leadscrew is actively driving an axis.
+
+2. **Gearbox & Mode Card Lockout (`bindModeEvents`)**:
+   * The cycle execution guard `if(state.runState === 'running') return;` is anchored at the very beginning of `bindModeEvents()`.
+   * When active, all setup toggles and parameter fields in the right-hand Mode Card are strictly non-interactive:
+     * `SYNC (SPINDLE) / ASYNC (TIME)` (`#fld-gearSync`): locked (`opacity: 0.45; cursor: not-allowed;`).
+     * `AXIS: Z / X` (`#fld-gearAxis`): locked (`opacity: 0.45; cursor: not-allowed;`).
+     * Z Feed Unit `[ FEED ]` / `[ PITCH ]`: locked (`opacity: 0.35; pointer-events: none;`).
+     * Z Carriage & X Cross-Slide feed boxes (`#fld-gearZ`, `#fld-gearX`): stripped of `.editable` and `.tap` classes (`cursor: default;`).
+
+3. **Dynamic Center Action Deck Runtime Rules**:
+   * **Locked Controls (No Modal Triggers)**:
+     * Feed Readout (`#deckReadout`): Stripped of `.tap` class; renders as a clean, read-only telemetry display (`cursor: default;`). Tapping performs a silent no-op instead of opening the numeric keypad or pitch modal.
+     * Custom Step (`#deckStepCust` / `± CUST STEP`): Stripped of `.tap` class; dimmed (`opacity: 0.35; cursor: not-allowed;`). Tapping performs a silent no-op.
+     * Direction Toggle (`#deckToggleDir`): Stripped of `.tap` class; dimmed (`opacity: 0.45; cursor: not-allowed;`). Tapping performs a silent no-op to prevent mid-cut leadscrew reversal.
+   * **Allowed Runtime Actions (Zero Modals, Zero Jitter)**:
+     * Primary Feed Nudges: `[ − ]` and `[ + ]` remain fully active and responsive, allowing immediate trimming of feed per revolution under chip load.
+     * Step Increment Cycling (`#deckStepCycle`): Preset cycling (`±0.010 → ±0.050 → ±0.100 mm`) remains available in-place without opening any dialogs.
+
+4. **Global Controls Lockout**:
+   * **DRO Coordinates (`#zValue`, `#xValue`)**: Tapping coordinates does not open `axisOverlay`.
+   * **Soft Limits (`.chip-sm[data-bound]`)**: Tapping limit chips does not open `limitOverlay`.
+   * **Jog Step Selector (`#stepMain`)**: Long-press hold skips opening `openKeypad('step')`.
+   * **Top Bar Utility Chips**: `#settingsBtn`, `#btnOpenLog`, and `#openDocBtn` perform silent no-ops while running.
+   * **Unit System Toggle (`#unitToggle`)**: Switching units (`mm` $\leftrightarrow$ `in`) is locked out during active motion to prevent mid-cut coordinate/ratio jumping.
+
+5. **Visual State Affirmation (`.device.is-running`)**:
+   * The hardware frame container dynamically toggles `.is-running` to reflect motion state.
+   * Non-interactive elements have cursor pointers removed and dashed editable underlines replaced with solid/clean borders, eliminating misleading affordances while leaving the vibrant red **STOP** button illuminated and active in the bottom-right corner.
 
 ---
 

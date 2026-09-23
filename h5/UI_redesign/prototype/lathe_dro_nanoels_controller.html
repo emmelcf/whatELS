@@ -346,6 +346,13 @@
   }
   .rbtn:active { filter: brightness(.85); }
 
+  /* Running Safety Lockout: Visual indications of non-interactive state */
+  .device.is-running .axis-value.tap { cursor: default; border-bottom-color: transparent; }
+  .device.is-running .chip-sm[data-bound].tap { cursor: default; opacity: 0.65; }
+  .device.is-running #settingsBtn.tap,
+  .device.is-running #unitToggle.tap { opacity: 0.45; cursor: not-allowed; }
+  .device.is-running #stepMain { cursor: default; }
+
   /* OVERLAYS & SHEETS */
   .overlay {
     position: absolute; inset: 0; background: rgba(3,5,6,.82); display: none;
@@ -1763,7 +1770,7 @@
           '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
             cycleLabel +
           '</div>' +
-          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+          '<div class="deck-step-chip ' + (!isRun ? 'tap' : '') + '" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;' + (isRun ? ' opacity:0.35; cursor:not-allowed;' : '') + '">' +
             '± CUST STEP' +
           '</div>' +
         '</div>';
@@ -1775,18 +1782,19 @@
         '</div>' +
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
-          '<div class="deck-readout tap" id="deckReadout">' +
+          '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + activeDisp.val + '</span>' +
             '<span class="deck-unit">' + activeDisp.unit + '</span>' +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
         '</div>' +
         stepChipsHTML +
-        '<div class="tap" id="deckToggleDir" style="background:#172129; border:1px solid #283744; border-radius:4px; min-height:38px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--fg); margin-top:2px;">' +
+        '<div class="' + (!isRun ? 'tap' : '') + '" id="deckToggleDir" style="background:#172129; border:1px solid #283744; border-radius:4px; min-height:38px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--fg); margin-top:2px;' + (isRun ? ' opacity:0.45; cursor:not-allowed;' : '') + '">' +
           dirLabel +
         '</div>';
 
       $('deckToggleDir').addEventListener('click', function(){
+        if(state.runState === 'running') return;
         if(state.activeFeedAxis === 'Z'){
           state.gearDirZ = state.gearDirZ === 'FWD' ? 'REV' : 'FWD';
         } else {
@@ -1808,7 +1816,7 @@
         '</div>' +
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
-          '<div class="deck-readout tap" id="deckReadout">' +
+          '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + lenStr(state.turnPitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
@@ -1818,7 +1826,7 @@
           '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
             cycleLabel +
           '</div>' +
-          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+          '<div class="deck-step-chip ' + (!isRun ? 'tap' : '') + '" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;' + (isRun ? ' opacity:0.35; cursor:not-allowed;' : '') + '">' +
             '± CUST STEP' +
           '</div>' +
         '</div>';
@@ -1835,7 +1843,7 @@
         '</div>' +
         '<div class="deck-controls">' +
           '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
-          '<div class="deck-readout tap" id="deckReadout">' +
+          '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + lenStr(state.facePitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
@@ -1845,7 +1853,7 @@
           '<div class="deck-step-chip tap active" id="deckStepCycle" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
             cycleLabel +
           '</div>' +
-          '<div class="deck-step-chip tap" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;">' +
+          '<div class="deck-step-chip ' + (!isRun ? 'tap' : '') + '" id="deckStepCust" style="flex: 1 1 0; min-height: 38px; font-size: 12px; letter-spacing: 0.2px;' + (isRun ? ' opacity:0.35; cursor:not-allowed;' : '') + '">' +
             '± CUST STEP' +
           '</div>' +
         '</div>';
@@ -1962,6 +1970,7 @@
       });
 
       stepCustBtn.addEventListener('click', function(){
+        if(isRun) return;
         var info = getActiveGearStepInfo();
         openKeypad('customFeedStep', info.val);
       });
@@ -2045,6 +2054,7 @@
 
       if(readout){
         readout.addEventListener('click', function(){
+          if(isRun) return;
           if(state.mode === 'GEARBOX'){
             if(state.activeFeedAxis === 'Z'){
               if(state.gearboxMode === 'ASYNC'){
@@ -2086,13 +2096,13 @@
       var zDisp = getGearZDisplay();
       var xDisp = getGearXDisplay();
       var zActive = state.activeFeedAxis === 'Z';
-      var zUnitDisabled = !isSync || !zActive;
+      var zUnitDisabled = !isSync || !zActive || isRun;
 
       return '' +
         '<div style="display:flex; flex-direction:column; gap:6px;">' +
           '<div style="display:flex; gap:4px;">' +
-            '<div class="deck-toggle-btn tap ' + (isSync?'on':'') + '" id="fld-gearSync">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
-            '<div class="deck-toggle-btn tap axis-on" id="fld-gearAxis">AXIS: ' + state.activeFeedAxis + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync"' + (isRun?' style="opacity:0.45; cursor:not-allowed;"':'') + '>' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + 'axis-on" id="fld-gearAxis"' + (isRun?' style="opacity:0.45; cursor:not-allowed;"':'') + '>AXIS: ' + state.activeFeedAxis + '</div>' +
           '</div>' +
 
           '<div class="feed-block ' + (zActive ? 'active-axis-row' : 'dimmed-axis-row') + '">' +
@@ -2100,12 +2110,12 @@
               '<span>Z CARRIAGE</span>' +
             '</div>' +
             '<div class="feed-row-bottom">' +
-              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearZ">' + zDisp.val + '</b>' +
+              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearZ"' + (isRun?' style="cursor:default;"':'') + '>' + zDisp.val + '</b>' +
               '<span class="feed-unit-box">' + zDisp.unit + '</span>' +
             '</div>' +
             '<div style="display:flex; gap:4px; margin-top:5px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
-              '<div class="toggle-chip tap ' + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
-              '<div class="toggle-chip tap ' + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
+              '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
+              '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:34px; padding:4px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
             '</div>' +
           '</div>' +
 
@@ -2114,7 +2124,7 @@
               '<span>X CROSS-SLIDE</span>' +
             '</div>' +
             '<div class="feed-row-bottom">' +
-              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearX">' + xDisp.val + '</b>' +
+              '<b class="mono ' + ed + ' feed-val-box" id="fld-gearX"' + (isRun?' style="cursor:default;"':'') + '>' + xDisp.val + '</b>' +
               '<span class="feed-unit-box">' + xDisp.unit + '</span>' +
             '</div>' +
           '</div>' +
@@ -2220,6 +2230,8 @@
   }
 
   function bindModeEvents(){
+    if(state.runState === 'running') return; // Field editing locked during cycle execution
+
     if(state.mode === 'GEARBOX'){
       $('fld-gearSync').addEventListener('click', function(){
         state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
@@ -2262,8 +2274,6 @@
       });
       return;
     }
-
-    if(state.runState === 'running') return; // Field editing locked during cycle execution
 
     if(state.mode === 'TURNING'){
       $('fld-turnType').addEventListener('click', function(){
@@ -2622,10 +2632,12 @@
     }
 
     $('unitToggle').textContent = state.unit;
+    $('device').classList.toggle('is-running', state.runState === 'running');
   }
 
   // Header Handlers
   $('unitToggle').addEventListener('click', function(){ 
+    if(state.runState === 'running') return;
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
     state.customFeedStepZ = null;
     state.customFeedStepX = null;
@@ -2633,9 +2645,13 @@
     state.customAsyncStepX = null;
     render(); 
   });
-  $('settingsBtn').addEventListener('click', function(){ $('settingsOverlay').classList.add('show'); });
+  $('settingsBtn').addEventListener('click', function(){ 
+    if(state.runState === 'running') return;
+    $('settingsOverlay').classList.add('show'); 
+  });
   $('settingsClose').addEventListener('click', function(){ $('settingsOverlay').classList.remove('show'); });
   $('openDocBtn').addEventListener('click', function(){
+    if(state.runState === 'running') return;
     $('settingsOverlay').classList.remove('show');
     showDocTab('decisions');
     $('docOverlay').classList.add('show');
@@ -2643,6 +2659,7 @@
 
   // Message Log Overlay Handlers
   $('btnOpenLog').addEventListener('click', function(){
+    if(state.runState === 'running') return;
     var list = $('logHistoryList');
     list.innerHTML = '';
     if(!state.msgLog || state.msgLog.length === 0){
@@ -2692,6 +2709,7 @@
   // Step selector: Tap to cycle, Long-press for Numpad
   var stepHoldTimer = null, stepDidHold = false;
   $('stepMain').addEventListener('pointerdown', function(){
+    if(state.runState === 'running') return;
     stepDidHold = false;
     stepHoldTimer = setTimeout(function(){
       stepDidHold = true;
@@ -2701,6 +2719,7 @@
   });
   $('stepMain').addEventListener('pointerup', function(){
     clearTimeout(stepHoldTimer);
+    if(state.runState === 'running') return;
     if(!stepDidHold){
       var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
       state.stepIdx = (state.stepIdx + 1) % maxLen;
@@ -2712,6 +2731,7 @@
   // Axis Coordinate Set Overlay
   var axisTarget = null;
   function openAxisOverlay(axis){
+    if(state.runState === 'running') return;
     axisTarget = axis;
     if(axis==='z'){
       $('axisOverlayTitle').textContent = 'Z AXIS COORDINATE';
@@ -2741,6 +2761,7 @@
   var limitLabels = { zMin:'Z MIN (CHUCK) LIMIT', zMax:'Z MAX (TAIL) LIMIT', xMaxDia:'X OUTER LIMIT', xMinDia:'X INNER LIMIT' };
   var limitTarget = null;
   function openLimitOverlay(bound){
+    if(state.runState === 'running') return;
     limitTarget = bound;
     $('limitOverlayTitle').textContent = limitLabels[bound];
     $('limitOverlayValue').textContent = limitText(bound) + (state[bound]!==null ? ' '+unitLabel() : '');
@@ -3317,6 +3338,7 @@
   var gearPitchRangeIdx = 1;
 
   function openGearboxPitchModal(){
+    if(state.runState === 'running') return;
     gearPitchUnit = (state.gearThreadUnit === 'tpi') ? 'tpi' : 'metric';
     var curPitch = state.gearPitchZ;
     if(gearPitchUnit === 'metric'){
@@ -3412,6 +3434,7 @@
   });
 
   function openThreadWizard(mode){
+    if(state.runState === 'running') return;
     pitchSelectTarget = 'modePitch';
     wizShowMore = false;
 
@@ -3799,6 +3822,7 @@
   };
 
   function openKeypad(target, defaultVal){
+    if(state.runState === 'running') return;
     kpTarget = target;
     kpInitialVal = (defaultVal !== undefined && defaultVal !== '') ? +parseFloat(defaultVal).toFixed(4) : 0;
     
