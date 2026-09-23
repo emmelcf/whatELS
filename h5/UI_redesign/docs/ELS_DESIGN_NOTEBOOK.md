@@ -798,11 +798,14 @@ A manual machinist on an ELS demands tactile, adaptive control over cutting cond
 * Gearbox Mode natively incorporates **Simple Taper** as the third axis option (`AXIS: [ Z | X | Z+X (TAPER) ]`), mapping directly to the firmware's `MODE_CONE` (`h5.ino` lines 9308–9356).
 * The Z leadscrew acts as the primary driving axis synchronized to spindle rotation (`dupr`), while the X cross-slide operates as an electronic slave governed by the ratio $C = 2\tan(\theta_{\text{half}})$.
 
-### 2. Strict Axis Isolation (Contextual Card Properties)
-* To eliminate cognitive clutter and prevent accidental misconfiguration of inactive axes:
-  * **When `AXIS: Z` is selected**: The mode card renders *only* Z leadscrew / carriage properties (Feed vs Pitch toggle, feed rate, and thread lead). Inactive X cross-feed properties are completely hidden.
-  * **When `AXIS: X` is selected**: The mode card renders *only* X cross-slide properties. Inactive Z leadscrew properties are completely hidden.
-  * **When `AXIS: Z+X (TAPER)` is selected**: The mode card displays the Z primary driving feed row alongside the slave Taper configuration block.
+### 2. Strict Axis Isolation & Redundancy Elimination
+* To eliminate cognitive clutter and preserve vertical screen real estate:
+  * **Removal of Redundant Feed Rate Readouts**: The large feed rate boxes were removed from the Gearbox mode card because the primary driving feed rate is already continuously displayed and adjusted in the Center Column Dynamic Deck.
+  * **Per-Axis Feed Rate Memory**: The controller continues to track and remember feed rates separately per axis (`gearPitchZ`, `gearPitchX`, `asyncSpeedZ`, `asyncSpeedX`). Switching axes restores each axis's individual feed parameters without cross-contamination.
+  * **Contextual Card Properties**:
+    * **When `AXIS: Z` is selected**: The mode card renders only Z leadscrew properties (Feed vs Pitch toggle, and thread lead when Pitch is active). Inactive X cross-feed properties are completely hidden.
+    * **When `AXIS: X` is selected**: The mode card renders only X cross-feed properties. Inactive Z leadscrew properties are hidden.
+    * **When `AXIS: Z+X (TAPER)` is selected**: The mode card renders only the slave Taper parameters (`EXT/INT`, `NORMAL/INVERT`, and Taper Angle/Ratio), since driving feed rate is adjusted in the center deck.
 
 ### 3. Direction Control Placement in Mode Card
 * The feed direction selection button (`DIR: ← CHUCK (Z−)` / `DIR: → TAIL (Z+)` for Z and `DIR: ↑ CENTER (X−)` / `DIR: ↓ RETRACT (X+)` for X) is located directly at the top of the Gearbox mode card.
@@ -827,9 +830,10 @@ A manual machinist on an ELS demands tactile, adaptive control over cutting cond
     * **Decimal Ratio $C$**: Decimal ratio $C = 2\tan\theta$.
     * Editing any of the three inputs instantly recalculates the other two in real-time.
 
-### 6. Center Column Dynamic Deck Decluttering
-* The center column Dynamic Deck focuses strictly on active feed rate adjustment and jog control.
-* Verbose explanatory snippets, parenthetical duplication, and multi-word headers (e.g., `2-AXIS TAPER TRIM (MT3 MORSE TAPER 3)`) have been eliminated in favor of a clean, minimalist header:
+### 6. Center Column Dynamic Deck Decluttering & Micro-Text Elimination
+* **Elimination of Visual Clutter**: Tiny, low-contrast explanatory text snippets (e.g. `Cross-feed synchronized to...`, `Feed rate active: adjust via...`, `Z CARRIAGE`, `Z+X SLAVED`) have been removed from the entire card and center column. Such text creates visual noise and is unreadable from typical machine operating distance.
+* **Ergonomic Rule**: Buttons and chips must prioritize physical touch targets ($\ge 36–38\text{ px}$) and bold, readable typography rather than miniature explanatory helper text.
+* **Streamlined Header**:
   * Left: `FEED RATE` (or `THREAD LEAD` in Pitch mode, `ASYNC SPEED` in Async mode).
   * Right: Compact colored badge (`Z+X TAPER` in amber, `Z-AXIS` in green, or `X-AXIS` in blue).
 
