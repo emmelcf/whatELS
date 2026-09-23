@@ -845,6 +845,9 @@ A manual machinist on an ELS demands tactile, adaptive control over cutting cond
 
 ---
 
-## 13. Component Consistency & Global Typography Inheritance
-* In web-based embedded interfaces, standard `<button>` elements do not inherit `font-family` from `body` by default, causing browser engines to fall back to desktop system fonts (e.g. Arial 900) instead of the design system's condensed sans-serif.
-* A universal reset rule `button, input, select, textarea { font-family: inherit; }` enforces consistent typography (`Barlow Condensed`) across all dialog sheets, modal calculators, and action triggers.
+## 13. Component Consistency & LVGL Widget Architecture
+* **Typography Inheritance**:
+  * In standard browser user-agent stylesheets, `<button>` elements do not inherit `font-family` from `body` by default. A universal reset rule `button, input, select, textarea { font-family: inherit; }` enforces consistent typography (`Barlow Condensed`) across all dialog sheets and keypad modals.
+* **Controller Face Component Unification (`div.tap`)**:
+  * Rather than mixing HTML-form `<button>` elements with custom `<div>` touch targets, all interactive controls on the primary controller face have been standardized as uniform `div.tap` components (e.g. `btnRun`, `btnStop`, `btnOpenLog`, `btnOpenTaperModal`, `btnEditPitch`, `btnThreadNew`, `btnThreadEdit`, and D-pad arrows).
+  * **LVGL 1:1 Mapping Benefit**: This eliminates browser-specific button outlines, user-agent margins, and flex quirks, mapping 1:1 to embedded LVGL objects (`lv_obj_t` with click callbacks and active-press state styles) during firmware UI implementation.

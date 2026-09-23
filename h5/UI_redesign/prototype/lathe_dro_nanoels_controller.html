@@ -1041,7 +1041,7 @@
         <div class="status-msg-wrap">
           <span class="status-msg mono" id="statusMessage">READY: GEARBOX SYNCHRONIZED TO SPINDLE</span>
         </div>
-        <button class="status-log-btn tap" id="btnOpenLog">LOG</button>
+        <div class="status-log-btn tap" id="btnOpenLog">LOG</div>
       </div>
     </div>
 
@@ -2224,7 +2224,7 @@
                     '<span style="font-size:9.5px; color:var(--dim); font-weight:700;">THREAD LEAD</span>' +
                     '<b class="mono" style="font-size:16px; color:var(--fg); margin-top:2px;">' + zDisp.val + ' ' + zDisp.unit + ' (' + (state.gearThreadHandedness||'RH') + ')</b>' +
                   '</div>' +
-                  '<button class="tap" id="btnEditPitch" style="background:#1b2836; color:var(--blue); border:1px solid #2e4559; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer;"' + (isRun?' disabled style="opacity:0.45;"':'') + '>✎ PITCH</button>' +
+                  '<div class="tap" id="btnEditPitch" style="background:#1b2836; color:var(--blue); border:1px solid #2e4559; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '">✎ PITCH</div>' +
                 '</div>' : '') +
             '</div>' 
           : xActive ?
@@ -2255,9 +2255,9 @@
               '</div>' +
 
               '<div style="display:flex; justify-content:flex-end;">' +
-                '<button class="tap" id="btnOpenTaperModal" style="background:var(--amber); color:#120e02; font-family:inherit; font-weight:700; font-size:13px; letter-spacing:0.5px; padding:6px 14px; border:none; border-radius:4px; min-height:36px; cursor:pointer; display:flex; align-items:center; gap:6px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '" title="Edit Taper Parameters"' + (isRun?' disabled':'') + '>' +
+                '<div class="tap" id="btnOpenTaperModal" style="background:var(--amber); color:#120e02; font-family:inherit; font-weight:700; font-size:13px; letter-spacing:0.5px; padding:6px 14px; border-radius:4px; min-height:36px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '" title="Edit Taper Parameters">' +
                   '<span style="font-size:13px;">✎</span><span>EDIT</span>' +
-                '</button>' +
+                '</div>' +
               '</div>' +
             '</div>'
           ) +
@@ -2307,8 +2307,8 @@
 
       return '' +
         '<div class="thread-action-bar">' +
-          '<button class="thread-act-btn new tap ' + disCls + '" id="btnThreadNew">+ NEW THREAD</button>' +
-          '<button class="thread-act-btn edit tap ' + disCls + '" id="btnThreadEdit">✎ EDIT SETUP</button>' +
+          '<div class="thread-act-btn new tap ' + disCls + '" id="btnThreadNew">+ NEW THREAD</div>' +
+          '<div class="thread-act-btn edit tap ' + disCls + '" id="btnThreadEdit">✎ EDIT SETUP</div>' +
         '</div>' +
         '<div style="background:#0a0e12; border:1px solid #1a2530; border-radius:4px; padding:6px 8px; display:flex; flex-direction:column; gap:3px;">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #141d24; padding-bottom:4px;">' +
