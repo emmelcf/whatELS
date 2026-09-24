@@ -905,3 +905,45 @@ Axis colors indicate *which physical leadscrew or tool vector is governed*:
 * **Engineering Units & Field Labels**: Neutral dim grays (`#84919b` / `#49545d`).
 * **Active Mode Setup Toggles (Non-Axis)**: Subdued Slate Blue (`#18222a` / border `#283744` / text `#9cb1c9`) to avoid competing with primary axis colors.
 
+---
+
+## 26. Taper vs. Gearbox Z+X Disambiguation & State Machine Protocol
+
+### 1. The Core Architecture Conflict
+NanoELS core firmware (`Motion.cpp`) provides a single low-level motion state for 2-axis coordinated angled feed: `MODE_CONE` (Code `100`). It is fundamentally continuous electronic gearing ($Z$ leadscrew synced to spindle encoder; $X$ cross-slide slaved proportionally via `coneRatio`).
+
+In the Companion Display controller, tapers serve two fundamentally different operational roles:
+1. **Continuous Manual Gearing (`GEARBOX → AXIS: Z+X`)**: Single-pass continuous feeding along a taper angle, bounded by machine soft limits (analogous to $Z$ carriage feed and $X$ cross-facing).
+2. **Automated Multi-Pass Cycle (`TAPER`)**: Autonomous canned cycle taking multiple roughing passes, automated $X$ infeed, and finish pass with rapid retract.
+
+Because both features rely on the physical controller running in `MODE_CONE`, raw incoming telemetry (`UI.mode=CONE`) is inherently 1-to-many and cannot distinguish between them without state-ownership tracking.
+
+### 2. Run-State Ownership & The 3 Yield Triggers
+While the Companion Display UI is on the `TAPER` mode setup screen, it preserves `state.mode = 'TAPER'` and monitors incoming telemetry. The UI yields control and transitions to `GEARBOX (Z+X)` upon detecting any of the following three triggers:
+
+1. **Trigger A: External Motion Inception (`UI.status === 'ON'`)**:
+   - The UI's automated cycle was stopped (`state.runState !== 'running'`).
+   - Incoming telemetry reports `UI.status=ON` (or `SYN`) with `UI.mode=CONE`.
+   - **Inference**: The operator physically engaged feed at the lathe apron or Nextion screen. Because the lathe hardware only natively executes continuous single-pass cone feed, the UI immediately flips to `GEARBOX (Z+X)` to render active feed telemetry, live limit envelopes, and the illuminated `STOP` button.
+
+2. **Trigger B: External Parameter Mutation (Nextion / Keypad Adjustment)**:
+   - While idle in `TAPER`, incoming telemetry reflects an external change to a `CONE` parameter (e.g., `pitch`, `coneRatio`, or dedicated stop registers altered from the Nextion display).
+   - **Inference**: The machinist is physically dialing in a manual cut on the machine. The UI yields to `GEARBOX (Z+X)` to reflect those adjustments.
+
+3. **Trigger C: Mode Shift (Non-Cone Broadcast)**:
+   - The controller reports any mode other than `CONE` (`GEAR`, `XGEAR`, `TURN`, `FACE`, `THREAD`, etc.).
+   - The UI immediately leaves `TAPER` and tracks the new physical mode.
+
+### 3. Cycle Execution Guarantee
+When the operator taps `START CYCLE` on the Companion Display in `TAPER` mode:
+* The UI sets `state.runState = 'running'`.
+* Telemetry packets with `UI.status=ON` and `UI.mode=CONE` are recognized as expected cycle execution passes.
+* The UI remains locked in `TAPER` mode, presenting the real-time pass monitor (`PASS 02 / 06`, current cut depth) with all setup fields locked out.
+
+### 4. Multi-Client Coexistence Edge Case
+When multiple companion displays are attached to the same ESP32:
+* If Client A initiates an automated `TAPER` cycle, raw telemetry broadcast over WebSocket contains `UI.mode=CONE` and `UI.status=ON`.
+* Client B (which did not initiate the cycle) follows Trigger A and displays `GEARBOX (Z+X)` cutting a live pass.
+* **Safety Invariant**: Client B still accurately displays the tool cutting an angled feed, displays real-time DRO coordinates, and maintains a fully operational, high-priority `STOP` button capable of terminating motion instantly. Future firmware updates can optionally broadcast `UI.cycle=TAPER` for distributed multi-screen canned cycle synchronization.
+
+

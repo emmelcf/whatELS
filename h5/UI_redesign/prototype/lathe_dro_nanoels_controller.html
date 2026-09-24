@@ -25,10 +25,12 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
   button, input, select, textarea { font-family: inherit; }
   html, body {
-    margin: 0; padding: 0; background: #040607; color: var(--fg);
+    margin: 0; padding: 14px 0 20px 0; background: #040607; color: var(--fg);
     font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-    height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    overflow: hidden;
+    min-height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   .mono { font-family: 'JetBrains Mono', 'Consolas', monospace; font-variant-numeric: tabular-nums; }
 
@@ -1082,6 +1084,174 @@
   .doc-content ul { margin: 0 0 8px 18px; padding: 0; }
   .doc-content li { margin-bottom: 4px; }
   .doc-content code { font-family: 'JetBrains Mono', monospace; color: var(--green); background: #0b1115; padding: 1px 4px; border-radius: 2px; }
+
+  /* ============================================================
+     EXTERNAL DEV & PROTOCOL TELEMETRY CONSOLE (Below .device)
+     ============================================================ */
+  .dev-console {
+    width: 800px; max-width: 95vw; background: #080c10;
+    border: 1px solid #1c2732; border-radius: 6px; overflow: hidden;
+    display: flex; flex-direction: column; flex: 0 0 auto;
+    margin-top: 22px; margin-bottom: 24px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  .dev-header {
+    min-height: 42px; display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-bottom: 1px solid #16202a; background: #0b1116; gap: 8px; flex-wrap: wrap;
+  }
+  .dev-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dev-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dev-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.6px; color: var(--blue);
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .dev-mode-pills { display: flex; gap: 4px; background: #11171d; padding: 2px; border-radius: 4px; border: 1px solid #1b2632; }
+  .dev-pill {
+    background: transparent; border: 1px solid transparent; color: var(--dim);
+    font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 3px; cursor: pointer;
+    letter-spacing: 0.3px; transition: all 0.12s ease;
+  }
+  .dev-pill.active {
+    background: #142332; border-color: #24496b; color: var(--blue);
+  }
+  .dev-host-wrap {
+    display: flex; align-items: center; background: #10161c; border: 1px solid #1d2a36;
+    border-radius: 4px; padding: 0 6px; height: 28px; gap: 2px;
+  }
+  .dev-host-proto { font-size: 10.5px; color: var(--dimmer); font-family: 'JetBrains Mono', monospace; }
+  .dev-host-input {
+    background: transparent; border: none; outline: none; color: var(--fg);
+    font-size: 11.5px; width: 110px; font-family: 'JetBrains Mono', monospace; font-weight: 600;
+  }
+  .dev-host-port { font-size: 10.5px; color: var(--dimmer); font-family: 'JetBrains Mono', monospace; }
+  .dev-action-btn {
+    background: #15222d; border: 1px solid #253e56; color: var(--blue);
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; cursor: pointer;
+    margin-left: 4px;
+  }
+  .dev-action-btn:hover { background: #1c3245; color: #fff; }
+  .dev-status-badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 3px; border: 1px solid #1d2b38; background: #0f151b;
+    letter-spacing: 0.4px;
+  }
+  .dev-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dimmer); flex-shrink: 0; }
+  .dev-status-badge.emu .dev-dot { background: var(--green); }
+  .dev-status-badge.emu { color: var(--green); border-color: #1a422a; background: #0b1a11; }
+  .dev-status-badge.live-connected .dev-dot { background: var(--green); }
+  .dev-status-badge.live-connected { color: var(--green); border-color: #1a422a; background: #0b1a11; }
+  .dev-status-badge.live-connecting .dev-dot { background: var(--amber); animation: devPulse 1.2s infinite; }
+  .dev-status-badge.live-connecting { color: var(--amber); border-color: #4a3416; background: #1e1509; }
+  .dev-status-badge.live-offline .dev-dot { background: var(--red); }
+  .dev-status-badge.live-offline { color: var(--red); border-color: #4c1a1e; background: #1e0b0e; }
+  @keyframes devPulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
+  .dev-tools { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dim); }
+  .dev-sub-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px; background: #070b0e; border-bottom: 1px solid #141c24;
+    gap: 8px; flex-wrap: wrap; font-size: 11px;
+  }
+  .dev-sub-bar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dev-sub-bar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .dev-check-label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; color: var(--dim); font-size: 11px; }
+  .dev-check-label input { margin: 0; cursor: pointer; }
+  .dev-check-label:hover { color: var(--fg); }
+  .dev-select {
+    background: #11171d; border: 1px solid #1e2a36; color: var(--fg);
+    font-size: 11px; font-weight: 600; padding: 2px 4px; border-radius: 3px; cursor: pointer; outline: none;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dev-tool-btn {
+    background: #11171d; border: 1px solid #1e2a36; color: var(--dim);
+    font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 3px; cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .dev-tool-btn:hover { color: var(--fg); background: #1b2632; }
+  .dev-tool-btn.active { background: #15222d; border-color: #253e56; color: var(--blue); }
+
+  .dev-log-window {
+    height: 200px; min-height: 80px; max-height: 650px; resize: vertical; overflow-y: scroll;
+    background: #040709; padding: 6px 10px; font-size: 11px; line-height: 1.45; font-family: 'JetBrains Mono', monospace;
+    display: flex; flex-direction: column; gap: 2px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #1f2c38 #070b0e;
+  }
+  .dev-log-window::-webkit-scrollbar { width: 8px; }
+  .dev-log-window::-webkit-scrollbar-track { background: #070b0e; }
+  .dev-log-window::-webkit-scrollbar-thumb { background: #1f2c38; border-radius: 4px; }
+  .dev-log-window::-webkit-scrollbar-thumb:hover { background: #2c3e4f; }
+
+  .dev-resize-bar {
+    height: 10px; background: #0a0e13; border-top: 1px solid #16202a;
+    display: flex; align-items: center; justify-content: center; cursor: ns-resize;
+    user-select: none;
+  }
+  .dev-resize-bar:hover { background: #0f151c; }
+  .dev-resize-indicator { width: 36px; height: 3px; background: #233140; border-radius: 2px; }
+  .dev-resize-bar:hover .dev-resize-indicator { background: var(--blue); }
+
+  .dev-log-row { display: flex; align-items: baseline; gap: 8px; }
+  .dev-log-row.filtered { display: none; }
+  .dev-log-time { color: var(--dimmer); flex-shrink: 0; font-size: 10px; }
+  .dev-log-badge {
+    padding: 0 4px; border-radius: 2px; font-size: 9.5px; font-weight: 800; flex-shrink: 0; letter-spacing: 0.4px;
+  }
+  .dev-log-badge.tx { background: #0e2a1b; color: var(--green); border: 1px solid #1b4b2e; }
+  .dev-log-badge.rx { background: #0c2136; color: var(--blue); border: 1px solid #1b3d5c; }
+  .dev-log-badge.sys { background: #26190b; color: var(--amber); border: 1px solid #4a3418; }
+  .dev-log-badge.err { background: #2b0e12; color: var(--red); border: 1px solid #541c22; }
+  .dev-log-raw { color: var(--fg); word-break: break-all; flex-shrink: 0; }
+  .dev-log-note { color: var(--dimmer); font-size: 10.5px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Collapsible Telemetry Packets & Stream Grouping */
+  .dev-telemetry-row {
+    background: #060b0e; border: 1px solid #131f2a; border-radius: 4px;
+    padding: 4px 6px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .dev-telemetry-row.stream-group {
+    background: #081118; border-color: #1a2f42;
+  }
+  .dev-telemetry-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none;
+  }
+  .dev-telemetry-header-left {
+    display: flex; align-items: baseline; gap: 6px; flex: 1; overflow: hidden;
+  }
+  .dev-telemetry-summary {
+    color: var(--blue); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;
+  }
+  .dev-telemetry-count-badge {
+    background: #142838; color: #7ab8f5; border: 1px solid #234765;
+    padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; flex-shrink: 0;
+  }
+  .dev-telemetry-expand-btn {
+    background: #101a24; border: 1px solid #1f3244; color: var(--dim);
+    font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 3px; cursor: pointer; flex-shrink: 0;
+  }
+  .dev-telemetry-expand-btn:hover {
+    color: #fff; border-color: var(--blue); background: #182a3a;
+  }
+  .dev-telemetry-drawer {
+    display: none; padding: 6px 8px; background: #030608; border: 1px solid #101a22;
+    border-radius: 3px; margin-top: 2px;
+  }
+  .dev-telemetry-drawer.open {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .dev-telemetry-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 4px 10px;
+    font-size: 10.5px;
+  }
+  .dev-telemetry-field { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed #141f29; padding-bottom: 1px; }
+  .dev-telemetry-key { color: var(--dimmer); font-size: 9.5px; text-transform: uppercase; font-weight: 700; }
+  .dev-telemetry-val { color: var(--fg); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .dev-telemetry-raw-box {
+    margin-top: 4px; padding: 4px 6px; background: #020304; border: 1px solid #0d151c;
+    border-radius: 2px; color: var(--dim); font-size: 9.5px; max-height: 80px; overflow-y: auto;
+    white-space: pre-wrap; font-family: 'JetBrains Mono', monospace;
+  }
 </style>
 </head>
 <body>
@@ -1533,6 +1703,63 @@
 
 </div>
 
+  <!-- ============================================================
+       EXTERNAL DEV & PROTOCOL TELEMETRY CONSOLE (Below .device)
+       ============================================================ -->
+  <div class="dev-console" id="devConsole">
+    <div class="dev-header">
+      <div class="dev-header-left">
+        <span class="dev-title">NanoELS Backend:</span>
+        <div class="dev-mode-pills">
+          <button type="button" class="dev-pill active" id="btnDevModeEmulator">● EMULATOR</button>
+          <button type="button" class="dev-pill" id="btnDevModeLive">○ LIVE WEBSOCKET</button>
+        </div>
+        <div class="dev-host-wrap" id="devHostWrap">
+          <span class="dev-host-proto">ws://</span>
+          <input type="text" class="dev-host-input" id="devHostInput" value="nanoels.local" placeholder="nanoels.local" spellcheck="false">
+          <span class="dev-host-port">:81</span>
+          <button type="button" class="dev-action-btn" id="btnDevConnect">CONNECT</button>
+        </div>
+      </div>
+      <div class="dev-header-right">
+        <span class="dev-status-badge emu" id="devStatusBadge"><span class="dev-dot"></span>EMULATOR READY</span>
+      </div>
+    </div>
+    <div class="dev-sub-bar">
+      <div class="dev-sub-bar-left">
+        <label class="dev-check-label" title="When unchecked, live 10Hz DRO state frames update the screen silently without flooding the log window">
+          <input type="checkbox" id="chkLogStatusPushes"> Log Status Pushes (UI.*)
+        </label>
+        <span style="color:var(--dimmer); opacity:0.6;">|</span>
+        <label style="display:inline-flex; align-items:center; gap:4px; color:var(--dim); font-size:11px;">
+          Buffer:
+          <select id="devBufferSize" class="dev-select" title="Maximum log lines kept in DOM memory">
+            <option value="100">100 lines</option>
+            <option value="500">500 lines</option>
+            <option value="1000" selected>1000 lines</option>
+            <option value="2000">2000 lines</option>
+          </select>
+        </label>
+        <span style="color:var(--dimmer); opacity:0.6;">|</span>
+        <div style="display:inline-flex; align-items:center; gap:4px; color:var(--dim); font-size:11px;">
+          Height:
+          <button type="button" class="dev-tool-btn" data-log-height="120">120px</button>
+          <button type="button" class="dev-tool-btn active" data-log-height="200">200px</button>
+          <button type="button" class="dev-tool-btn" data-log-height="350">350px</button>
+        </div>
+      </div>
+      <div class="dev-sub-bar-right">
+        <button type="button" class="dev-tool-btn" id="btnDevScrollBottom" style="display:none; color:var(--blue); border-color:#204360; background:#0c1e2d;">↓ Bottom</button>
+        <label class="dev-check-label" id="lblAutoScroll"><input type="checkbox" id="chkAutoScroll" checked> Auto-Scroll</label>
+        <button type="button" class="dev-tool-btn" id="btnDevClearLog">CLEAR LOG</button>
+      </div>
+    </div>
+    <div class="dev-log-window" id="devLogWindow"></div>
+    <div class="dev-resize-bar" id="devResizeBar" title="Drag to resize log window height"><span class="dev-resize-indicator"></span></div>
+  </div>
+
+<script src="nanoels-emulator.js"></script>
+<script src="nanoels-service.js"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -1671,7 +1898,7 @@
     threadUnit: 'metric',
     
     // Other H5 Modes
-    taperAngle: 5.71, taperLen: 25.0, taperDir: 'INT',
+    taperAngle: 5.71, taperLen: 25.0, taperDir: 'INT', taperCycleActive: false,
     cutoffFeed: 0.030, cutoffPeck: 1.200, cutoffRetract: 0.500,
     slotStrokes: 12, slotFeedPerStroke: 0.020, slotLen: 15.0,
     sphereRadius: 12.0, sphereType: 'CONVEX', sphereStep: 0.050,
@@ -2365,39 +2592,45 @@
 
       return '' +
         '<div style="display:flex; flex-direction:column; gap:6px;">' +
+          // Top Row: Primary Axis + Feed Direction side-by-side (saves full row of vertical space)
           '<div style="display:flex; gap:4px;">' +
-            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
-            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + axisClass + '" id="fld-gearAxis" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + axisBtnLabel + '</div>' +
-          '</div>' +
-
-          '<div style="display:flex; justify-content:space-between; align-items:center; background:#12181f; border:1px solid #1f2c38; border-radius:4px; padding:5px 8px; min-height:38px;">' +
-            '<span style="font-size:11px; font-weight:700; color:var(--dim); letter-spacing:0.3px;">FEED DIRECTION</span>' +
-            '<span class="inline-dir-chip ' + dirChipClass + ' ' + (!isRun?'tap':'') + '" id="fld-gearDir" style="font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:3px;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' + dirLabel + '</span>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + axisClass + '" id="fld-gearAxis" style="flex:1; min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + axisBtnLabel + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + dirChipClass + '" id="fld-gearDir" style="flex:1; min-height:38px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' + dirLabel + '</div>' +
           '</div>' +
 
           (zActive ? 
-            '<div class="feed-block active-axis-row" style="background:rgba(61, 220, 132, 0.03); border:1px solid rgba(61, 220, 132, 0.35); border-radius:4px; padding:8px;">' +
-              '<div style="display:flex; gap:4px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
-                '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
-                '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
+            '<div class="feed-block active-axis-row" style="background:rgba(61, 220, 132, 0.03); border:1px solid rgba(61, 220, 132, 0.35); border-radius:4px; padding:6px; display:flex; flex-direction:column; gap:6px;">' +
+              // SYNC vs ASYNC Toggle (Exclusive to Z axis where controller supports both)
+              '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync" style="min-height:34px; font-size:12px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' +
+                (isSync ? '⚡ SYNC (SPINDLE)' : '⏱ ASYNC (TIME FEED)') +
               '</div>' +
-              (state.gearFeedModeZ === 'PITCH' ?
-                '<div style="display:flex; justify-content:space-between; align-items:center; background:#0e141a; border:1px solid #1b2632; border-radius:3px; padding:8px 10px; margin-top:8px;">' +
-                  '<div style="display:flex; flex-direction:column;">' +
-                    '<span style="font-size:9.5px; color:var(--dim); font-weight:700;">THREAD LEAD</span>' +
-                    '<b class="mono" style="font-size:16px; color:var(--fg); margin-top:2px;">' + zDisp.val + ' ' + zDisp.unit + ' (' + (state.gearThreadHandedness||'RH') + ')</b>' +
-                  '</div>' +
-                  '<div class="tap" id="btnEditPitch" style="background:#112519; color:var(--green); border:1px solid #1f4a2d; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '">✎ PITCH</div>' +
-                '</div>' : '') +
+              (isSync ?
+                '<div style="display:flex; gap:4px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
+                  '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:36px; padding:6px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
+                  '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:36px; padding:6px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
+                '</div>' +
+                (state.gearFeedModeZ === 'PITCH' ?
+                  '<div style="display:flex; justify-content:space-between; align-items:center; background:#0e141a; border:1px solid #1b2632; border-radius:3px; padding:6px 10px; margin-top:2px;">' +
+                    '<div style="display:flex; flex-direction:column;">' +
+                      '<span style="font-size:9.5px; color:var(--dim); font-weight:700;">THREAD LEAD</span>' +
+                      '<b class="mono" style="font-size:15px; color:var(--fg); margin-top:2px;">' + zDisp.val + ' ' + zDisp.unit + ' (' + (state.gearThreadHandedness||'RH') + ')</b>' +
+                    '</div>' +
+                    '<div class="tap" id="btnEditPitch" style="background:#112519; color:var(--green); border:1px solid #1f4a2d; font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '">✎ PITCH</div>' +
+                  '</div>' : '')
+              : 
+                '<div style="background:#0e141a; border:1px solid #1b2632; border-radius:3px; padding:6px 10px; font-size:11.5px; color:var(--dim); line-height:1.4;">' +
+                  'Constant timed carriage feed (' + unitLabel() + '/min) independent of spindle rotation.' +
+                '</div>'
+              ) +
             '</div>' 
           : xActive ?
             '<div class="feed-block active-axis-row" style="background:rgba(90, 169, 255, 0.03); border:1px solid rgba(90, 169, 255, 0.35); border-radius:4px; padding:8px; display:flex; flex-direction:column; gap:4px;">' +
               '<div style="display:flex; justify-content:space-between; align-items:center;">' +
                 '<span style="font-size:10.5px; font-weight:700; color:var(--dim); letter-spacing:0.4px;">CROSS-SLIDE MOTION</span>' +
-                '<span class="mono" style="font-size:10.5px; font-weight:700; color:var(--blue); background:#0c1c2a; border:1px solid #1e364c; padding:2px 6px; border-radius:3px;">X CROSS-FEED</span>' +
+                '<span class="mono" style="font-size:10.5px; font-weight:700; color:var(--blue); background:#0c1c2a; border:1px solid #1e364c; padding:2px 6px; border-radius:3px;">X POWER FACING</span>' +
               '</div>' +
               '<div style="font-size:11.5px; color:var(--dim); line-height:1.4; margin-top:2px;">' +
-                (isSync ? 'Transverse feed synchronized to spindle rotation.' : 'Asynchronous timed cross-slide traverse.') +
+                'Transverse facing feed synchronized to spindle rotation (' + unitLabel() + '/rev).' +
               '</div>' +
             '</div>'
           : 
@@ -2541,6 +2774,7 @@
       if(btnSync){
         btnSync.addEventListener('click', function(){
           state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
+          syncModeToController('GEARBOX');
           updateStatusMsg(); render();
         });
       }
@@ -2548,9 +2782,16 @@
       var btnAxis = $('fld-gearAxis');
       if(btnAxis){
         btnAxis.addEventListener('click', function(){
-          if(state.activeFeedAxis === 'Z') state.activeFeedAxis = 'X';
-          else if(state.activeFeedAxis === 'X') state.activeFeedAxis = 'Z+X';
-          else state.activeFeedAxis = 'Z';
+          if(state.activeFeedAxis === 'Z'){
+            state.activeFeedAxis = 'X';
+            state.gearboxMode = 'SYNC';
+          } else if(state.activeFeedAxis === 'X'){
+            state.activeFeedAxis = 'Z+X';
+            state.gearboxMode = 'SYNC';
+          } else {
+            state.activeFeedAxis = 'Z';
+          }
+          syncModeToController('GEARBOX');
           updateStatusMsg(); render();
         });
       }
@@ -2769,6 +3010,9 @@
       '<div class="rbtn stop ' + stopClass + ' ' + (isRun ? 'tap' : '') + '" id="btnStop">STOP</div>';
 
     $('btnRun').addEventListener('click', function(){
+      if(window.nanoelsClient){
+        window.nanoelsClient.startCycle();
+      }
       if(state.runState === 'stopped'){
         // Cache limits if opt-in restoration is active
         if(state.mode === 'TURNING' && state.turnRestoreLimits && state.turnSavedZMin === null && state.turnSavedZMax === null){
@@ -2801,6 +3045,9 @@
     });
 
     $('btnStop').addEventListener('click', function(){
+      if(window.nanoelsClient){
+        window.nanoelsClient.stopCycle();
+      }
       if(state.runState !== 'stopped'){
         stopCycle(true);
       }
@@ -3031,6 +3278,9 @@
   // Header Handlers
   $('unitToggle').addEventListener('click', function(){ 
     if(state.runState === 'running') return;
+    if(window.nanoelsClient){
+      window.nanoelsClient.cycleMeasure();
+    }
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
     state.customFeedStepZ = null;
     state.customFeedStepX = null;
@@ -3075,11 +3325,43 @@
     if(state.runState === 'running') return;
     $('modeOverlay').classList.add('show');
   });
+  function syncModeToController(targetMode){
+    if(!window.nanoelsClient) return;
+    var modeMap = {
+      'GEARBOX': 'GEARS',
+      'JOYSTICK': 'JOYSTICK',
+      'TURNING': 'TURN',
+      'FACING': 'FACE',
+      'THREADING': 'THREAD',
+      'TAPER': 'CONE',
+      'CUTOFF': 'CUT',
+      'SLOTTING': 'SLOT',
+      'SPHERE': 'ELLIPSE'
+    };
+    var m = targetMode || state.mode;
+    var actionKey = modeMap[m];
+    if(m === 'GEARBOX'){
+      if(state.activeFeedAxis === 'Z'){
+        actionKey = (state.gearboxMode === 'ASYNC') ? 'ASYNC' : 'GEARS';
+      } else if(state.activeFeedAxis === 'X'){
+        actionKey = 'XGEAR';
+      } else if(state.activeFeedAxis === 'Z+X'){
+        actionKey = 'CONE';
+      } else {
+        actionKey = 'GEARS';
+      }
+    }
+    if(actionKey){
+      window.nanoelsClient.setMode(actionKey);
+    }
+  }
+
   $('modeOverlay').querySelectorAll('button[data-mode]').forEach(function(b){
     b.addEventListener('click', function(){
       state.mode = b.dataset.mode;
       state.runState = 'stopped';
       $('modeOverlay').classList.remove('show');
+      syncModeToController(state.mode);
       updateStatusMsg();
       render();
     });
@@ -3088,6 +3370,9 @@
 
   $('repBadge').addEventListener('click', function(e){
     e.stopPropagation();
+    if(window.nanoelsClient){
+      window.nanoelsClient.toggleDiaRad();
+    }
     state.xRep = state.xRep === 'diameter' ? 'radius' : 'diameter';
     render();
   });
@@ -3114,6 +3399,9 @@
     clearTimeout(stepHoldTimer);
     if(state.runState === 'running') return;
     if(!stepDidHold){
+      if(window.nanoelsClient){
+        window.nanoelsClient.cycleStep();
+      }
       var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
       state.stepIdx = (state.stepIdx + 1) % maxLen;
       render();
@@ -3141,6 +3429,9 @@
   $('xValue').addEventListener('click', function(){ openAxisOverlay('x'); });
   $('axisCancelBtn').addEventListener('click', function(){ $('axisOverlay').classList.remove('show'); });
   $('axisZeroBtn').addEventListener('click', function(){
+    if(window.nanoelsClient){
+      window.nanoelsClient.zeroAxis(axisTarget);
+    }
     if(axisTarget==='z') state.z = 0; else state.xDia = 0;
     $('axisOverlay').classList.remove('show'); render();
   });
@@ -3165,6 +3456,11 @@
   });
   $('limitCancelBtn').addEventListener('click', function(){ $('limitOverlay').classList.remove('show'); });
   $('limitSetBtn').addEventListener('click', function(){
+    if(window.nanoelsClient){
+      var isZ = (limitTarget === 'zMin' || limitTarget === 'zMax');
+      var isMin = (limitTarget === 'zMin' || limitTarget === 'xMinDia');
+      window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
+    }
     if(limitTarget==='zMin' || limitTarget==='zMax') state[limitTarget] = state.z; else state[limitTarget] = state.xDia;
     $('limitOverlay').classList.remove('show'); render();
   });
@@ -3173,12 +3469,20 @@
     var curr = state[limitTarget] !== null ? toDisplayLen(state[limitTarget]) : 0;
     openKeypad('limitTarget', curr);
   });
-  $('limitClearBtn').addEventListener('click', function(){ state[limitTarget] = null; $('limitOverlay').classList.remove('show'); render(); });
+  $('limitClearBtn').addEventListener('click', function(){ 
+    if(window.nanoelsClient){
+      var isZ = (limitTarget === 'zMin' || limitTarget === 'zMax');
+      var isMin = (limitTarget === 'zMin' || limitTarget === 'xMinDia');
+      window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
+    }
+    state[limitTarget] = null; $('limitOverlay').classList.remove('show'); render(); 
+  });
 
   // Asynchronous Jogging (UP = into cut / to center, DOWN = retract)
   document.querySelectorAll('.dpad .btn[data-axis]').forEach(function(btn){
     var holdTimer=null, repeatTimer=null;
     var axis = btn.dataset.axis, dir = parseInt(btn.dataset.dir,10);
+    var isPressed = false;
     function isBlocked(){
       var eps = 0.0005;
       if(axis === 'z'){
@@ -3212,14 +3516,26 @@
         setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
+      isPressed = true;
       btn.classList.add('pressed');
+      if (window.nanoelsClient) {
+        window.nanoelsClient.jog(axis, dir, true);
+      }
       doStep();
       holdTimer = setTimeout(function(){ repeatTimer = setInterval(doStep, 110); }, 350);
     }
-    function stop(){ btn.classList.remove('pressed'); clearTimeout(holdTimer); clearInterval(repeatTimer); }
+    function stop(){
+      if (!isPressed) return;
+      isPressed = false;
+      btn.classList.remove('pressed');
+      clearTimeout(holdTimer);
+      clearInterval(repeatTimer);
+      if (window.nanoelsClient) {
+        window.nanoelsClient.jog(axis, dir, false);
+      }
+    }
     btn.addEventListener('pointerdown', start);
     btn.addEventListener('pointerup', stop);
-    btn.addEventListener('pointerleave', stop);
     btn.addEventListener('pointercancel', stop);
   });
 
@@ -3229,6 +3545,7 @@
     var diag = btn.dataset.diag;
     var zDir = diag==='nw' ? -1 : 1;
     var xDir = diag==='nw' ? -1 : 1;
+    var isPressed = false;
     function isBlocked(){
       var eps = 0.0005;
       if(zDir === -1 && state.zMin !== null && state.z <= (state.zMin + eps)) return 'Z MIN (CHUCK)';
@@ -3255,14 +3572,28 @@
         setStatusMsg('LIMIT BLOCKED: RESTING ON ' + blk + ' — JOG OPPOSITE TO RETREAT');
         return;
       }
+      isPressed = true;
       btn.classList.add('pressed');
+      if (window.nanoelsClient) {
+        window.nanoelsClient.jog('z', zDir, true);
+        window.nanoelsClient.jog('x', xDir, true);
+      }
       doStep();
       holdTimer = setTimeout(function(){ repeatTimer = setInterval(doStep, 110); }, 350);
     }
-    function stop(){ btn.classList.remove('pressed'); clearTimeout(holdTimer); clearInterval(repeatTimer); }
+    function stop(){
+      if (!isPressed) return;
+      isPressed = false;
+      btn.classList.remove('pressed');
+      clearTimeout(holdTimer);
+      clearInterval(repeatTimer);
+      if (window.nanoelsClient) {
+        window.nanoelsClient.jog('z', zDir, false);
+        window.nanoelsClient.jog('x', xDir, false);
+      }
+    }
     btn.addEventListener('pointerdown', start);
     btn.addEventListener('pointerup', stop);
-    btn.addEventListener('pointerleave', stop);
     btn.addEventListener('pointercancel', stop);
   });
 
@@ -4329,6 +4660,10 @@
     var bp = getWizBlueprint();
     if(!bp) return;
     commitThreadSettingsFromWiz(bp);
+    if(pitchSelectTarget !== 'gearZ'){
+      state.mode = 'THREADING';
+      syncModeToController('THREADING');
+    }
     $('pitchOverlay').classList.remove('show');
     updateStatusMsg();
     render();
@@ -4344,6 +4679,7 @@
     if(bp.coneRatio > 0){
       // Pipe Thread -> TAPER Mode
       state.mode = 'TAPER';
+      syncModeToController('TAPER');
       state.taperAngle = 1.79; // 1:16 Cone Ratio (1 deg 47 min)
       state.taperLen = bp.l2 || 15.0;
       state.taperDir = bp.side === 'EXTERNAL' ? 'INT' : 'EXT';
@@ -4351,6 +4687,7 @@
     } else {
       // Straight Thread -> TURNING Mode
       state.mode = 'TURNING';
+      syncModeToController('TURNING');
       var targetOd = bp.side === 'EXTERNAL' ? bp.stockMax : bp.stockMin;
       var deltaDia = +(state.xDia - targetOd).toFixed(3);
       if(deltaDia > 0.05){
@@ -4759,7 +5096,509 @@
   $('tabDocManual').addEventListener('click', function(){ showDocTab('manual'); });
   $('docClose').addEventListener('click', function(){ $('docOverlay').classList.remove('show'); });
 
+  // --- NanoELS Integration & Dev Console Controller ---
+  function initDevConsoleAndService(){
+    var savedBackend = localStorage.getItem('nanoels_backend') || 'emulator';
+    var savedHost = localStorage.getItem('nanoels_host') || 'nanoels.local';
+    var savedLogStatus = localStorage.getItem('nanoels_log_status_pushes') === 'true';
+    var savedBufferSize = localStorage.getItem('nanoels_log_buffer') || '1000';
+    var savedHeight = localStorage.getItem('nanoels_log_height') || '200';
+
+    var btnEmulator = $('btnDevModeEmulator');
+    var btnLive = $('btnDevModeLive');
+    var hostInput = $('devHostInput');
+    var hostWrap = $('devHostWrap');
+    var btnConnect = $('btnDevConnect');
+    var statusBadge = $('devStatusBadge');
+    var logWindow = $('devLogWindow');
+    var chkLogStatus = $('chkLogStatusPushes');
+    var selBufferSize = $('devBufferSize');
+    var chkAutoScroll = $('chkAutoScroll');
+    var btnScrollBottom = $('btnDevScrollBottom');
+    var btnClear = $('btnDevClearLog');
+    var resizeBar = $('devResizeBar');
+
+    var consecutiveTelemetryCount = 0;
+    var activeStreamRow = null;
+    var activeStreamCountBadge = null;
+    var activeStreamSummary = null;
+    var activeStreamDrawerContent = null;
+    var activeStreamTime = null;
+
+    function renderTelemetryDrawerHTML(data, raw){
+      if(!data) return '';
+      return '' +
+        '<div class="dev-telemetry-grid">' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Axis Z</span><span class="dev-telemetry-val">' + (data.z || '--') + ' ' + (data.measure||'MM') + '</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Axis X</span><span class="dev-telemetry-val">' + (data.x || '--') + ' ' + (data.measure||'MM') + '</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Spindle</span><span class="dev-telemetry-val">' + (data.rpm || '0') + ' RPM</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Status</span><span class="dev-telemetry-val" style="color:' + (data.status==='ON'?'var(--green)':'var(--red)') + '">' + (data.status || 'OFF') + '</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Mode</span><span class="dev-telemetry-val">' + (data.mode || '--') + '</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Lead/Pitch</span><span class="dev-telemetry-val">' + (data.pitch || '--') + '</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">Z Limits</span><span class="dev-telemetry-val">[' + (data.zLeft || '--') + ' / ' + (data.zRight || '--') + ']</span></div>' +
+          '<div class="dev-telemetry-field"><span class="dev-telemetry-key">X Limits</span><span class="dev-telemetry-val">[' + (data.xLeft || '--') + ' / ' + (data.xRight || '--') + ']</span></div>' +
+        '</div>' +
+        (raw ? '<div class="dev-telemetry-raw-box">' + escapeHtml(raw) + '</div>' : '');
+    }
+
+    if(hostInput) hostInput.value = savedHost;
+    if(chkLogStatus) chkLogStatus.checked = savedLogStatus;
+    if(selBufferSize) selBufferSize.value = savedBufferSize;
+    if(logWindow) logWindow.style.height = savedHeight + 'px';
+
+    var heightBtns = document.querySelectorAll('[data-log-height]');
+    heightBtns.forEach(function(b){
+      b.classList.toggle('active', b.dataset.logHeight === savedHeight);
+      b.addEventListener('click', function(){
+        var h = b.dataset.logHeight;
+        logWindow.style.height = h + 'px';
+        heightBtns.forEach(function(btn){ btn.classList.toggle('active', btn === b); });
+        localStorage.setItem('nanoels_log_height', h);
+      });
+    });
+
+    if(resizeBar){
+      var startY, startH;
+      function onPointerMove(e){
+        var newH = Math.max(80, Math.min(650, startH + (e.clientY - startY)));
+        logWindow.style.height = newH + 'px';
+      }
+      function onPointerUp(){
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        var finalH = parseInt(logWindow.style.height, 10);
+        localStorage.setItem('nanoels_log_height', finalH);
+        heightBtns.forEach(function(btn){
+          btn.classList.toggle('active', btn.dataset.logHeight === finalH.toString());
+        });
+      }
+      resizeBar.addEventListener('pointerdown', function(e){
+        startY = e.clientY;
+        startH = logWindow.getBoundingClientRect().height;
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      });
+    }
+
+    var isUserScrolledUp = false;
+    logWindow.addEventListener('scroll', function(){
+      var distFromBottom = logWindow.scrollHeight - logWindow.clientHeight - logWindow.scrollTop;
+      isUserScrolledUp = distFromBottom > 35;
+      if(btnScrollBottom){
+        btnScrollBottom.style.display = isUserScrolledUp ? 'inline-flex' : 'none';
+      }
+    });
+
+    if(btnScrollBottom){
+      btnScrollBottom.addEventListener('click', function(){
+        logWindow.scrollTop = logWindow.scrollHeight;
+        isUserScrolledUp = false;
+        if(chkAutoScroll) chkAutoScroll.checked = true;
+        btnScrollBottom.style.display = 'none';
+      });
+    }
+
+    if(chkAutoScroll){
+      chkAutoScroll.addEventListener('change', function(){
+        if(chkAutoScroll.checked){
+          logWindow.scrollTop = logWindow.scrollHeight;
+          isUserScrolledUp = false;
+          if(btnScrollBottom) btnScrollBottom.style.display = 'none';
+        }
+      });
+    }
+
+    if(selBufferSize){
+      selBufferSize.addEventListener('change', function(){
+        localStorage.setItem('nanoels_log_buffer', selBufferSize.value);
+        var maxLimit = parseInt(selBufferSize.value, 10);
+        while(logWindow.children.length > maxLimit){
+          if(logWindow.firstChild === activeStreamRow){
+            activeStreamRow = null;
+          }
+          logWindow.removeChild(logWindow.firstChild);
+        }
+      });
+    }
+
+    function updatePills(backend){
+      if(btnEmulator) btnEmulator.classList.toggle('active', backend === 'emulator');
+      if(btnLive) btnLive.classList.toggle('active', backend === 'live');
+      if(hostWrap){
+        hostWrap.style.opacity = (backend === 'live') ? '1' : '0.45';
+      }
+    }
+    updatePills(savedBackend);
+
+    // Initialize Service
+    if(window.NanoelsService){
+      window.nanoelsClient = new window.NanoelsService({
+        mode: savedBackend,
+        host: savedHost,
+        port: 81,
+        logStatusPushes: savedLogStatus
+      });
+
+      // Handle Connection Status Updates
+      window.nanoelsClient.addEventListener('connection', function(e){
+        var detail = e.detail;
+        if(detail.mode === 'emulator'){
+          statusBadge.className = 'dev-status-badge emu';
+          statusBadge.innerHTML = '<span class="dev-dot"></span>EMULATOR ACTIVE';
+        } else if(detail.connecting){
+          statusBadge.className = 'dev-status-badge live-connecting';
+          statusBadge.innerHTML = '<span class="dev-dot"></span>CONNECTING (' + detail.host + ':81)...';
+        } else if(detail.connected){
+          statusBadge.className = 'dev-status-badge live-connected';
+          statusBadge.innerHTML = '<span class="dev-dot"></span>CONNECTED (' + detail.host + ':81)';
+        } else {
+          statusBadge.className = 'dev-status-badge live-offline';
+          statusBadge.innerHTML = '<span class="dev-dot"></span>OFFLINE (ws://' + detail.host + ':81)';
+        }
+      });
+
+      // Handle Traffic Logging
+      window.nanoelsClient.addEventListener('traffic', function(e){
+        var item = e.detail;
+
+        if(item.type === 'telemetry_packet'){
+          if(!chkLogStatus || !chkLogStatus.checked){
+            return;
+          }
+
+          consecutiveTelemetryCount++;
+
+          var t = item.time;
+          var timeStr = ('0' + t.getHours()).slice(-2) + ':' +
+                        ('0' + t.getMinutes()).slice(-2) + ':' +
+                        ('0' + t.getSeconds()).slice(-2) + '.' +
+                        ('00' + t.getMilliseconds()).slice(-3);
+
+          if(consecutiveTelemetryCount <= 3){
+            var row = document.createElement('div');
+            row.className = 'dev-telemetry-row';
+            row.innerHTML = '' +
+              '<div class="dev-telemetry-header">' +
+                '<div class="dev-telemetry-header-left">' +
+                  '<span class="dev-log-time">' + timeStr + '</span>' +
+                  '<span class="dev-log-badge rx">RX ◀</span>' +
+                  '<span class="dev-telemetry-summary">' + escapeHtml(item.summary) + '</span>' +
+                '</div>' +
+                '<button type="button" class="dev-telemetry-expand-btn">[+] DATA</button>' +
+              '</div>' +
+              '<div class="dev-telemetry-drawer">' + renderTelemetryDrawerHTML(item.data, item.raw) + '</div>';
+
+            var btnExpand = row.querySelector('.dev-telemetry-expand-btn');
+            var drawer = row.querySelector('.dev-telemetry-drawer');
+            btnExpand.addEventListener('click', function(ev){
+              ev.stopPropagation();
+              var open = drawer.classList.toggle('open');
+              btnExpand.textContent = open ? '[−] HIDE' : '[+] DATA';
+            });
+            row.querySelector('.dev-telemetry-header').addEventListener('click', function(){
+              var open = drawer.classList.toggle('open');
+              btnExpand.textContent = open ? '[−] HIDE' : '[+] DATA';
+            });
+
+            logWindow.appendChild(row);
+            activeStreamRow = null;
+          } else {
+            var childrenCount = consecutiveTelemetryCount - 3;
+            if(!activeStreamRow){
+              var row = document.createElement('div');
+              row.className = 'dev-telemetry-row stream-group';
+              row.innerHTML = '' +
+                '<div class="dev-telemetry-header">' +
+                  '<div class="dev-telemetry-header-left">' +
+                    '<span class="dev-log-time stream-time">' + timeStr + '</span>' +
+                    '<span class="dev-log-badge rx">RX ◀</span>' +
+                    '<span class="dev-log-badge sys" style="font-size:9px;">STREAM</span>' +
+                    '<span class="dev-telemetry-summary stream-summary">' + escapeHtml(item.summary) + '</span>' +
+                    '<span class="dev-telemetry-count-badge stream-count">+' + childrenCount + ' updates</span>' +
+                  '</div>' +
+                  '<button type="button" class="dev-telemetry-expand-btn">[+] DATA</button>' +
+                '</div>' +
+                '<div class="dev-telemetry-drawer stream-drawer">' +
+                  '<div class="stream-drawer-content">' + renderTelemetryDrawerHTML(item.data, item.raw) + '</div>' +
+                '</div>';
+
+              var btnExpand = row.querySelector('.dev-telemetry-expand-btn');
+              var drawer = row.querySelector('.stream-drawer');
+              btnExpand.addEventListener('click', function(ev){
+                ev.stopPropagation();
+                var open = drawer.classList.toggle('open');
+                btnExpand.textContent = open ? '[−] HIDE' : '[+] DATA';
+              });
+              row.querySelector('.dev-telemetry-header').addEventListener('click', function(){
+                var open = drawer.classList.toggle('open');
+                btnExpand.textContent = open ? '[−] HIDE' : '[+] DATA';
+              });
+
+              logWindow.appendChild(row);
+
+              activeStreamRow = row;
+              activeStreamCountBadge = row.querySelector('.stream-count');
+              activeStreamSummary = row.querySelector('.stream-summary');
+              activeStreamDrawerContent = row.querySelector('.stream-drawer-content');
+              activeStreamTime = row.querySelector('.stream-time');
+            } else {
+              // In-place mutation: ZERO new DOM elements added!
+              if(activeStreamCountBadge) activeStreamCountBadge.textContent = '+' + childrenCount + ' updates';
+              if(activeStreamSummary) activeStreamSummary.textContent = item.summary;
+              if(activeStreamTime) activeStreamTime.textContent = timeStr;
+              if(activeStreamDrawerContent) activeStreamDrawerContent.innerHTML = renderTelemetryDrawerHTML(item.data, item.raw);
+            }
+          }
+        } else {
+          // Regular log line (TX commands, KEY presses, SYSINFO, warnings, etc.)
+          consecutiveTelemetryCount = 0;
+          activeStreamRow = null;
+
+          var row = document.createElement('div');
+          row.className = 'dev-log-row';
+
+          var t = item.time;
+          var timeStr = ('0' + t.getHours()).slice(-2) + ':' +
+                        ('0' + t.getMinutes()).slice(-2) + ':' +
+                        ('0' + t.getSeconds()).slice(-2) + '.' +
+                        ('00' + t.getMilliseconds()).slice(-3);
+
+          var badgeClass = item.direction === 'TX' ? 'tx' : (item.direction === 'RX' ? 'rx' : (item.direction === 'ERR' ? 'err' : 'sys'));
+          var dirGlyph = item.direction === 'TX' ? 'TX ▶' : (item.direction === 'RX' ? 'RX ◀' : item.direction);
+
+          row.innerHTML = '<span class="dev-log-time">' + timeStr + '</span>' +
+                          '<span class="dev-log-badge ' + badgeClass + '">' + dirGlyph + '</span>' +
+                          '<span class="dev-log-raw">' + escapeHtml(item.raw) + '</span>' +
+                          (item.annotation ? '<span class="dev-log-note">(' + escapeHtml(item.annotation) + ')</span>' : '');
+
+          logWindow.appendChild(row);
+        }
+
+        // Keep DOM prune limit per selected buffer size
+        var maxLimit = parseInt(selBufferSize ? selBufferSize.value : 1000, 10);
+        while(logWindow.children.length > maxLimit){
+          if(logWindow.firstChild === activeStreamRow){
+            activeStreamRow = null;
+          }
+          logWindow.removeChild(logWindow.firstChild);
+        }
+
+        // Only auto-scroll if enabled AND user has not scrolled up
+        if(chkAutoScroll && chkAutoScroll.checked && !isUserScrolledUp){
+          logWindow.scrollTop = logWindow.scrollHeight;
+        }
+      });
+
+      // Handle Telemetry Updates into Prototype State (Option B: Canonical Millimeters)
+      window.nanoelsClient.addEventListener('telemetry', function(e){
+        var data = e.detail;
+
+        // 1. Establish Measurement Unit First (to determine canonical mm scale)
+        if(data.measure !== undefined && data.measure !== ''){
+          var m = data.measure.toUpperCase();
+          state.unit = (m === 'IN') ? 'in' : 'mm';
+        }
+        var scale = (state.unit === 'in') ? 25.4 : 1.0;
+
+        // 2. Normalize Coordinates to Canonical Millimeters
+        if(data.z !== undefined && data.z !== ''){
+          state.z = parseFloat(data.z) * scale;
+        }
+
+        // Diameter / Radius Mode Synchronization
+        var controllerIsInDia = (data.diameter !== undefined) ? (data.diameter === '1') : true;
+        if(data.diameter !== undefined){
+          state.xRep = controllerIsInDia ? 'diameter' : 'radius';
+        }
+
+        if(data.x !== undefined && data.x !== ''){
+          var rawX = parseFloat(data.x) * scale;
+          // If controller is in Diameter mode, rawX is already diameter. If Radius, multiply by 2 for canonical state.xDia
+          state.xDia = controllerIsInDia ? rawX : (rawX * 2);
+        }
+
+        // 3. Spindle Metrics & Run State
+        if(data.rpm !== undefined && data.rpm !== '') state.rpm = parseInt(data.rpm, 10);
+        if(data.turns !== undefined && data.turns !== '') state.turns = parseFloat(data.turns);
+        if(data.angle !== undefined && data.angle !== '') state.angle = parseFloat(data.angle);
+        if(data.status !== undefined){
+          state.runState = (data.status === 'ON' || data.status === 'SYN') ? 'running' : 'stopped';
+        }
+
+        // 4. Soft Limits (Firmware publishes relative distance to stops; empty string if unset)
+        if(data.zLeft !== undefined){
+          if(data.zLeft === '') state.zMin = null;
+          else state.zMin = state.z - (Math.abs(parseFloat(data.zLeft)) * scale);
+        }
+        if(data.zRight !== undefined){
+          if(data.zRight === '') state.zMax = null;
+          else state.zMax = state.z + (Math.abs(parseFloat(data.zRight)) * scale);
+        }
+        if(data.xLeft !== undefined){
+          if(data.xLeft === '') state.xMinDia = null;
+          else state.xMinDia = state.xDia - (Math.abs(parseFloat(data.xLeft)) * scale * 2);
+        }
+        if(data.xRight !== undefined){
+          if(data.xRight === '') state.xMaxDia = null;
+          else state.xMaxDia = state.xDia + (Math.abs(parseFloat(data.xRight)) * scale * 2);
+        }
+
+        // 5. Controller Operating Mode Mapping
+        if(data.mode !== undefined && data.mode !== ''){
+          var modeKey = data.mode.toUpperCase();
+          if(modeKey === 'GEAR' || modeKey === 'XGEAR' || modeKey === 'ASYNC'){
+            state.mode = 'GEARBOX';
+            state.gearboxMode = (modeKey === 'ASYNC') ? 'ASYNC' : 'SYNC';
+            if(modeKey === 'XGEAR') state.activeFeedAxis = 'X';
+            else state.activeFeedAxis = 'Z';
+          } else if(modeKey === 'CONE'){
+            if(state.mode === 'TAPER'){
+              // Trigger A: Motion started externally on lathe hardware while UI was idle in TAPER setup
+              var isControllerRunning = (data.status === 'ON' || data.status === 'SYN');
+              if(isControllerRunning && !state.taperCycleActive){
+                state.mode = 'GEARBOX';
+                state.gearboxMode = 'SYNC';
+                state.activeFeedAxis = 'Z+X';
+              }
+            } else {
+              // Switch was initiated on controller or in GEARBOX: map to Gearbox Z+X
+              state.mode = 'GEARBOX';
+              state.gearboxMode = 'SYNC';
+              state.activeFeedAxis = 'Z+X';
+            }
+          } else if(modeKey === 'TURN'){
+            state.mode = 'TURNING';
+          } else if(modeKey === 'FACE'){
+            state.mode = 'FACING';
+          } else if(modeKey === 'THREAD'){
+            state.mode = 'THREADING';
+          } else if(modeKey === 'CUT'){
+            state.mode = 'CUTOFF';
+          } else if(modeKey === 'SLOT'){
+            state.mode = 'SLOTTING';
+          } else if(modeKey === 'ELLIP'){
+            state.mode = 'SPHERE';
+          } else if(modeKey === 'JOY'){
+            state.mode = 'JOYSTICK';
+          }
+        }
+
+        // 6. Pitch / Feed Synchronization
+        if(data.pitch !== undefined && data.pitch !== ''){
+          var pVal = parseFloat(data.pitch);
+          if(!isNaN(pVal) && pVal > 0){
+            var isTpi = (data.measure && data.measure.toUpperCase() === 'TPI');
+            if(state.mode === 'THREADING'){
+              if(isTpi){
+                state.pitch = +(25.4 / pVal).toFixed(4);
+                state.threadUnit = 'tpi';
+              } else {
+                state.pitch = (state.unit === 'in') ? pVal * 25.4 : pVal;
+              }
+            } else if(state.mode === 'TAPER' && !state.taperCycleActive){
+              // Trigger B: External feed adjustment on CONE while idle in TAPER setup -> yield to GEARBOX Z+X
+              var currentPitch = (state.unit === 'in') ? state.gearPitchZ / 25.4 : state.gearPitchZ;
+              if(Math.abs(pVal - currentPitch) > 0.0001){
+                state.mode = 'GEARBOX';
+                state.gearboxMode = 'SYNC';
+                state.activeFeedAxis = 'Z+X';
+                state.gearPitchZ = (state.unit === 'in') ? pVal * 25.4 : pVal;
+              }
+            } else if(state.mode === 'GEARBOX'){
+              if(state.activeFeedAxis === 'X'){
+                state.gearPitchX = (state.unit === 'in') ? pVal * 25.4 : pVal;
+              } else {
+                if(isTpi){
+                  state.gearPitchZ = +(25.4 / pVal).toFixed(4);
+                  state.gearThreadUnit = 'tpi';
+                  state.gearFeedModeZ = 'PITCH';
+                } else {
+                  state.gearPitchZ = (state.unit === 'in') ? pVal * 25.4 : pVal;
+                }
+              }
+            }
+          }
+        }
+
+        // 7. Status Message
+        if(data.message !== undefined && data.message !== ''){
+          setStatusMsg(data.message);
+        }
+
+        render();
+      });
+
+      // Connect initial
+      window.nanoelsClient.connect();
+    }
+
+    // Dev Console Button Actions
+    if(btnEmulator){
+      btnEmulator.addEventListener('click', function(){
+        savedBackend = 'emulator';
+        localStorage.setItem('nanoels_backend', savedBackend);
+        updatePills(savedBackend);
+        if(window.nanoelsClient){
+          window.nanoelsClient.setBackend('emulator');
+        }
+      });
+    }
+
+    if(btnLive){
+      btnLive.addEventListener('click', function(){
+        savedBackend = 'live';
+        localStorage.setItem('nanoels_backend', savedBackend);
+        updatePills(savedBackend);
+        var host = hostInput ? hostInput.value.trim() : 'nanoels.local';
+        if(window.nanoelsClient){
+          window.nanoelsClient.setBackend('live', host, 81);
+        }
+      });
+    }
+
+    if(btnConnect){
+      btnConnect.addEventListener('click', function(){
+        var host = hostInput ? hostInput.value.trim() : 'nanoels.local';
+        localStorage.setItem('nanoels_host', host);
+        savedBackend = 'live';
+        localStorage.setItem('nanoels_backend', savedBackend);
+        updatePills(savedBackend);
+        if(window.nanoelsClient){
+          window.nanoelsClient.setBackend('live', host, 81);
+        }
+      });
+    }
+
+    if(btnClear){
+      btnClear.addEventListener('click', function(){
+        if(logWindow) logWindow.innerHTML = '';
+        consecutiveTelemetryCount = 0;
+        activeStreamRow = null;
+        activeStreamCountBadge = null;
+        activeStreamSummary = null;
+        activeStreamDrawerContent = null;
+        activeStreamTime = null;
+      });
+    }
+
+    if(chkLogStatus){
+      chkLogStatus.addEventListener('change', function(){
+        var active = chkLogStatus.checked;
+        localStorage.setItem('nanoels_log_status_pushes', active);
+        if(window.nanoelsClient){
+          window.nanoelsClient.setLogStatusPushes(active);
+        }
+      });
+    }
+
+    function escapeHtml(str){
+      if(!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  }
+
   // Initial Boot Render
+  initDevConsoleAndService();
   updateStatusMsg();
   render();
 })();

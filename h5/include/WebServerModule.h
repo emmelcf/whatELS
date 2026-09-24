@@ -86,7 +86,8 @@ void publishMachineStatus(const String& statusText, const String& modeText, cons
     const String& xText, const String& xLeftText, const String& xRightText,
     const String& yText, const String& yLeftText, const String& yRightText,
     const String& zText, const String& zLeftText, const String& zRightText,
-    const String& messageText);
+    const String& messageText, bool isDiameterMode = true, bool isAbsoluteMode = true,
+    bool xIsDroActive = false, bool zIsDroActive = false);
 
 bool queueWebUiEvent(byte actionCode, bool isPress);
 bool readWebUiEvent(WebUiEvent* event);

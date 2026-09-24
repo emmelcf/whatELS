@@ -171,7 +171,8 @@ void updateDisplay() {
 
   if (publishStatus) {
     publishMachineStatus(snapshot.status, snapshot.mode, snapshot.pitch, snapshot.measure, snapshot.step, snapshot.rpmText, snapshot.turnsText, snapshot.angleText,
-      snapshot.xPos, snapshot.xStopUp, snapshot.xStopDown, snapshot.yPos, snapshot.yStopUp, snapshot.yStopDown, snapshot.zPos, snapshot.zStopLeft, snapshot.zStopRight, snapshot.message);
+      snapshot.xPos, snapshot.xStopUp, snapshot.xStopDown, snapshot.yPos, snapshot.yStopUp, snapshot.yStopDown, snapshot.zPos, snapshot.zStopLeft, snapshot.zStopRight, snapshot.message,
+      snapshot.isDiameterMode, snapshot.isAbsoluteMode, snapshot.xIsDroActive, snapshot.zIsDroActive);
   }
 }
 

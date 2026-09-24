@@ -364,11 +364,12 @@ void publishMachineStatus(const String& status, const String& modeText, const St
     const String& stepText, const String& rpmText, const String& turnsText, const String& angleText,
     const String& xText, const String& xLeftText, const String& xRightText,
     const String& yText, const String& yLeftText, const String& yRightText,
-    const String& zText, const String& zLeftText, const String& zRightText, const String& messageText) {
+    const String& zText, const String& zLeftText, const String& zRightText, const String& messageText,
+    bool isDiameterMode, bool isAbsoluteMode, bool xIsDroActive, bool zIsDroActive) {
   if (!webBuffersReady || !webUiIsConnected()) return;
 
   String response = "";
-  response.reserve(520);
+  response.reserve(600);
   appendUiLine(&response, "UI.status", status);
   appendUiLine(&response, "UI.mode", modeText);
   appendUiLine(&response, "UI.pitch", pitchText);
@@ -378,6 +379,10 @@ void publishMachineStatus(const String& status, const String& modeText, const St
   appendUiLine(&response, "UI.turns", turnsText);
   appendUiLine(&response, "UI.angle", angleText);
   appendUiLine(&response, "UI.x", xText);
+  appendUiLine(&response, "UI.diameter", isDiameterMode ? "1" : "0");
+  appendUiLine(&response, "UI.abs", isAbsoluteMode ? "1" : "0");
+  appendUiLine(&response, "UI.xDro", xIsDroActive ? "1" : "0");
+  appendUiLine(&response, "UI.zDro", zIsDroActive ? "1" : "0");
   appendUiLine(&response, "UI.xLeft", xLeftText);
   appendUiLine(&response, "UI.xRight", xRightText);
   appendUiLine(&response, "UI.y", yText);
