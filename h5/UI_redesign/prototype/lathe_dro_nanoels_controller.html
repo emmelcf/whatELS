@@ -127,6 +127,9 @@
   }
   .deck-toggle-btn.on { background: #0d1b28; border-color: #234058; color: var(--blue); }
   .deck-toggle-btn.axis-on { background: var(--green-bg); border-color: #1f3d2c; color: var(--green); }
+  .deck-toggle-btn.axis-z-on { background: var(--green-bg); border-color: #1f3d2c; color: var(--green); }
+  .deck-toggle-btn.axis-x-on { background: var(--blue-bg); border-color: #234058; color: var(--blue); }
+  .deck-toggle-btn.axis-zx-on { background: #26190b; border-color: #583e1c; color: var(--amber); }
 
   .deck-controls { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
   .deck-nudge {
@@ -305,6 +308,9 @@
     cursor: pointer; white-space: nowrap; user-select: none; letter-spacing: .3px;
     display: inline-flex; align-items: center; justify-content: center;
   }
+  .inline-dir-chip.dir-z { border-color: #1f4a2d; background: #0d2116; color: var(--green); }
+  .inline-dir-chip.dir-x { border-color: #234058; background: var(--blue-bg); color: var(--blue); }
+  .inline-dir-chip.dir-zx { border-color: #583e1c; background: #26190b; color: var(--amber); }
   .inline-dir-chip:active { filter: brightness(1.25); }
 
   /* Bracket group for coupled inputs (e.g. Max DOC & Passes) */
@@ -2200,20 +2206,23 @@
       var normalConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,2 25,6 25,12 3,16" fill="currentColor" fill-opacity="0.25"/></svg>';
       var invertConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,6 25,2 25,16 3,12" fill="currentColor" fill-opacity="0.25"/></svg>';
 
+      var axisClass = isTaper ? 'axis-zx-on' : (zActive ? 'axis-z-on' : 'axis-x-on');
+      var dirChipClass = isTaper ? 'dir-zx' : (zActive ? 'dir-z' : 'dir-x');
+
       return '' +
         '<div style="display:flex; flex-direction:column; gap:6px;">' +
           '<div style="display:flex; gap:4px;">' +
             '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + (isSync?'on':'') + '" id="fld-gearSync" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + (isSync?'SYNC (SPINDLE)':'ASYNC (TIME)') + '</div>' +
-            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + 'axis-on" id="fld-gearAxis" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + axisBtnLabel + '</div>' +
+            '<div class="deck-toggle-btn ' + (!isRun?'tap ':'') + axisClass + '" id="fld-gearAxis" style="min-height:38px;' + (isRun?' opacity:0.45; cursor:not-allowed;':'') + '">' + axisBtnLabel + '</div>' +
           '</div>' +
 
           '<div style="display:flex; justify-content:space-between; align-items:center; background:#12181f; border:1px solid #1f2c38; border-radius:4px; padding:5px 8px; min-height:38px;">' +
             '<span style="font-size:11px; font-weight:700; color:var(--dim); letter-spacing:0.3px;">FEED DIRECTION</span>' +
-            '<span class="inline-dir-chip ' + (!isRun?'tap':'') + '" id="fld-gearDir" style="background:#182430; border:1px solid #2e4559; color:var(--blue); font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:3px;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' + dirLabel + '</span>' +
+            '<span class="inline-dir-chip ' + dirChipClass + ' ' + (!isRun?'tap':'') + '" id="fld-gearDir" style="font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:3px;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' + dirLabel + '</span>' +
           '</div>' +
 
           (zActive ? 
-            '<div class="feed-block active-axis-row" style="background:#111921; border:1px solid #1e3140; border-radius:4px; padding:8px;">' +
+            '<div class="feed-block active-axis-row" style="background:rgba(61, 220, 132, 0.03); border:1px solid rgba(61, 220, 132, 0.35); border-radius:4px; padding:8px;">' +
               '<div style="display:flex; gap:4px; ' + (zUnitDisabled ? 'opacity:0.35; pointer-events:none;' : '') + '">' +
                 '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='FEED'?'active':'') + '" id="fld-unitFeed" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">FEED (' + unitLabel() + '/rev)</div>' +
                 '<div class="toggle-chip ' + (!isRun?'tap ':'') + (state.gearFeedModeZ==='PITCH'?'active':'') + '" id="fld-unitPitch" style="flex:1; text-align:center; min-height:38px; padding:6px 0; font-size:12px; font-weight:700;">PITCH (' + (state.gearThreadHandedness||'RH') + ')</div>' +
@@ -2224,24 +2233,32 @@
                     '<span style="font-size:9.5px; color:var(--dim); font-weight:700;">THREAD LEAD</span>' +
                     '<b class="mono" style="font-size:16px; color:var(--fg); margin-top:2px;">' + zDisp.val + ' ' + zDisp.unit + ' (' + (state.gearThreadHandedness||'RH') + ')</b>' +
                   '</div>' +
-                  '<div class="tap" id="btnEditPitch" style="background:#1b2836; color:var(--blue); border:1px solid #2e4559; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '">✎ PITCH</div>' +
+                  '<div class="tap" id="btnEditPitch" style="background:#112519; color:var(--green); border:1px solid #1f4a2d; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;' + (isRun?' opacity:0.45; pointer-events:none;':'') + '">✎ PITCH</div>' +
                 '</div>' : '') +
             '</div>' 
           : xActive ?
-            ''
+            '<div class="feed-block active-axis-row" style="background:rgba(90, 169, 255, 0.03); border:1px solid rgba(90, 169, 255, 0.35); border-radius:4px; padding:8px; display:flex; flex-direction:column; gap:4px;">' +
+              '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                '<span style="font-size:10.5px; font-weight:700; color:var(--dim); letter-spacing:0.4px;">CROSS-SLIDE MOTION</span>' +
+                '<span class="mono" style="font-size:10.5px; font-weight:700; color:var(--blue); background:#0c1c2a; border:1px solid #1e364c; padding:2px 6px; border-radius:3px;">X CROSS-FEED</span>' +
+              '</div>' +
+              '<div style="font-size:11.5px; color:var(--dim); line-height:1.4; margin-top:2px;">' +
+                (isSync ? 'Transverse feed synchronized to spindle rotation.' : 'Asynchronous timed cross-slide traverse.') +
+              '</div>' +
+            '</div>'
           : 
-            '<div class="feed-block active-axis-row" style="border-color: rgba(255, 179, 0, 0.4); background: rgba(255, 179, 0, 0.03); border-radius:4px; padding:6px; display:flex; flex-direction:column; gap:6px;">' +
+            '<div class="feed-block active-axis-row" style="border: 1px solid rgba(255, 180, 84, 0.4); background: rgba(255, 180, 84, 0.03); border-radius:4px; padding:6px; display:flex; flex-direction:column; gap:6px;">' +
               '<div style="display:flex; gap:6px;">' +
-                '<div class="inline-dir-chip ' + (!isRun?'tap ':'') + '" id="fld-gearTaperSide" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; background:#18222a; border:1px solid #283744; border-radius:4px; color:var(--amber); font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' +
+                '<div class="inline-dir-chip dir-zx ' + (!isRun?'tap ':'') + '" id="fld-gearTaperSide" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '">' +
                   (state.gearTaperSide==='EXTERNAL'?'EXT (OD)':'INT (ID)') +
                 '</div>' +
-                '<div class="inline-dir-chip ' + (!isRun?'tap ':'') + '" id="fld-gearTaperInvert" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; gap:8px; background:#18222a; border:1px solid #283744; border-radius:4px; color:var(--blue); font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '" title="Toggle Cone Slope Direction">' +
+                '<div class="inline-dir-chip dir-zx ' + (!isRun?'tap ':'') + '" id="fld-gearTaperInvert" style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:11.5px; font-weight:700;' + (isRun?' opacity:0.45; cursor:not-allowed;':' cursor:pointer;') + '" title="Toggle Cone Slope Direction">' +
                   (state.gearTaperInvert ? invertConeSvg : normalConeSvg) +
                   '<span>' + (state.gearTaperInvert ? 'INVERT' : 'NORMAL') + '</span>' +
                 '</div>' +
               '</div>' +
 
-              '<div id="boxTaperValues" class="' + (!isRun?'tap':'') + '" style="background:#111822; border:1px solid #223446; border-radius:4px; padding:8px 10px; cursor:pointer;" title="Tap to edit taper parameters">' +
+              '<div id="boxTaperValues" class="' + (!isRun?'tap':'') + '" style="background:#141b21; border:1px solid #2e3c49; border-radius:4px; padding:8px 10px; cursor:pointer;" title="Tap to edit taper parameters">' +
                 '<div style="display:flex; align-items:center; gap:6px;">' +
                   '<span style="font-size:10px; font-weight:700; color:var(--dim); letter-spacing:0.4px;">TAPER:</span>' +
                   '<b style="font-size:12.5px; color:var(--amber); letter-spacing:0.3px;">' + presetName + '</b>' +
@@ -2249,7 +2266,7 @@
                 '<div style="display:flex; align-items:baseline; gap:8px; margin-top:2px;">' +
                   '<span class="mono" style="font-size:16px; font-weight:700; color:var(--fg);">' + fmt(state.gearTaperAngle, 2) + '°</span>' +
                   '<span style="color:var(--dim); font-size:11px;">·</span>' +
-                  '<span class="mono" style="font-size:15px; font-weight:700; color:var(--blue);">' + formatTaperRatio(state.gearTaperRatio) + '</span>' +
+                  '<span class="mono" style="font-size:15px; font-weight:700; color:var(--amber);">' + formatTaperRatio(state.gearTaperRatio) + '</span>' +
                   '<span class="mono" style="font-size:10.5px; color:var(--dimmer);">(' + state.gearTaperRatio.toFixed(4) + ')</span>' +
                 '</div>' +
               '</div>' +
@@ -2269,7 +2286,7 @@
       var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
         '<div class="kv"><span>OPERATION</span><span class="toggle-chip active tap" id="fld-turnType" style="min-height:38px; min-width:140px;">' + (state.turnType==='EXTERNAL'?'EXTERNAL (OD)':'INTERNAL (ID / BORE)') + '</span></div>' +
-        '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + lenStr(state.turnLength, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>LENGTH</span><span class="inline-dir-chip dir-z tap" id="fld-turnDir">' + (state.turnDir==='CHUCK'?'← CHUCK':'→ TAIL') + '</span><b class="mono ' + ed + '" id="fld-turnLen">' + lenStr(state.turnLength, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-turnDepth">Ø ' + lenStr(state.turnTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv-bracket-group">' +
           '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-turnMaxDoc">Ø ' + lenStr(state.turnMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +
@@ -2282,7 +2299,7 @@
       var fpInfo = getFacePasses();
       var dp = state.unit === 'mm' ? 3 : 4;
       return '' +
-        '<div class="kv"><span>STROKE</span><span class="inline-dir-chip tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + lenStr(state.faceStroke, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
+        '<div class="kv"><span>STROKE</span><span class="inline-dir-chip dir-x tap" id="fld-faceDir">' + (state.faceDir==='CENTER'?'↑ TO CENTER':'↓ RETRACT') + '</span><b class="mono ' + ed + '" id="fld-faceStroke">Ø ' + lenStr(state.faceStroke, state.unit==='mm'?2:3) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv"><span>TOTAL DEPTH</span><b class="mono ' + ed + '" id="fld-faceDepth">' + lenStr(state.faceTotalDepth, dp) + ' ' + unitLabel() + '</b></div>' +
         '<div class="kv-bracket-group">' +
           '<div class="kv"><span>MAX DOC / PASS</span><b class="mono ' + ed + '" id="fld-faceMaxDoc">' + lenStr(state.faceMaxDoc, dp) + ' ' + unitLabel() + '</b></div>' +

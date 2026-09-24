@@ -851,3 +851,52 @@ A manual machinist on an ELS demands tactile, adaptive control over cutting cond
 * **Controller Face Component Unification (`div.tap`)**:
   * Rather than mixing HTML-form `<button>` elements with custom `<div>` touch targets, all interactive controls on the primary controller face have been standardized as uniform `div.tap` components (e.g. `btnRun`, `btnStop`, `btnOpenLog`, `btnOpenTaperModal`, `btnEditPitch`, `btnThreadNew`, `btnThreadEdit`, and D-pad arrows).
   * **LVGL 1:1 Mapping Benefit**: This eliminates browser-specific button outlines, user-agent margins, and flex quirks, mapping 1:1 to embedded LVGL objects (`lv_obj_t` with click callbacks and active-press state styles) during firmware UI implementation.
+
+---
+
+## 25. Universal Color Hierarchy & Visual Indicator Standards
+
+To prevent cognitive clutter and ensure instant situational awareness on the shop floor, color is structured into four non-overlapping semantic tiers:
+
+### Tier 1: Machine Safety & Motion State (Universal Industrial Rules)
+* **Vibrant Green (`#3ddc84`)**: Reserved strictly for affirmative runtime execution:
+  - Solid Fill: Stationary universal `START FEED` / `START CYCLE` button.
+  - Telemetry: Top bar `RUNNING` status dot, real-time hardware pulse indicator, communication health pills (`ENC ●`, `DRIVE ●`).
+* **Vibrant Red (`#ff5a5f`)**: Reserved strictly for danger, stop, and emergency boundaries:
+  - Solid Fill / Glowing Halo: Stationary universal `STOP` button during active motion.
+  - Hardware / Software Limit Contact: Jog arrows and chamfer buttons that trip a software limit turn high-visibility red (`.limit-blocked`) with physical step lockout into the boundary.
+  - Top bar `STOPPED` status dot, modal `ABORT` buttons, and destructive emergency actions.
+* **Amber / Caution (`#ffb454`)**: Reserved for supervisory interventions:
+  - Supervisory Modals: Human-in-the-loop Skim Pass confirmation prompt (`skim-sheet h3`).
+  - Kinematic Advisories: `⚠ Spindle: REVERSE (CW)` warning banner during blind-hole threading.
+  - Machine Pause: Top bar `PAUSED` status dot.
+
+### Tier 2: Kinematic Axis Identification (Z vs. X vs. Z+X)
+Axis colors indicate *which physical leadscrew or tool vector is governed*:
+* **$Z$ Axis (Longitudinal Carriage)** $\rightarrow$ **Emerald Green (`#3ddc84` / bg `#0d2116` / border `#1f4a2d`)**:
+  - Center Dynamic Deck Header Badge: `Z-AXIS`.
+  - Mode Card Axis Toggle: Highlights green when `AXIS: Z` is active (`.axis-z-on`).
+  - Direction Chips: Carriage feed direction (`← CHUCK (Z−)` / `→ TAIL (Z+)`) in Gearbox and Turning (`.inline-dir-chip.dir-z`).
+  - Parameter Card Framing: Z-axis leadscrew blocks receive a subtle green border (`rgba(61, 220, 132, 0.35)`) and dark tint (`rgba(61, 220, 132, 0.03)`).
+  - Leadscrew Action Triggers: `[ ✎ PITCH ]` edit chip inside Z carriage block.
+* **$X$ Axis (Transverse Cross-Slide)** $\rightarrow$ **Cyan Blue (`#5aa9ff` / bg `#0c1c2a` / border `#234058`)**:
+  - Center Dynamic Deck Header Badge: `X-AXIS`.
+  - Mode Card Axis Toggle: Highlights blue when `AXIS: X` is active (`.axis-x-on`).
+  - Direction Chips: Cross-slide feed direction (`↑ TO CENTER (X−)` / `↓ RETRACT (X+)`) in Gearbox and Facing (`.inline-dir-chip.dir-x`).
+  - Parameter Card Framing: X-axis cross-feed blocks receive a subtle blue border (`rgba(90, 169, 255, 0.35)`) and dark tint (`rgba(90, 169, 255, 0.03)`).
+* **$Z+X$ Axis (Coordinated Cone / Taper)** $\rightarrow$ **Warm Amber (`#ffb454` / bg `#26190b` / border `#583e1c`)**:
+  - Center Dynamic Deck Header Badge: `Z+X TAPER`.
+  - Mode Card Axis Toggle: Highlights amber when `AXIS: Z+X (TAPER)` is active (`.axis-zx-on`).
+  - Parameter Card Framing: Taper block receives an amber border (`rgba(255, 180, 84, 0.40)`) and dark tint (`rgba(255, 180, 84, 0.03)`).
+  - Taper Action Triggers: `[ ✎ EDIT ]` button, preset title (`TAPER: 1:16 PIPE`), and cone slope direction chips.
+
+### Tier 3: Dimensional Representation (DRO Left Column)
+* **Diameter Mode (`Ø`)**: Styled in **Cyan Blue (`#5aa9ff`)** across the European engineering glyph (`Ø`) and toggle badge (`Ø DIA`), reinforcing that diameter is governed by the transverse X-axis.
+* **Radius Mode (`R`)**: Styled in **Warm Amber (`#ffb454`)** across the glyph (`R`) and toggle badge (`R RAD`), warning the operator that radial infeed cuts 1:1 on tool radius.
+
+### Tier 4: General UI Affordance & Telemetry
+* **Numeric Coordinates & Critical Dimensions**: High-contrast white (`#e9edf0`, JetBrains Mono).
+* **Live Feed / Dynamic Value Readout**: Warm Amber (`#ffb454`) in the center deck, visually distinguishing active feed rates from physical machine positions.
+* **Engineering Units & Field Labels**: Neutral dim grays (`#84919b` / `#49545d`).
+* **Active Mode Setup Toggles (Non-Axis)**: Subdued Slate Blue (`#18222a` / border `#283744` / text `#9cb1c9`) to avoid competing with primary axis colors.
+
