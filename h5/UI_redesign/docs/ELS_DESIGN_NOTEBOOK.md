@@ -817,18 +817,23 @@ A manual machinist on an ELS demands tactile, adaptive control over cutting cond
   * **Dedicated Edit Row**: Directly below the readout card, a dedicated action row positions the **`[ ✎ EDIT ]`** button aligned to the bottom right ($36\text{ px}$ height, amber fill, dark bold text).
   * Tapping either the readout card or the dedicated `[ ✎ EDIT ]` button opens the Taper Selection modal.
 
-### 5. Dedicated Taper Selection Modal & Triple-Linked Custom Calculator
+### 5. Dedicated Taper Selection Modal & Authoritative Custom Calculator
 * Tapping the edit button or the taper card opens the `GEARBOX TAPER SELECTION` modal:
-  * **Standard Presets Tab**: Instant 1-tap selection of machine tapers:
-    * Pipe Threads: `1:16 PIPE` (NPT / BSPT, 1.79°)
-    * Morse Tapers: `MT1` through `MT5` (1:20 to 1:19)
-    * Metric Standards: `1:20`, `1:10`, `1:5`
-    * Standard Chamfers: `45° CHAMFER` (1:1), `30° BEVEL`, `60° CENTER`
-  * **Triple-Linked Custom Tab**: Live three-way recalculation across:
-    * **Half-Angle $\theta$**: Machine cone angle in degrees ($0.05° - 85.00°$).
-    * **Proportional Ratio ($1 : K$)**: Shop-standard ratio where $K = 1 / (2\tan\theta)$.
-    * **Decimal Ratio $C$**: Decimal ratio $C = 2\tan\theta$.
-    * Editing any of the three inputs instantly recalculates the other two in real-time.
+  * **Standard Presets Tab**: Two-tier organized selection of standard lathe tapers across three categories:
+    * **Collets & Spindles**: Morse Tapers `MT1` through `MT5`, `R8 COLLET`, `5C COLLET`, `ER COLLET`, `7:24 STEEP (ISO)`.
+    * **Ratios & Pins**: `1:50 METRIC PIN`, `1:48 US PIN`, `1:10 SHAFT`, `1:20 METRIC`, `1:5 METRIC`, `NPT/BSPT PIPE`.
+    * **Chamfers & Centers**: `60° LATHE CENTER`, `45° CHAMFER`, `30° BEVEL`.
+    * Presets are arranged in a 3-column top-aligned grid ($130\text{px}$ cards, $8\text{px}$ row gap, $14\text{px}$ column gap) with strict top-alignment and consistent spacing across all categories.
+  * **Authoritative Custom Tab (Compact Single Input + Keypad + Informational Readouts)**:
+    * Avoids bidirectional rounding drift and precision loss by establishing a **single authoritative entered value**:
+      - **Proportional 36px Controls ($248\text{px}$ cluster)**: Features a compact input box ($140\text{px} \times 36\text{px}$) and adjacent format cycle toggle ($100\text{px} \times 36\text{px}$), strictly matching the $36\text{px}$ vertical height of the category and modal toggle chips above.
+      - **Consistent Nomenclature**: Standardizes strictly on `ANGLE`, `RATIO`, and `DECIMAL` across the cycle button, keypad titles, and informational readouts.
+      - **On-Screen Numeric Keypad Integration**: Tapping the input box opens the full-screen numeric keypad (`#kpOverlay`) pre-filled with the current value and titled with mode-specific engineering units (e.g., `CUSTOM TAPER (DEGREES)`, `(1:K RATIO)`, or `(DECIMAL)`). Committing via **SET** establishes the new authoritative master.
+      - **Authoritative Value Tracking (Behind the Scenes)**: The exact number entered by the operator in their chosen format is tracked as the authoritative master (`authMode`, `authVal`). No developer-facing "authoritative" badges or clutter are shown in the UI.
+      - **Cycle Without Edit**: Cycling the format toggle without modifying the value displays the converted equivalent for the new format while strictly retaining the original entered value as the authoritative source.
+      - **Pure Text Informational Companions**: Below the input row, the two companion converted values are presented as quiet, pure typography ($14\text{px}$ monospace values with $11\text{px}$ muted labels separated by a vertical hairline) rather than boxed or recessed input-like elements.
+      - **Late Conversion**: Converting to machine angle ($\theta$) and diametral ratio ($C$) occurs as late as possible when dispatching to the NanoELS motion controller, preserving exact drawing dimensions entered by the machinist.
+      - **Main Screen Representation**: When custom taper is active, the Gearbox card prominently displays the entered format callout (e.g., `CUSTOM (1.79°)`, `CUSTOM (1:16.0)`, or `CUSTOM (0.05)`), allowing the operator to immediately verify against their blueprint.
 
 ### 6. Center Column Dynamic Deck Decluttering & Micro-Text Elimination
 * **Elimination of Visual Clutter**: Tiny, low-contrast explanatory text snippets (e.g. `Cross-feed synchronized to...`, `Feed rate active: adjust via...`, `Z CARRIAGE`, `Z+X SLAVED`) have been removed from the entire card and center column. Such text creates visual noise and is unreadable from typical machine operating distance.

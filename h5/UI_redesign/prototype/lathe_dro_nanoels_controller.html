@@ -336,6 +336,141 @@
     pointer-events: none;
   }
 
+  /* Custom Taper Redesign: Single Authoritative Input + Format Cycle Toggle */
+  .custom-taper-inp-box {
+    width: 140px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    background: #141c24;
+    border: 1px solid #283744;
+    border-radius: 4px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .custom-taper-inp-box:hover, .custom-taper-inp-box:focus-within {
+    border-color: #4a6885;
+    background: #16202a;
+  }
+  .custom-taper-inp-box input {
+    flex: 1;
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fg);
+    outline: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .custom-taper-inp-box input::-webkit-outer-spin-button,
+  .custom-taper-inp-box input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .custom-taper-prefix {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--dim);
+    margin-right: 6px;
+    user-select: none;
+    line-height: 1;
+  }
+  .custom-taper-unit {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dim);
+    margin-left: auto;
+    padding-left: 4px;
+    user-select: none;
+    line-height: 1;
+  }
+  .custom-taper-cycle-btn {
+    height: 36px;
+    width: 100px;
+    min-width: 100px;
+    padding: 0 8px;
+    background: #151e27;
+    border: 1px solid #2c3f52;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+    color: var(--fg);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    transition: all 0.15s ease;
+  }
+  .custom-taper-cycle-btn:hover {
+    background: #1c2834;
+    border-color: #3d5872;
+  }
+
+  /* Dedicated Gearbox Taper Preset Cards */
+  .taper-preset-btn {
+    height: 44px !important;
+    min-height: 44px !important;
+    width: 130px !important;
+    padding: 4px 8px !important;
+    background: #11181e !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+    transition: all 0.12s ease !important;
+  }
+  .taper-preset-btn:hover {
+    border-color: #2c4257 !important;
+    background: #162028 !important;
+  }
+  .taper-preset-btn.active {
+    background: #102419 !important;
+    border-color: #2e6040 !important;
+  }
+  .tpb-name {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+    color: var(--fg) !important;
+    letter-spacing: 0.2px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+  }
+  .taper-preset-btn.active .tpb-name {
+    color: var(--green) !important;
+  }
+  .tpb-spec {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 9.5px !important;
+    font-weight: 600 !important;
+    color: var(--dim) !important;
+    line-height: 1.2 !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+  }
+
   /* Universal Runstack: 12px safety gap, static STOP positioning */
   .runstack { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
   .rbtn {
@@ -1290,58 +1425,61 @@
 
   <!-- Dedicated Gearbox Taper Modal (Standard Presets & Linked Custom Angle/Ratio Calculator) -->
   <div class="overlay" id="gearTaperOverlay">
-    <div class="sheet" style="width: 480px; max-width: 95vw; background: #0f141a; border: 1px solid var(--line); border-radius: 8px; padding: 14px;">
-      <div class="wiz-nav" style="border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:10px;">
+    <div class="sheet" id="gearTaperSheet" style="width: 480px; max-width: 95vw; height: 380px; background: #0f141a; border: 1px solid var(--line); border-radius: 8px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column;">
+      <div class="wiz-nav" style="border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:10px; flex-shrink:0;">
         <div class="wiz-title" style="font-size:14px; letter-spacing:0.5px; color:var(--amber);">GEARBOX TAPER SELECTION</div>
-        <button class="wiz-close-mark" id="btnGearTaperClose" title="Close">✕</button>
+        <div class="wiz-close-mark tap" id="btnGearTaperClose" title="Close">✕</div>
       </div>
 
       <!-- Tab Buttons: PRESETS vs CUSTOM CALCULATOR -->
-      <div style="display:flex; gap:6px; margin-bottom:12px;">
-        <button class="toggle-chip active tap" id="btnTaperTabPresets" style="flex:1; min-height:36px; font-weight:700; font-size:12px;">STANDARD PRESETS</button>
-        <button class="toggle-chip tap" id="btnTaperTabCustom" style="flex:1; min-height:36px; font-weight:700; font-size:12px;">CUSTOM (LINKED ANGLE/RATIO)</button>
+      <div style="display:flex; gap:6px; margin-bottom:12px; flex-shrink:0;">
+        <div class="toggle-chip active tap" id="btnTaperTabPresets" style="flex:1; min-height:36px; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center;">STANDARD PRESETS</div>
+        <div class="toggle-chip tap" id="btnTaperTabCustom" style="flex:1; min-height:36px; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center;">CUSTOM</div>
       </div>
 
-      <!-- Presets View -->
-      <div id="taperPresetsView" style="display:flex; flex-direction:column; gap:8px;">
-        <div style="font-size:11px; font-weight:700; color:var(--dim); text-transform:uppercase;">Select Standard Machine / Pipe Taper:</div>
-        <div id="gearTaperPresetsGrid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; max-height:260px; overflow-y:auto;">
-          <!-- Injected via JS -->
+      <!-- Presets View (Two-Step Selection: Category Tabs + Spacious Preset Grid) -->
+      <div id="taperPresetsView" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="gear-range-row" id="taperCatRow" style="display:flex; gap:6px; margin-bottom:14px; flex-shrink:0;">
+          <!-- Category tabs injected via JS as div.tap -->
+        </div>
+        <div id="gearTaperPresetsGrid" style="display:grid; grid-template-columns: repeat(3, 130px); grid-auto-rows: 44px; align-content: start; justify-content: center; column-gap: 14px; row-gap: 8px; flex:1; overflow-y:auto;">
+          <!-- Preset cards injected via JS as div.tap -->
         </div>
       </div>
 
-      <!-- Custom Linked View (Triple Linked Inputs: Angle, Proportional Ratio 1:K, Decimal Ratio C) -->
-      <div id="taperCustomView" style="display:none; flex-direction:column; gap:10px;">
-        <div style="font-size:12px; color:var(--dim); line-height:1.4;">
-          Enter any parameter below. The other two calculate automatically in real time:
-        </div>
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
-          <!-- 1. Taper Half-Angle -->
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <span style="font-size:11px; font-weight:700; color:var(--amber);">ANGLE (°)</span>
-            <input type="number" step="0.01" id="customTaperAngleInp" style="width:100%; height:42px; background:#141c24; border:1px solid #283744; border-radius:4px; color:var(--amber); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; padding:0 6px;" placeholder="1.79">
-            <span style="font-size:9.5px; color:var(--dim);">Half-angle θ</span>
-          </div>
-
-          <!-- 2. Proportional Ratio 1:K (Denominator) -->
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <span style="font-size:11px; font-weight:700; color:var(--green);">RATIO (1 : K)</span>
-            <div style="display:flex; align-items:center; background:#141c24; border:1px solid #283744; border-radius:4px; height:42px; padding:0 6px;">
-              <span style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; color:var(--dim); margin-right:4px;">1 :</span>
-              <input type="number" step="0.01" id="customTaperKInp" style="width:100%; height:100%; background:transparent; border:none; color:var(--green); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; outline:none;" placeholder="16.0">
+      <!-- Custom Taper View (Compact, Centered, Proportional to 36px Toggle Chips) -->
+      <div id="taperCustomView" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div style="display:flex; flex-direction:column; align-items:center; margin-top:20px;">
+          <!-- Primary Input Row with Adjacent Cycle Toggle Chip (Total width 248px, height 36px) -->
+          <div style="display:flex; gap:8px; align-items:center; width:248px;">
+            <div class="custom-taper-inp-box tap" id="customTaperInpBox" title="Tap to enter value with keypad">
+              <span class="custom-taper-prefix mono" id="customTaperPrefix" style="display:none;">1 :</span>
+              <input type="text" id="customTaperMainInp" class="mono" readonly placeholder="0.0">
+              <span class="custom-taper-unit mono" id="customTaperUnit">°</span>
             </div>
-            <span style="font-size:9.5px; color:var(--dim);">e.g. 16 for 1:16</span>
+            <!-- Toggle / Cycle Chip: strictly div.tap per design standards -->
+            <div class="custom-taper-cycle-btn tap" id="btnCustomTaperCycle" title="Click to cycle format (Angle ➔ Ratio ➔ Decimal)">
+              <span id="customTaperCycleLbl" class="mono">ANGLE</span>
+              <span style="font-size:13px; opacity:0.8; margin-left:4px;">⟳</span>
+            </div>
           </div>
 
-          <!-- 3. Decimal Ratio C -->
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <span style="font-size:11px; font-weight:700; color:var(--blue);">DECIMAL (C)</span>
-            <input type="number" step="0.0001" id="customTaperRatioInp" style="width:100%; height:42px; background:#141c24; border:1px solid #283744; border-radius:4px; color:var(--blue); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; padding:0 6px;" placeholder="0.0625">
-            <span style="font-size:9.5px; color:var(--dim);">ΔDia / Length</span>
+          <!-- Pure Read-Only Informational Companions (Smaller text, clean typography, no input boxes) -->
+          <div style="display:flex; justify-content:center; align-items:center; gap:24px; margin-top:22px; width:248px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1;">
+              <span style="font-size:11px; font-weight:700; color:var(--dim); letter-spacing:0.5px;" id="customTaperComp1Lbl">RATIO</span>
+              <span class="mono" style="font-size:14px; font-weight:600; color:var(--fg);" id="customTaperComp1Val">1 : 16.00</span>
+            </div>
+            <div style="width:1px; height:24px; background:var(--line); flex-shrink:0;"></div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1;">
+              <span style="font-size:11px; font-weight:700; color:var(--dim); letter-spacing:0.5px;" id="customTaperComp2Lbl">DECIMAL</span>
+              <span class="mono" style="font-size:14px; font-weight:600; color:var(--fg);" id="customTaperComp2Val">0.06250</span>
+            </div>
           </div>
         </div>
-        <div id="customTaperRatioSummary" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--dim); text-align:right;">Ratio: 1:16.000 (0.06250)</div>
-        <button id="btnApplyCustomTaper" style="background:#1a2e22; border:1px solid #2e6040; color:var(--green); font-weight:800; font-size:13px; height:42px; border-radius:4px; margin-top:4px; cursor:pointer;">✓ APPLY CUSTOM TAPER</button>
+
+        <!-- Apply Button: strictly div.tap, centered and matching 248px width -->
+        <div id="btnApplyCustomTaper" class="tap" style="display:flex; align-items:center; justify-content:center; background:#1a2e22; border:1px solid #2e6040; color:var(--green); font-weight:800; font-size:13px; height:38px; min-height:38px; width:248px; margin:auto auto 6px auto; border-radius:4px; cursor:pointer;">✓ APPLY CUSTOM TAPER</div>
       </div>
     </div>
   </div>
@@ -1399,29 +1537,45 @@
 (function(){
   var $ = function(id){ return document.getElementById(id); };
 
-  // Standard Taper Presets for Gearbox 2-Axis Mode
+  // Standard Taper Presets & Categories for Gearbox 2-Axis Mode
+  var TAPER_CATEGORIES = [
+    { id: 'SPINDLE', label: 'COLLETS & SPINDLES' },
+    { id: 'RATIOS', label: 'RATIOS & PINS' },
+    { id: 'CENTERS', label: 'CHAMFERS & CENTERS' }
+  ];
+
+  var gearTaperCategory = 'SPINDLE';
+
   var TAPER_PRESETS = [
-    { name: '1:16 PIPE', ratio: 0.0625, angle: 1.79, desc: 'NPT / BSPT 1:16' },
-    { name: 'MT1 (1:20.0)', ratio: 0.04988, angle: 1.43, desc: 'Morse Taper 1' },
-    { name: 'MT2 (1:20.0)', ratio: 0.04995, angle: 1.43, desc: 'Morse Taper 2' },
-    { name: 'MT3 (1:19.9)', ratio: 0.05020, angle: 1.44, desc: 'Morse Taper 3' },
-    { name: 'MT4 (1:19.3)', ratio: 0.05194, angle: 1.49, desc: 'Morse Taper 4' },
-    { name: 'MT5 (1:19.0)', ratio: 0.05263, angle: 1.51, desc: 'Morse Taper 5' },
-    { name: '1:20 METRIC', ratio: 0.0500, angle: 1.43, desc: 'Metric Standard 1:20' },
-    { name: '1:10 METRIC', ratio: 0.1000, angle: 2.86, desc: 'Metric Standard 1:10' },
-    { name: '1:5 METRIC', ratio: 0.2000, angle: 5.71, desc: 'Metric Standard 1:5' },
-    { name: '45° CHAMFER', ratio: 2.0000, angle: 45.00, desc: '1:1 45° Chamfer' },
-    { name: '30° BEVEL', ratio: 1.1547, angle: 30.00, desc: '30° Bevel' },
-    { name: '60° CENTER', ratio: 1.1547, angle: 30.00, desc: '60° Included Center' }
+    // --- COLLETS & SPINDLES (9 items: MT1-MT5, R8, 5C, ER, 7:24) ---
+    { name: 'MT1', category: 'SPINDLE', angle: 1.4286, ratio: 0.049882, spec: '0.5986 in/ft' },
+    { name: 'MT2', category: 'SPINDLE', angle: 1.4306, ratio: 0.049951, spec: '0.5994 in/ft' },
+    { name: 'MT3', category: 'SPINDLE', angle: 1.4376, ratio: 0.050196, spec: '0.6024 in/ft' },
+    { name: 'MT4', category: 'SPINDLE', angle: 1.4875, ratio: 0.051938, spec: '0.6233 in/ft' },
+    { name: 'MT5', category: 'SPINDLE', angle: 1.5072, ratio: 0.052626, spec: '0.6315 in/ft' },
+    { name: 'R8 COLLET', category: 'SPINDLE', angle: 8.4250, ratio: 0.296270, spec: '16° 51\' included' },
+    { name: '5C COLLET', category: 'SPINDLE', angle: 10.0000, ratio: 0.352654, spec: '20° 00\' included' },
+    { name: 'ER COLLET', category: 'SPINDLE', angle: 8.0000, ratio: 0.281096, spec: '16° 00\' included' },
+    { name: '7:24 STEEP', category: 'SPINDLE', angle: 8.2971, ratio: 0.291667, spec: '3.500 in/ft (ISO)' },
+
+    // --- RATIOS & PINS (6 items: 1:50, 1:48, 1:10, 1:20, 1:5, NPT/BSPT) ---
+    { name: '1:50 METRIC PIN', category: 'RATIOS', angle: 0.5729, ratio: 0.020000, spec: 'ISO 2339 / DIN 1' },
+    { name: '1:48 US PIN', category: 'RATIOS', angle: 0.5968, ratio: 0.020833, spec: '1/4" / ft (ASME)' },
+    { name: '1:10 SHAFT', category: 'RATIOS', angle: 2.8624, ratio: 0.100000, spec: 'ISO 2268 (Motors)' },
+    { name: '1:20 METRIC', category: 'RATIOS', angle: 1.4321, ratio: 0.050000, spec: 'DIN 228 / ISO' },
+    { name: '1:5 METRIC', category: 'RATIOS', angle: 5.7106, ratio: 0.200000, spec: 'DIN 254 (Hubs)' },
+    { name: 'NPT/BSPT PIPE', category: 'RATIOS', angle: 1.7899, ratio: 0.062500, spec: '1:16 (0.750 in/ft)' },
+
+    // --- CHAMFERS & CENTERS (3 items: 60° Center, 45° Chamfer, 30° Bevel) ---
+    { name: '60° LATHE CENTER', category: 'CENTERS', angle: 30.0000, ratio: 1.154701, spec: '60° 00\' included' },
+    { name: '45° CHAMFER', category: 'CENTERS', angle: 45.0000, ratio: 2.000000, spec: '1:1 (45°)' },
+    { name: '30° BEVEL', category: 'CENTERS', angle: 30.0000, ratio: 1.154701, spec: '30° lead angle' }
   ];
 
   function formatTaperRatio(r){
     if(!r || r <= 0) return '1:--';
-    if(r >= 1.99 && r <= 2.01) return '1:1 (45°)';
+    if(Math.abs(r - 2.0) < 0.001) return '1:1.00';
     var k = 1 / r;
-    if(Math.abs(k - Math.round(k)) < 0.05){
-      return '1:' + Math.round(k);
-    }
     return '1:' + k.toFixed(2);
   }
 
@@ -1443,8 +1597,8 @@
     gearboxMode: 'SYNC', // 'SYNC' (spindle synchronized) or 'ASYNC' (time-based)
     activeFeedAxis: 'Z', // 'Z', 'X', or 'Z+X' (2-Axis Taper)
     gearTaperPresetIdx: 0,
-    gearTaperRatio: 0.0625,
-    gearTaperAngle: 1.79,
+    gearTaperRatio: 0.049882,
+    gearTaperAngle: 1.4286,
     gearTaperSide: 'EXTERNAL', // 'EXTERNAL' or 'INTERNAL'
     gearTaperInvert: false, // false: Normal (larger at chuck), true: Inverted (smaller at chuck)
     gearFeedModeZ: 'FEED', // 'FEED' (mm/rev or in/rev), 'PITCH' (leadscrew thread sync)
@@ -2201,7 +2355,7 @@
 
       var presetName = (state.gearTaperPresetIdx >= 0 && state.gearTaperPresetIdx < TAPER_PRESETS.length) 
         ? TAPER_PRESETS[state.gearTaperPresetIdx].name 
-        : 'CUSTOM';
+        : (state.gearTaperAuthMode ? 'CUSTOM (' + (state.gearTaperAuthMode === 'ANGLE' ? state.gearTaperAuthVal + '°' : (state.gearTaperAuthMode === 'RATIO' ? '1:' + state.gearTaperAuthVal : state.gearTaperAuthVal)) + ')' : 'CUSTOM');
 
       var normalConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,2 25,6 25,12 3,16" fill="currentColor" fill-opacity="0.25"/></svg>';
       var invertConeSvg = '<svg width="26" height="16" viewBox="0 0 28 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><polygon points="3,6 25,2 25,16 3,12" fill="currentColor" fill-opacity="0.25"/></svg>';
@@ -3679,42 +3833,58 @@
     $('btnTaperTabCustom').classList.remove('active');
     $('taperPresetsView').style.display = 'flex';
     $('taperCustomView').style.display = 'none';
+
+    // Auto-select category corresponding to current active preset
+    if(state.gearTaperPresetIdx >= 0 && state.gearTaperPresetIdx < TAPER_PRESETS.length){
+      gearTaperCategory = TAPER_PRESETS[state.gearTaperPresetIdx].category || 'SPINDLE';
+    } else {
+      gearTaperCategory = 'SPINDLE';
+    }
+
     renderGearboxTaperPresets();
     $('gearTaperOverlay').classList.add('show');
   }
 
   function renderGearboxTaperPresets(){
+    // Render Category Tabs
+    var catRow = $('taperCatRow');
+    if(catRow){
+      catRow.innerHTML = '';
+      TAPER_CATEGORIES.forEach(function(cat){
+        var btn = document.createElement('div');
+        btn.className = 'gear-range-btn tap' + (cat.id === gearTaperCategory ? ' active' : '');
+        btn.textContent = cat.label;
+        btn.addEventListener('click', function(){
+          gearTaperCategory = cat.id;
+          renderGearboxTaperPresets();
+        });
+        catRow.appendChild(btn);
+      });
+    }
+
     var grid = $('gearTaperPresetsGrid');
     if(!grid) return;
     grid.innerHTML = '';
+
     TAPER_PRESETS.forEach(function(p, idx){
-      var b = document.createElement('button');
-      b.className = 'gear-pitch-btn';
-      b.style.display = 'flex';
-      b.style.flexDirection = 'column';
-      b.style.alignItems = 'flex-start';
-      b.style.justifyContent = 'center';
-      b.style.minHeight = '48px';
-      b.style.padding = '5px 8px';
-      b.style.textAlign = 'left';
+      if(p.category !== gearTaperCategory) return;
+
+      var b = document.createElement('div');
+      b.className = 'taper-preset-btn tap';
       
-      var isCur = (state.gearTaperPresetIdx === idx) || (Math.abs(state.gearTaperRatio - p.ratio) < 0.0005);
+      var isCur = (state.gearTaperPresetIdx === idx) || (Math.abs(state.gearTaperRatio - p.ratio) < 0.00005);
       if(isCur) b.classList.add('active');
 
-      b.innerHTML = '<div style="display:flex; justify-content:space-between; width:100%; align-items:center;">' +
-        '<b style="font-size:12px; color:var(--fg);">' + p.name + '</b>' +
-        '<span style="font-size:10px; font-weight:700; color:var(--amber); font-family:\'JetBrains Mono\',monospace;">' + p.angle.toFixed(2) + '°</span>' +
-      '</div>' +
-      '<div style="display:flex; justify-content:space-between; width:100%; font-size:10px; color:var(--dim); font-family:\'JetBrains Mono\',monospace; margin-top:2px;">' +
-        '<span>' + p.desc + '</span>' +
-        '<span style="color:var(--blue); font-weight:600;">' + formatTaperRatio(p.ratio) + '</span>' +
-      '</div>';
+      b.innerHTML = '<div class="tpb-name">' + p.name + '</div>' +
+        '<div class="tpb-spec">' + p.spec + '</div>';
 
       b.addEventListener('click', function(){
         state.gearTaperPresetIdx = idx;
         state.gearTaperRatio = p.ratio;
         state.gearTaperAngle = p.angle;
-        setStatusMsg('TAPER SET: ' + p.name + ' (' + p.angle.toFixed(2) + '°, ' + formatTaperRatio(p.ratio) + ')');
+        state.gearTaperAuthMode = null;
+        state.gearTaperAuthVal = null;
+        setStatusMsg('TAPER SET: ' + p.name + ' (' + p.spec + ')');
         $('gearTaperOverlay').classList.remove('show');
         render();
       });
@@ -3729,84 +3899,190 @@
     $('taperCustomView').style.display = 'none';
   });
 
+  // Custom Taper State Machine
+  // Formats: 'ANGLE' (degrees), 'RATIO' (1:K, entered as K), 'DECIMAL' (C = diametral taper ratio)
+  var customTaperState = {
+    activeMode: 'ANGLE',  // currently displayed in the input field
+    authMode: 'ANGLE',    // authoritative format entered by user
+    authVal: 1.79         // exact numeric value entered in authMode
+  };
+
+  function convertTaperValue(val, fromMode, toMode){
+    if(val <= 0 || isNaN(val)) return 0;
+    // Step 1: Normalize fromMode to diametral taper ratio C
+    var c = 0;
+    if(fromMode === 'ANGLE'){
+      c = 2 * Math.tan(val * Math.PI / 180);
+    } else if(fromMode === 'RATIO'){
+      c = 1 / val;
+    } else if(fromMode === 'DECIMAL'){
+      c = val;
+    }
+
+    // Step 2: Convert C to toMode
+    if(toMode === 'ANGLE'){
+      return Math.atan(c / 2) * (180 / Math.PI);
+    } else if(toMode === 'RATIO'){
+      return c > 0 ? (1 / c) : 0;
+    } else if(toMode === 'DECIMAL'){
+      return c;
+    }
+    return 0;
+  }
+
+  function updateCompanionRow(rowNum, mode, authMode, authVal){
+    var lblEl = $('customTaperComp' + rowNum + 'Lbl');
+    var valEl = $('customTaperComp' + rowNum + 'Val');
+    if(!lblEl || !valEl) return;
+
+    var isSource = (mode === authMode);
+    var val = isSource ? authVal : convertTaperValue(authVal, authMode, mode);
+
+    if(mode === 'ANGLE'){
+      lblEl.textContent = 'ANGLE';
+      valEl.textContent = (isSource ? val : val.toFixed(4)) + '°';
+    } else if(mode === 'RATIO'){
+      lblEl.textContent = 'RATIO';
+      valEl.textContent = '1 : ' + (isSource ? val : (val >= 10 ? val.toFixed(2) : val.toFixed(3)));
+    } else if(mode === 'DECIMAL'){
+      lblEl.textContent = 'DECIMAL';
+      valEl.textContent = isSource ? val.toString() : val.toFixed(5);
+    }
+  }
+
+  function renderCustomTaperUI(){
+    var active = customTaperState.activeMode;
+    var auth = customTaperState.authMode;
+    var authVal = customTaperState.authVal;
+
+    // Determine value to display in main input
+    var displayVal;
+    if(active === auth){
+      displayVal = authVal;
+    } else {
+      var raw = convertTaperValue(authVal, auth, active);
+      if(active === 'ANGLE') displayVal = +raw.toFixed(4);
+      else if(active === 'RATIO') displayVal = +(raw >= 10 ? raw.toFixed(2) : raw.toFixed(3));
+      else if(active === 'DECIMAL') displayVal = +raw.toFixed(5);
+    }
+
+    var inp = $('customTaperMainInp');
+    var cycleLbl = $('customTaperCycleLbl');
+    var pfx = $('customTaperPrefix');
+    var unit = $('customTaperUnit');
+
+    if(active === 'ANGLE'){
+      cycleLbl.textContent = 'ANGLE';
+      pfx.style.display = 'none';
+      unit.style.display = 'inline-flex';
+      unit.textContent = '°';
+      inp.step = '0.01';
+      inp.value = displayVal;
+    } else if(active === 'RATIO'){
+      cycleLbl.textContent = 'RATIO';
+      pfx.style.display = 'inline-flex';
+      pfx.textContent = '1 :';
+      unit.style.display = 'none';
+      inp.step = '0.1';
+      inp.value = displayVal;
+    } else if(active === 'DECIMAL'){
+      cycleLbl.textContent = 'DECIMAL';
+      pfx.style.display = 'none';
+      unit.style.display = 'none';
+      inp.step = '0.0001';
+      inp.value = displayVal;
+    }
+
+    // Render Companion Computed Rows (the other two formats, side-by-side neutral)
+    var otherModes = ['ANGLE', 'RATIO', 'DECIMAL'].filter(function(m){ return m !== active; });
+    updateCompanionRow(1, otherModes[0], auth, authVal);
+    updateCompanionRow(2, otherModes[1], auth, authVal);
+  }
+
   $('btnTaperTabCustom').addEventListener('click', function(){
     this.classList.add('active');
     $('btnTaperTabPresets').classList.remove('active');
     $('taperPresetsView').style.display = 'none';
     $('taperCustomView').style.display = 'flex';
-    var r = state.gearTaperRatio;
-    var k = r > 0 ? (1 / r) : 16;
-    $('customTaperAngleInp').value = state.gearTaperAngle.toFixed(2);
-    $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
-    $('customTaperRatioInp').value = r.toFixed(5);
-    $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
-  });
 
-  $('btnGearTaperClose').addEventListener('click', function(){
-    $('gearTaperOverlay').classList.remove('show');
-  });
-
-  $('gearTaperOverlay').addEventListener('click', function(e){
-    if(e.target === this) this.classList.remove('show');
-  });
-
-  var customTaperInpActive = false;
-  $('customTaperAngleInp').addEventListener('input', function(){
-    if(customTaperInpActive) return;
-    customTaperInpActive = true;
-    var ang = parseFloat(this.value);
-    if(!isNaN(ang) && ang > 0 && ang < 89.9){
-      var r = 2 * Math.tan(ang * Math.PI / 180);
-      var k = 1 / r;
-      $('customTaperRatioInp').value = r.toFixed(5);
-      $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
-      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+    if(state.gearTaperAuthMode && state.gearTaperAuthVal){
+      customTaperState.authMode = state.gearTaperAuthMode;
+      customTaperState.authVal = state.gearTaperAuthVal;
+      customTaperState.activeMode = state.gearTaperAuthMode;
+    } else {
+      customTaperState.authMode = 'ANGLE';
+      customTaperState.authVal = +(state.gearTaperAngle.toFixed(4));
+      customTaperState.activeMode = 'ANGLE';
     }
-    customTaperInpActive = false;
+    renderCustomTaperUI();
   });
 
-  $('customTaperKInp').addEventListener('input', function(){
-    if(customTaperInpActive) return;
-    customTaperInpActive = true;
-    var k = parseFloat(this.value);
-    if(!isNaN(k) && k > 0){
-      var r = 1 / k;
-      var ang = Math.atan(r / 2) * (180 / Math.PI);
-      $('customTaperAngleInp').value = ang.toFixed(2);
-      $('customTaperRatioInp').value = r.toFixed(5);
-      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
+  $('btnCustomTaperCycle').addEventListener('click', function(){
+    if(customTaperState.activeMode === 'ANGLE'){
+      customTaperState.activeMode = 'RATIO';
+    } else if(customTaperState.activeMode === 'RATIO'){
+      customTaperState.activeMode = 'DECIMAL';
+    } else {
+      customTaperState.activeMode = 'ANGLE';
     }
-    customTaperInpActive = false;
+    renderCustomTaperUI();
   });
 
-  $('customTaperRatioInp').addEventListener('input', function(){
-    if(customTaperInpActive) return;
-    customTaperInpActive = true;
-    var r = parseFloat(this.value);
-    if(!isNaN(r) && r > 0){
-      var k = 1 / r;
-      var ang = Math.atan(r / 2) * (180 / Math.PI);
-      $('customTaperAngleInp').value = ang.toFixed(2);
-      $('customTaperKInp').value = (k >= 10 ? k.toFixed(1) : k.toFixed(2));
-      $('customTaperRatioSummary').textContent = 'Ratio: 1:' + (k >= 10 ? k.toFixed(1) : k.toFixed(2)) + ' (' + r.toFixed(5) + ')';
-    }
-    customTaperInpActive = false;
+  $('customTaperInpBox').addEventListener('click', function(){
+    openKeypad('customTaperVal', $('customTaperMainInp').value);
+  });
+
+  $('customTaperMainInp').addEventListener('input', function(){
+    var raw = parseFloat(this.value);
+    if(isNaN(raw) || raw <= 0) return;
+
+    customTaperState.authMode = customTaperState.activeMode;
+    customTaperState.authVal = raw;
+
+    var auth = customTaperState.authMode;
+    var authVal = customTaperState.authVal;
+
+    var otherModes = ['ANGLE', 'RATIO', 'DECIMAL'].filter(function(m){ return m !== customTaperState.activeMode; });
+    updateCompanionRow(1, otherModes[0], auth, authVal);
+    updateCompanionRow(2, otherModes[1], auth, authVal);
   });
 
   $('btnApplyCustomTaper').addEventListener('click', function(){
-    var ang = parseFloat($('customTaperAngleInp').value);
-    var r = parseFloat($('customTaperRatioInp').value);
-    if(isNaN(ang) || ang <= 0 || ang >= 89.9){
-      setStatusMsg('INVALID TAPER ANGLE (Must be 0.1° to 88°)');
+    var auth = customTaperState.authMode;
+    var authVal = customTaperState.authVal;
+
+    var currentInpVal = parseFloat($('customTaperMainInp').value);
+    if(!isNaN(currentInpVal) && currentInpVal > 0 && Math.abs(currentInpVal - authVal) > 0.000001 && customTaperState.activeMode === auth){
+      authVal = currentInpVal;
+      customTaperState.authVal = authVal;
+    }
+
+    if(isNaN(authVal) || authVal <= 0){
+      setStatusMsg('INVALID TAPER VALUE');
       return;
     }
-    if(isNaN(r) || r <= 0){
-      r = 2 * Math.tan(ang * Math.PI / 180);
+
+    // Convert as late as possible for NanoELS controller
+    var finalAngle = convertTaperValue(authVal, auth, 'ANGLE');
+    var finalRatio = convertTaperValue(authVal, auth, 'DECIMAL');
+
+    if(finalAngle <= 0 || finalAngle >= 89.9){
+      setStatusMsg('TAPER ANGLE OUT OF BOUNDS (0.01° - 88°)');
+      return;
     }
-    state.gearTaperAngle = +ang.toFixed(2);
-    state.gearTaperRatio = +r.toFixed(5);
+
+    state.gearTaperAuthMode = auth;
+    state.gearTaperAuthVal = authVal;
+    state.gearTaperAngle = +finalAngle.toFixed(4);
+    state.gearTaperRatio = +finalRatio.toFixed(6);
     state.gearTaperPresetIdx = -1; // custom
-    setStatusMsg('CUSTOM TAPER SET: ' + state.gearTaperAngle.toFixed(2) + '° (' + formatTaperRatio(state.gearTaperRatio) + ')');
+
+    var desc = '';
+    if(auth === 'ANGLE') desc = authVal + '°';
+    else if(auth === 'RATIO') desc = '1:' + authVal;
+    else if(auth === 'DECIMAL') desc = 'C=' + authVal;
+
+    setStatusMsg('CUSTOM TAPER SET: [' + auth + ' ' + desc + '] (' + state.gearTaperAngle.toFixed(2) + '° / ' + formatTaperRatio(state.gearTaperRatio) + ')');
     $('gearTaperOverlay').classList.remove('show');
     render();
   });
@@ -4197,6 +4473,7 @@
     sphereStep:'ARC STEP', joyMaxRate:'MAX JOYSTICK SPEED', joyDeadzone:'JOYSTICK DEADZONE',
     coordZ:'SET Z COORDINATE', coordX:'SET X COORDINATE', limitTarget:'SET LIMIT',
     customFeedStep:'CUSTOM FEED STEP', gearPitchZ_custom:'CUSTOM GEAR PITCH',
+    customTaperVal:'CUSTOM TAPER',
     wizThreadStarts:'THREAD STARTS (1-9)'
   };
 
@@ -4218,6 +4495,11 @@
     else if(target === 'gearPitchZ_custom') unitStr = ' (' + (gearPitchUnit === 'tpi' ? 'TPI' : unitLabel()) + ')';
     else if(target === 'customFeedStep'){
       unitStr = ' (' + (state.gearboxMode === 'ASYNC' ? (unitLabel() + '/min') : (state.gearFeedUnitZ === 'TPI' && state.activeFeedAxis === 'Z' ? 'TPI' : unitLabel() + '/rev')) + ')';
+    }
+    else if(target === 'customTaperVal'){
+      if(customTaperState.activeMode === 'ANGLE') unitStr = ' (DEGREES)';
+      else if(customTaperState.activeMode === 'RATIO') unitStr = ' (1:K RATIO)';
+      else if(customTaperState.activeMode === 'DECIMAL') unitStr = ' (DECIMAL)';
     }
 
     $('kpTitle').textContent = (kpTitles[target] || 'INPUT') + unitStr;
@@ -4375,6 +4657,13 @@
         renderStage4Setup();
         updateWizBlueprintCard();
         $('pitchOverlay').classList.add('show');
+      }
+      else if(kpTarget==='customTaperVal'){
+        if(!isNaN(v) && v > 0){
+          customTaperState.authMode = customTaperState.activeMode;
+          customTaperState.authVal = v;
+          renderCustomTaperUI();
+        }
       }
       else if(kpTarget==='threadStarts'){
         state.threadStarts = Math.max(1, Math.min(9, Math.round(v)));
