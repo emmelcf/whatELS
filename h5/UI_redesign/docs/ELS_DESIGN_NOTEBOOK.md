@@ -1141,4 +1141,70 @@ $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translato
 4. **`ClientEndpoint` (Composite Channel)**:
    * Manages the lifecycle of a connected client, routing incoming messages through the translator and transmitting replies and change-triggered telemetry broadcasts over the transport.
 
+---
+
+## 29. Monolith Decomposition, Alpine.js Store & Semantic Intent Architecture
+
+### 1. Architectural Motivation
+The monolithic prototype HTML file grew to over 5,700 lines containing embedded CSS stylesheets, math utilities, modal controllers, and DOM manipulation scripts. To make the architecture scalable, modular, and compatible with ESP32 LittleFS and LVGL 9, the monolithic structure was decomposed into decoupled layers, and the data model was unified around **Semantic Operator Intent**.
+
+### 2. File Organization & Zero-Build Runtime
+Everything runs **100% offline** with **zero build step**, operating identically whether served from ESP32 LittleFS or opened directly via `file:///`:
+
+| File | Purpose | Lines |
+| :--- | :--- | :--- |
+| [`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html) | Declarative HTML5 markup bound to Alpine store | ~530 |
+| [`alpine.min.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/alpine.min.js) | Alpine.js v3.17.4 local offline runtime | ~43 KB |
+| [`lathe-controller.css`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe-controller.css) | Extracted modular styles, typography, and layout | ~1,250 |
+| [`nanoels-presets.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-presets.js) | Standard engineering thread families & taper data | ~350 |
+| [`nanoels-formatters.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-formatters.js) | Pure render-time formatters (deci-microns $\rightarrow$ human strings) | ~90 |
+| [`nanoels-state.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-state.js) | `Alpine.store('machine')` reactive 4-domain model | ~240 |
+| [`lathe-controller.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe-controller.js) | UI modal controllers, wizard engines, and dev console | ~4,000 |
+
+---
+
+### 3. Display Units & Diameter Mode Decoupling
+A crucial architectural decision was made to **completely decouple display presentation from the controller core**:
+
+1. **Physical Invariance in the Core**:
+   * The ESP32 kinematics and stepper pulse generators deal strictly in canonical **deci-microns (`du`)** and microsteps.
+   * The core controller does not care whether a user is looking at inches or millimeters.
+2. **Multi-Display Independence**:
+   * One operator on an apron tablet can view the DRO in **Inches** (reading an imperial print), while a second display on the headstock or phone displays **Millimeters**.
+   * Tapping `unitToggle` (`mm/in`) or `repBadge` (`Ø DIA / R RAD`) **does not transmit wire commands to the controller**.
+   * It purely updates the client-local presentation store (`$store.machine.measure` and `$store.machine.dia`), eliminating round-trip latency and cross-client interference.
+
+---
+
+### 4. Semantic Intent vs. Raw Directional Signs
+Hardcoding $+/-$ coordinate math into a UI creates serious safety hazards (e.g. rear-toolpost parting blades or slant-bed lathes moving opposite to front toolposts).
+
+Instead of commanding raw coordinate signs, clients transmit **operator semantic intent**:
+
+```text
+CMD.jogHold=X,INFEED       // Operator wants to move tool into the cut / towards centerline
+CMD.jogHold=X,RETRACT      // Operator wants to back the tool out of the cut
+CMD.jogHold=Z,CHUCK        // Operator wants to feed carriage toward the chuck
+CMD.jogHold=Z,TAIL         // Operator wants to feed carriage toward the tailstock
+CMD.jogRelease=<axis>      // Operator released the jog key
+CMD.jogStep=<axis>,<dir>   // Discrete 1-step movement in semantic direction
+```
+
+#### Example: Cutting an Inverted Taper
+When turning an inverted taper (narrow at the chuck, wide at the tailstock) from the narrow end to the wide end:
+* **`TAPER_PROFILE`**: `INVERTED` (Narrow at Chuck $\rightarrow$ Wide at Tailstock).
+* **`SURFACE`**: `EXTERNAL` (OD Turning) vs `INTERNAL` (Boring).
+* **`FEED_DIR`**: `TO_TAIL` (traveling from Chuck toward Tailstock).
+* **Controller Kinematics Execution**:
+  * Primary axis $Z$ feeds `TO_TAIL`.
+  * Synchronized cross-slide $X$ is calculated by the core: since diameter expands toward the tailstock on an external cut, $X$ automatically moves **`RETRACT`** at the precise taper ratio $K$.
+  * The physical motor pin polarities are resolved exclusively in firmware configuration (`Config.h`), protecting against crashes regardless of toolpost orientation.
+
+---
+
+### 5. Verification Status
+* **PlatformIO ESP32-S3 Build**: Succeeded in 11.97s, 0 errors, 0 warnings (Flash 19.4%, RAM 25.0%).
+* **Browser Runtime Verification**: Verified against local emulator, 0 console errors, instantaneous client-side unit toggles, and clean semantic packet streams.
+
+
 

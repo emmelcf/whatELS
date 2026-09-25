@@ -137,6 +137,28 @@ class NanoelsEmulator {
         else this.feedStepDu = 100;
       } else if (cmd.startsWith('jogStepDu=')) {
         this.moveStep = parseInt(cmd.substring(10), 10) || 10000;
+      } else if (cmd.startsWith('jogHold=')) {
+        const parts = cmd.substring(8).split(',');
+        const ax = parts[0].toUpperCase();
+        const dir = (parts[1] || '').toUpperCase();
+        if (ax === 'Z') {
+          this.heldMoveAction = (dir === 'CHUCK' || dir === 'LEFT') ? 21 : 22;
+        } else if (ax === 'X') {
+          this.heldMoveAction = (dir === 'INFEED' || dir === 'IN' || dir === 'UP') ? 23 : 24;
+        }
+        this.heldMoveMillis = Date.now();
+      } else if (cmd.startsWith('jogRelease=')) {
+        this.heldMoveAction = 0;
+      } else if (cmd.startsWith('jogStep=')) {
+        const parts = cmd.substring(8).split(',');
+        const ax = parts[0].toUpperCase();
+        const dir = (parts[1] || '').toUpperCase();
+        const step = this.moveStep || 10000;
+        if (ax === 'Z') {
+          this.z += (dir === 'CHUCK' || dir === 'LEFT') ? -step : step;
+        } else if (ax === 'X') {
+          this.x += (dir === 'INFEED' || dir === 'IN' || dir === 'UP') ? -step : step;
+        }
       } else if (cmd.startsWith('taperRatio=')) {
         this.tpVal = parseFloat(cmd.substring(11)) || 1.0;
         this.tpMode = 0;

@@ -1579,9 +1579,6 @@
   // Header Handlers
   $('unitToggle').addEventListener('click', function(){ 
     if(state.runState === 'running') return;
-    if(window.nanoelsClient){
-      window.nanoelsClient.cycleMeasure();
-    }
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
     if(window.Alpine && Alpine.store('machine')){
       Alpine.store('machine').measure = state.unit === 'in' ? 1 : 0;
@@ -1720,9 +1717,6 @@
 
   $('repBadge').addEventListener('click', function(e){
     e.stopPropagation();
-    if(window.nanoelsClient){
-      window.nanoelsClient.toggleDiaRad();
-    }
     state.xRep = state.xRep === 'diameter' ? 'radius' : 'diameter';
     if(window.Alpine && Alpine.store('machine')){
       Alpine.store('machine').dia = state.xRep === 'diameter';

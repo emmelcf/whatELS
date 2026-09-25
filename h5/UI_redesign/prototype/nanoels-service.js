@@ -282,26 +282,56 @@ class NanoelsService extends EventTarget {
     this.activeHolds.clear();
   }
 
-  // High-level Jog Controller (Z: Left -1, Right +1; X: Up -1 into cut, Down +1 retract)
-  jog(axis, dir, isPress) {
+  // High-level Jog Controller supporting both Semantic Directions and legacy numbers
+  jog(axis, dirOrSemantic, isPress) {
     const upper = axis.toUpperCase();
+    let semanticDir = '';
     let code = 0;
     let label = '';
 
     if (upper === 'Z') {
-      code = dir < 0 ? this.ACTIONS.B_LEFT : this.ACTIONS.B_RIGHT;
-      label = dir < 0 ? 'Jog Z Left (← Chuck)' : 'Jog Z Right (→ Tail)';
+      if (typeof dirOrSemantic === 'string') {
+        semanticDir = dirOrSemantic.toUpperCase();
+      } else {
+        semanticDir = dirOrSemantic < 0 ? 'CHUCK' : 'TAIL';
+      }
+      code = (semanticDir === 'CHUCK' || semanticDir === 'LEFT') ? this.ACTIONS.B_LEFT : this.ACTIONS.B_RIGHT;
+      label = semanticDir === 'CHUCK' ? 'Jog Z (← Chuck)' : 'Jog Z (→ Tail)';
     } else if (upper === 'X') {
-      code = dir < 0 ? this.ACTIONS.B_UP : this.ACTIONS.B_DOWN;
-      label = dir < 0 ? 'Jog X In (↑ Center)' : 'Jog X Out (↓ Retract)';
+      if (typeof dirOrSemantic === 'string') {
+        semanticDir = dirOrSemantic.toUpperCase();
+      } else {
+        semanticDir = dirOrSemantic > 0 ? 'INFEED' : 'RETRACT';
+      }
+      code = (semanticDir === 'INFEED' || semanticDir === 'IN' || semanticDir === 'UP') ? this.ACTIONS.B_UP : this.ACTIONS.B_DOWN;
+      label = semanticDir === 'INFEED' ? 'Jog X (↑ Infeed / Center)' : 'Jog X (↓ Retract)';
     }
 
     if (!code) return;
     if (isPress) {
-      this.startHold(code, label);
+      this.sendRaw(`CMD.jogHold=${upper},${semanticDir}\n`, `${label} [Held]`);
+      if (!this.heartbeatTimer) {
+        this.heartbeatTimer = setInterval(() => {
+          this.sendRaw(`CMD.jogHold=${upper},${semanticDir}\n`, `Heartbeat [${label}]`);
+        }, 200);
+      }
     } else {
-      this.stopHold(code, label);
+      this._stopHeartbeat();
+      this.sendRaw(`CMD.jogRelease=${upper}\n`, `${label} [Released]`);
     }
+  }
+
+  // Discrete 1-step jog in semantic direction
+  jogStep(axis, dirOrSemantic) {
+    const upper = axis.toUpperCase();
+    let semanticDir = '';
+    if (upper === 'Z') {
+      semanticDir = typeof dirOrSemantic === 'string' ? dirOrSemantic.toUpperCase() : (dirOrSemantic < 0 ? 'CHUCK' : 'TAIL');
+    } else if (upper === 'X') {
+      semanticDir = typeof dirOrSemantic === 'string' ? dirOrSemantic.toUpperCase() : (dirOrSemantic < 0 ? 'INFEED' : 'RETRACT');
+    }
+    if (!semanticDir) return;
+    this.sendRaw(`CMD.jogStep=${upper},${semanticDir}\n`, `Jog Step ${upper} ${semanticDir}`);
   }
 
   // Cycle Start / Stop

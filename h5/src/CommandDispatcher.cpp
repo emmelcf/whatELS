@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "MachineModel.h"
 #include "RichClientAdapter.h"
+#include "WebServerModule.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -104,6 +105,60 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       long val = atol(cmd + 10);
       if (val > 0) moveStep = val;
       return true;
+    }
+    // CMD.jogHold=<axis>,<semanticDir>
+    if (cmdLen >= 8 && strncmp(cmd, "jogHold=", 8) == 0) {
+      char ax = cmd[8];
+      const char* p = strchr(cmd + 8, ',');
+      if (p) {
+        p++;
+        byte code = 0;
+        if (ax == 'Z' || ax == 'z') {
+          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0) code = B_LEFT;
+          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0) code = B_RIGHT;
+        } else if (ax == 'X' || ax == 'x') {
+          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0) code = B_UP;
+          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0) code = B_DOWN;
+        }
+        if (code != 0) {
+          queueWebUiEvent(code, true);
+          return true;
+        }
+      }
+    }
+    // CMD.jogRelease=<axis>
+    if (cmdLen >= 11 && strncmp(cmd, "jogRelease=", 11) == 0) {
+      char ax = cmd[11];
+      if (ax == 'Z' || ax == 'z') {
+        queueWebUiEvent(B_LEFT, false);
+        queueWebUiEvent(B_RIGHT, false);
+        return true;
+      } else if (ax == 'X' || ax == 'x') {
+        queueWebUiEvent(B_UP, false);
+        queueWebUiEvent(B_DOWN, false);
+        return true;
+      }
+    }
+    // CMD.jogStep=<axis>,<semanticDir>
+    if (cmdLen >= 8 && strncmp(cmd, "jogStep=", 8) == 0) {
+      char ax = cmd[8];
+      const char* p = strchr(cmd + 8, ',');
+      if (p) {
+        p++;
+        byte code = 0;
+        if (ax == 'Z' || ax == 'z') {
+          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0) code = B_LEFT;
+          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0) code = B_RIGHT;
+        } else if (ax == 'X' || ax == 'x') {
+          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0) code = B_UP;
+          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0) code = B_DOWN;
+        }
+        if (code != 0) {
+          queueWebUiEvent(code, true);
+          queueWebUiEvent(code, false);
+          return true;
+        }
+      }
     }
     // CMD.taperRatio=<ratioK>
     if (cmdLen >= 11 && strncmp(cmd, "taperRatio=", 11) == 0) {

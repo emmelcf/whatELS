@@ -172,16 +172,10 @@ document.addEventListener('alpine:init', () => {
     // -------------------------------------------------------------
     cycleMeasure() {
       this.measure = this.measure === 0 ? 1 : 0;
-      if (window.nanoelsClient) {
-        window.nanoelsClient.cycleMeasure();
-      }
     },
 
     toggleDiaRad() {
       this.dia = !this.dia;
-      if (window.nanoelsClient) {
-        window.nanoelsClient.toggleDiaRad();
-      }
     },
 
     cycleJogStep() {
