@@ -977,4 +977,168 @@ To remove ambiguity between travel direction and stop location, all four limit c
 * **At Limit ($0.000$)**: When distance $\le 0.001\text{ mm}$, the chip illuminates amber (`.at-limit`) and the corresponding DPAD jog direction is automatically blocked with `.limit-blocked` visual feedback.
 * **Manual Entry**: Tapping "SET DISTANCE…" opens the keypad and inputs the stroke distance from the current carriage position, directly aligning with the controller firmware numpad convention (`// Treat newDu as a relative distance from current position`).
 
+---
+
+## 28. Decoupled MachineModel & Multi-Domain Round-Trip Protocol Specification
+
+### 1. Architectural Motivation & Decoupling Invariants
+To achieve high reliability, modularity, and future extensibility across diverse displays (Web UI, future Nextion v2 rewrite, serial pendants, or native LVGL displays), the firmware's internal kinematic core is completely decoupled from presentation and transport layers:
+1. **The Controller is the Sole Authority**: Connected clients (browsers, displays, pendants) are pure reactive observers. Setpoints and mode changes flow into the controller via authoritative intent commands (`CMD.*`), and state flows outward via domain-namespaced telemetry.
+2. **Zero In-Server Math**: All string parsing, floating-point arithmetic, unit conversions, and pitch-to-DURP translations are removed from transport code ([src/WebServerModule.cpp](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/WebServerModule.cpp)) and encapsulated into the core kinematics API ([include/Motion.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h), [src/Motion.cpp](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp)).
+3. **Preservation of Authoritative Intent**: To prevent floating-point round-trip display drift (such as an operator entering taper `1:3.5` and having it return as `1:3.4985`, or entering `20 TPI` and having it return as `19.9998`), the controller stores the operator's exact typed intent alongside the hardware kinematics value.
+4. **Layered Transport Separation**:
+   * **Layer 1 (Core Kinematics)**: [include/Motion.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h), [include/Axis.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Axis.h) — Hardware timers, step generators, integer deci-micron (`du`) coordinate tracking.
+   * **Layer 2 (State & Serialization Adapter)**: [include/MachineModel.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h), [include/RichClientAdapter.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/RichClientAdapter.h) — Structured domain capture and line-oriented streaming.
+   * **Layer 3 (Command Dispatcher)**: [include/CommandDispatcher.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/CommandDispatcher.h) — Unified command dispatcher handling all transport sources (WebSocket, Serial, Web API).
+
+---
+
+### 2. Domain State Architecture (`MachineModel`)
+The machine state is partitioned into four independent, cohesive domains:
+
+```
++-------------------------------------------------------------------------+
+|                              MachineModel                               |
++-------------------+-------------------+----------------+----------------+
+|    Kinematics     |      Intent       |     Cycle      |   Properties   |
+|   (Domain 'K')    |   (Domain 'I')    |  (Domain 'C')  |  (Domain 'P')  |
+|     Bit: 0x01     |     Bit: 0x02     |   Bit: 0x04    |   Bit: 0x08    |
++-------------------+-------------------+----------------+----------------+
+| zDu, xDu, yDu     | thFmt, thPitch    | passes         | measure        |
+| zLeftDu, zRightDu | dupr              | opIdx (curr)   | dia, abs       |
+| xUpDu, xDownDu    | tpMode, tpVal     | setupIdx       | zDro, xDro     |
+| rpm, turns, angle | coneRatio         | starts         | screwZDu       |
+| mode, on, estop   | feedStepDu        |                | screwXDu       |
+| zDis, xDis, yDis  | jogStepDu         |                | motorStepsZ/X  |
+| dupr, nextDupr    | feedRev           |                | encoderPpr     |
++-------------------+-------------------+----------------+----------------+
+```
+
+#### Domain Mask Flags ([include/MachineModel.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h))
+```cpp
+enum DomainFlags : uint8_t {
+  DOMAIN_NONE       = 0x00,
+  DOMAIN_KINEMATICS = 0x01,  // Dynamic physical axes, limits, spindle, mode, on/off
+  DOMAIN_INTENT     = 0x02,  // Thread format/pitch, taper ratio/angle, steps, feed direction
+  DOMAIN_CYCLE      = 0x04,  // Multi-pass counts, current pass, operation step, multi-starts
+  DOMAIN_PROPERTIES = 0x08,  // Unit system, diameter mode, DRO active, leadscrew pitches
+  DOMAIN_ALL        = 0x0F   // All domains combined (0x01 | 0x02 | 0x04 | 0x08)
+};
+```
+
+---
+
+### 3. Flexible Multi-Domain Query Protocol
+To eliminate multiple round-trips when a client initializes or transitions pages, the client can request any arbitrary combination of domains in a single command.
+
+#### Query Syntax:
+* **Compound Request**: `?get=K,I` or `CMD.get=K,I`
+* **Single Domain**: `?get=P` or `?get=properties`
+* **All Domains**: `?get=ALL` or `?state` or `?get=*`
+
+#### Token Parser Mapping:
+| Query Token | Target Domain Flag | Description |
+| :--- | :--- | :--- |
+| `K`, `kinematics`, `kin` | `DOMAIN_KINEMATICS` (`0x01`) | High-frequency physical axis positions and limits |
+| `I`, `intent` | `DOMAIN_INTENT` (`0x02`) | Operator input setpoints (exact typed values) |
+| `C`, `cycle` | `DOMAIN_CYCLE` (`0x04`) | Automated multi-pass and multi-start cycle counters |
+| `P`, `properties`, `props` | `DOMAIN_PROPERTIES` (`0x08`) | Hardware leadscrew parameters and mode toggles |
+| `ALL`, `*` | `DOMAIN_ALL` (`0x0F`) | Full state capture across all four domains |
+
+---
+
+### 4. Wire Telemetry Schema Reference
+
+#### Domain 'K' — Kinematics (`K.*`)
+| Key | Type | Unit | Description |
+| :--- | :--- | :--- | :--- |
+| `K.zDu` | `long` | `du` (0.1 µm) | Canonical Z carriage position (DRO scale or stepper pos) |
+| `K.xDu` | `long` | `du` (0.1 µm) | Canonical X cross-slide position |
+| `K.yDu` | `long` | `du` (0.1 µm) | Canonical Y auxiliary position |
+| `K.zLeftDu` | `long` | `du` (0.1 µm) | Z left/chuck limit position (`LONG_MAX` if unset) |
+| `K.zRightDu` | `long` | `du` (0.1 µm) | Z right/tailstock limit position (`LONG_MIN` if unset) |
+| `K.xUpDu` | `long` | `du` (0.1 µm) | X upper/inward limit position (`LONG_MAX` if unset) |
+| `K.xDownDu` | `long` | `du` (0.1 µm) | X lower/outward limit position (`LONG_MIN` if unset) |
+| `K.zDis` | `0` or `1` | boolean | Z axis motor disabled |
+| `K.xDis` | `0` or `1` | boolean | X axis motor disabled |
+| `K.yDis` | `0` or `1` | boolean | Y axis motor disabled |
+| `K.rpm` | `int` | RPM | Filtered spindle speed |
+| `K.turns` | `long` | revolutions | Spindle revolutions counter |
+| `K.angle` | `long` | 0.1° (0..3599) | Spindle rotary angle |
+| `K.mode` | `int` | enum | Operating mode (`0`=GEARBOX, `1`=THREAD, `2`=CONE, etc.) |
+| `K.on` | `0` or `1` | boolean | Kinematic spindle-feed sync engaged |
+| `K.estop` | `0` or `1` | boolean | Hardware emergency stop tripped |
+| `K.dupr` | `long` | `du/rev` | Active kinematic feedrate |
+| `K.nextDupr` | `long` | `du/rev` | Pending/buffered next feedrate (if changed while moving) |
+
+#### Domain 'I' — Intent (`I.*`)
+| Key | Type | Unit | Description |
+| :--- | :--- | :--- | :--- |
+| `I.thFmt` | `int` | enum | Thread format (`0`=Metric mm, `1`=Imperial TPI, `2`=Imperial Inch) |
+| `I.thPitch` | `float` | user unit | Exact authoritative pitch entered by operator (e.g. `20.0000` for 20 TPI) |
+| `I.dupr` | `long` | `du/rev` | Internal feedrate equivalent |
+| `I.tpMode` | `int` | enum | Taper input mode (`0`=Ratio 1:K, `1`=Angle °, `2`=Standard Preset) |
+| `I.tpVal` | `float` | ratio / deg | Exact authoritative taper value (e.g. `3.5000` for 1:3.5, `8.1300` for 8.13°) |
+| `I.coneRatio` | `float` | dimensionless | Resolved kinematic cone ratio ($X / Z$) |
+| `I.tpPreset` | `int` | id | Preset identifier (-1 if custom ratio/angle) |
+| `I.feedStepDu` | `long` | `du` (0.1 µm) | Discontinuous feed step size (100, 500, 1000, 2000 du) |
+| `I.jogStepDu` | `long` | `du` (0.1 µm) | Continuous manual jog step size (100, 1000, 10000 du) |
+| `I.feedRev` | `0` or `1` | boolean | Feed direction reversal state |
+
+#### Domain 'C' — Cycle (`C.*`)
+| Key | Type | Unit | Description |
+| :--- | :--- | :--- | :--- |
+| `C.passes` | `int` | count | Total programmed passes for automated cycle |
+| `C.opIdx` | `int` | index | Active cut pass index |
+| `C.setupIdx` | `int` | index | Active step in setup wizard |
+| `C.starts` | `int` | count | Multi-start thread count |
+
+#### Domain 'P' — Properties (`P.*`)
+| Key | Type | Unit | Description |
+| :--- | :--- | :--- | :--- |
+| `P.measure` | `0` or `1` | enum | Unit system (`0`=Metric, `1`=Imperial) |
+| `P.dia` | `0` or `1` | boolean | Lathe X cross-slide diameter mode enabled |
+| `P.abs` | `0` or `1` | boolean | Coordinate system (`1`=Absolute, `0`=Incremental) |
+| `P.zDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on Z |
+| `P.xDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on X |
+| `P.screwZDu` | `long` | `du` (0.1 µm) | Hardware Z leadscrew pitch |
+| `P.screwXDu` | `long` | `du` (0.1 µm) | Hardware X cross-slide leadscrew pitch |
+| `P.motorStepsZ` | `long` | steps/rev | Z stepper driver microsteps per motor revolution |
+| `P.motorStepsX` | `long` | steps/rev | X stepper driver microsteps per motor revolution |
+| `P.encoderPpr` | `long` | pulses/rev | Spindle encoder pulses per revolution |
+
+---
+
+### 5. Backward Compatibility Guarantee
+During the UI transition, [RichClientAdapter::buildTelemetry()](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp) simultaneously emits both the new domain keys (`K.*`, `I.*`, `C.*`, `P.*`) and the legacy mirror keys (`M.*`) whenever `DOMAIN_ALL` or `DOMAIN_KINEMATICS` is transmitted. This ensures zero regression in existing test clients or background scripts while enabling modern modular UI subscriptions.
+
+---
+
+### 6. Generic Client Architecture: Transport / Serializer / Translator Pipeline
+To ensure any future transport (physical Nextion v2 UART driver, USB-UART serial pendant, Bluetooth Low Energy, or CAN/Modbus bus) can be added cleanly without modifying core firmware or existing web clients, the system implements a composable client pipeline ([include/ClientEndpoint.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/ClientEndpoint.h)):
+
+$$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$$
+
+```
+   Raw Wire (Bytes/Text)              Inbound Translation                   Core Controller
+[ Physical I/O Channel ] ──(Inbound)──► [ ICommandTranslator ] ──(Dispatch)──► [ Motion / Model ]
+           ▲                                                                           │
+           │                                                                           │
+           └──────────────(Outbound)── [ ITelemetrySerializer ] ◄──(Capture)───────────┘
+```
+
+1. **`ITransport` (Physical I/O)**:
+   * Pure virtual wire interface: `isConnected()`, `sendText(str)`, `sendBytes(buf, len)`.
+   * Concrete implementations: `WebSocketTransport`, `NextionUartTransport`, `SerialPendantTransport`, `BleTransport`.
+2. **`ITelemetrySerializer` (Outbound Encoding)**:
+   * Transforms typed [MachineModel](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h) structs into the client's expected wire format.
+   * `RichClientAdapter` implements this to produce line-oriented ASCII `K.*`, `I.*`, etc.
+   * A future `NextionSerializer` will produce Nextion HMI display commands (e.g. `t0.txt="..."`).
+3. **`ICommandTranslator` (Inbound Decoding)**:
+   * Decodes raw inbound wire payloads into authoritative controller actions.
+   * `DefaultCommandTranslator` passes text commands directly to [CommandDispatcher](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/CommandDispatcher.h).
+   * A future `NextionTranslator` or `PendantTranslator` can decode binary touch packets (`0x65 0x01...`) into canonical commands (`CMD.mode=...`).
+4. **`ClientEndpoint` (Composite Channel)**:
+   * Manages the lifecycle of a connected client, routing incoming messages through the translator and transmitting replies and change-triggered telemetry broadcasts over the transport.
+
 

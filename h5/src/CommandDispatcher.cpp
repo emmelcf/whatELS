@@ -3,7 +3,8 @@
 #include "Axis.h"
 #include "Config.h"
 #include "Input.h"
-#include "WebServerModule.h"
+#include "MachineModel.h"
+#include "RichClientAdapter.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -33,7 +34,15 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     rep += "SYSINFO.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
     rep += "SYSINFO.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
     if (reply) *reply = rep;
-    queueWebSocketText(rep);
+    return true;
+  }
+
+  // 2. Domain State Queries (?get=K,I / ?state / ?get=ALL)
+  if ((length >= 4 && strncmp(payload, "?get", 4) == 0) ||
+      (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
+    uint8_t mask = parseDomainQuery(payload);
+    String rep = RichClientAdapter::buildTelemetry(mask);
+    if (reply) *reply = rep;
     return true;
   }
 
@@ -41,6 +50,14 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
   if (length >= 4 && strncmp(payload, "CMD.", 4) == 0) {
     const char* cmd = payload + 4;
     size_t cmdLen = length - 4;
+
+    // CMD.get=<domains>
+    if (cmdLen >= 4 && strncmp(cmd, "get=", 4) == 0) {
+      uint8_t mask = parseDomainQuery(cmd + 4);
+      String rep = RichClientAdapter::buildTelemetry(mask);
+      if (reply) *reply = rep;
+      return true;
+    }
 
     // CMD.feedDupr=<du>
     if (cmdLen >= 9 && strncmp(cmd, "feedDupr=", 9) == 0) {

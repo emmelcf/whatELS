@@ -576,6 +576,9 @@ static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
   // First, delegate to CommandDispatcher for all domain and system commands
   String reply = "";
   if (CommandDispatcher::dispatch((const char*)payload, length, &reply)) {
+    if (reply.length() > 0) {
+      queueWebSocketText(reply);
+    }
     machineStatusForcePublish = true;
     return true;
   }
