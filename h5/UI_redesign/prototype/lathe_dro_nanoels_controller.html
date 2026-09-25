@@ -10,19 +10,21 @@
 </head>
 <body>
 
-<div class="device" id="device">
+<div class="device" id="device" x-data :class="{ 'is-running': $store.machine.isOn }">
 
   <!-- TOP STATUS & TELEMETRY BAR -->
   <div class="topbar">
     <div class="topbar-left">
-      <div class="pill stopped" id="statusPill"><span class="dot"></span>STOPPED</div>
+      <div class="pill" :class="$store.machine.isOn ? 'running' : 'stopped'" id="statusPill">
+        <span class="dot"></span><span x-text="$store.machine.isOn ? 'RUNNING' : 'STOPPED'">STOPPED</span>
+      </div>
       <div class="hw-strip">
         <span class="hw-pill"><span class="dot"></span>ENC</span>
         <span class="hw-pill"><span class="dot"></span>DRIVE</span>
       </div>
     </div>
     <div class="topbar-right">
-      <div class="chip tap" id="unitToggle">mm</div>
+      <div class="chip tap" id="unitToggle" x-text="$store.machine.unitStr">mm</div>
       <div class="chip icon tap" id="settingsBtn">⚙</div>
     </div>
   </div>
@@ -36,29 +38,31 @@
         <div class="col-dro">
           <div class="spindle-card tap" id="spindleBox" title="Tap to cycle: RPM / TURNS / ANGLE / SIM SPINDLE">
             <span class="card-title">SPINDLE</span>
-            <span><span class="spindle-value mono" id="spindleValue">0</span><span class="spindle-unit" id="spindleUnit">RPM</span></span>
+            <span><span class="spindle-value mono" id="spindleValue" x-text="$store.machine.spindleDisplay">0</span><span class="spindle-unit" id="spindleUnit" x-text="$store.machine.spindleUnit">RPM</span></span>
           </div>
 
           <div>
             <div class="axis-head">
               <div class="axis-letter">Z</div>
-              <div class="axis-value mono tap" id="zValue">-18.426</div>
+              <div class="axis-value mono tap" id="zValue" x-text="$store.machine.zDisplay">-18.426</div>
             </div>
             <div class="axis-meta">
-              <span class="chip-sm mono tap" id="lim-zMin" data-bound="zLeft"></span>
-              <span class="chip-sm mono tap" id="lim-zMax" data-bound="zRight"></span>
+              <span class="chip-sm mono tap" id="lim-zMin" data-bound="zLeft" :class="{ 'empty-limit': !$store.machine.zLeftDisplay }" x-text="$store.machine.zLeftDisplay ? ('|← ' + $store.machine.zLeftDisplay) : '|← SET'"></span>
+              <span class="chip-sm mono tap" id="lim-zMax" data-bound="zRight" :class="{ 'empty-limit': !$store.machine.zRightDisplay }" x-text="$store.machine.zRightDisplay ? ($store.machine.zRightDisplay + ' →|') : 'SET →|'"></span>
             </div>
           </div>
 
           <div>
             <div class="axis-head">
               <div class="axis-letter">X</div>
-              <div class="axis-value mono tap" id="xValue"><span class="dia-glyph dia">Ø</span>26.438</div>
+              <div class="axis-value mono tap" id="xValue">
+                <span class="dia-glyph dia" x-show="$store.machine.dia">Ø</span><span x-text="$store.machine.xDisplay">26.438</span>
+              </div>
             </div>
             <div class="axis-meta">
-              <span class="chip-sm mono tap" id="lim-xMaxDia" data-bound="xRight"></span>
-              <span class="chip-sm rep-toggle tap is-dia" id="repBadge">Ø DIA</span>
-              <span class="chip-sm mono tap" id="lim-xMinDia" data-bound="xLeft"></span>
+              <span class="chip-sm mono tap" id="lim-xMaxDia" data-bound="xRight" :class="{ 'empty-limit': !$store.machine.xDownDisplay }" x-text="$store.machine.xDownDisplay ? ($store.machine.xDownDisplay + ' ⭳') : 'SET ⭳'"></span>
+              <span class="chip-sm rep-toggle tap" :class="{ 'is-dia': $store.machine.dia }" id="repBadge" x-text="$store.machine.dia ? 'Ø DIA' : 'R RAD'">Ø DIA</span>
+              <span class="chip-sm mono tap" id="lim-xMinDia" data-bound="xLeft" :class="{ 'empty-limit': !$store.machine.xUpDisplay }" x-text="$store.machine.xUpDisplay ? ('⤒ ' + $store.machine.xUpDisplay) : '⤒ SET'"></span>
             </div>
           </div>
         </div>
@@ -86,7 +90,7 @@
               <div class="btn left-a" data-axis="z" data-dir="-1"><span class="arrow">←</span><span class="axis-tag">CHUCK (Z−)</span></div>
               <div class="center tap" id="stepMain" title="Tap to cycle, Long-press to edit">
                 <span class="step-label">STEP</span>
-                <span class="step-value mono" id="stepValue">0.010</span>
+                <span class="step-value mono" id="stepValue" x-text="$store.machine.stepDisplay">0.010</span>
                 <span class="step-hint" style="font-size:8px;color:var(--dimmer);letter-spacing:1px;line-height:1;">···</span>
               </div>
               <div class="btn right-a" data-axis="z" data-dir="1"><span class="arrow">→</span><span class="axis-tag">TAIL (Z+)</span></div>
@@ -104,7 +108,7 @@
       <div class="status-deck">
         <span class="status-icon">●</span>
         <div class="status-msg-wrap">
-          <span class="status-msg mono" id="statusMessage">READY: GEARBOX SYNCHRONIZED TO SPINDLE</span>
+          <span class="status-msg mono" id="statusMessage" x-text="$store.machine.statusMsg">READY: GEARBOX SYNCHRONIZED TO SPINDLE</span>
         </div>
         <div class="status-log-btn tap" id="btnOpenLog">LOG</div>
       </div>
@@ -114,13 +118,25 @@
     <div class="col-info">
       <div class="mode-card">
         <div class="mode-head tap" id="modeHead">
-          <span class="name" id="modeName">GEARBOX</span>
+          <span class="name" id="modeName" x-text="$store.machine.modeName + ($store.machine.isOn ? ' 🔒' : '')">GEARBOX</span>
           <span class="chev">⌄</span>
         </div>
         <div class="mode-body" id="modeBody"></div>
       </div>
 
-      <div class="runstack" id="runstackArea"></div>
+      <div class="runstack" id="runstackArea">
+        <div class="rbtn tap"
+             :class="$store.machine.isOn ? 'running' : 'start'"
+             id="btnRun">
+          <template x-if="$store.machine.isOn">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:8px; box-shadow:0 0 6px var(--green);"></span>
+          </template>
+          <span x-text="$store.machine.isOn ? ($store.machine.modeName === 'GEARBOX' ? 'FEEDING' : 'RUNNING') : ($store.machine.modeName === 'GEARBOX' ? 'START FEED' : 'START CYCLE')">START FEED</span>
+        </div>
+        <div class="rbtn stop"
+             :class="$store.machine.isOn ? 'active tap' : 'idle'"
+             id="btnStop">STOP</div>
+      </div>
     </div>
 
   </div>

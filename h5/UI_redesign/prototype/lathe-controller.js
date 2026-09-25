@@ -386,7 +386,11 @@
   }
 
   function setStatusMsg(text){
-    $('statusMessage').textContent = text;
+    if(window.Alpine && Alpine.store('machine')){
+      Alpine.store('machine').statusMsg = text;
+    } else {
+      $('statusMessage').textContent = text;
+    }
     if(!state.msgLog) state.msgLog = [];
     if(state.msgLog.length === 0 || state.msgLog[state.msgLog.length - 1] !== text){
       state.msgLog.push(text);
@@ -1268,63 +1272,85 @@
   }
 
   // Universal Runstack: Binary START / STOP (matches NanoELS hardware state machine)
+  var runstackBound = false;
   function renderRunstack(){
+    var hasAlpine = window.Alpine && Alpine.store('machine');
     var isRun = state.runState === 'running';
-    var runText = isRun ? (state.mode === 'GEARBOX' ? 'FEEDING' : 'RUNNING') : (state.mode === 'GEARBOX' ? 'START FEED' : 'START CYCLE');
-    var runClass = isRun ? 'running' : 'start';
-    var stopClass = isRun ? 'active' : 'idle';
 
-    $('runstackArea').innerHTML = '' +
-      '<div class="rbtn ' + runClass + ' tap" id="btnRun">' + (isRun ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:8px; box-shadow:0 0 6px var(--green);"></span>' : '') + runText + '</div>' +
-      '<div class="rbtn stop ' + stopClass + ' ' + (isRun ? 'tap' : '') + '" id="btnStop">STOP</div>';
+    if(!hasAlpine){
+      var runText = isRun ? (state.mode === 'GEARBOX' ? 'FEEDING' : 'RUNNING') : (state.mode === 'GEARBOX' ? 'START FEED' : 'START CYCLE');
+      var runClass = isRun ? 'running' : 'start';
+      var stopClass = isRun ? 'active' : 'idle';
 
-    $('btnRun').addEventListener('click', function(){
-      if(window.nanoelsClient){
-        window.nanoelsClient.startCycle();
-      }
-      if(state.runState === 'stopped'){
-        // Cache limits if opt-in restoration is active
-        if(state.mode === 'TURNING' && state.turnRestoreLimits && state.turnSavedZMin === null && state.turnSavedZMax === null){
-          state.turnSavedZMin = state.zMin;
-          state.turnSavedZMax = state.zMax;
-        } else if(state.mode === 'FACING' && state.faceRestoreLimits && state.faceSavedXMin === null && state.faceSavedXMax === null){
-          state.faceSavedXMin = state.xMinDia;
-          state.faceSavedXMax = state.xMaxDia;
-        } else if(state.mode === 'THREADING'){
-          if(state.threadSkimVerify){
-            state.threadSkimStage = 'SKIMMING';
-            state.threadCurrentPass = 0;
-            state.pass = 'SKIM';
-            setStatusMsg('THREADING STAGE 1/2: EXECUTING SKIM PASS AT PRE-TURN OD');
-          } else {
-            state.threadSkimStage = 'THREADING';
-            state.threadCurrentPass = 1;
-            state.pass = '01 / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
-            setStatusMsg('THREADING: PASS 01 OF ' + state.threadPassCount);
+      $('runstackArea').innerHTML = '' +
+        '<div class="rbtn ' + runClass + ' tap" id="btnRun">' + (isRun ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:8px; box-shadow:0 0 6px var(--green);"></span>' : '') + runText + '</div>' +
+        '<div class="rbtn stop ' + stopClass + ' ' + (isRun ? 'tap' : '') + '" id="btnStop">STOP</div>';
+    }
+
+    if(!runstackBound){
+      var bRun = $('btnRun');
+      var bStop = $('btnStop');
+      if(bRun && bStop){
+        if(hasAlpine) runstackBound = true;
+
+        bRun.addEventListener('click', function(){
+          if(window.nanoelsClient){
+            window.nanoelsClient.startCycle();
           }
-        }
-        state.runState = 'running';
-        if(state.mode !== 'THREADING') setStatusMsg('CYCLE STARTED: ' + state.mode + ' ACTIVE');
-      } else {
-        stopCycle(true);
-        return;
-      }
-      syncSpindleSimulation();
-      render();
-    });
+          if(window.Alpine && Alpine.store('machine')){
+            Alpine.store('machine').isOn = true;
+          }
+          if(state.runState === 'stopped'){
+            // Cache limits if opt-in restoration is active
+            if(state.mode === 'TURNING' && state.turnRestoreLimits && state.turnSavedZMin === null && state.turnSavedZMax === null){
+              state.turnSavedZMin = state.zMin;
+              state.turnSavedZMax = state.zMax;
+            } else if(state.mode === 'FACING' && state.faceRestoreLimits && state.faceSavedXMin === null && state.faceSavedXMax === null){
+              state.faceSavedXMin = state.xMinDia;
+              state.faceSavedXMax = state.xMaxDia;
+            } else if(state.mode === 'THREADING'){
+              if(state.threadSkimVerify){
+                state.threadSkimStage = 'SKIMMING';
+                state.threadCurrentPass = 0;
+                state.pass = 'SKIM';
+                setStatusMsg('THREADING STAGE 1/2: EXECUTING SKIM PASS AT PRE-TURN OD');
+              } else {
+                state.threadSkimStage = 'THREADING';
+                state.threadCurrentPass = 1;
+                state.pass = '01 / ' + (state.threadPassCount < 10 ? '0' : '') + state.threadPassCount;
+                setStatusMsg('THREADING: PASS 01 OF ' + state.threadPassCount);
+              }
+            }
+            state.runState = 'running';
+            if(state.mode !== 'THREADING') setStatusMsg('CYCLE STARTED: ' + state.mode + ' ACTIVE');
+          } else {
+            stopCycle(true);
+            return;
+          }
+          syncSpindleSimulation();
+          render();
+        });
 
-    $('btnStop').addEventListener('click', function(){
-      if(window.nanoelsClient){
-        window.nanoelsClient.stopCycle();
+        bStop.addEventListener('click', function(){
+          if(window.nanoelsClient){
+            window.nanoelsClient.stopCycle();
+          }
+          if(window.Alpine && Alpine.store('machine')){
+            Alpine.store('machine').isOn = false;
+          }
+          if(state.runState !== 'stopped'){
+            stopCycle(true);
+          }
+        });
       }
-      if(state.runState !== 'stopped'){
-        stopCycle(true);
-      }
-    });
+    }
   }
 
   function stopCycle(manualStop){
     state.runState = 'stopped';
+    if(window.Alpine && Alpine.store('machine')){
+      Alpine.store('machine').isOn = false;
+    }
     
     // Auto-restore limit if opt-in was active
     if(state.mode === 'TURNING' && state.turnRestoreLimits && (state.turnSavedZMin !== null || state.turnSavedZMax !== null)){
@@ -1503,27 +1529,31 @@
   }
 
   function render(){
-    $('zValue').textContent = lenStr(state.z);
-    renderLimitChip('lim-zMin', 'zLeft');
-    renderLimitChip('lim-zMax', 'zRight');
+    var hasAlpine = window.Alpine && Alpine.store('machine');
+    if(!hasAlpine){
+      $('zValue').textContent = lenStr(state.z);
+      renderLimitChip('lim-zMin', 'zLeft');
+      renderLimitChip('lim-zMax', 'zRight');
 
-    var isDia = state.xRep === 'diameter';
-    var xVal = isDia ? state.xDia : state.xDia / 2;
-    var glyphClass = isDia ? 'dia' : 'rad';
-    var glyphChar = isDia ? 'Ø' : 'R';
-    $('xValue').innerHTML = '<span class="dia-glyph ' + glyphClass + '">' + glyphChar + '</span>' + lenStr(xVal);
-    renderLimitChip('lim-xMaxDia', 'xRight');
-    renderLimitChip('lim-xMinDia', 'xLeft');
-    $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
-    $('repBadge').className = 'chip-sm rep-toggle tap ' + (isDia ? 'is-dia' : 'is-rad');
+      var isDia = state.xRep === 'diameter';
+      var xVal = isDia ? state.xDia : state.xDia / 2;
+      var glyphClass = isDia ? 'dia' : 'rad';
+      var glyphChar = isDia ? 'Ø' : 'R';
+      $('xValue').innerHTML = '<span class="dia-glyph ' + glyphClass + '">' + glyphChar + '</span>' + lenStr(xVal);
+      renderLimitChip('lim-xMaxDia', 'xRight');
+      renderLimitChip('lim-xMinDia', 'xLeft');
+      $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
+      $('repBadge').className = 'chip-sm rep-toggle tap ' + (isDia ? 'is-dia' : 'is-rad');
 
-    $('stepValue').textContent = getActiveJogStepDisplay();
+      $('stepValue').textContent = getActiveJogStepDisplay();
 
-    if(state.spindleCycle === 0){ $('spindleValue').textContent = fmt(state.rpm,0); $('spindleUnit').textContent = 'RPM'; }
-    else if(state.spindleCycle === 1){ $('spindleValue').textContent = fmt(state.turns,2); $('spindleUnit').textContent = 'TURNS'; }
-    else { $('spindleValue').textContent = fmt(state.angle,1); $('spindleUnit').textContent = '°'; }
+      if(state.spindleCycle === 0){ $('spindleValue').textContent = fmt(state.rpm,0); $('spindleUnit').textContent = 'RPM'; }
+      else if(state.spindleCycle === 1){ $('spindleValue').textContent = fmt(state.turns,2); $('spindleUnit').textContent = 'TURNS'; }
+      else { $('spindleValue').textContent = fmt(state.angle,1); $('spindleUnit').textContent = '°'; }
 
-    $('modeName').textContent = state.mode + (state.runState === 'running' ? ' 🔒' : '');
+      $('modeName').textContent = state.mode + (state.runState === 'running' ? ' 🔒' : '');
+    }
+
     $('modeHead').classList.toggle('locked', state.runState === 'running');
     $('modeBody').innerHTML = modeBodyHTML();
     bindModeEvents();
@@ -1531,17 +1561,19 @@
     renderDynamicDeck();
     updateJogAntiTrap();
 
-    var sp = $('statusPill');
-    if(isFeeding()){
-      sp.className = 'pill running'; sp.innerHTML = '<span class="dot"></span>FEEDING';
-    } else if(state.runState === 'running' && !state.spindleSimRunning && (state.mode!=='GEARBOX'||state.gearboxMode==='SYNC')){
-      sp.className = 'pill paused'; sp.innerHTML = '<span class="dot"></span>ARMED (WAIT)';
-    } else {
-      sp.className = 'pill stopped'; sp.innerHTML = '<span class="dot"></span>STOPPED';
-    }
+    if(!hasAlpine){
+      var sp = $('statusPill');
+      if(isFeeding()){
+        sp.className = 'pill running'; sp.innerHTML = '<span class="dot"></span>FEEDING';
+      } else if(state.runState === 'running' && !state.spindleSimRunning && (state.mode!=='GEARBOX'||state.gearboxMode==='SYNC')){
+        sp.className = 'pill paused'; sp.innerHTML = '<span class="dot"></span>ARMED (WAIT)';
+      } else {
+        sp.className = 'pill stopped'; sp.innerHTML = '<span class="dot"></span>STOPPED';
+      }
 
-    $('unitToggle').textContent = state.unit;
-    $('device').classList.toggle('is-running', state.runState === 'running');
+      $('unitToggle').textContent = state.unit;
+      $('device').classList.toggle('is-running', state.runState === 'running');
+    }
   }
 
   // Header Handlers
@@ -1551,6 +1583,9 @@
       window.nanoelsClient.cycleMeasure();
     }
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
+    if(window.Alpine && Alpine.store('machine')){
+      Alpine.store('machine').measure = state.unit === 'in' ? 1 : 0;
+    }
     render(); 
   });
   $('settingsBtn').addEventListener('click', function(){ 
@@ -1689,11 +1724,17 @@
       window.nanoelsClient.toggleDiaRad();
     }
     state.xRep = state.xRep === 'diameter' ? 'radius' : 'diameter';
+    if(window.Alpine && Alpine.store('machine')){
+      Alpine.store('machine').dia = state.xRep === 'diameter';
+    }
     render();
   });
 
   $('spindleBox').addEventListener('click', function(){
     state.spindleCycle = (state.spindleCycle + 1) % 3;
+    if(window.Alpine && Alpine.store('machine')){
+      Alpine.store('machine').spindleMode = state.spindleCycle;
+    }
     if(state.spindleCycle === 0) state.spindleSimRunning = !state.spindleSimRunning;
     syncSpindleSimulation();
     render();
@@ -1719,6 +1760,11 @@
       }
       var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
       state.stepIdx = (state.stepIdx + 1) % maxLen;
+      var curVal = state.unit === 'mm' ? JOG_STEPS_MM[state.stepIdx] : JOG_STEPS_IN[state.stepIdx];
+      var stepDu = Math.round((state.unit === 'in' ? curVal * 254000 : curVal * 10000));
+      if(window.Alpine && Alpine.store('machine')){
+        Alpine.store('machine').jogStepDu = stepDu;
+      }
       render();
     }
   });
@@ -3749,14 +3795,18 @@
 
         // --- Fast Path: Canonical Deci-Microns & Authoritative Intent ---
         if(data.canonical && (data.canonical.zDu !== undefined || data.canonical.dupr !== undefined)){
+          if(window.Alpine && Alpine.store('machine')){
+            Alpine.store('machine').updateFromCanonical(data.canonical);
+          }
           var c = data.canonical;
+          state.unit = c.measure === 1 ? 'in' : 'mm';
           state.z = c.zDu / 10000.0;
           state.xRep = c.dia ? 'diameter' : 'radius';
           state.xDia = (c.xDu / 10000.0) * (c.dia ? 2.0 : 1.0);
           state.rpm = c.rpm;
           state.turns = c.turns;
           state.angle = c.angle;
-          state.runState = c.on ? 'running' : 'stopped';
+          state.runState = (c.on || c.isOn) ? 'running' : 'stopped';
           state.step = c.jogStepDu / 10000.0;
           state.feedStep = c.feedStepDu / 10000.0;
 
