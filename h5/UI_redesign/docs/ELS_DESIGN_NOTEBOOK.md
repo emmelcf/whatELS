@@ -940,10 +940,41 @@ When the operator taps `START CYCLE` on the Companion Display in `TAPER` mode:
 * Telemetry packets with `UI.status=ON` and `UI.mode=CONE` are recognized as expected cycle execution passes.
 * The UI remains locked in `TAPER` mode, presenting the real-time pass monitor (`PASS 02 / 06`, current cut depth) with all setup fields locked out.
 
+
 ### 4. Multi-Client Coexistence Edge Case
 When multiple companion displays are attached to the same ESP32:
 * If Client A initiates an automated `TAPER` cycle, raw telemetry broadcast over WebSocket contains `UI.mode=CONE` and `UI.status=ON`.
 * Client B (which did not initiate the cycle) follows Trigger A and displays `GEARBOX (Z+X)` cutting a live pass.
 * **Safety Invariant**: Client B still accurately displays the tool cutting an angled feed, displays real-time DRO coordinates, and maintains a fully operational, high-priority `STOP` button capable of terminating motion instantly. Future firmware updates can optionally broadcast `UI.cycle=TAPER` for distributed multi-screen canned cycle synchronization.
+
+---
+
+## 27. Travel Limit Envelopes: Distance-To-Boundary & Vector Stop Indicator Standard
+
+### 1. Conceptual Disconnect & Firmware Architecture
+In benchtop electronic leadscrews like NanoELS, software limits (`leftStop`, `rightStop`) are fundamentally **work envelope boundaries** for multi-pass turning, facing, and threading cycles. 
+
+In stock NanoELS firmware ([docs/h5.ino](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/h5.ino)), the stop values broadcast over telemetry (`UI.zLeft`, `UI.zRight`, `UI.xLeft`, `UI.xRight`) and displayed on the Nextion hardware are **distances remaining from the current tool position to the limit**, not absolute machine coordinates:
+$$\text{zStopLeft} = \text{stepsToDu}(z.\text{leftStop} - z.\text{pos})$$
+$$\text{zStopRight} = \text{stepsToDu}(z.\text{pos} - z.\text{rightStop})$$
+
+Previously, the Web UI prototype erroneously added these distances to the carriage position (`state.z + data.zRight`), producing arbitrary coordinate readouts (e.g. `16.881`) that clashed with the physical Nextion screen (`5.843`).
+
+### 2. The Ergonomic Decision: Distance-to-Boundary
+1. **Immediate Apron Utility**: At the lathe apron, an operator does not want to read an axis position of `-18.426`, look at a limit chip of `-24.269`, and perform mental subtraction during rapid feed. A distance readout of **`5.843`** counting down to `0.000` is immediately actionable.
+2. **Direct Synergy with Mode Dimensions**: In `TURNING`, `FACING`, and `THREADING`, the operator enters a `LENGTH` or `STROKE` (e.g. `25.000 mm`). That length is identical to the distance between the envelope stops.
+3. **1:1 Mirror of Nextion**: The Web UI, Nextion screen, and WebSocket telemetry stream show identical numbers with zero rounding or synchronization drift.
+
+### 3. Vector Stop Indicators: Arrow-Into-Wall
+To remove ambiguity between travel direction and stop location, all four limit chips render dedicated vector SVG icons where the arrow points **in the direction of carriage travel, hitting the boundary wall bar at the tip**:
+* **Z Left (Chuck side)**: Vertical wall bar on the left with arrow pointing left into it (`|←`)
+* **Z Right (Tailstock side)**: Vertical wall bar on the right with arrow pointing right into it (`→|`)
+* **X Inward (Center / Into cut)**: Horizontal ceiling bar on top with arrow pointing up into it (`⤒`)
+* **X Outward (Retract / Clearance)**: Horizontal floor bar on bottom with arrow pointing down into it (`⭳`)
+
+### 4. Interactive Behaviors & Arrival Feedback
+* **Active Display**: Left chip renders `|← 23.574`; right chip renders `14.426 →|`.
+* **At Limit ($0.000$)**: When distance $\le 0.001\text{ mm}$, the chip illuminates amber (`.at-limit`) and the corresponding DPAD jog direction is automatically blocked with `.limit-blocked` visual feedback.
+* **Manual Entry**: Tapping "SET DISTANCE…" opens the keypad and inputs the stroke distance from the current carriage position, directly aligning with the controller firmware numpad convention (`// Treat newDu as a relative distance from current position`).
 
 

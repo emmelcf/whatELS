@@ -105,12 +105,21 @@
   .chip-sm {
     border: 1px solid var(--line); background: #12181d; border-radius: 4px; padding: 6px 10px;
     font-size: 13px; color: var(--fg); min-height: 38px; display: inline-flex; align-items: center; justify-content: center;
-    min-width: 82px; font-weight: 600;
+    min-width: 82px; font-weight: 600; gap: 4px;
   }
   .chip-sm.rep-toggle { min-width: 68px; font-weight: 700; letter-spacing: .4px; font-size: 12.5px; }
   .chip-sm.rep-toggle.is-dia { color: var(--blue); border-color: #234058; background: var(--blue-bg); }
   .chip-sm.rep-toggle.is-rad { color: var(--amber); border-color: #583e1c; background: #26190b; }
   .chip-sm.empty-limit { color: var(--dimmer); border-style: dashed; }
+  .chip-sm.at-limit {
+    color: var(--amber); border-color: #583e1c; background: #26190b;
+    box-shadow: 0 0 6px rgba(255, 180, 84, 0.25);
+  }
+  .lim-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--dim); flex-shrink: 0;
+  }
+  .chip-sm.at-limit .lim-icon { color: var(--amber); }
 
   /* CENTER COLUMN: Mode-Adaptive Dynamic Action Deck + Jog Cluster */
   .col-jog {
@@ -1291,8 +1300,8 @@
               <div class="axis-value mono tap" id="zValue">-18.426</div>
             </div>
             <div class="axis-meta">
-              <span class="chip-sm mono tap" id="lim-zMin" data-bound="zMin">-42.000</span>
-              <span class="chip-sm mono tap" id="lim-zMax" data-bound="zMax">-4.000</span>
+              <span class="chip-sm mono tap" id="lim-zMin" data-bound="zLeft"></span>
+              <span class="chip-sm mono tap" id="lim-zMax" data-bound="zRight"></span>
             </div>
           </div>
 
@@ -1302,9 +1311,9 @@
               <div class="axis-value mono tap" id="xValue"><span class="dia-glyph dia">Ø</span>26.438</div>
             </div>
             <div class="axis-meta">
-              <span class="chip-sm mono tap" id="lim-xMaxDia" data-bound="xMaxDia">Ø28.000</span>
+              <span class="chip-sm mono tap" id="lim-xMaxDia" data-bound="xRight"></span>
               <span class="chip-sm rep-toggle tap is-dia" id="repBadge">Ø DIA</span>
-              <span class="chip-sm mono tap" id="lim-xMinDia" data-bound="xMinDia">Ø23.800</span>
+              <span class="chip-sm mono tap" id="lim-xMinDia" data-bound="xLeft"></span>
             </div>
           </div>
         </div>
@@ -1810,8 +1819,18 @@
   var state = {
     unit: 'mm',
     xRep: 'diameter',
-    z: -18.426, zMin: -42.000, zMax: -4.000,
-    xDia: 26.438, xMinDia: 23.800, xMaxDia: null,
+    z: -18.426,
+    zLeft: null, zRight: null,
+    xDia: 26.438,
+    xLeft: null, xRight: null,
+    get zMin(){ return this.zLeft !== null ? +(this.z - this.zLeft).toFixed(3) : null; },
+    set zMin(v){ this.zLeft = (v !== null) ? Math.max(0, +(this.z - v).toFixed(3)) : null; },
+    get zMax(){ return this.zRight !== null ? +(this.z + this.zRight).toFixed(3) : null; },
+    set zMax(v){ this.zRight = (v !== null) ? Math.max(0, +(v - this.z).toFixed(3)) : null; },
+    get xMinDia(){ return this.xLeft !== null ? +(this.xDia - this.xLeft).toFixed(3) : null; },
+    set xMinDia(v){ this.xLeft = (v !== null) ? Math.max(0, +(this.xDia - v).toFixed(3)) : null; },
+    get xMaxDia(){ return this.xRight !== null ? +(this.xDia + this.xRight).toFixed(3) : null; },
+    set xMaxDia(v){ this.xRight = (v !== null) ? Math.max(0, +(v - this.xDia).toFixed(3)) : null; },
     steps: [1.000, 0.100, 0.010], stepIdx: 2,
     spindleSimRunning: false,
     rpm: 0, turns: 0, angle: 0, spindleCycle: 0,
@@ -2139,11 +2158,60 @@
     }
   }
 
+  function getLimitIconSVG(type){
+    var stroke = 'currentColor';
+    if(type === 'zLeft'){
+      // Wall on left, arrow pointing left into wall: |←
+      return '<svg width="12" height="12" viewBox="0 0 12 12" class="lim-icon" style="stroke:' + stroke + ';fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;"><line x1="2" y1="1.5" x2="2" y2="10.5"/><line x1="10.5" y1="6" x2="3.5" y2="6"/><polyline points="6.5 3 3.5 6 6.5 9"/></svg>';
+    }
+    if(type === 'zRight'){
+      // Wall on right, arrow pointing right into wall: →|
+      return '<svg width="12" height="12" viewBox="0 0 12 12" class="lim-icon" style="stroke:' + stroke + ';fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;"><line x1="10" y1="1.5" x2="10" y2="10.5"/><line x1="1.5" y1="6" x2="8.5" y2="6"/><polyline points="5.5 3 8.5 6 5.5 9"/></svg>';
+    }
+    if(type === 'xLeft'){
+      // Bar at top (centerline), arrow pointing UP into bar: ⤒
+      return '<svg width="12" height="12" viewBox="0 0 12 12" class="lim-icon" style="stroke:' + stroke + ';fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;"><line x1="1.5" y1="2" x2="10.5" y2="2"/><line x1="6" y1="10.5" x2="6" y2="3.5"/><polyline points="3 6.5 6 3.5 9 6.5"/></svg>';
+    }
+    if(type === 'xRight'){
+      // Bar at bottom (retract), arrow pointing DOWN into bar: ⭳
+      return '<svg width="12" height="12" viewBox="0 0 12 12" class="lim-icon" style="stroke:' + stroke + ';fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;"><line x1="1.5" y1="10" x2="10.5" y2="10"/><line x1="6" y1="1.5" x2="6" y2="8.5"/><polyline points="3 5.5 6 8.5 9 5.5"/></svg>';
+    }
+    return '';
+  }
+
   function limitText(bound){
     var v = state[bound];
-    if(v === null) return 'SET LIMIT';
-    if(bound==='zMin' || bound==='zMax') return lenStr(v);
-    return 'Ø' + lenStr(v);
+    if(v === null) return 'SET';
+    var prefix = (bound === 'xLeft' || bound === 'xRight') && state.xRep === 'diameter' ? 'Ø' : '';
+    return prefix + lenStr(Math.abs(v));
+  }
+
+  function renderLimitChip(elemId, bound){
+    var el = $(elemId);
+    if(!el) return;
+    var v = state[bound];
+    var isUnset = (v === null);
+    var isAtLimit = (!isUnset && Math.abs(v) <= 0.001);
+    el.classList.toggle('empty-limit', isUnset);
+    el.classList.toggle('at-limit', isAtLimit);
+
+    var icon = getLimitIconSVG(bound);
+    if(isUnset){
+      if(bound === 'zLeft' || bound === 'xLeft'){
+        el.innerHTML = icon + '<span>SET</span>';
+      } else {
+        el.innerHTML = '<span>SET</span>' + icon;
+      }
+      return;
+    }
+
+    var numStr = lenStr(Math.abs(v));
+    var prefix = ((bound === 'xLeft' || bound === 'xRight') && state.xRep === 'diameter') ? 'Ø' : '';
+    if(bound === 'zLeft' || bound === 'xLeft'){
+      el.innerHTML = icon + '<span>' + prefix + numStr + '</span>';
+    } else {
+      el.innerHTML = '<span>' + prefix + numStr + '</span>' + icon;
+    }
   }
 
   function isFeeding(){
@@ -2208,21 +2276,25 @@
 
   function recalcTurnLimits(){
     if(state.turnDir === 'CHUCK'){
-      state.zMin = +(state.z - state.turnLength).toFixed(3);
-      setStatusMsg('DIMENSION APPLIED: Z-MIN LIMIT SET TO ' + lenStr(state.zMin) + ' (CHUCK SHOULDER)');
+      state.zLeft = state.turnLength;
+      state.zRight = 0.000;
+      setStatusMsg('ENVELOPE APPLIED: CHUCK SHOULDER SET TO ' + lenStr(state.zLeft) + ' ' + unitLabel());
     } else {
-      state.zMax = +(state.z + state.turnLength).toFixed(3);
-      setStatusMsg('DIMENSION APPLIED: Z-MAX LIMIT SET TO ' + lenStr(state.zMax) + ' (TAIL SHOULDER)');
+      state.zRight = state.turnLength;
+      state.zLeft = 0.000;
+      setStatusMsg('ENVELOPE APPLIED: TAIL SHOULDER SET TO ' + lenStr(state.zRight) + ' ' + unitLabel());
     }
   }
 
   function recalcFaceLimits(){
     if(state.faceDir === 'CENTER'){
-      state.xMinDia = Math.max(0, +(state.xDia - state.faceStroke).toFixed(3));
-      setStatusMsg('DIMENSION APPLIED: X-MIN LIMIT SET TO Ø' + lenStr(state.xMinDia) + ' (CENTER STOP)');
+      state.xLeft = state.faceStroke;
+      state.xRight = 0.000;
+      setStatusMsg('ENVELOPE APPLIED: CENTER STOP SET TO ' + lenStr(state.xLeft) + ' ' + unitLabel());
     } else {
-      state.xMaxDia = +(state.xDia + state.faceStroke).toFixed(3);
-      setStatusMsg('DIMENSION APPLIED: X-MAX LIMIT SET TO Ø' + lenStr(state.xMaxDia) + ' (CLEARANCE STOP)');
+      state.xRight = state.faceStroke;
+      state.xLeft = 0.000;
+      setStatusMsg('ENVELOPE APPLIED: RETRACT STOP SET TO ' + lenStr(state.xRight) + ' ' + unitLabel());
     }
   }
 
@@ -3209,42 +3281,42 @@
   }
 
   function updateJogAntiTrap(){
-    var eps = 0.0005;
-    var atZMin = (state.zMin !== null && state.z <= (state.zMin + eps));
-    var atZMax = (state.zMax !== null && state.z >= (state.zMax - eps));
-    var atXMin = (state.xMinDia !== null && state.xDia <= (state.xMinDia + eps));
-    var atXMax = (state.xMaxDia !== null && state.xDia >= (state.xMaxDia - eps));
+    var eps = 0.001;
+    var atZLeft  = (state.zLeft  !== null && state.zLeft  <= eps);
+    var atZRight = (state.zRight !== null && state.zRight <= eps);
+    var atXLeft  = (state.xLeft  !== null && state.xLeft  <= eps);
+    var atXRight = (state.xRight !== null && state.xRight <= eps);
 
     var btnLeft = document.querySelector('.dpad .btn.left-a');   // Z- (Chuck)
     var btnRight = document.querySelector('.dpad .btn.right-a'); // Z+ (Tail)
     var btnUp = document.querySelector('.dpad .btn.up');         // X- (To Center)
     var btnDown = document.querySelector('.dpad .btn.down');     // X+ (Retract)
 
-    if(btnLeft) btnLeft.classList.toggle('limit-blocked', atZMin);
-    if(btnRight) btnRight.classList.toggle('limit-blocked', atZMax);
-    if(btnUp) btnUp.classList.toggle('limit-blocked', atXMin);
-    if(btnDown) btnDown.classList.toggle('limit-blocked', atXMax);
+    if(btnLeft) btnLeft.classList.toggle('limit-blocked', atZLeft);
+    if(btnRight) btnRight.classList.toggle('limit-blocked', atZRight);
+    if(btnUp) btnUp.classList.toggle('limit-blocked', atXLeft);
+    if(btnDown) btnDown.classList.toggle('limit-blocked', atXRight);
 
-    // NW: Z- and X- (Into cut / To Center). Blocked if at Z-Min OR X-Min.
-    // SE: Z+ and X+ (Retract). Blocked if at Z-Max OR X-Max.
+    // NW: Z- and X- (Into cut / To Center). Blocked if at Z-Left OR X-Left.
+    // SE: Z+ and X+ (Retract). Blocked if at Z-Right OR X-Right.
     var btnNw = document.querySelector('.chamfer-btn[data-diag="nw"]');
     var btnSe = document.querySelector('.chamfer-btn[data-diag="se"]');
-    if(btnNw) btnNw.classList.toggle('limit-blocked', atZMin || atXMin);
-    if(btnSe) btnSe.classList.toggle('limit-blocked', atZMax || atXMax);
+    if(btnNw) btnNw.classList.toggle('limit-blocked', atZLeft || atXLeft);
+    if(btnSe) btnSe.classList.toggle('limit-blocked', atZRight || atXRight);
   }
 
   function render(){
     $('zValue').textContent = lenStr(state.z);
-    $('lim-zMin').textContent = limitText('zMin'); $('lim-zMin').classList.toggle('empty-limit', state.zMin===null);
-    $('lim-zMax').textContent = limitText('zMax'); $('lim-zMax').classList.toggle('empty-limit', state.zMax===null);
+    renderLimitChip('lim-zMin', 'zLeft');
+    renderLimitChip('lim-zMax', 'zRight');
 
     var isDia = state.xRep === 'diameter';
     var xVal = isDia ? state.xDia : state.xDia / 2;
     var glyphClass = isDia ? 'dia' : 'rad';
     var glyphChar = isDia ? 'Ø' : 'R';
     $('xValue').innerHTML = '<span class="dia-glyph ' + glyphClass + '">' + glyphChar + '</span>' + lenStr(xVal);
-    $('lim-xMaxDia').textContent = limitText('xMaxDia'); $('lim-xMaxDia').classList.toggle('empty-limit', state.xMaxDia===null);
-    $('lim-xMinDia').textContent = limitText('xMinDia'); $('lim-xMinDia').classList.toggle('empty-limit', state.xMinDia===null);
+    renderLimitChip('lim-xMaxDia', 'xRight');
+    renderLimitChip('lim-xMinDia', 'xLeft');
     $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
     $('repBadge').className = 'chip-sm rep-toggle tap ' + (isDia ? 'is-dia' : 'is-rad');
 
@@ -3442,13 +3514,20 @@
   });
 
   // Soft Limit Overlay
-  var limitLabels = { zMin:'Z MIN (CHUCK) LIMIT', zMax:'Z MAX (TAIL) LIMIT', xMaxDia:'X OUTER LIMIT', xMinDia:'X INNER LIMIT' };
+  var limitLabels = { zLeft:'Z CHUCK LIMIT', zRight:'Z TAIL LIMIT', xLeft:'X CENTER LIMIT', xRight:'X RETRACT LIMIT' };
   var limitTarget = null;
   function openLimitOverlay(bound){
     if(state.runState === 'running') return;
     limitTarget = bound;
-    $('limitOverlayTitle').textContent = limitLabels[bound];
-    $('limitOverlayValue').textContent = limitText(bound) + (state[bound]!==null ? ' '+unitLabel() : '');
+    $('limitOverlayTitle').textContent = limitLabels[bound] || 'ENVELOPE LIMIT';
+    var curVal = state[bound];
+    var icon = getLimitIconSVG(bound);
+    if(curVal !== null){
+      var prefix = (bound === 'xLeft' || bound === 'xRight') && state.xRep === 'diameter' ? 'Ø' : '';
+      $('limitOverlayValue').innerHTML = icon + ' ' + prefix + lenStr(Math.abs(curVal)) + ' ' + unitLabel();
+    } else {
+      $('limitOverlayValue').innerHTML = '—';
+    }
     $('limitOverlay').classList.add('show');
   }
   document.querySelectorAll('.chip-sm[data-bound]').forEach(function(el){
@@ -3457,11 +3536,11 @@
   $('limitCancelBtn').addEventListener('click', function(){ $('limitOverlay').classList.remove('show'); });
   $('limitSetBtn').addEventListener('click', function(){
     if(window.nanoelsClient){
-      var isZ = (limitTarget === 'zMin' || limitTarget === 'zMax');
-      var isMin = (limitTarget === 'zMin' || limitTarget === 'xMinDia');
+      var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
+      var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
       window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
     }
-    if(limitTarget==='zMin' || limitTarget==='zMax') state[limitTarget] = state.z; else state[limitTarget] = state.xDia;
+    state[limitTarget] = 0.000;
     $('limitOverlay').classList.remove('show'); render();
   });
   $('limitManualBtn').addEventListener('click', function(){
@@ -3471,8 +3550,8 @@
   });
   $('limitClearBtn').addEventListener('click', function(){ 
     if(window.nanoelsClient){
-      var isZ = (limitTarget === 'zMin' || limitTarget === 'zMax');
-      var isMin = (limitTarget === 'zMin' || limitTarget === 'xMinDia');
+      var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
+      var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
       window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
     }
     state[limitTarget] = null; $('limitOverlay').classList.remove('show'); render(); 
@@ -3484,13 +3563,13 @@
     var axis = btn.dataset.axis, dir = parseInt(btn.dataset.dir,10);
     var isPressed = false;
     function isBlocked(){
-      var eps = 0.0005;
+      var eps = 0.001;
       if(axis === 'z'){
-        if(dir === -1 && state.zMin !== null && state.z <= (state.zMin + eps)) return 'Z MIN (CHUCK)';
-        if(dir === 1 && state.zMax !== null && state.z >= (state.zMax - eps)) return 'Z MAX (TAIL)';
+        if(dir === -1 && state.zLeft !== null && state.zLeft <= eps) return 'Z CHUCK LIMIT';
+        if(dir === 1 && state.zRight !== null && state.zRight <= eps) return 'Z TAIL LIMIT';
       } else {
-        if(dir === 1 && state.xMinDia !== null && state.xDia <= (state.xMinDia + eps)) return 'X MIN (CENTER)';
-        if(dir === -1 && state.xMaxDia !== null && state.xDia >= (state.xMaxDia - eps)) return 'X MAX (CLEARANCE)';
+        if(dir === 1 && state.xLeft !== null && state.xLeft <= eps) return 'X CENTER LIMIT';
+        if(dir === -1 && state.xRight !== null && state.xRight <= eps) return 'X RETRACT LIMIT';
       }
       return null;
     }
@@ -3501,11 +3580,26 @@
         return;
       }
       var stepMm = getActiveJogStepMm();
-      if(axis==='z'){ state.z = clamp(state.z + dir*stepMm, state.zMin, state.zMax); }
-      else { 
+      if(axis==='z'){
+        state.z += dir * stepMm;
+        if(dir === -1){
+          if(state.zLeft !== null) state.zLeft = Math.max(0, +(state.zLeft - stepMm).toFixed(4));
+          if(state.zRight !== null) state.zRight = +(state.zRight + stepMm).toFixed(4);
+        } else {
+          if(state.zRight !== null) state.zRight = Math.max(0, +(state.zRight - stepMm).toFixed(4));
+          if(state.zLeft !== null) state.zLeft = +(state.zLeft + stepMm).toFixed(4);
+        }
+      } else { 
         // dir=1 is UP (To Center, diameter decreases), dir=-1 is DOWN (Retract, diameter increases)
         var xDelta = (dir === 1 ? -1 : 1) * stepMm;
-        state.xDia = clamp(state.xDia + xDelta, state.xMinDia, state.xMaxDia); 
+        state.xDia += xDelta;
+        if(dir === 1){
+          if(state.xLeft !== null) state.xLeft = Math.max(0, +(state.xLeft - stepMm).toFixed(4));
+          if(state.xRight !== null) state.xRight = +(state.xRight + stepMm).toFixed(4);
+        } else {
+          if(state.xRight !== null) state.xRight = Math.max(0, +(state.xRight - stepMm).toFixed(4));
+          if(state.xLeft !== null) state.xLeft = +(state.xLeft + stepMm).toFixed(4);
+        }
       }
       render();
     }
@@ -3547,11 +3641,11 @@
     var xDir = diag==='nw' ? -1 : 1;
     var isPressed = false;
     function isBlocked(){
-      var eps = 0.0005;
-      if(zDir === -1 && state.zMin !== null && state.z <= (state.zMin + eps)) return 'Z MIN (CHUCK)';
-      if(zDir === 1 && state.zMax !== null && state.z >= (state.zMax - eps)) return 'Z MAX (TAIL)';
-      if(xDir === -1 && state.xMinDia !== null && state.xDia <= (state.xMinDia + eps)) return 'X MIN (CENTER)';
-      if(xDir === 1 && state.xMaxDia !== null && state.xDia >= (state.xMaxDia - eps)) return 'X MAX (CLEARANCE)';
+      var eps = 0.001;
+      if(zDir === -1 && state.zLeft !== null && state.zLeft <= eps) return 'Z CHUCK LIMIT';
+      if(zDir === 1 && state.zRight !== null && state.zRight <= eps) return 'Z TAIL LIMIT';
+      if(xDir === -1 && state.xLeft !== null && state.xLeft <= eps) return 'X CENTER LIMIT';
+      if(xDir === 1 && state.xRight !== null && state.xRight <= eps) return 'X RETRACT LIMIT';
       return null;
     }
     function doStep(){
@@ -3561,8 +3655,22 @@
         return;
       }
       var stepMm = getActiveJogStepMm();
-      state.z = clamp(state.z + zDir*stepMm, state.zMin, state.zMax);
-      state.xDia = clamp(state.xDia + xDir*stepMm, state.xMinDia, state.xMaxDia);
+      state.z += zDir * stepMm;
+      if(zDir === -1){
+        if(state.zLeft !== null) state.zLeft = Math.max(0, +(state.zLeft - stepMm).toFixed(4));
+        if(state.zRight !== null) state.zRight = +(state.zRight + stepMm).toFixed(4);
+      } else {
+        if(state.zRight !== null) state.zRight = Math.max(0, +(state.zRight - stepMm).toFixed(4));
+        if(state.zLeft !== null) state.zLeft = +(state.zLeft + stepMm).toFixed(4);
+      }
+      state.xDia += xDir * stepMm;
+      if(xDir === -1){
+        if(state.xLeft !== null) state.xLeft = Math.max(0, +(state.xLeft - stepMm).toFixed(4));
+        if(state.xRight !== null) state.xRight = +(state.xRight + stepMm).toFixed(4);
+      } else {
+        if(state.xRight !== null) state.xRight = Math.max(0, +(state.xRight - stepMm).toFixed(4));
+        if(state.xLeft !== null) state.xLeft = +(state.xLeft + stepMm).toFixed(4);
+      }
       render();
     }
     function start(e){
@@ -5427,20 +5535,16 @@
 
         // 4. Soft Limits (Firmware publishes relative distance to stops; empty string if unset)
         if(data.zLeft !== undefined){
-          if(data.zLeft === '') state.zMin = null;
-          else state.zMin = state.z - (Math.abs(parseFloat(data.zLeft)) * scale);
+          state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
         }
         if(data.zRight !== undefined){
-          if(data.zRight === '') state.zMax = null;
-          else state.zMax = state.z + (Math.abs(parseFloat(data.zRight)) * scale);
+          state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
         }
         if(data.xLeft !== undefined){
-          if(data.xLeft === '') state.xMinDia = null;
-          else state.xMinDia = state.xDia - (Math.abs(parseFloat(data.xLeft)) * scale * 2);
+          state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
         }
         if(data.xRight !== undefined){
-          if(data.xRight === '') state.xMaxDia = null;
-          else state.xMaxDia = state.xDia + (Math.abs(parseFloat(data.xRight)) * scale * 2);
+          state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
         }
 
         // 5. Controller Operating Mode Mapping
