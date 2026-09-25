@@ -888,16 +888,16 @@ void adjustPitch(bool plus) {
   bool minus = !plus;
   long currentDupr = nextDuprFlag ? nextDupr : dupr;
   if (measure != MEASURE_TPI) {
-    long delta = moveStep > 0 ? moveStep : (measure == MEASURE_METRIC ? MOVE_STEP_3 : MOVE_STEP_IMP_3);
+    long delta = feedStepDu > 0 ? feedStepDu : (measure == MEASURE_METRIC ? FEED_STEP_2 : FEED_STEP_IMP_3);
     long normalizedDupr = normalizePitch(currentDupr);
     if (minus && currentDupr > -DUPR_MAX) {
-      setDupr(max(-DUPR_MAX, normalizedDupr - delta));
+      setFeedrateDupr(max(-DUPR_MAX, normalizedDupr - delta), false);
     } else if (plus && currentDupr < DUPR_MAX) {
-      setDupr(min(DUPR_MAX, normalizedDupr + delta));
+      setFeedrateDupr(min(DUPR_MAX, normalizedDupr + delta), false);
     }
   } else { // TPI
     if (currentDupr == 0) {
-      setDupr(plus ? 1 : -1);
+      setFeedrateDupr(plus ? 1 : -1, false);
     } else {
       long currentTpi = round(254000.0 / currentDupr);
       long tpi = currentTpi + (plus ? 1 : -1);
@@ -906,7 +906,11 @@ void adjustPitch(bool plus) {
         newDupr += plus ? -1 : 1;
       }
       if (newDupr != currentDupr && newDupr < DUPR_MAX && newDupr > -DUPR_MAX) {
-        setDupr(newDupr);
+        setFeedrateTpi((float)abs(tpi), false);
+        if (newDupr < 0) {
+          setDupr(newDupr);
+          currentThreadSetting.dupr = newDupr;
+        }
       }
     }
   }

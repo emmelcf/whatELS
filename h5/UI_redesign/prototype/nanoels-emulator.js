@@ -18,8 +18,14 @@ class NanoelsEmulator {
     this.mode = 'GEAR';      // GEAR, XGEAR, TURN, FACE, CONE, CUT, SLOT, THREAD, ASYNC, JOY
     this.measure = 'MM';     // MM, IN, TPI
     this.dupr = 15000;       // Pitch in deci-microns (1.5mm = 15000 du)
-    this.moveStep = 1000;    // Manual step in deci-microns (0.1mm = 1000 du)
+    this.moveStep = 10000;   // Jog step in deci-microns (1.0mm = 10000 du)
+    this.feedStepDu = 500;   // Feed step in deci-microns (0.05mm/rev = 500 du)
     this.starts = 1;
+    this.thFmt = 0;          // 0: Metric, 1: TPI, 2: Inch
+    this.thPitch = 1.5;      // Author value
+    this.tpMode = 0;         // 0: Ratio, 1: Angle, 2: Preset
+    this.tpVal = 20.0;       // Author value (e.g. 1:20)
+    this.tpPreset = 0;
     this.coneRatio = 0.0500;
     this.turnPasses = 5;
     this.currentPass = 1;
@@ -96,7 +102,112 @@ class NanoelsEmulator {
       return;
     }
 
-    // 2. WebUI Action Command: @<actionCode>:<state>
+    // 2. Canonical CMD.* Handlers
+    if (line.startsWith('CMD.')) {
+      const cmd = line.substring(4);
+      if (cmd.startsWith('feedDupr=')) {
+        this.dupr = parseInt(cmd.substring(9), 10) || 0;
+      } else if (cmd.startsWith('feedMm=')) {
+        this.thPitch = parseFloat(cmd.substring(7)) || 0;
+        this.thFmt = 0;
+        this.dupr = Math.round(this.thPitch * 10000);
+      } else if (cmd.startsWith('feedTpi=')) {
+        this.thPitch = parseFloat(cmd.substring(8)) || 0;
+        this.thFmt = 1;
+        this.dupr = this.thPitch > 0 ? Math.round(254000.0 / this.thPitch) : 0;
+      } else if (cmd.startsWith('feedInch=')) {
+        this.thPitch = parseFloat(cmd.substring(9)) || 0;
+        this.thFmt = 2;
+        this.dupr = Math.round(this.thPitch * 254000.0);
+      } else if (cmd === 'feedRev') {
+        this.dupr = -this.dupr;
+      } else if (cmd.startsWith('feedStepDu=')) {
+        this.feedStepDu = parseInt(cmd.substring(11), 10) || 500;
+      } else if (cmd === 'feedStepCycle') {
+        if (this.feedStepDu === 100) this.feedStepDu = 500;
+        else if (this.feedStepDu === 500) this.feedStepDu = 1000;
+        else if (this.feedStepDu === 1000) this.feedStepDu = 2000;
+        else this.feedStepDu = 100;
+      } else if (cmd.startsWith('jogStepDu=')) {
+        this.moveStep = parseInt(cmd.substring(10), 10) || 10000;
+      } else if (cmd.startsWith('taperRatio=')) {
+        this.tpVal = parseFloat(cmd.substring(11)) || 1.0;
+        this.tpMode = 0;
+        this.coneRatio = 1.0 / this.tpVal;
+      } else if (cmd.startsWith('taperAngle=')) {
+        this.tpVal = parseFloat(cmd.substring(11)) || 0.0;
+        this.tpMode = 1;
+        this.coneRatio = 2.0 * Math.tan(this.tpVal * (Math.PI / 180.0));
+      } else if (cmd.startsWith('axisZero=')) {
+        const ax = cmd.substring(9).toUpperCase();
+        if (ax === 'Z') { this.zOrigin += this.z; this.z = 0; }
+        if (ax === 'X') { this.xOrigin += this.x; this.x = 0; }
+      } else if (cmd.startsWith('axisPosDu=')) {
+        const parts = cmd.substring(10).split(',');
+        const ax = parts[0].toUpperCase();
+        const du = parseInt(parts[1], 10) || 0;
+        if (ax === 'Z') this.z = du;
+        if (ax === 'X') this.x = du;
+      } else if (cmd.startsWith('axisLimitDu=')) {
+        const parts = cmd.substring(12).split(',');
+        const ax = parts[0].toUpperCase();
+        const isLeft = parts[1] === '1';
+        const du = parseInt(parts[2], 10);
+        if (ax === 'Z') { if (isLeft) this.zLeft = du; else this.zRight = du; }
+        if (ax === 'X') { if (isLeft) this.xLeft = du; else this.xRight = du; }
+      } else if (cmd.startsWith('axisClearLimit=')) {
+        const parts = cmd.substring(15).split(',');
+        const ax = parts[0].toUpperCase();
+        const isLeft = parts[1] === '1';
+        if (ax === 'Z') { if (isLeft) this.zLeft = null; else this.zRight = null; }
+        if (ax === 'X') { if (isLeft) this.xLeft = null; else this.xRight = null; }
+      } else if (cmd.startsWith('mode=')) {
+        const m = parseInt(cmd.substring(5), 10);
+        const modeMap = ['GEAR', 'XGEAR', 'ASYNC', 'CONE', 'TURN', 'FACE', 'CUT', 'THREAD', 'ELLIPSE', 'GCODE', 'Y', 'JOYSTICK', 'SLOT'];
+        if (modeMap[m]) this.mode = modeMap[m];
+      } else if (cmd.startsWith('on=')) {
+        this.isOn = cmd.substring(3) === '1';
+        if (this.isOn) this.spindleRunning = true;
+      }
+      this._lastTelemetryStr = '';
+      return;
+    }
+
+    // 2. Direct Pitch Commands: @pitch:<val> or @dupr:<val>
+    if (line.startsWith('@pitch:') || line.startsWith('@pitch=')) {
+      const valStr = line.substring(7).trim();
+      const hasSign = valStr.startsWith('-') || valStr.startsWith('+');
+      const val = parseFloat(valStr);
+      if (!isNaN(val) && Math.abs(val) > 0.00001) {
+        let du = Math.round(Math.abs(val) * 10000);
+        if (hasSign) {
+          if (val < 0) du = -du;
+        } else if (this.dupr < 0) {
+          du = -du;
+        }
+        this.dupr = du;
+        this._lastTelemetryStr = '';
+      }
+      return;
+    }
+    if (line.startsWith('@dupr:') || line.startsWith('@dupr=')) {
+      const valStr = line.substring(6).trim();
+      const hasSign = valStr.startsWith('-') || valStr.startsWith('+');
+      const val = parseInt(valStr, 10);
+      if (!isNaN(val) && Math.abs(val) > 0) {
+        let du = Math.abs(val);
+        if (hasSign) {
+          if (val < 0) du = -du;
+        } else if (this.dupr < 0) {
+          du = -du;
+        }
+        this.dupr = du;
+        this._lastTelemetryStr = '';
+      }
+      return;
+    }
+
+    // 3. WebUI Action Command: @<actionCode>:<state>
     if (line.startsWith('@')) {
       const sep = line.indexOf(':') !== -1 ? ':' : (line.indexOf('=') !== -1 ? '=' : ',');
       if (sep !== -1) {
@@ -311,15 +422,44 @@ class NanoelsEmulator {
       `UI.diameter=${this.isDiameterMode ? '1' : '0'}\n` +
       `UI.xLeft=${xLeftStr}\n` +
       `UI.xRight=${xRightStr}\n` +
-      `UI.z=${zMm}\n` +
-      `UI.zLeft=${zLeftStr}\n` +
-      `UI.zRight=${zRightStr}\n` +
-      `UI.message=${msg}\n`;
+    const canonicalTelemetry =
+      `M.mode=${this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)))}\n` +
+      `M.on=${this.isOn ? 1 : 0}\n` +
+      `M.estop=0\n` +
+      `M.dupr=${this.dupr}\n` +
+      `M.nextDupr=${this.dupr}\n` +
+      `M.thFmt=${this.thFmt}\n` +
+      `M.thPitch=${this.thPitch}\n` +
+      `M.tpMode=${this.tpMode}\n` +
+      `M.tpVal=${this.tpVal}\n` +
+      `M.coneRatio=${this.coneRatio}\n` +
+      `M.tpPreset=${this.tpPreset}\n` +
+      `M.feedStepDu=${this.feedStepDu}\n` +
+      `M.jogStepDu=${this.moveStep}\n` +
+      `M.measure=${this.measure === 'MM' ? 0 : (this.measure === 'IN' ? 1 : 2)}\n` +
+      `M.zDu=${Math.round(this.z)}\n` +
+      `M.xDu=${Math.round(this.x)}\n` +
+      `M.yDu=0\n` +
+      `M.zLeftDu=${this.zLeft !== null ? Math.round(this.zLeft) : 2147483647}\n` +
+      `M.zRightDu=${this.zRight !== null ? Math.round(this.zRight) : -2147483648}\n` +
+      `M.xUpDu=${this.xLeft !== null ? Math.round(this.xLeft) : 2147483647}\n` +
+      `M.xDownDu=${this.xRight !== null ? Math.round(this.xRight) : -2147483648}\n` +
+      `M.rpm=${Math.round(this.rpm)}\n` +
+      `M.turns=${this.turns.toFixed(1)}\n` +
+      `M.angle=${this.angle.toFixed(1)}\n` +
+      `M.dia=${this.isDiameterMode ? 1 : 0}\n` +
+      `M.abs=1\n` +
+      `M.zDro=0\n` +
+      `M.xDro=0\n` +
+      `M.starts=${this.starts}\n` +
+      `M.passes=${this.turnPasses}\n`;
 
-    if (telemetry !== this._lastTelemetryStr) {
-      this._lastTelemetryStr = telemetry;
+    const fullTelemetry = canonicalTelemetry + telemetry;
+
+    if (fullTelemetry !== this._lastTelemetryStr) {
+      this._lastTelemetryStr = fullTelemetry;
       this._lastBroadcastTime = now;
-      this._emitRaw(telemetry);
+      this._emitRaw(fullTelemetry);
     }
   }
 

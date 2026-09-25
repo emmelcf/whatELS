@@ -18,7 +18,7 @@ class NanoelsService extends EventTarget {
     this.activeHolds = new Set();
     this.reconnectTimer = null;
 
-    // Normalized controller state
+    // Normalized controller state (UI display strings)
     this.state = {
       connected: false,
       backend: this.mode,
@@ -40,6 +40,45 @@ class NanoelsService extends EventTarget {
       zLeft: '', zRight: '',
       message: '',
       version: 'Unknown'
+    };
+
+    // Authoritative Canonical State (Integers / Deci-microns / Pure Intent)
+    this.canonical = {
+      mode: 0,
+      on: false,
+      estop: 0,
+      dupr: 0,
+      nextDupr: 0,
+      thFmt: 0,           // 0: Metric, 1: TPI, 2: Inch
+      thPitch: 0.0,       // Operator authoring value
+      tpMode: 0,          // 0: Ratio, 1: Angle, 2: Preset
+      tpVal: 1.0,         // Operator authoring value
+      coneRatio: 1.0,     // Kinematic ratio
+      tpPreset: 0,
+      feedStepDu: 500,    // Deci-microns (0.05 mm/rev)
+      jogStepDu: 10000,   // Deci-microns (1.0 mm)
+      measure: 0,
+      zDu: 0,
+      xDu: 0,
+      yDu: 0,
+      zLeftDu: 2147483647,
+      zRightDu: -2147483648,
+      xUpDu: 2147483647,
+      xDownDu: -2147483648,
+      zDis: false,
+      xDis: false,
+      yDis: false,
+      dia: true,
+      abs: true,
+      zDro: false,
+      xDro: false,
+      rpm: 0,
+      turns: 0,
+      angle: 0,
+      starts: 1,
+      passes: 1,
+      opIdx: 0,
+      setupIdx: 0
     };
 
     // Action Code Mapping (from docs/h5.ino)
@@ -290,6 +329,72 @@ class NanoelsService extends EventTarget {
   reversePitch() { this.pulseAction(this.ACTIONS.B_REVERSE, 'Reverse Pitch Sign'); }
   nudgePitch(plus) { this.pulseAction(plus ? this.ACTIONS.B_PLUS : this.ACTIONS.B_MINUS, plus ? 'Pitch +' : 'Pitch -'); }
 
+  // --- Canonical 4-Layer Command APIs ---
+  setFeedDupr(du) {
+    if (du === undefined || isNaN(du)) return;
+    this.sendRaw(`CMD.feedDupr=${Math.round(du)}\n`, `Set Feedrate ${du} du`);
+  }
+  setFeedMm(pitchMm) {
+    if (!pitchMm || isNaN(pitchMm)) return;
+    this.sendRaw(`CMD.feedMm=${pitchMm}\n`, `Set Metric Pitch ${pitchMm} mm`);
+  }
+  setFeedTpi(tpi) {
+    if (!tpi || isNaN(tpi)) return;
+    this.sendRaw(`CMD.feedTpi=${tpi}\n`, `Set Thread ${tpi} TPI`);
+  }
+  setFeedInch(pitchInch) {
+    if (!pitchInch || isNaN(pitchInch)) return;
+    this.sendRaw(`CMD.feedInch=${pitchInch}\n`, `Set Imperial Pitch ${pitchInch} in`);
+  }
+  reverseFeed() {
+    this.sendRaw(`CMD.feedRev\n`, `Reverse Feed Direction`);
+  }
+  setFeedStepDu(stepDu) {
+    if (!stepDu || isNaN(stepDu)) return;
+    this.sendRaw(`CMD.feedStepDu=${Math.round(stepDu)}\n`, `Set Feed Step ${stepDu} du`);
+  }
+  cycleFeedStep() {
+    this.sendRaw(`CMD.feedStepCycle\n`, `Cycle Feed Step`);
+  }
+  setJogStepDu(stepDu) {
+    if (!stepDu || isNaN(stepDu)) return;
+    this.sendRaw(`CMD.jogStepDu=${Math.round(stepDu)}\n`, `Set Jog Step ${stepDu} du`);
+  }
+  setTaperRatio(ratioK) {
+    if (!ratioK || isNaN(ratioK)) return;
+    this.sendRaw(`CMD.taperRatio=${ratioK}\n`, `Set Taper Ratio 1:${ratioK}`);
+  }
+  setTaperAngle(deg) {
+    if (deg === undefined || isNaN(deg)) return;
+    this.sendRaw(`CMD.taperAngle=${deg}\n`, `Set Taper Angle ${deg}°`);
+  }
+  setTaperPreset(presetId, deg, ratioVal) {
+    this.sendRaw(`CMD.taperPreset=${presetId || 0},${deg || 0},${ratioVal || 0}\n`, `Set Taper Preset #${presetId}`);
+  }
+  setAxisZero(axis) {
+    this.sendRaw(`CMD.axisZero=${axis.toUpperCase()}\n`, `Zero Axis ${axis}`);
+  }
+  setAxisPosDu(axis, posDu) {
+    this.sendRaw(`CMD.axisPosDu=${axis.toUpperCase()},${Math.round(posDu)}\n`, `Preset Axis ${axis} to ${posDu} du`);
+  }
+  setAxisLimitDu(axis, isLeftOrUp, limitDu) {
+    this.sendRaw(`CMD.axisLimitDu=${axis.toUpperCase()},${isLeftOrUp ? 1 : 0},${Math.round(limitDu)}\n`, `Set Limit ${axis}`);
+  }
+  clearAxisLimit(axis, isLeftOrUp) {
+    this.sendRaw(`CMD.axisClearLimit=${axis.toUpperCase()},${isLeftOrUp ? 1 : 0}\n`, `Clear Limit ${axis}`);
+  }
+  setOperatingMode(modeId) {
+    this.sendRaw(`CMD.mode=${modeId}\n`, `Set Operating Mode ${modeId}`);
+  }
+  setControllerOn(isOn) {
+    this.sendRaw(`CMD.on=${isOn ? 1 : 0}\n`, `Controller ${isOn ? 'ON' : 'OFF'}`);
+  }
+
+  // Backward-compatible Pitch / Feedrate setters
+  setPitch(pitchMm) {
+    this.setFeedMm(pitchMm);
+  }
+
   // Mode Selection
   setMode(modeKey) {
     const action = this.ACTIONS[`B_MODE_${modeKey.toUpperCase()}`];
@@ -312,10 +417,28 @@ class NanoelsService extends EventTarget {
       const line = raw.trim();
       if (!line) continue;
 
+      const isM = line.startsWith('M.');
       const isUI = line.startsWith('UI.');
       const isGrbl = line.startsWith('<') && line.endsWith('>');
 
-      if (isUI) {
+      if (isM) {
+        telemetryLines.push(line);
+        const idx = line.indexOf('=');
+        if (idx !== -1) {
+          const key = line.substring(2, idx);
+          const val = line.substring(idx + 1);
+          if (key in this.canonical) {
+            if (typeof this.canonical[key] === 'boolean') {
+              this.canonical[key] = val === '1' || val === 'true';
+            } else if (typeof this.canonical[key] === 'number') {
+              this.canonical[key] = parseFloat(val);
+            } else {
+              this.canonical[key] = val;
+            }
+            telemetryChanged = true;
+          }
+        }
+      } else if (isUI) {
         telemetryLines.push(line);
         const idx = line.indexOf('=');
         if (idx !== -1) {
@@ -369,7 +492,7 @@ class NanoelsService extends EventTarget {
     }
 
     if (telemetryChanged) {
-      this._emit('telemetry', { ...this.state });
+      this._emit('telemetry', { ...this.state, canonical: { ...this.canonical } });
       if (this.logStatusPushes) {
         const summary = `Z: ${this.state.z} mm | X: ${this.state.x} mm | ${this.state.rpm} RPM | ${this.state.status}`;
         this._logPacket('RX', summary, { ...this.state }, telemetryLines.join('\n'));

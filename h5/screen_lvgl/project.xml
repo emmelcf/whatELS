@@ -1,7 +1,0 @@
-<project>
-    <!-- Configure included UI folders for the LVGL Editor -->
-    <folders>
-        <folder path="./components" />
-        <folder path="./screens" />
-    </folders>
-</project>

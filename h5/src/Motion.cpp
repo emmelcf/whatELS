@@ -33,6 +33,10 @@ int gcodeProgramCount = 0;
 String gcodeProgram = "";
 int gcodeProgramCharIndex = 0;
 
+ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
+TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
+long feedStepDu = FEED_STEP_2;
+
 static long auxSafeDistance = 0;
 static long startOffset = 0;
 static bool timerAttached = false;
@@ -191,11 +195,14 @@ void reset() {
   setDupr(0);
   setStarts(1);
   moveStep = MOVE_STEP_1;
+  feedStepDu = FEED_STEP_2;
   setModeFromTask(MODE_NORMAL);
   measure = MEASURE_METRIC;
   showTacho = false;
   showAngle = false;
   setConeRatio(1);
+  currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
+  currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
   auxForward = true;
 }
 
@@ -1317,3 +1324,182 @@ void taskGcode(void *param) {
   }
   vTaskDelete(NULL);
 }
+
+// --- Kinematic Core Domain APIs ---
+
+bool setFeedrateDupr(long duprVal, bool preserveDirection) {
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duprVal = -abs(duprVal);
+  }
+  long absDu = abs(duprVal);
+  if (measure == MEASURE_METRIC) {
+    currentThreadSetting.format = THREAD_METRIC;
+    currentThreadSetting.authorPitch = absDu / 10000.0f;
+  } else if (measure == MEASURE_TPI) {
+    currentThreadSetting.format = THREAD_TPI;
+    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
+  } else {
+    currentThreadSetting.format = THREAD_INCH;
+    currentThreadSetting.authorPitch = absDu / 254000.0f;
+  }
+  currentThreadSetting.dupr = duprVal;
+  setDupr(duprVal);
+  return true;
+}
+
+bool setFeedrateMm(float pitchMm, bool preserveDirection) {
+  long duVal = (long)round(pitchMm * 10000.0f);
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_METRIC;
+  currentThreadSetting.authorPitch = pitchMm;
+  currentThreadSetting.dupr = duVal;
+  setDupr(duVal);
+  return true;
+}
+
+bool setFeedrateTpi(float tpi, bool preserveDirection) {
+  long duVal = (tpi > 0.0f) ? (long)round(254000.0 / (double)tpi) : 0;
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_TPI;
+  currentThreadSetting.authorPitch = tpi;
+  currentThreadSetting.dupr = duVal;
+  setDupr(duVal);
+  return true;
+}
+
+bool setFeedrateInch(float pitchInch, bool preserveDirection) {
+  long duVal = (long)round(pitchInch * 254000.0f);
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_INCH;
+  currentThreadSetting.authorPitch = pitchInch;
+  currentThreadSetting.dupr = duVal;
+  setDupr(duVal);
+  return true;
+}
+
+bool reverseFeedDirection() {
+  long current = nextDuprFlag ? nextDupr : dupr;
+  long reversed = -current;
+  setDupr(reversed);
+  currentThreadSetting.dupr = reversed;
+  return true;
+}
+
+ThreadSetting getThreadSetting() {
+  return currentThreadSetting;
+}
+
+bool setTaperRatio(float ratioK) {
+  if (ratioK <= 0.0f) return false;
+  float cone = 1.0f / ratioK;
+  currentTaperSetting.modeType = TAPER_RATIO;
+  currentTaperSetting.authorVal = ratioK;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = 0;
+  setConeRatio(cone);
+  return true;
+}
+
+bool setTaperAngle(float angleDeg) {
+  float rad = angleDeg * 0.017453292519943295f;
+  float cone = 2.0f * tanf(rad);
+  currentTaperSetting.modeType = TAPER_ANGLE;
+  currentTaperSetting.authorVal = angleDeg;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = 0;
+  setConeRatio(cone);
+  return true;
+}
+
+bool setTaperPreset(int presetIdx, float angleDeg, float ratioVal) {
+  float cone = 0.0f;
+  float author = 0.0f;
+  if (ratioVal > 0.0f) {
+    cone = 1.0f / ratioVal;
+    author = ratioVal;
+  } else {
+    float rad = angleDeg * 0.017453292519943295f;
+    cone = 2.0f * tanf(rad);
+    author = angleDeg;
+  }
+  currentTaperSetting.modeType = TAPER_PRESET;
+  currentTaperSetting.authorVal = author;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = presetIdx;
+  setConeRatio(cone);
+  return true;
+}
+
+TaperSetting getTaperSetting() {
+  return currentTaperSetting;
+}
+
+bool setAxisZero(Axis* a) {
+  if (!a) return false;
+  markAxis0(a);
+  return true;
+}
+
+bool setAxisPositionDu(Axis* a, long posDu) {
+  if (!a) return false;
+  long targetSteps = duToSteps(a, posDu);
+  a->originPos = targetSteps - a->pos;
+  return true;
+}
+
+bool setAxisLimitDu(Axis* a, bool isLeftOrUp, long limitDu) {
+  if (!a) return false;
+  long stopSteps = duToSteps(a, limitDu) - a->originPos;
+  if (isLeftOrUp) {
+    setLeftStop(a, stopSteps);
+  } else {
+    setRightStop(a, stopSteps);
+  }
+  return true;
+}
+
+bool clearAxisLimit(Axis* a, bool isLeftOrUp) {
+  if (!a) return false;
+  if (isLeftOrUp) {
+    setLeftStop(a, LONG_MAX);
+  } else {
+    setRightStop(a, LONG_MIN);
+  }
+  return true;
+}
+
+bool setOperatingMode(int newMode) {
+  setModeFromUi(newMode, false);
+  return true;
+}
+
+bool setFeedStepDu(long stepDu) {
+  if (stepDu <= 0) return false;
+  feedStepDu = stepDu;
+  return true;
+}
+
+long getFeedStepDu() {
+  return feedStepDu;
+}
+
+void cycleFeedStep() {
+  if (measure == MEASURE_METRIC) {
+    if (feedStepDu == FEED_STEP_1) feedStepDu = FEED_STEP_2;
+    else if (feedStepDu == FEED_STEP_2) feedStepDu = FEED_STEP_3;
+    else if (feedStepDu == FEED_STEP_3) feedStepDu = FEED_STEP_4;
+    else feedStepDu = FEED_STEP_1;
+  } else {
+    if (feedStepDu == FEED_STEP_IMP_1) feedStepDu = FEED_STEP_IMP_2;
+    else if (feedStepDu == FEED_STEP_IMP_2) feedStepDu = FEED_STEP_IMP_3;
+    else if (feedStepDu == FEED_STEP_IMP_3) feedStepDu = FEED_STEP_IMP_4;
+    else feedStepDu = FEED_STEP_IMP_1;
+  }
+}
+

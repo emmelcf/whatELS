@@ -5,7 +5,12 @@
 		},
 		{
 			"path": "h5"
+		},
+		{
+			"path": "h5/screen_lvgl"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"terminal.integrated.automationProfile.linux": {}
+	}
 }

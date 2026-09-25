@@ -1,9 +1,10 @@
 {
-    "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf",
     "files.associations": {
         "*.html.h": "html"
     },
+    "C_Cpp.intelliSenseEngine": "disabled",
     "clangd.arguments": [
-        "--query-driver=**"
+        "--query-driver=**",
+        "--compile-commands-dir=${workspaceFolder}"
     ]
 }

@@ -202,7 +202,7 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 
 #define LCD_HASH_INITIAL -3845709
 
-// Step sizes
+// Step sizes (Jogging)
 #define MOVE_STEP_1 10000 // 1mm
 #define MOVE_STEP_2 1000  // 0.1mm
 #define MOVE_STEP_3 100   // 0.01mm
@@ -210,6 +210,17 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define MOVE_STEP_IMP_1 25400 // 1/10"
 #define MOVE_STEP_IMP_2 2540  // 1/100"
 #define MOVE_STEP_IMP_3 254   // 1/1000"
+
+// Feed step sizes (Chip-load / feed rate adjustment)
+#define FEED_STEP_1 100   // 0.01mm/rev
+#define FEED_STEP_2 500   // 0.05mm/rev
+#define FEED_STEP_3 1000  // 0.10mm/rev
+#define FEED_STEP_4 2000  // 0.20mm/rev
+
+#define FEED_STEP_IMP_1 25   // 0.001"/rev
+#define FEED_STEP_IMP_2 51   // 0.002"/rev
+#define FEED_STEP_IMP_3 127  // 0.005"/rev
+#define FEED_STEP_IMP_4 254  // 0.010"/rev
 
 // Lathe modes
 #define MODE_NORMAL 0

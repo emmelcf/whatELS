@@ -5,6 +5,8 @@
 #include "Input.h"
 #include "Display.h"
 #include "Motion.h"
+#include "CommandDispatcher.h"
+#include "RichClientAdapter.h"
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
@@ -368,6 +370,11 @@ void publishMachineStatus(const String& status, const String& modeText, const St
     bool isDiameterMode, bool isAbsoluteMode, bool xIsDroActive, bool zIsDroActive) {
   if (!webBuffersReady || !webUiIsConnected()) return;
 
+  // Broadcast Canonical Telemetry (Layer 2 / Layer 3)
+  if (RichClientAdapter::hasStateChanged() || machineStatusForcePublish) {
+    queueWebSocketText(RichClientAdapter::buildTelemetry());
+  }
+
   String response = "";
   response.reserve(600);
   appendUiLine(&response, "UI.status", status);
@@ -566,15 +573,14 @@ void updateWebUiMoveWatchdog(byte actionCode, bool isPress) {
 }
 
 static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
-  if (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) {
-    String response = "SYSINFO.version=" CONTROLLER_VERSION_TEXT "\n";
-    response += "SYSINFO.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
-    response += "SYSINFO.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
-    response += "SYSINFO.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
-    queueWebSocketText(response);
+  // First, delegate to CommandDispatcher for all domain and system commands
+  String reply = "";
+  if (CommandDispatcher::dispatch((const char*)payload, length, &reply)) {
+    machineStatusForcePublish = true;
     return true;
   }
 
+  // Next, try parsing as physical/virtual button event
   WebUiEvent event = {};
   String error = "";
   if (!parseWebUiEventCommand(payload, length, &event, &error)) {
