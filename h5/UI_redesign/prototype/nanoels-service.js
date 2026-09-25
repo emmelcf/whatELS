@@ -184,6 +184,7 @@ class NanoelsService extends EventTarget {
     this.state.connected = true;
     this._log('SYS', 'Emulator connected', 'Internal virtual ESP32 initialized');
     this._emit('connection', { connected: true, mode: 'emulator', host: 'Local Emulator' });
+    this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
     this.sendRaw('?sysinfo\n', 'Query emulator sysinfo');
   }
 
@@ -198,6 +199,7 @@ class NanoelsService extends EventTarget {
         this.state.connected = true;
         this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established');
         this._emit('connection', { connected: true, mode: 'live', host: this.host });
+        this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
         this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
       };
 
@@ -390,6 +392,10 @@ class NanoelsService extends EventTarget {
     this.sendRaw(`CMD.on=${isOn ? 1 : 0}\n`, `Controller ${isOn ? 'ON' : 'OFF'}`);
   }
 
+  queryState(domains = 'ALL') {
+    this.sendRaw(`?get=${domains}\n`, `Query state [${domains}]`);
+  }
+
   // Backward-compatible Pitch / Feedrate setters
   setPitch(pitchMm) {
     this.setFeedMm(pitchMm);
@@ -417,11 +423,15 @@ class NanoelsService extends EventTarget {
       const line = raw.trim();
       if (!line) continue;
 
+      const isDomainK = line.startsWith('K.');
+      const isDomainI = line.startsWith('I.');
+      const isDomainC = line.startsWith('C.');
+      const isDomainP = line.startsWith('P.');
       const isM = line.startsWith('M.');
       const isUI = line.startsWith('UI.');
       const isGrbl = line.startsWith('<') && line.endsWith('>');
 
-      if (isM) {
+      if (isDomainK || isDomainI || isDomainC || isDomainP || isM) {
         telemetryLines.push(line);
         const idx = line.indexOf('=');
         if (idx !== -1) {

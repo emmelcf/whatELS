@@ -83,7 +83,6 @@ class NanoelsEmulator {
     }
   }
 
-  _handleLine(line) {
     // 1. Direct Queries
     if (line === '?') {
       this._emitGrblStatus();
@@ -91,6 +90,10 @@ class NanoelsEmulator {
     }
     if (line === '?sysinfo') {
       this._emitSysInfo();
+      return;
+    }
+    if (line.startsWith('?get') || line === '?state' || line.startsWith('CMD.get=')) {
+      this._emitDomainQuery(line);
       return;
     }
     if (line === '!') {
@@ -105,6 +108,10 @@ class NanoelsEmulator {
     // 2. Canonical CMD.* Handlers
     if (line.startsWith('CMD.')) {
       const cmd = line.substring(4);
+      if (cmd.startsWith('get=')) {
+        this._emitDomainQuery(cmd);
+        return;
+      }
       if (cmd.startsWith('feedDupr=')) {
         this.dupr = parseInt(cmd.substring(9), 10) || 0;
       } else if (cmd.startsWith('feedMm=')) {
@@ -422,8 +429,16 @@ class NanoelsEmulator {
       `UI.diameter=${this.isDiameterMode ? '1' : '0'}\n` +
       `UI.xLeft=${xLeftStr}\n` +
       `UI.xRight=${xRightStr}\n` +
+    const modeInt = this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)));
+    const zLeftVal = this.zLeft !== null ? Math.round(this.zLeft) : 2147483647;
+    const zRightVal = this.zRight !== null ? Math.round(this.zRight) : -2147483648;
+    const xUpVal = this.xLeft !== null ? Math.round(this.xLeft) : 2147483647;
+    const xDownVal = this.xRight !== null ? Math.round(this.xRight) : -2147483648;
+
+    const domainTelemetry = this._buildDomainTelemetry(0x0F);
+
     const canonicalTelemetry =
-      `M.mode=${this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)))}\n` +
+      `M.mode=${modeInt}\n` +
       `M.on=${this.isOn ? 1 : 0}\n` +
       `M.estop=0\n` +
       `M.dupr=${this.dupr}\n` +
@@ -440,10 +455,10 @@ class NanoelsEmulator {
       `M.zDu=${Math.round(this.z)}\n` +
       `M.xDu=${Math.round(this.x)}\n` +
       `M.yDu=0\n` +
-      `M.zLeftDu=${this.zLeft !== null ? Math.round(this.zLeft) : 2147483647}\n` +
-      `M.zRightDu=${this.zRight !== null ? Math.round(this.zRight) : -2147483648}\n` +
-      `M.xUpDu=${this.xLeft !== null ? Math.round(this.xLeft) : 2147483647}\n` +
-      `M.xDownDu=${this.xRight !== null ? Math.round(this.xRight) : -2147483648}\n` +
+      `M.zLeftDu=${zLeftVal}\n` +
+      `M.zRightDu=${zRightVal}\n` +
+      `M.xUpDu=${xUpVal}\n` +
+      `M.xDownDu=${xDownVal}\n` +
       `M.rpm=${Math.round(this.rpm)}\n` +
       `M.turns=${this.turns.toFixed(1)}\n` +
       `M.angle=${this.angle.toFixed(1)}\n` +
@@ -454,13 +469,95 @@ class NanoelsEmulator {
       `M.starts=${this.starts}\n` +
       `M.passes=${this.turnPasses}\n`;
 
-    const fullTelemetry = canonicalTelemetry + telemetry;
+    const fullTelemetry = domainTelemetry + canonicalTelemetry + telemetry;
 
     if (fullTelemetry !== this._lastTelemetryStr) {
       this._lastTelemetryStr = fullTelemetry;
       this._lastBroadcastTime = now;
       this._emitRaw(fullTelemetry);
     }
+  }
+
+  _buildDomainTelemetry(domainMask = 0x0F) {
+    let out = '';
+    const modeInt = this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)));
+    const zLeftVal = this.zLeft !== null ? Math.round(this.zLeft) : 2147483647;
+    const zRightVal = this.zRight !== null ? Math.round(this.zRight) : -2147483648;
+    const xUpVal = this.xLeft !== null ? Math.round(this.xLeft) : 2147483647;
+    const xDownVal = this.xRight !== null ? Math.round(this.xRight) : -2147483648;
+
+    if (domainMask & 0x01) { // Kinematics (K)
+      out += `K.zDu=${Math.round(this.z)}\n` +
+             `K.xDu=${Math.round(this.x)}\n` +
+             `K.yDu=0\n` +
+             `K.zLeftDu=${zLeftVal}\n` +
+             `K.zRightDu=${zRightVal}\n` +
+             `K.xUpDu=${xUpVal}\n` +
+             `K.xDownDu=${xDownVal}\n` +
+             `K.zDis=0\n` +
+             `K.xDis=0\n` +
+             `K.yDis=0\n` +
+             `K.rpm=${Math.round(this.rpm)}\n` +
+             `K.turns=${this.turns.toFixed(1)}\n` +
+             `K.angle=${this.angle.toFixed(1)}\n` +
+             `K.mode=${modeInt}\n` +
+             `K.on=${this.isOn ? 1 : 0}\n` +
+             `K.estop=0\n` +
+             `K.dupr=${this.dupr}\n` +
+             `K.nextDupr=${this.dupr}\n`;
+    }
+    if (domainMask & 0x02) { // Intent (I)
+      out += `I.thFmt=${this.thFmt}\n` +
+             `I.thPitch=${this.thPitch}\n` +
+             `I.dupr=${this.dupr}\n` +
+             `I.tpMode=${this.tpMode}\n` +
+             `I.tpVal=${this.tpVal}\n` +
+             `I.coneRatio=${this.coneRatio}\n` +
+             `I.tpPreset=${this.tpPreset}\n` +
+             `I.feedStepDu=${this.feedStepDu}\n` +
+             `I.jogStepDu=${this.moveStep}\n` +
+             `I.feedRev=${this.dupr < 0 ? 1 : 0}\n`;
+    }
+    if (domainMask & 0x04) { // Cycle (C)
+      out += `C.passes=${this.turnPasses}\n` +
+             `C.opIdx=${this.currentPass}\n` +
+             `C.setupIdx=0\n` +
+             `C.starts=${this.starts}\n`;
+    }
+    if (domainMask & 0x08) { // Properties (P)
+      out += `P.measure=${this.measure === 'MM' ? 0 : (this.measure === 'IN' ? 1 : 2)}\n` +
+             `P.dia=${this.isDiameterMode ? 1 : 0}\n` +
+             `P.abs=1\n` +
+             `P.zDro=0\n` +
+             `P.xDro=0\n` +
+             `P.screwZDu=40000\n` +
+             `P.screwXDu=40000\n` +
+             `P.motorStepsZ=800\n` +
+             `P.motorStepsX=800\n` +
+             `P.encoderPpr=2400\n`;
+    }
+    return out;
+  }
+
+  _emitDomainQuery(line) {
+    let q = line;
+    if (q.startsWith('?get=')) q = q.substring(5);
+    else if (q.startsWith('get=')) q = q.substring(4);
+    else if (q.startsWith('CMD.get=')) q = q.substring(8);
+    else if (q === '?state') q = 'ALL';
+
+    const tokens = q.toUpperCase().split(/[,;| ]+/);
+    let mask = 0;
+    for (const t of tokens) {
+      if (t === 'K' || t === 'KINEMATICS') mask |= 0x01;
+      else if (t === 'I' || t === 'INTENT') mask |= 0x02;
+      else if (t === 'C' || t === 'CYCLE') mask |= 0x04;
+      else if (t === 'P' || t === 'PROPERTIES' || t === 'PROPS') mask |= 0x08;
+      else if (t === 'ALL' || t === '*') mask |= 0x0F;
+    }
+    if (mask === 0) mask = 0x0F;
+    const resp = this._buildDomainTelemetry(mask);
+    this._emitRaw(resp);
   }
 
   _emitSysInfo() {
