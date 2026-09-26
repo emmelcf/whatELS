@@ -188,6 +188,7 @@ int getApproxRpm() {
   if (elapsedTime > 50000) {
     // RPM less than 10.
     spindleEncTimeDiffBulk = 0;
+    shownRpm = 0;
     return 0;
   }
   int rpm = 0;

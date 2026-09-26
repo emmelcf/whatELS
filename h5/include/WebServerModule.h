@@ -12,6 +12,7 @@ struct CircleBuffer {
   size_t head;
   size_t tail;
   size_t size;
+  SemaphoreHandle_t mutex;
 };
 
 extern CircleBuffer inBuffer;

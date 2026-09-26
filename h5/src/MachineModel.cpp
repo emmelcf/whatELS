@@ -4,6 +4,7 @@
 #include "Motion.h"
 #include "Input.h"
 #include "Display.h"
+#include "DisplayModel.h"
 #include <limits.h>
 
 static long getAxisCanonicalPosDu(Axis* a) {
@@ -37,7 +38,7 @@ KinematicsState MachineModel::captureKinematics() {
   k.zDisabled = z.disabled;
   k.xDisabled = x.disabled;
   k.yDisabled = y.disabled;
-  k.rpm = shownRpm;
+  k.rpm = getApproxRpm();
   k.turns = (ENCODER_PPR > 0) ? (spindlePos / ENCODER_PPR) : 0;
   k.angle = (ENCODER_PPR > 0) ? (abs(spindlePos) % ENCODER_PPR) * 3600 / ENCODER_PPR : 0;
   k.mode = mode;

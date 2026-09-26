@@ -70,6 +70,16 @@ bool bufferAvailable(CircleBuffer* b) {
 }
 
 bool writeBuffer(CircleBuffer* b, char c) {
+  if (b->mutex && xSemaphoreTake(b->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    bool ok = false;
+    if ((b->head + 1) % b->size != b->tail) {
+      b->buffer[b->head] = c;
+      b->head = (b->head + 1) % b->size;
+      ok = true;
+    }
+    xSemaphoreGive(b->mutex);
+    return ok;
+  }
   if ((b->head + 1) % b->size == b->tail) {
     return false;
   }
@@ -79,10 +89,25 @@ bool writeBuffer(CircleBuffer* b, char c) {
 }
 
 bool writeBuffer(CircleBuffer* b, const char* str) {
+  if (b->mutex && xSemaphoreTake(b->mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+    bool ok = true;
+    while (*str) {
+      if ((b->head + 1) % b->size == b->tail) {
+        ok = false;
+        break;
+      }
+      b->buffer[b->head] = *str++;
+      b->head = (b->head + 1) % b->size;
+    }
+    xSemaphoreGive(b->mutex);
+    return ok;
+  }
   while (*str) {
-    if (!writeBuffer(b, *str++)) {
+    if ((b->head + 1) % b->size == b->tail) {
       return false;
     }
+    b->buffer[b->head] = *str++;
+    b->head = (b->head + 1) % b->size;
   }
   return true;
 }
@@ -98,6 +123,15 @@ bool writeBuffer(CircleBuffer* b, float f, int precision) {
 }
 
 char shiftBuffer(CircleBuffer* b) {
+  if (b->mutex && xSemaphoreTake(b->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    char c = 0;
+    if (b->head != b->tail) {
+      c = b->buffer[b->tail];
+      b->tail = (b->tail + 1) % b->size;
+    }
+    xSemaphoreGive(b->mutex);
+    return c;
+  }
   if (b->head == b->tail) {
     return 0;
   }
@@ -111,11 +145,20 @@ void initBuffer(CircleBuffer* b, size_t size) {
   b->buffer = (char*)malloc(size);
   b->head = 0;
   b->tail = 0;
+  if (!b->mutex) {
+    b->mutex = xSemaphoreCreateMutex();
+  }
 }
 
 void clearBuffer(CircleBuffer* b) {
-  b->head = 0;
-  b->tail = 0;
+  if (b->mutex && xSemaphoreTake(b->mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+    b->head = 0;
+    b->tail = 0;
+    xSemaphoreGive(b->mutex);
+  } else {
+    b->head = 0;
+    b->tail = 0;
+  }
 }
 
 bool webUiIsConnected() {
@@ -372,38 +415,9 @@ void publishMachineStatus(const String& status, const String& modeText, const St
 
   // Broadcast Canonical Telemetry (Layer 2 / Layer 3)
   if (RichClientAdapter::hasStateChanged() || machineStatusForcePublish) {
-    queueWebSocketText(RichClientAdapter::buildTelemetry());
+    machineStatusForcePublish = false;
+    queueWebSocketText(RichClientAdapter::buildTelemetry(DOMAIN_ALL));
   }
-
-  String response = "";
-  response.reserve(600);
-  appendUiLine(&response, "UI.status", status);
-  appendUiLine(&response, "UI.mode", modeText);
-  appendUiLine(&response, "UI.pitch", pitchText);
-  appendUiLine(&response, "UI.measure", measureText);
-  appendUiLine(&response, "UI.step", stepText);
-  appendUiLine(&response, "UI.rpm", rpmText);
-  appendUiLine(&response, "UI.turns", turnsText);
-  appendUiLine(&response, "UI.angle", angleText);
-  appendUiLine(&response, "UI.x", xText);
-  appendUiLine(&response, "UI.diameter", isDiameterMode ? "1" : "0");
-  appendUiLine(&response, "UI.abs", isAbsoluteMode ? "1" : "0");
-  appendUiLine(&response, "UI.xDro", xIsDroActive ? "1" : "0");
-  appendUiLine(&response, "UI.zDro", zIsDroActive ? "1" : "0");
-  appendUiLine(&response, "UI.xLeft", xLeftText);
-  appendUiLine(&response, "UI.xRight", xRightText);
-  appendUiLine(&response, "UI.y", yText);
-  appendUiLine(&response, "UI.yLeft", yLeftText);
-  appendUiLine(&response, "UI.yRight", yRightText);
-  appendUiLine(&response, "UI.z", zText);
-  appendUiLine(&response, "UI.zLeft", zLeftText);
-  appendUiLine(&response, "UI.zRight", zRightText);
-  appendUiLine(&response, "UI.message", messageText);
-
-  if (!machineStatusForcePublish && response == lastMachineStatus) return;
-  machineStatusForcePublish = false;
-  lastMachineStatus = response;
-  queueWebSocketText(response);
 }
 
 static bool isWebUiActionCode(byte actionCode) {
@@ -579,7 +593,12 @@ static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
     if (reply.length() > 0) {
       queueWebSocketText(reply);
     }
-    machineStatusForcePublish = true;
+    bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
+                   (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
+                   (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0);
+    if (!isQuery) {
+      machineStatusForcePublish = true;
+    }
     return true;
   }
 
@@ -1600,7 +1619,7 @@ void taskWiFi(void *param) {
   }
 
   initBuffer(&inBuffer, 1024);
-  initBuffer(&outBuffer, 1024);
+  initBuffer(&outBuffer, 4096);
   webBuffersReady = true;
 
   registerWebRoutes();
@@ -1634,10 +1653,23 @@ void taskWiFi(void *param) {
 
     if (bufferAvailable(&outBuffer)) {
       String outData = "";
-      while (bufferAvailable(&outBuffer)) {
-        outData += shiftBuffer(&outBuffer);
+      if (outBuffer.mutex && xSemaphoreTake(outBuffer.mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        if (outBuffer.head != outBuffer.tail) {
+          outData.reserve(1024);
+          while (outBuffer.head != outBuffer.tail) {
+            outData += outBuffer.buffer[outBuffer.tail];
+            outBuffer.tail = (outBuffer.tail + 1) % outBuffer.size;
+          }
+        }
+        xSemaphoreGive(outBuffer.mutex);
+      } else if (!outBuffer.mutex) {
+        while (bufferAvailable(&outBuffer)) {
+          outData += shiftBuffer(&outBuffer);
+        }
       }
-      webSocket.broadcastTXT(outData);
+      if (outData.length() > 0) {
+        webSocket.broadcastTXT(outData);
+      }
     }
     taskYIELD();
   }

@@ -111,17 +111,59 @@ Static and machine-level hardware properties.
 
 ---
 
-## 3. Composable Client Endpoint Pipeline
+## 3. Composable Client Endpoint Pipeline & Multi-Client Architecture
 
-To allow any hardware transport to communicate with the core controller, communication is modeled as a 3-part pipeline ([`ClientEndpoint.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/ClientEndpoint.h)):
+To allow any hardware transport and multiple concurrent displays to communicate with the core controller, communication is modeled as a composable pipeline ([`ClientEndpoint.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/ClientEndpoint.h)):
 
-1. **`ITransport`**: Pure communication link (`send()`, `onReceive()`, `isConnected()`). Implementations: `WebSocketTransport`, `SerialTransport`, `SharedMemoryTransport`.
-2. **`ITelemetrySerializer`**: Encodes domain bitmasks into wire packets. Implemented by [`RichClientAdapter`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/RichClientAdapter.h) (emitting `K.*`, `I.*`, `C.*`, `P.*`).
-3. **`ICommandTranslator`**: Parses wire strings into atomic core method calls. Implemented by [`CommandDispatcher`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp).
+$$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$$
 
-This architecture decouples the network stack entirely from motion code:
-- WebSockets can fail or reconnect without interrupting stepper pulse generation.
-- A local LVGL display on the ESP32-S3 communicates via direct C++ function calls through the exact same `MachineModel` without serializing strings.
+1. **`ITransport`**: Pure I/O wire interface (`sendText()`, `sendBytes()`, `isConnected()`). Implementations: `WebSocketClientTransport`, `UartTransport`, `SharedMemoryTransport`.
+2. **`ITelemetrySerializer`**: Transforms internal `MachineModel` snapshots into wire protocols. Implementations: `RichClientAdapter` (Canonical `K.*`, `I.*`, `C.*`, `P.*`), `GrblSerializer` (`<Idle|...|FS:...>`), `DroSerializer` (minimal coordinates).
+3. **`ICommandTranslator`**: Parses inbound wire bytes into atomic controller method calls. Implemented by `CommandDispatcher` (Canonical `CMD.*`) or protocol-specific parsers.
+
+### 3.1 Smart Clients vs. Dumb Displays (Stateful Presenters)
+The client model accommodates both intelligent and protocol-constrained clients:
+
+* **Smart Clients (Web UI / Alpine Reactive Store)**:
+  - The client runs its own reactive state engine on its local CPU (browser).
+  - The controller's serializer is thin and stateless: it emits raw canonical data (`K.*`, `I.*`). The client formats units, diameters, and DOM elements locally.
+* **Dumb Displays (Physical Nextion LCD / Serial Pendants)**:
+  - Nextion hardware has no domain logic; it only receives widget text strings (`t0.txt="-18.42"`) and emits component touch IDs (Page 1, Component 4).
+  - Its `ClientEndpoint` acts as a **Stateful Presenter / Transformer**:
+    1. **Diff Cache**: Stores previously rendered strings, active page ID, and widget colors to eliminate redundant UART transmissions and screen flicker.
+    2. **Component Mapping**: Maps raw touch events into canonical `CommandDispatcher` actions.
+    3. **Quirk Isolation**: Nextion-specific hashing and delta-rendering reside strictly inside the Nextion adapter, keeping core firmware clean.
+
+### 3.2 Heterogeneous Channels & URL-Path Routing
+When multiple clients connect via WebSockets, they may require different data formats. Routing is handled via the HTTP upgrade URL path (Option B):
+
+| URL Path | Channel Type | Serializer Used | Target Client |
+| :--- | :--- | :--- | :--- |
+| `ws://<ip>:81/` or `/canonical` | `CHANNEL_CANONICAL` | `RichClientAdapter` (`K.*`, `I.*`, `C.*`, `P.*`) | Rich Web UI / Multi-Axis HMI |
+| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | CNC Senders (UGS, CNCjs, OpenBuilds) |
+| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | Minimal Wireless DRO Readouts |
+
+- **Zero Runtime Overhead**: The channel is assigned **once** during the HTTP upgrade handshake. Runtime packets require no subscription parsing.
+- **Active Channel Bitmask (`activeChannelMask`)**: The controller tracks which channels have active listeners. Formats with zero connected listeners are **never serialized**, burning zero CPU cycles.
+
+### 3.3 Change-Driven Telemetry (Zero Minimum Rate, Clamped Ceiling)
+Status pushes are strictly event-driven:
+- **Zero Minimum Rate (Quiescence)**: If the lathe is stationary and idle with no buttons pressed, **zero packets** are sent. Radio, network buffers, and CPU remain completely silent.
+- **Max-Rate Ceiling**: High-frequency events (e.g. 2,500+ RPM spindle motion or rapid feeds) are clamped to a clean ceiling (e.g. max ~28 Hz / 35 ms) to guarantee that FreeRTOS stepper pulse generation (`taskMoveZ`, `taskMoveX`) is never starved.
+
+### 3.4 Unicast vs. Channel Push Separation
+1. **Unicast Request-Response (1-to-1)**:
+   - Queries (`?get=...`, `?sysinfo`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
+   - Prevents network amplification ($O(N^2)$ traffic) when multiple displays are active.
+   - New connections receive an immediate unicast hydration frame without disturbing existing screens.
+2. **Channel Broadcast (1-to-Many)**:
+   - When machine state changes, telemetry is serialized once per active channel and pushed to matching sockets.
+
+### 3.5 Settings Read/Write Transaction Model
+Configuration settings follow a strict transaction flow:
+1. **Read**: `SETTINGS.get=<key>` $\rightarrow$ Controller replies unicast: `SETTING.<key>=<val>`.
+2. **Write**: `SETTINGS.set=<key>,<val>` $\rightarrow$ Controller validates bounds, persists to NVS `Preferences`, updates `MachineModel::properties`, and replies unicast: `OK:SETTINGS.<key>=<val>`.
+3. **Synchronization**: Controller marks `DOMAIN_PROPERTIES` as modified, triggering an automatic push of `P.*` to all canonical channel subscribers so all screens update in real time.
 
 ---
 

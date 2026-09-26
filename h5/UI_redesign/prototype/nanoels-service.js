@@ -78,7 +78,13 @@ class NanoelsService extends EventTarget {
       starts: 1,
       passes: 1,
       opIdx: 0,
-      setupIdx: 0
+      setupIdx: 0,
+      feedRev: false,
+      screwZDu: 40000,
+      screwXDu: 40000,
+      motorStepsZ: 800,
+      motorStepsX: 800,
+      encoderPpr: 2400
     };
 
     // Action Code Mapping (from docs/h5.ino)
@@ -532,6 +538,14 @@ class NanoelsService extends EventTarget {
     }
 
     if (telemetryChanged) {
+      if (this.canonical.zDu !== undefined) this.state.z = (this.canonical.zDu / 10000.0).toFixed(3);
+      if (this.canonical.xDu !== undefined) this.state.x = (this.canonical.xDu / 10000.0).toFixed(3);
+      if (this.canonical.rpm !== undefined) this.state.rpm = Math.round(this.canonical.rpm);
+      if (this.canonical.turns !== undefined) this.state.turns = String(this.canonical.turns);
+      if (this.canonical.angle !== undefined) this.state.angle = String(this.canonical.angle);
+      if (this.canonical.on !== undefined) this.state.status = this.canonical.on ? 'ON' : 'OFF';
+      if (this.canonical.measure !== undefined) this.state.measure = this.canonical.measure === 1 ? 'IN' : 'MM';
+
       this._emit('telemetry', { ...this.state, canonical: { ...this.canonical } });
       if (this.logStatusPushes) {
         const summary = `Z: ${this.state.z} mm | X: ${this.state.x} mm | ${this.state.rpm} RPM | ${this.state.status}`;

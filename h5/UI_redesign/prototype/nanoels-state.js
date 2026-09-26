@@ -237,17 +237,17 @@ document.addEventListener('alpine:init', () => {
         }
       }
 
-      // 2. Directly Ingest Live Controller Status Message Fields
-      if (data.rpm !== undefined && data.rpm !== '') {
+      // 2. Fallback to legacy fields only if not present in canonical
+      if ((!c || c.rpm === undefined) && data.rpm !== undefined && data.rpm !== '') {
         this.rpm = parseInt(data.rpm, 10) || 0;
       }
-      if (data.turns !== undefined && data.turns !== '') {
+      if ((!c || c.turns === undefined) && data.turns !== undefined && data.turns !== '') {
         this.turns = parseFloat(data.turns) || 0;
       }
-      if (data.angle !== undefined && data.angle !== '') {
+      if ((!c || c.angle === undefined) && data.angle !== undefined && data.angle !== '') {
         this.angle = parseFloat(String(data.angle).replace('°', '')) || 0;
       }
-      if (data.status !== undefined && data.status !== '') {
+      if ((!c || c.on === undefined) && data.status !== undefined && data.status !== '') {
         this.isOn = (data.status === 'ON' || data.status === 'SYN');
       }
       if (data.message !== undefined) {

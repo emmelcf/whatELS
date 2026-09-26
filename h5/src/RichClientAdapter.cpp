@@ -114,11 +114,6 @@ String RichClientAdapter::buildTelemetry(uint8_t domainMask) {
     serializeProperties(&out, m.properties);
   }
 
-  // Include legacy M.* namespace for backward compatibility whenever ALL or KINEMATICS is requested
-  if ((domainMask == DOMAIN_ALL) || (domainMask & DOMAIN_KINEMATICS)) {
-    serializeLegacyM(&out, m);
-  }
-
   return out;
 }
 

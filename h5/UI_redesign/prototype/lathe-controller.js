@@ -3878,90 +3878,90 @@
         }
 
         // 2. Units & Measure (MM / IN)
-        if(data.measure !== undefined && data.measure !== ''){
+        if(c && c.measure !== undefined){
+          state.unit = c.measure === 1 ? 'in' : 'mm';
+        } else if(data.measure !== undefined && data.measure !== ''){
           var m = data.measure.toUpperCase();
           state.unit = (m === 'IN') ? 'in' : 'mm';
-        } else if(c && c.measure !== undefined){
-          state.unit = c.measure === 1 ? 'in' : 'mm';
         }
         var scale = (state.unit === 'in') ? 25.4 : 1.0;
 
         // 3. Coordinate Positions (Z & X)
-        if(data.z !== undefined && data.z !== ''){
-          state.z = parseFloat(data.z) * scale;
-        } else if(c && c.zDu !== undefined){
+        if(c && c.zDu !== undefined){
           state.z = c.zDu / 10000.0;
+        } else if(data.z !== undefined && data.z !== ''){
+          state.z = parseFloat(data.z) * scale;
         }
 
-        var controllerIsInDia = (data.diameter !== undefined) ? (data.diameter === '1' || data.diameter === true) : (c ? c.dia : true);
+        var controllerIsInDia = (c && c.dia !== undefined) ? c.dia : ((data.diameter !== undefined) ? (data.diameter === '1' || data.diameter === true) : true);
         state.xRep = controllerIsInDia ? 'diameter' : 'radius';
 
-        if(data.x !== undefined && data.x !== ''){
+        if(c && c.xDu !== undefined){
+          state.xDia = (c.xDu / 10000.0) * (controllerIsInDia ? 2.0 : 1.0);
+        } else if(data.x !== undefined && data.x !== ''){
           var rawX = parseFloat(data.x) * scale;
           state.xDia = controllerIsInDia ? rawX : (rawX * 2);
-        } else if(c && c.xDu !== undefined){
-          state.xDia = (c.xDu / 10000.0) * (controllerIsInDia ? 2.0 : 1.0);
         }
 
         // 4. Spindle Readouts (RPM, TURNS, ANGLE)
-        if(data.rpm !== undefined && data.rpm !== ''){
-          state.rpm = parseInt(data.rpm, 10) || 0;
-        } else if(c && c.rpm !== undefined){
+        if(c && c.rpm !== undefined){
           state.rpm = c.rpm;
+        } else if(data.rpm !== undefined && data.rpm !== ''){
+          state.rpm = parseInt(data.rpm, 10) || 0;
         }
 
-        if(data.turns !== undefined && data.turns !== ''){
-          state.turns = parseFloat(data.turns) || 0;
-        } else if(c && c.turns !== undefined){
+        if(c && c.turns !== undefined){
           state.turns = c.turns;
+        } else if(data.turns !== undefined && data.turns !== ''){
+          state.turns = parseFloat(data.turns) || 0;
         }
 
-        if(data.angle !== undefined && data.angle !== ''){
-          state.angle = parseFloat(String(data.angle).replace('°', '')) || 0;
-        } else if(c && c.angle !== undefined){
+        if(c && c.angle !== undefined){
           state.angle = c.angle;
+        } else if(data.angle !== undefined && data.angle !== ''){
+          state.angle = parseFloat(String(data.angle).replace('°', '')) || 0;
         }
 
         // 5. Run State & Mode (ON / OFF / SYN)
-        if(data.status !== undefined && data.status !== ''){
-          state.runState = (data.status === 'ON' || data.status === 'SYN') ? 'running' : 'stopped';
-        } else if(c && (c.on !== undefined || c.isOn !== undefined)){
+        if(c && (c.on !== undefined || c.isOn !== undefined)){
           state.runState = (c.on || c.isOn) ? 'running' : 'stopped';
+        } else if(data.status !== undefined && data.status !== ''){
+          state.runState = (data.status === 'ON' || data.status === 'SYN') ? 'running' : 'stopped';
         }
 
         // 6. Steps (Jog & Feed)
-        if(data.step !== undefined && data.step !== ''){
-          state.step = parseFloat(data.step) * scale;
-        } else if(c && c.jogStepDu !== undefined){
+        if(c && c.jogStepDu !== undefined){
           state.step = c.jogStepDu / 10000.0;
+        } else if(data.step !== undefined && data.step !== ''){
+          state.step = parseFloat(data.step) * scale;
         }
         if(c && c.feedStepDu !== undefined){
           state.feedStep = c.feedStepDu / 10000.0;
         }
 
         // 7. Soft Limits (Z Left/Right, X Up/Down)
-        if(data.zLeft !== undefined){
-          state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
-        } else if(c && c.zLeftDu !== undefined){
+        if(c && c.zLeftDu !== undefined){
           state.zLeft = (c.zLeftDu === 2147483647) ? null : Math.abs(c.zDu - c.zLeftDu) / 10000.0;
+        } else if(data.zLeft !== undefined){
+          state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
         }
 
-        if(data.zRight !== undefined){
-          state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
-        } else if(c && c.zRightDu !== undefined){
+        if(c && c.zRightDu !== undefined){
           state.zRight = (c.zRightDu === -2147483648) ? null : Math.abs(c.zRightDu - c.zDu) / 10000.0;
+        } else if(data.zRight !== undefined){
+          state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
         }
 
-        if(data.xLeft !== undefined){
-          state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
-        } else if(c && c.xUpDu !== undefined){
+        if(c && c.xUpDu !== undefined){
           state.xLeft = (c.xUpDu === 2147483647) ? null : Math.abs(c.xDu - c.xUpDu) / 10000.0;
+        } else if(data.xLeft !== undefined){
+          state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
         }
 
-        if(data.xRight !== undefined){
-          state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
-        } else if(c && c.xDownDu !== undefined){
+        if(c && c.xDownDu !== undefined){
           state.xRight = (c.xDownDu === -2147483648) ? null : Math.abs(c.xDownDu - c.xDu) / 10000.0;
+        } else if(data.xRight !== undefined){
+          state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
         }
 
         // 8. Authoritative Taper Intent (Domain I)
