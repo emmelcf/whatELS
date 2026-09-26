@@ -83,6 +83,7 @@ class NanoelsEmulator {
     }
   }
 
+  _handleLine(line) {
     // 1. Direct Queries
     if (line === '?') {
       this._emitGrblStatus();
@@ -162,11 +163,21 @@ class NanoelsEmulator {
       } else if (cmd.startsWith('taperRatio=')) {
         this.tpVal = parseFloat(cmd.substring(11)) || 1.0;
         this.tpMode = 0;
+        this.tpPreset = -1;
         this.coneRatio = 1.0 / this.tpVal;
       } else if (cmd.startsWith('taperAngle=')) {
         this.tpVal = parseFloat(cmd.substring(11)) || 0.0;
         this.tpMode = 1;
+        this.tpPreset = -1;
         this.coneRatio = 2.0 * Math.tan(this.tpVal * (Math.PI / 180.0));
+      } else if (cmd.startsWith('taperPreset=')) {
+        const parts = cmd.substring(12).split(',');
+        this.tpPreset = parseInt(parts[0], 10) || 0;
+        this.tpMode = 2;
+        const deg = parseFloat(parts[1]) || 0.0;
+        const ratio = parseFloat(parts[2]) || 0.0;
+        this.tpVal = ratio > 0 ? ratio : deg;
+        this.coneRatio = ratio > 0 ? (1.0 / ratio) : (2.0 * Math.tan(deg * (Math.PI / 180.0)));
       } else if (cmd.startsWith('axisZero=')) {
         const ax = cmd.substring(9).toUpperCase();
         if (ax === 'Z') { this.zOrigin += this.z; this.z = 0; }
@@ -270,7 +281,12 @@ class NanoelsEmulator {
         this.isOn = true;
         this.spindleRunning = true;
         break;
-      case 27: // B_OFF: Stop cycle / feed disengage
+      case 27: // B_OFF: Stop cycle / feed disengage / zero turns and angle
+        if (!this.isOn) {
+          this.turns = 0;
+          this.turnsFraction = 0;
+          this.angle = 0;
+        }
         this.isOn = false;
         break;
       case 64: // B_STEP: cycle 1mm -> 0.1mm -> 0.01mm
@@ -356,7 +372,8 @@ class NanoelsEmulator {
       const revsPerSec = this.rpm / 60;
       const revsDelta = revsPerSec * 0.050; // 50ms tick
       this.turns += revsDelta;
-      this.angle = (this.angle + revsDelta * 360) % 360;
+      this.angle = ((this.angle + revsDelta * 360) % 360 + 360) % 360;
+      if (this.angle >= 359.95) this.angle = 0.0;
       this.spindlePos += revsDelta * this.ENCODER_STEPS;
     } else {
       this.rpm = 0;
@@ -445,12 +462,12 @@ class NanoelsEmulator {
       `UI.measure=${this.measure}\n` +
       `UI.step=${stepStr}\n` +
       `UI.rpm=${this.rpm}\n` +
-      `UI.turns=${this.turns.toFixed(1)}\n` +
-      `UI.angle=${this.angle.toFixed(1)}\n` +
+      `UI.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
+      `UI.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
       `UI.x=${xMm}\n` +
       `UI.diameter=${this.isDiameterMode ? '1' : '0'}\n` +
       `UI.xLeft=${xLeftStr}\n` +
-      `UI.xRight=${xRightStr}\n` +
+      `UI.xRight=${xRightStr}\n`;
     const modeInt = this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)));
     const zLeftVal = this.zLeft !== null ? Math.round(this.zLeft) : 2147483647;
     const zRightVal = this.zRight !== null ? Math.round(this.zRight) : -2147483648;
@@ -482,8 +499,8 @@ class NanoelsEmulator {
       `M.xUpDu=${xUpVal}\n` +
       `M.xDownDu=${xDownVal}\n` +
       `M.rpm=${Math.round(this.rpm)}\n` +
-      `M.turns=${this.turns.toFixed(1)}\n` +
-      `M.angle=${this.angle.toFixed(1)}\n` +
+      `M.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
+      `M.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
       `M.dia=${this.isDiameterMode ? 1 : 0}\n` +
       `M.abs=1\n` +
       `M.zDro=0\n` +
@@ -520,8 +537,8 @@ class NanoelsEmulator {
              `K.xDis=0\n` +
              `K.yDis=0\n` +
              `K.rpm=${Math.round(this.rpm)}\n` +
-             `K.turns=${this.turns.toFixed(1)}\n` +
-             `K.angle=${this.angle.toFixed(1)}\n` +
+             `K.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
+             `K.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
              `K.mode=${modeInt}\n` +
              `K.on=${this.isOn ? 1 : 0}\n` +
              `K.estop=0\n` +

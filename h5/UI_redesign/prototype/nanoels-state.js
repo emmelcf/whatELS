@@ -111,7 +111,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     get taperDisplay() {
-      return Formatters.formatTaper(this.tpVal, this.tpMode, this.coneRatio);
+      return Formatters.formatTaper(this.tpVal, this.tpMode, this.coneRatio, this.tpPreset);
     },
 
     get stepDisplay() {
@@ -132,6 +132,22 @@ document.addEventListener('alpine:init', () => {
 
     get turnsDisplay() {
       return Formatters.formatTurns(this.turns);
+    },
+
+    get surfaceSpeedDisplay() {
+      return Formatters.formatSurfaceSpeed(this.xDu, this.rpm, this.unitStr, this.dia);
+    },
+
+    get feedDisplay() {
+      return Formatters.formatFeed(this.dupr, this.unitStr, this.mode === 2, 150);
+    },
+
+    get pitchWithCompanion() {
+      return Formatters.formatPitchWithCompanion(this.thPitch, this.thFmt, this.unitStr);
+    },
+
+    get taperCompanions() {
+      return Formatters.formatTaperCompanions(this.tpVal, this.tpMode, this.coneRatio, this.tpPreset);
     },
 
     get spindleDisplay() {
@@ -206,14 +222,36 @@ document.addEventListener('alpine:init', () => {
       this.statusMsg = msg;
     },
 
-    // Ingests incoming canonical dictionary from nanoels-service.js
-    updateFromCanonical(c) {
-      if (!c) return;
-      if ('on' in c) this.isOn = !!c.on;
-      for (const k in c) {
-        if (k in this && typeof this[k] !== 'function') {
-          this[k] = c[k];
+    // Ingests incoming telemetry data (both canonical and live status)
+    updateFromTelemetry(data) {
+      if (!data) return;
+      var c = data.canonical || data;
+
+      // 1. Ingest Canonical (K, I, C, P)
+      if (c) {
+        if ('on' in c) this.isOn = !!c.on;
+        for (const k in c) {
+          if (k in this && typeof this[k] !== 'function') {
+            this[k] = c[k];
+          }
         }
+      }
+
+      // 2. Directly Ingest Live Controller Status Message Fields
+      if (data.rpm !== undefined && data.rpm !== '') {
+        this.rpm = parseInt(data.rpm, 10) || 0;
+      }
+      if (data.turns !== undefined && data.turns !== '') {
+        this.turns = parseFloat(data.turns) || 0;
+      }
+      if (data.angle !== undefined && data.angle !== '') {
+        this.angle = parseFloat(String(data.angle).replace('°', '')) || 0;
+      }
+      if (data.status !== undefined && data.status !== '') {
+        this.isOn = (data.status === 'ON' || data.status === 'SYN');
+      }
+      if (data.message !== undefined) {
+        this.statusMsg = data.message;
       }
     }
   });
@@ -221,11 +259,8 @@ document.addEventListener('alpine:init', () => {
   // Attach listener to NanoELS client service if present
   if (window.nanoelsClient) {
     window.nanoelsClient.addEventListener('telemetry', (e) => {
-      if (e.detail && e.detail.canonical) {
-        store.updateFromCanonical(e.detail.canonical);
-      }
-      if (e.detail && e.detail.message) {
-        store.statusMsg = e.detail.message;
+      if (e.detail) {
+        store.updateFromTelemetry(e.detail);
       }
     });
 

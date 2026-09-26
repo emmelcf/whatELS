@@ -1206,5 +1206,91 @@ When turning an inverted taper (narrow at the chuck, wide at the tailstock) from
 * **PlatformIO ESP32-S3 Build**: Succeeded in 11.97s, 0 errors, 0 warnings (Flash 19.4%, RAM 25.0%).
 * **Browser Runtime Verification**: Verified against local emulator, 0 console errors, instantaneous client-side unit toggles, and clean semantic packet streams.
 
+---
+
+## 30. Comprehensive Display Presentation Decoupling (Feeds, Spindle Surface Speed, Threads, Tapers)
+
+### 1. Architectural Motivation
+Decoupling units is not merely about toggling `mm` and `in` labels on coordinates. A high-performance digital lathe interface must allow an operator to view machining parameters in the units that match their tooling, stock material, and mental model without mutating the controller's underlying canonical kinematics or creating network thrashing.
+
+### 2. Decoupled Display Domains
+
+#### A. Feed & Rapid Rates (`formatFeed`)
+* **Controller Canonical Invariant**: Synchronized feed is stored as `dupr` (deci-microns per spindle revolution, where $10{,}000\text{ dupr} = 1.000\text{ mm/rev}$).
+* **Client Presentation**:
+  * Metric mode: Formatted to 3 decimal places as `mm/rev` (e.g. `0.100 mm/rev`).
+  * Imperial mode: Computed as $\text{dupr} / 254{,}000.0$ and formatted to 4 decimal places as `in/rev` (e.g. `0.0039 in/rev`).
+  * Time-based Async Rapid/Feed:
+    * Metric mode: `mm/min` (e.g. `150 mm/min`).
+    * Imperial mode: Converted via $\text{speed} / 25.4$ to `in/min` (e.g. `5.9 in/min`).
+  * When the operator toggles the unit chip in the topbar, the feed display converts instantly with zero lag and zero network traffic.
+
+#### B. Live Spindle Surface Speed Readout (`formatSurfaceSpeed`)
+* **4-Way Spindle Readout Cycling**:
+  Tapping `#spindleBox` cycles through 4 real-time telemetry modes:
+  1. `RPM`: Spindle revolutions per minute.
+  2. `TURNS`: Cumulative spindle revolutions (useful for coil winding, precise manual indexing).
+  3. `°`: Spindle rotational position ($0.0^\circ$ to $359.9^\circ$).
+  4. `SMM / SFM`: Live Cutting Surface Speed.
+* **Surface Speed Calculation**:
+  Derived at 10 Hz from the current workpiece diameter (live $X$ DRO position in diameter mode) and spindle RPM:
+  * Metric mode ($SMM$, Surface Meters per Minute):
+    $$SMM = \frac{\pi \times \text{Dia}_{\text{mm}} \times \text{RPM}}{1000.0}$$
+  * Imperial mode ($SFM$, Surface Feet per Minute):
+    $$SFM = \frac{\pi \times \text{Dia}_{\text{in}} \times \text{RPM}}{12.0} \approx \frac{\text{Dia}_{\text{in}} \times \text{RPM}}{3.8197}$$
+  * Toggling `mm` $\leftrightarrow$ `in` instantly flips the readout between `SMM` and `SFM`.
+
+#### C. Dual Thread Companion Readouts (`formatPitchWithCompanion`)
+* Machinists frequently work from drawings specified in metric pitch ($P$ in mm) while using imperial leadscrews or vice versa.
+* The decoupled display shows the primary pitch plus the companion metric in parentheses:
+  * Imperial Primary: `20 TPI (1.270 mm)`
+  * Metric Primary: `1.500 mm (16.93 TPI)`
+  * Fractional Inch Primary: `0.0500 in (20.0 TPI)`
+
+#### D. Multi-Format Taper Companions (`formatTaperCompanions`)
+* A lathe taper is physically defined by a single slope ratio $C = \Delta \text{Dia} / \Delta Z$.
+* The display simultaneously provides companion conversions across all 3 machining conventions:
+  * **Ratio**: $1 : K$ (e.g. `1 : 20.00` or `1 : 19.25` for MT2).
+  * **Angle**: Half-angle ($\theta = \arctan(C/2)$) and Included Angle ($2\theta$).
+  * **Taper Per Foot (TPF)**: $C \times 12.0\text{ in/ft}$ (e.g. `0.5994 in/ft` for MT2, `0.7500 in/ft` for NPT).
+  * **Metric Taper**: $C \times 1000.0\text{ mm/m}$ (e.g. `50.0 mm/m`).
+
+#### E. Ergonomic Jog Step Presets
+* Metric mode cycles: `1.000 mm`, `0.100 mm`, `0.010 mm`.
+* Imperial mode cycles: `0.1000 in`, `0.0100 in`, `0.0010 in`.
+* When switching units, the active step snaps to the equivalent ergonomic preset index rather than an awkward fractional conversion (e.g. `0.0010 in` instead of `0.00039 in`).
+
+---
+
+## 31. Lossless Intent State Architecture (`IntentState` / `I.*`)
+
+### 1. The Problem: Floating-Point Round-Trip Degradation
+In traditional electronic leadscrew implementations, operator authoring values are immediately flattened into a single kinematic float (e.g. `dupr` for pitch or $C = \Delta \text{Dia}/\Delta Z$ for taper).
+When these values are transmitted back across telemetry or parsed by a secondary display:
+1. Entering **`1 : 19`** taper ratio ($C = 1/19 \approx 0.052631578...$) degrades to **`1 : 18.99`** or **`1 : 19.0002`** when backwards-calculated from $C$.
+2. Selecting standard preset **`MT2`** ($C \approx 0.04995$) degrades into an arbitrary decimal `0.0499` without memory that the operator chose Morse Taper #2.
+3. Entering **`13 TPI`** ($P = 25.4 / 13 \approx 1.953846...$) degrades into `13.0003 TPI` or `12.9998 TPI`.
+
+### 2. The Solution: First-Class Intent Domain
+The controller maintains an authoritative `IntentState` structure in firmware (`MachineModel.h`) and telemetry broadcasts (`I.*` / `M.*`):
+* `I.tpPreset`: Selected preset ID (`-1` for custom, $\ge 0$ for Morse, Brown & Sharpe, R8, etc.).
+* `I.tpMode`: Authoring mode (`0` = 1:K Ratio, `1` = Angle degrees, `2` = Preset).
+* `I.tpVal`: Exact user-entered scalar (e.g. `19.0` for 1:19, `1.79` for 1.79°).
+* `I.thFmt`: Thread format (`0` = Metric mm, `1` = Imperial TPI, `2` = Imperial Inch).
+* `I.thPitch`: Exact user-entered pitch (e.g. `13.0` for 13 TPI, `1.500` for 1.5mm).
+
+### 3. End-to-End Pipeline Guarantees
+1. **Keypad & Wizard Entry**: `kpConfirm` and `commitThreadSettingsFromWiz` capture exact numeric user input into `state.threadTpiVal`, `state.gearPitchZ_tpi`, `state.gearTaperAuthVal`, and `state.gearTaperPresetIdx`.
+2. **Wire Dispatch**: Commands explicitly serialize intent:
+   * `CMD.feedTpi=13`
+   * `CMD.feedMm=1.5`
+   * `CMD.taperPreset=2,1.4306,20.0196`
+   * `CMD.taperRatio=19`
+   * `CMD.taperAngle=1.79`
+3. **Telemetry Hydration**: Telemetry parsers (`nanoels-service.js` and `lathe-controller.js`) hydrate `Alpine.store('machine')` and `state` directly from `c.thPitch`, `c.thFmt`, `c.tpPreset`, and `c.tpVal`.
+4. **Render-Time Formatters**: Formatters in `nanoels-formatters.js` render primary strings directly from the intent registers, and calculate companions on demand, guaranteeing zero decimal flicker and zero cumulative drift.
+
+
+
 
 

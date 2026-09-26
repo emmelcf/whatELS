@@ -36,12 +36,6 @@
     { name: '30° BEVEL', category: 'CENTERS', angle: 30.0000, ratio: 1.154701, spec: '30° lead angle' }
   ];
 
-  function formatTaperRatio(r){
-    if(!r || r <= 0) return '1:--';
-    if(Math.abs(r - 2.0) < 0.001) return '1:1.00';
-    var k = 1 / r;
-    return '1:' + k.toFixed(2);
-  }
 
   // Core State Engine
   var state = {
@@ -310,9 +304,15 @@
   function lenStr(mm, dp){ dp = dp || (state.unit==='mm' ? 3 : 4); return fmt(toDisplayLen(mm), dp); }
   function unitLabel(){ return state.unit; }
   function formatTaperRatio(ratio){
+    if(state && state.gearTaperAuthMode === 'RATIO' && state.gearTaperAuthVal){
+      var v = state.gearTaperAuthVal;
+      var str = (v % 1 === 0) ? v.toFixed(0) : (v * 10 % 1 === 0 ? v.toFixed(1) : (v >= 10 ? v.toFixed(2) : v.toFixed(3)));
+      return '1 : ' + str;
+    }
     if(!ratio || isNaN(ratio) || ratio <= 0) return '1 : —';
     var k = 1 / ratio;
-    return '1 : ' + (k >= 10 ? k.toFixed(2) : k.toFixed(3));
+    var kStr = (k % 1 === 0) ? k.toFixed(0) : (k * 10 % 1 === 0 ? k.toFixed(1) : (k >= 10 ? k.toFixed(2) : k.toFixed(3)));
+    return '1 : ' + kStr;
   }
   function getActiveJogStepMm(){
     if(state.unit === 'mm'){
@@ -460,10 +460,11 @@
     return state.spindleSimRunning;
   }
 
-  // Gearbox Display Helpers
+  // Gearbox Display Helpers (Fully Decoupled Units)
   function getGearZDisplay(){
     if(state.gearboxMode === 'ASYNC'){
-      return { val: state.asyncSpeedZ.toString(), unit: unitLabel() + '/min' };
+      var spd = state.unit === 'in' ? (state.asyncSpeedZ / 25.4).toFixed(1) : state.asyncSpeedZ.toString();
+      return { val: spd, unit: unitLabel() + '/min' };
     }
     if(state.gearFeedModeZ === 'FEED'){
       var fVal = state.unit === 'mm' ? state.gearPitchZ : state.gearPitchZ / 25.4;
@@ -474,15 +475,18 @@
     if(state.gearThreadUnit === 'tpi'){
       var tpi = state.gearPitchZ > 0 ? (25.4 / state.gearPitchZ) : 0;
       var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
-      return { val: tpiStr, unit: 'TPI' + hand };
+      var mmLead = state.gearPitchZ > 0 ? state.gearPitchZ.toFixed(3) : '0.000';
+      return { val: tpiStr, unit: 'TPI' + hand, companion: '(' + mmLead + ' mm)' };
     } else {
-      return { val: lenStr(state.gearPitchZ), unit: unitLabel() + hand };
+      var tpiComp = state.gearPitchZ > 0 ? (25.4 / state.gearPitchZ).toFixed(1) : '0';
+      return { val: lenStr(state.gearPitchZ), unit: unitLabel() + hand, companion: '(' + tpiComp + ' TPI)' };
     }
   }
 
   function getGearXDisplay(){
     if(state.gearboxMode === 'ASYNC'){
-      return { val: state.asyncSpeedX.toString(), unit: unitLabel() + '/min' };
+      var spd = state.unit === 'in' ? (state.asyncSpeedX / 25.4).toFixed(1) : state.asyncSpeedX.toString();
+      return { val: spd, unit: unitLabel() + '/min' };
     }
     var fVal = state.unit === 'mm' ? state.gearPitchX : state.gearPitchX / 25.4;
     return { val: fmt(fVal, state.unit === 'mm' ? 3 : 4), unit: unitLabel() + '/rev' };
@@ -491,11 +495,13 @@
   function getThreadPitchDisplay(){
     var hand = state.threadHandedness === 'RIGHT' ? 'RH' : 'LH';
     if(state.threadUnit === 'tpi'){
-      var tpi = state.pitch > 0 ? (25.4 / state.pitch) : 0;
-      var tpiStr = Math.abs(tpi - Math.round(tpi)) < 0.05 ? Math.round(tpi).toString() : tpi.toFixed(1);
-      return { val: tpiStr, unit: 'TPI (' + hand + ')', num: tpi };
+      var tpi = state.threadTpiVal || (state.pitch > 0 ? (25.4 / state.pitch) : 0);
+      var tpiStr = (tpi % 1 === 0) ? tpi.toFixed(0) : (tpi * 10 % 1 === 0 ? tpi.toFixed(1) : tpi.toFixed(2));
+      var mmLead = state.pitch > 0 ? (25.4 / tpi).toFixed(3) : '0.000';
+      return { val: tpiStr, unit: 'TPI (' + hand + ')', companion: '(' + mmLead + ' mm)', num: tpi };
     } else {
-      return { val: lenStr(state.pitch), unit: unitLabel() + ' (' + hand + ')', num: state.pitch };
+      var tpiComp = state.pitch > 0 ? (25.4 / state.pitch).toFixed(1) : '0';
+      return { val: lenStr(state.pitch), unit: unitLabel() + ' (' + hand + ')', companion: '(' + tpiComp + ' TPI)', num: state.pitch };
     }
   }
 
@@ -572,6 +578,7 @@
           '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + activeDisp.val + '</span>' +
             '<span class="deck-unit">' + activeDisp.unit + '</span>' +
+            (activeDisp.companion ? '<span class="deck-companion mono" style="font-size:11px; color:var(--dim); margin-left:6px; font-weight:600;">' + activeDisp.companion + '</span>' : '') +
           '</div>' +
           '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
         '</div>' +
@@ -725,8 +732,9 @@
         if(state.mode === 'GEARBOX'){
           var info = getActiveGearStepInfo();
           if(info.type === 'async'){
-            if(info.axis === 'Z') state.asyncSpeedZ = Math.max(1, state.asyncSpeedZ - info.val);
-            else state.asyncSpeedX = Math.max(1, state.asyncSpeedX - info.val);
+            var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+            if(info.axis === 'Z') state.asyncSpeedZ = Math.max(1, Math.round(state.asyncSpeedZ - delta));
+            else state.asyncSpeedX = Math.max(1, Math.round(state.asyncSpeedX - delta));
           } else if(info.type === 'tpi'){
             var currTpi = 25.4 / state.gearPitchZ;
             var nextTpi = Math.max(1, +(currTpi - info.val).toFixed(1));
@@ -761,8 +769,9 @@
         if(state.mode === 'GEARBOX'){
           var info = getActiveGearStepInfo();
           if(info.type === 'async'){
-            if(info.axis === 'Z') state.asyncSpeedZ += info.val;
-            else state.asyncSpeedX += info.val;
+            var delta = state.unit === 'mm' ? info.val : (info.val * 25.4);
+            if(info.axis === 'Z') state.asyncSpeedZ = Math.round(state.asyncSpeedZ + delta);
+            else state.asyncSpeedX = Math.round(state.asyncSpeedX + delta);
           } else if(info.type === 'tpi'){
             var currTpi = 25.4 / state.gearPitchZ;
             var nextTpi = Math.min(80, +(currTpi + info.val).toFixed(1));
@@ -799,7 +808,8 @@
           if(state.mode === 'GEARBOX'){
             if(state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X'){
               if(state.gearboxMode === 'ASYNC'){
-                openKeypad('asyncSpeedZ', state.asyncSpeedZ);
+                var curSpd = state.unit === 'mm' ? state.asyncSpeedZ : +(state.asyncSpeedZ / 25.4).toFixed(1);
+                openKeypad('asyncSpeedZ', curSpd);
               } else if(state.gearFeedModeZ === 'FEED'){
                 openKeypad('gearPitchZ', toDisplayLen(state.gearPitchZ));
               } else {
@@ -807,7 +817,8 @@
               }
             } else {
               if(state.gearboxMode === 'ASYNC'){
-                openKeypad('asyncSpeedX', state.asyncSpeedX);
+                var curSpd = state.unit === 'mm' ? state.asyncSpeedX : +(state.asyncSpeedX / 25.4).toFixed(1);
+                openKeypad('asyncSpeedX', curSpd);
               } else {
                 openKeypad('gearPitchX', state.unit==='mm'?state.gearPitchX:state.gearPitchX/25.4);
               }
@@ -989,7 +1000,7 @@
             '<b style="font-size:14.5px; color:var(--blue); letter-spacing:0.3px;">' + specLabel + '</b>' +
             '<span style="font-size:10px; font-weight:700; color:var(--dim); background:#121a22; border:1px solid #1f2c38; padding:1px 6px; border-radius:3px;">' + sideLabel + ' · ' + handLabel + '</span>' +
           '</div>' +
-          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>PITCH / LEAD</span><b class="mono" style="font-size:12.5px;">' + fmt(state.pitch, 3) + ' mm' + (state.threadStarts > 1 ? ' (' + state.threadStarts + 'S / ' + fmt(leadMm, 2) + 'mm)' : '') + '</b></div>' +
+          '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>PITCH / LEAD</span><b class="mono" style="font-size:12.5px;">' + (state.threadUnit === 'tpi' ? (tp.val + ' TPI ' + tp.companion) : (fmt(state.pitch, 3) + ' mm ' + tp.companion)) + (state.threadStarts > 1 ? ' (' + state.threadStarts + 'S / ' + fmt(leadMm, 2) + 'mm)' : '') + '</b></div>' +
           '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>FEED DIR / LEN</span><b class="mono" style="font-size:12.5px;">' + cutLabel + ' · ' + lenStr(state.threadLength || 20.0, 1) + ' ' + unitLabel() + '</b></div>' +
           '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>STOCK (PREP Ø)</span><b class="mono" style="font-size:12.5px;">Ø ' + fmt(stockDia, 2) + ' mm</b></div>' +
           '<div class="kv" style="min-height:22px; padding:1px 0; font-size:12px;"><span>TARGET ROOT Ø</span><b class="mono" style="font-size:12.5px;">Ø ' + fmt(rootDia, 2) + ' mm</b></div>' +
@@ -1378,6 +1389,10 @@
   // Spindle Encoder Simulation & Multi-Pass Cycle Stepper
   var simTimer = null;
   function syncSpindleSimulation(){
+    if(window.nanoelsClient){
+      if(simTimer){ clearInterval(simTimer); simTimer = null; }
+      return;
+    }
     if(state.spindleSimRunning && !simTimer){
       state.rpm = 640;
       simTimer = setInterval(function(){
@@ -1528,7 +1543,8 @@
     if(btnSe) btnSe.classList.toggle('limit-blocked', atZRight || atXRight);
   }
 
-  function render(){
+  var lastRenderedModeKey = '';
+  function render(forceModeRebuild){
     var hasAlpine = window.Alpine && Alpine.store('machine');
     if(!hasAlpine){
       $('zValue').textContent = lenStr(state.z);
@@ -1548,15 +1564,22 @@
       $('stepValue').textContent = getActiveJogStepDisplay();
 
       if(state.spindleCycle === 0){ $('spindleValue').textContent = fmt(state.rpm,0); $('spindleUnit').textContent = 'RPM'; }
-      else if(state.spindleCycle === 1){ $('spindleValue').textContent = fmt(state.turns,2); $('spindleUnit').textContent = 'TURNS'; }
-      else { $('spindleValue').textContent = fmt(state.angle,1); $('spindleUnit').textContent = '°'; }
+      else if(state.spindleCycle === 1){ $('spindleValue').textContent = (typeof Formatters !== 'undefined' ? Formatters.formatTurns(state.turns) : Math.floor(state.turns).toString()); $('spindleUnit').textContent = 'TURNS'; }
+      else if(state.spindleCycle === 2){ $('spindleValue').textContent = (typeof Formatters !== 'undefined' ? Formatters.formatAngle(state.angle) : fmt(state.angle,1)); $('spindleUnit').textContent = '°'; }
 
       $('modeName').textContent = state.mode + (state.runState === 'running' ? ' 🔒' : '');
     }
 
     $('modeHead').classList.toggle('locked', state.runState === 'running');
-    $('modeBody').innerHTML = modeBodyHTML();
-    bindModeEvents();
+
+    // Only rebuild modeBody DOM when mode or state parameters change, avoiding 10Hz DOM thrash
+    var currentModeKey = state.mode + '|' + state.runState + '|' + state.activeFeedAxis + '|' + state.gearFeedModeZ + '|' + state.gearboxMode + '|' + (state.gearTaperPresetIdx) + '|' + (state.gearTaperAuthVal) + '|' + (state.turnCurrentPass) + '|' + (state.faceCurrentPass) + '|' + (state.pitch) + '|' + (state.threadTpiVal);
+    if(forceModeRebuild || currentModeKey !== lastRenderedModeKey){
+      lastRenderedModeKey = currentModeKey;
+      $('modeBody').innerHTML = modeBodyHTML();
+      bindModeEvents();
+    }
+
     renderRunstack();
     renderDynamicDeck();
     updateJogAntiTrap();
@@ -1582,6 +1605,9 @@
     state.unit = state.unit === 'mm' ? 'in' : 'mm';
     if(window.Alpine && Alpine.store('machine')){
       Alpine.store('machine').measure = state.unit === 'in' ? 1 : 0;
+      var curStep = state.unit === 'mm' ? JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length] : JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length];
+      var stepDu = Math.round(state.unit === 'in' ? curStep * 254000 : curStep * 10000);
+      Alpine.store('machine').jogStepDu = stepDu;
     }
     render(); 
   });
@@ -1661,19 +1687,49 @@
       if(state.threadUnit === 'tpi'){
         var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
         window.nanoelsClient.setFeedTpi(tpi);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').thFmt = 1;
+          Alpine.store('machine').thPitch = tpi;
+        }
       } else {
         var pMm = targetPitch || state.pitch || 1.5;
         window.nanoelsClient.setFeedMm(pMm);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').thFmt = 0;
+          Alpine.store('machine').thPitch = pMm;
+        }
       }
       return;
     }
 
-    // 2. Taper Mode
-    if(state.mode === 'TAPER'){
-      if(customTaperState && customTaperState.activeMode === 'ANGLE'){
-        window.nanoelsClient.setTaperAngle(state.gearTaperAngle || 1.432);
+    // 2. Taper Mode (Dedicated Mode or Gearbox 2-Axis Taper)
+    if(state.mode === 'TAPER' || (state.mode === 'GEARBOX' && state.activeFeedAxis === 'Z+X')){
+      if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
+        var p = TAPER_PRESETS[state.gearTaperPresetIdx];
+        window.nanoelsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').tpPreset = state.gearTaperPresetIdx;
+          Alpine.store('machine').tpMode = 2;
+          Alpine.store('machine').tpVal = 1.0 / p.ratio;
+          Alpine.store('machine').coneRatio = p.ratio;
+        }
+      } else if(state.gearTaperAuthMode === 'ANGLE'){
+        window.nanoelsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').tpPreset = -1;
+          Alpine.store('machine').tpMode = 1;
+          Alpine.store('machine').tpVal = state.gearTaperAuthVal || state.gearTaperAngle;
+          Alpine.store('machine').coneRatio = state.gearTaperRatio;
+        }
       } else {
-        window.nanoelsClient.setTaperRatio(state.gearTaperRatio || 3.5);
+        var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
+        window.nanoelsClient.setTaperRatio(rVal);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').tpPreset = -1;
+          Alpine.store('machine').tpMode = 0;
+          Alpine.store('machine').tpVal = rVal;
+          Alpine.store('machine').coneRatio = state.gearTaperRatio;
+        }
       }
       var taperPitch = targetPitch || state.gearPitchZ || 0.15;
       window.nanoelsClient.setFeedMm(taperPitch);
@@ -1681,17 +1737,31 @@
     }
 
     // 3. Gearbox / Turning / Facing Feed
+    if(state.mode === 'GEARBOX'){
+      if(state.gearboxMode === 'ASYNC') return;
+      if(state.gearThreadUnit === 'tpi'){
+        var tpiVal = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
+        window.nanoelsClient.setFeedTpi(tpiVal);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').thFmt = 1;
+          Alpine.store('machine').thPitch = tpiVal;
+        }
+        return;
+      }
+      var p = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
+      if(p !== undefined && p !== null && !isNaN(p) && p > 0){
+        window.nanoelsClient.setFeedMm(p);
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').thFmt = 0;
+          Alpine.store('machine').thPitch = p;
+        }
+      }
+      return;
+    }
+
     var p = targetPitch;
     if(p === undefined || p === null){
-      if(state.mode === 'GEARBOX'){
-        if(state.gearboxMode === 'ASYNC') return;
-        if(state.gearThreadUnit === 'tpi'){
-          var tpiVal = state.gearPitchZ_tpi || +(25.4 / state.gearPitchZ).toFixed(2);
-          window.nanoelsClient.setFeedTpi(tpiVal);
-          return;
-        }
-        p = (state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ;
-      } else if(state.mode === 'TURNING'){
+      if(state.mode === 'TURNING'){
         p = state.turnPitch;
       } else if(state.mode === 'FACING'){
         p = state.facePitch;
@@ -1699,6 +1769,10 @@
     }
     if(p !== undefined && p !== null && !isNaN(p) && p > 0){
       window.nanoelsClient.setFeedMm(p);
+      if(window.Alpine && Alpine.store('machine')){
+        Alpine.store('machine').thFmt = 0;
+        Alpine.store('machine').thPitch = p;
+      }
     }
   }
 
@@ -1729,9 +1803,7 @@
     if(window.Alpine && Alpine.store('machine')){
       Alpine.store('machine').spindleMode = state.spindleCycle;
     }
-    if(state.spindleCycle === 0) state.spindleSimRunning = !state.spindleSimRunning;
-    syncSpindleSimulation();
-    render();
+    render(true);
   });
 
   // Step selector: Tap to cycle, Long-press for Numpad
@@ -2607,6 +2679,7 @@
         state.gearTaperAngle = p.angle;
         state.gearTaperAuthMode = null;
         state.gearTaperAuthVal = null;
+        syncPitchToController();
         setStatusMsg('TAPER SET: ' + p.name + ' (' + p.spec + ')');
         $('gearTaperOverlay').classList.remove('show');
         render();
@@ -2799,6 +2872,7 @@
     state.gearTaperAngle = +finalAngle.toFixed(4);
     state.gearTaperRatio = +finalRatio.toFixed(6);
     state.gearTaperPresetIdx = -1; // custom
+    syncPitchToController();
 
     var desc = '';
     if(auth === 'ANGLE') desc = authVal + '°';
@@ -3015,15 +3089,18 @@
   function commitThreadSettingsFromWiz(bp){
     if(pitchSelectTarget === 'gearZ'){
       state.gearPitchZ = bp.pitchMm;
+      state.gearPitchZ_tpi = bp.tpi || null;
       state.gearThreadHandedness = bp.handedness === 'RIGHT' ? 'RH' : 'LH';
       state.gearFeedModeZ = 'PITCH';
-      state.gearThreadUnit = (bp.family === 'UN') ? 'tpi' : 'metric';
+      state.gearThreadUnit = (bp.family === 'UN' || bp.tpi) ? 'tpi' : 'metric';
       syncPitchToController(state.gearPitchZ);
       setStatusMsg('GEARBOX PITCH SET: ' + bp.name + ' (' + state.gearThreadHandedness + ')');
     } else {
       state.threadStandard = bp.family;
       state.threadStandardName = bp.name;
       state.pitch = bp.pitchMm;
+      state.threadTpiVal = bp.tpi || null;
+      state.threadUnit = (bp.family === 'UN' || bp.family === 'NPT' || bp.tpi) ? 'tpi' : 'metric';
       syncPitchToController(state.pitch);
       state.threadStarts = bp.starts || wizStarts || 1;
       if(wizSizeItem && THREAD_FAMILIES[bp.family]){
@@ -3042,7 +3119,6 @@
       state.threadTargetStockDia = bp.stockMax;
       state.threadTargetRootDia = bp.targetRoot;
       state.threadLength = bp.length || wizThreadLength || 20.0;
-      state.threadUnit = (bp.family === 'UN' || bp.family === 'NPT') ? 'tpi' : 'metric';
       state.pass = '01 / ' + (bp.passes < 10 ? '0' : '') + bp.passes;
       setStatusMsg('CONVERSATIONAL THREAD SET: ' + bp.name + ' (' + bp.handedness + ', L=' + fmt(state.threadLength, 1) + 'mm)');
     }
@@ -3223,6 +3299,7 @@
       if(state.gearFeedModeZ === 'PITCH' && state.gearThreadUnit === 'tpi') unitStr = ' (TPI)';
       else unitStr = ' (' + unitLabel() + '/rev)';
     }
+    else if(target === 'asyncSpeedZ' || target === 'asyncSpeedX') unitStr = ' (' + unitLabel() + '/min)';
     else if(target === 'gearPitchZ_custom') unitStr = ' (' + (gearPitchUnit === 'tpi' ? 'TPI' : unitLabel()) + ')';
     else if(target === 'customTaperVal'){
       if(customTaperState.activeMode === 'ANGLE') unitStr = ' (DEGREES)';
@@ -3278,8 +3355,10 @@
       }
       else if(kpTarget==='gearPitchZ'){
         if(state.gearFeedModeZ === 'PITCH' && state.gearThreadUnit === 'tpi'){
-          state.gearPitchZ = +(25.4 / Math.max(0.1, v)).toFixed(4);
+          state.gearPitchZ_tpi = Math.max(0.1, v);
+          state.gearPitchZ = +(25.4 / state.gearPitchZ_tpi).toFixed(4);
         } else {
+          state.gearPitchZ_tpi = null;
           state.gearPitchZ = Math.max(0.001, Math.abs(mm));
         }
         syncPitchToController(state.gearPitchZ);
@@ -3287,15 +3366,17 @@
       }
       else if(kpTarget==='gearPitchZ_custom'){
         if(gearPitchUnit === 'tpi'){
-          state.gearPitchZ = +(25.4 / Math.max(0.1, v)).toFixed(4);
+          state.gearPitchZ_tpi = Math.max(0.1, v);
+          state.gearPitchZ = +(25.4 / state.gearPitchZ_tpi).toFixed(4);
           state.gearThreadUnit = 'tpi';
         } else {
+          state.gearPitchZ_tpi = null;
           state.gearPitchZ = Math.max(0.01, Math.abs(mm));
           state.gearThreadUnit = 'metric';
         }
         state.gearFeedModeZ = 'PITCH';
         syncPitchToController(state.gearPitchZ);
-        setStatusMsg('GEARBOX PITCH SET: ' + (gearPitchUnit==='metric' ? state.gearPitchZ.toFixed(2)+' mm' : v+' TPI') + ' (' + (state.gearThreadHandedness||'RH') + ')');
+        setStatusMsg('GEARBOX PITCH SET: ' + (gearPitchUnit==='metric' ? state.gearPitchZ.toFixed(2)+' mm' : state.gearPitchZ_tpi+' TPI') + ' (' + (state.gearThreadHandedness||'RH') + ')');
         render();
       }
       else if(kpTarget==='gearPitchX'){ 
@@ -3303,8 +3384,8 @@
         syncPitchToController(state.gearPitchX);
         render();
       }
-      else if(kpTarget==='asyncSpeedZ'){ state.asyncSpeedZ = Math.round(v); render(); }
-      else if(kpTarget==='asyncSpeedX'){ state.asyncSpeedX = Math.round(v); render(); }
+      else if(kpTarget==='asyncSpeedZ'){ state.asyncSpeedZ = Math.round(state.unit === 'mm' ? v : v * 25.4); render(); }
+      else if(kpTarget==='asyncSpeedX'){ state.asyncSpeedX = Math.round(state.unit === 'mm' ? v : v * 25.4); render(); }
       else if(kpTarget==='turnPitch'){ 
         state.turnPitch = mm; 
         syncPitchToController(state.turnPitch);
@@ -3349,9 +3430,11 @@
       }
       else if(kpTarget==='pitch'){
         if(state.pitchTab === 'tpi'){
-          state.pitch = +(25.4 / Math.max(0.1, v)).toFixed(4);
+          state.threadTpiVal = Math.max(0.1, v);
+          state.pitch = +(25.4 / state.threadTpiVal).toFixed(4);
           state.threadUnit = 'tpi';
         } else {
+          state.threadTpiVal = null;
           state.pitch = mm;
           state.threadUnit = 'metric';
         }
@@ -3786,88 +3869,140 @@
       // Handle Telemetry Updates into Prototype State (Layer 1 / Layer 2 Decoupled)
       window.nanoelsClient.addEventListener('telemetry', function(e){
         var data = e.detail;
+        if(!data) return;
+        var c = data.canonical;
 
-        // --- Fast Path: Canonical Deci-Microns & Authoritative Intent ---
-        if(data.canonical && (data.canonical.zDu !== undefined || data.canonical.dupr !== undefined)){
-          if(window.Alpine && Alpine.store('machine')){
-            Alpine.store('machine').updateFromCanonical(data.canonical);
-          }
-          var c = data.canonical;
-          state.unit = c.measure === 1 ? 'in' : 'mm';
-          state.z = c.zDu / 10000.0;
-          state.xRep = c.dia ? 'diameter' : 'radius';
-          state.xDia = (c.xDu / 10000.0) * (c.dia ? 2.0 : 1.0);
-          state.rpm = c.rpm;
-          state.turns = c.turns;
-          state.angle = c.angle;
-          state.runState = (c.on || c.isOn) ? 'running' : 'stopped';
-          state.step = c.jogStepDu / 10000.0;
-          state.feedStep = c.feedStepDu / 10000.0;
-
-          // Soft limits
-          state.zLeft = (c.zLeftDu === 2147483647) ? null : Math.abs(c.zDu - c.zLeftDu) / 10000.0;
-          state.zRight = (c.zRightDu === -2147483648) ? null : Math.abs(c.zRightDu - c.zDu) / 10000.0;
-          state.xLeft = (c.xUpDu === 2147483647) ? null : Math.abs(c.xDu - c.xUpDu) / 10000.0;
-          state.xRight = (c.xDownDu === -2147483648) ? null : Math.abs(c.xDownDu - c.xDu) / 10000.0;
-
-          // Authoritative Taper Intent: Never drift!
-          if(c.tpMode === 0 && c.tpVal > 0){
-            state.gearTaperRatio = c.tpVal; // 1:K exact author value
-          } else if(c.tpMode === 1 && c.tpVal > 0){
-            state.gearTaperAngle = c.tpVal; // degrees exact author value
-          }
-
-          // Authoritative Thread Intent: Never drift!
-          if(c.thFmt === 1 && c.thPitch > 0){
-            state.threadTpiVal = c.thPitch;
-            state.pitch = +(25.4 / c.thPitch).toFixed(4);
-            state.threadUnit = 'tpi';
-          } else if(c.thFmt === 0 && c.thPitch > 0){
-            state.pitch = c.thPitch;
-            state.threadUnit = 'mm';
-          }
-        } else {
-          // --- Fallback Path: Legacy string parsing ---
-          if(data.measure !== undefined && data.measure !== ''){
-            var m = data.measure.toUpperCase();
-            state.unit = (m === 'IN') ? 'in' : 'mm';
-          }
-          var scale = (state.unit === 'in') ? 25.4 : 1.0;
-
-          if(data.z !== undefined && data.z !== ''){
-            state.z = parseFloat(data.z) * scale;
-          }
-
-          var controllerIsInDia = (data.diameter !== undefined) ? (data.diameter === '1') : true;
-          if(data.diameter !== undefined){
-            state.xRep = controllerIsInDia ? 'diameter' : 'radius';
-          }
-
-          if(data.x !== undefined && data.x !== ''){
-            var rawX = parseFloat(data.x) * scale;
-            state.xDia = controllerIsInDia ? rawX : (rawX * 2);
-          }
-
-          if(data.rpm !== undefined && data.rpm !== '') state.rpm = parseInt(data.rpm, 10);
-          if(data.turns !== undefined && data.turns !== '') state.turns = parseFloat(data.turns);
-          if(data.angle !== undefined && data.angle !== '') state.angle = parseFloat(data.angle);
-          if(data.status !== undefined){
-            state.runState = (data.status === 'ON' || data.status === 'SYN') ? 'running' : 'stopped';
-          }
-
-          if(data.zLeft !== undefined){
-            state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
-          }
-          if(data.zRight !== undefined){
-            state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
-          }
-          if(data.xLeft !== undefined){
-            state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
-          }
-          if(data.xRight !== undefined){
-            state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
-          }
+        // 1. Synchronize Alpine Reactive Store
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').updateFromTelemetry(data);
         }
+
+        // 2. Units & Measure (MM / IN)
+        if(data.measure !== undefined && data.measure !== ''){
+          var m = data.measure.toUpperCase();
+          state.unit = (m === 'IN') ? 'in' : 'mm';
+        } else if(c && c.measure !== undefined){
+          state.unit = c.measure === 1 ? 'in' : 'mm';
+        }
+        var scale = (state.unit === 'in') ? 25.4 : 1.0;
+
+        // 3. Coordinate Positions (Z & X)
+        if(data.z !== undefined && data.z !== ''){
+          state.z = parseFloat(data.z) * scale;
+        } else if(c && c.zDu !== undefined){
+          state.z = c.zDu / 10000.0;
+        }
+
+        var controllerIsInDia = (data.diameter !== undefined) ? (data.diameter === '1' || data.diameter === true) : (c ? c.dia : true);
+        state.xRep = controllerIsInDia ? 'diameter' : 'radius';
+
+        if(data.x !== undefined && data.x !== ''){
+          var rawX = parseFloat(data.x) * scale;
+          state.xDia = controllerIsInDia ? rawX : (rawX * 2);
+        } else if(c && c.xDu !== undefined){
+          state.xDia = (c.xDu / 10000.0) * (controllerIsInDia ? 2.0 : 1.0);
+        }
+
+        // 4. Spindle Readouts (RPM, TURNS, ANGLE)
+        if(data.rpm !== undefined && data.rpm !== ''){
+          state.rpm = parseInt(data.rpm, 10) || 0;
+        } else if(c && c.rpm !== undefined){
+          state.rpm = c.rpm;
+        }
+
+        if(data.turns !== undefined && data.turns !== ''){
+          state.turns = parseFloat(data.turns) || 0;
+        } else if(c && c.turns !== undefined){
+          state.turns = c.turns;
+        }
+
+        if(data.angle !== undefined && data.angle !== ''){
+          state.angle = parseFloat(String(data.angle).replace('°', '')) || 0;
+        } else if(c && c.angle !== undefined){
+          state.angle = c.angle;
+        }
+
+        // 5. Run State & Mode (ON / OFF / SYN)
+        if(data.status !== undefined && data.status !== ''){
+          state.runState = (data.status === 'ON' || data.status === 'SYN') ? 'running' : 'stopped';
+        } else if(c && (c.on !== undefined || c.isOn !== undefined)){
+          state.runState = (c.on || c.isOn) ? 'running' : 'stopped';
+        }
+
+        // 6. Steps (Jog & Feed)
+        if(data.step !== undefined && data.step !== ''){
+          state.step = parseFloat(data.step) * scale;
+        } else if(c && c.jogStepDu !== undefined){
+          state.step = c.jogStepDu / 10000.0;
+        }
+        if(c && c.feedStepDu !== undefined){
+          state.feedStep = c.feedStepDu / 10000.0;
+        }
+
+        // 7. Soft Limits (Z Left/Right, X Up/Down)
+        if(data.zLeft !== undefined){
+          state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
+        } else if(c && c.zLeftDu !== undefined){
+          state.zLeft = (c.zLeftDu === 2147483647) ? null : Math.abs(c.zDu - c.zLeftDu) / 10000.0;
+        }
+
+        if(data.zRight !== undefined){
+          state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
+        } else if(c && c.zRightDu !== undefined){
+          state.zRight = (c.zRightDu === -2147483648) ? null : Math.abs(c.zRightDu - c.zDu) / 10000.0;
+        }
+
+        if(data.xLeft !== undefined){
+          state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
+        } else if(c && c.xUpDu !== undefined){
+          state.xLeft = (c.xUpDu === 2147483647) ? null : Math.abs(c.xDu - c.xUpDu) / 10000.0;
+        }
+
+        if(data.xRight !== undefined){
+          state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
+        } else if(c && c.xDownDu !== undefined){
+          state.xRight = (c.xDownDu === -2147483648) ? null : Math.abs(c.xDownDu - c.xDu) / 10000.0;
+        }
+
+        // 8. Authoritative Taper Intent (Domain I)
+        if(c && c.tpPreset !== undefined && c.tpPreset >= 0){
+          state.gearTaperPresetIdx = c.tpPreset;
+          if(window.TAPER_PRESETS && window.TAPER_PRESETS[c.tpPreset]){
+            state.gearTaperRatio = window.TAPER_PRESETS[c.tpPreset].ratio;
+            state.gearTaperAngle = window.TAPER_PRESETS[c.tpPreset].angle;
+          }
+        } else if(c && c.tpMode === 0 && c.tpVal > 0){
+          state.gearTaperRatio = c.tpVal; // 1:K exact author value
+          state.gearTaperAuthMode = 'RATIO';
+          state.gearTaperAuthVal = c.tpVal;
+          state.gearTaperPresetIdx = -1;
+        } else if(c && c.tpMode === 1 && c.tpVal > 0){
+          state.gearTaperAngle = c.tpVal; // degrees exact author value
+          state.gearTaperAuthMode = 'ANGLE';
+          state.gearTaperAuthVal = c.tpVal;
+          state.gearTaperPresetIdx = -1;
+        }
+
+        // 9. Authoritative Thread Intent (Domain I)
+        if(c && c.thFmt === 1 && c.thPitch > 0){
+          state.threadTpiVal = c.thPitch;
+          state.gearPitchZ_tpi = c.thPitch;
+          state.pitch = +(25.4 / c.thPitch).toFixed(4);
+          state.threadUnit = 'tpi';
+          state.gearThreadUnit = 'tpi';
+        } else if(c && c.thFmt === 0 && c.thPitch > 0){
+          state.pitch = c.thPitch;
+          state.threadTpiVal = null;
+          state.gearPitchZ_tpi = null;
+          state.threadUnit = 'mm';
+          state.gearThreadUnit = 'metric';
+        }
+
+        // 10. Indicators & Status Message
+        if(data.abs !== undefined) state.absMode = (data.abs === '1');
+        if(data.xDro !== undefined) state.xIsDro = (data.xDro === '1');
+        if(data.zDro !== undefined) state.zIsDro = (data.zDro === '1');
+        if(data.message !== undefined && data.message !== '') state.statusMsg = data.message;
 
         // 5. Controller Operating Mode Mapping
         if(data.mode !== undefined && data.mode !== ''){

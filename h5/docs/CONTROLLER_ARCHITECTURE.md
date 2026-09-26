@@ -83,6 +83,7 @@ Stores the operator's exact authored setpoints. By storing authoring intent sepa
 | `I.tpMode` | `uint8_t` | Taper entry mode: `0` (Ratio 1:K), `1` (Angle in degrees), `2` (Preset) |
 | `I.tpVal` | `float` | Exact operator-typed taper value (e.g. `16.0` for 1:16 or `1.43` for 1.43°) |
 | `I.coneRatio`| `float` | Calculated kinematic cross-slide to carriage ratio |
+| `I.tpPreset` | `int16_t` | Selected taper preset ID (`-1` = Custom, `0` = MT0, `1` = MT1, `2` = MT2, etc.) |
 | `I.feedStepDu` | `int32_t` | Feedrate adjustment increment in deci-microns |
 | `I.jogStepDu`  | `int32_t` | Manual jog step increment in deci-microns |
 | `I.feedRev`    | `uint8_t` | Pitch reverse flag ($1 = \text{reversed}, 0 = \text{normal}$) |
@@ -152,6 +153,7 @@ The controller core enforces safety and machine geometry. Clients transmit **ope
 - `CMD.feedRev` : Reverses feed direction without recalculating pitch.
 - `CMD.taperRatio=<ratioK>` : Sets taper ratio $1:K$ (e.g. `CMD.taperRatio=16.0`).
 - `CMD.taperAngle=<deg>` : Sets taper half-angle (e.g. `CMD.taperAngle=1.43`).
+- `CMD.taperPreset=<presetId>,<deg>,<ratio>` : Sets authoritative taper preset ID and parameters (e.g. `CMD.taperPreset=2,1.4306,20.0196` for MT2).
 - `CMD.axisZero=<axis>` : Zeroes axis coordinate register (`Z`, `X`, or `Y`).
 - `CMD.axisPosDu=<axis>,<du>` : Presets axis coordinate register to an exact deci-micron position.
 - `CMD.axisLimitDu=<axis>,<L|R>,<du>` : Sets soft limit boundary.
@@ -175,3 +177,12 @@ While DRO coordinates are purely a view concern, **machining specifications** (s
 - Intent parameters (`I.thFmt`, `I.thPitch`, `I.tpVal`) are authoritative in firmware.
 - The controller core calculates the exact microstep gear ratio from these invariants.
 - All connected clients display the authoritative intent regardless of their local DRO coordinate unit setting.
+
+### 5.3 Decoupled Display Presentation Layer
+The client UI incorporates pure render-time formatters (`nanoels-formatters.js`) that compute ergonomic companion views from canonical invariants:
+- **Feedrates**: Derived from canonical `dupr` (deci-microns/rev) $\rightarrow$ `mm/rev` or `in/rev`. Time feeds derive from mm/min $\rightarrow$ `in/min`.
+- **Cutting Surface Speed**: Derived at 10 Hz from spindle RPM and live $X$ DRO workpiece diameter $\rightarrow$ `SMM` (m/min) in metric, `SFM` (ft/min) in imperial.
+- **Thread Pitch Companions**: Displaying primary specification alongside dual companion (e.g. `20 TPI (1.270 mm)` or `1.500 mm (16.93 TPI)`).
+- **Taper Multi-Format Companions**: Converting canonical slope $C = \Delta \text{Dia}/\Delta Z$ simultaneously to Ratio ($1:K$), Angle ($\theta, 2\theta$), Taper Per Foot (`in/ft`), and Metric Taper (`mm/m`).
+- **Ergonomic Jog Steps**: Unit toggle immediately snaps to the nearest native preset (`0.010 mm` $\leftrightarrow$ `0.0010 in`) rather than fractional conversions.
+
