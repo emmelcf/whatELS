@@ -3,7 +3,10 @@
  * Mirrors the ESP32 MachineModel (Kinematics, Intent, Cycle, Properties)
  * Pure unidirectional data flow with zero floating-point accumulation drift.
  */
-document.addEventListener('alpine:init', () => {
+function registerMachineStore() {
+  if (!window.Alpine) return null;
+  if (Alpine.store && Alpine.store('machine')) return Alpine.store('machine');
+
   const store = Alpine.store('machine', {
     // -------------------------------------------------------------
     // Kinematics Domain ('K.*' in deci-microns: 10,000 du = 1.0 mm)
@@ -256,17 +259,32 @@ document.addEventListener('alpine:init', () => {
     }
   });
 
-  // Attach listener to NanoELS client service if present
-  if (window.nanoelsClient) {
-    window.nanoelsClient.addEventListener('telemetry', (e) => {
-      if (e.detail) {
-        store.updateFromTelemetry(e.detail);
-      }
-    });
+  function attachClient() {
+    const s = window.Alpine && Alpine.store && Alpine.store('machine');
+    if (s && window.nanoelsClient && !s._clientAttached) {
+      s._clientAttached = true;
+      window.nanoelsClient.addEventListener('telemetry', (e) => {
+        if (e.detail) {
+          s.updateFromTelemetry(e.detail);
+        }
+      });
 
-    window.nanoelsClient.addEventListener('connection', (e) => {
-      store.connected = !!e.detail.connected;
-      if (e.detail.mode) store.backend = e.detail.mode;
-    });
+      window.nanoelsClient.addEventListener('connection', (e) => {
+        s.connected = !!e.detail.connected;
+        if (e.detail.mode) s.backend = e.detail.mode;
+      });
+    }
   }
-});
+
+  attachClient();
+  window.addEventListener('load', attachClient);
+
+  return store;
+}
+
+if (window.Alpine && window.Alpine.store) {
+  registerMachineStore();
+} else {
+  document.addEventListener('alpine:init', registerMachineStore);
+}
+
