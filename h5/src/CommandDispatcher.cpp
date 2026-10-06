@@ -55,7 +55,8 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
   if ((length >= 4 && strncmp(payload, "?get", 4) == 0) ||
       (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
     uint8_t mask = parseDomainQuery(payload);
-    String rep = RichClientAdapter::buildTelemetry(mask);
+    MachineModel m = MachineModel::captureAll();
+    String rep = RichClientAdapter::buildTelemetry(m, mask);
     if (reply) *reply = rep;
     return true;
   }
@@ -68,7 +69,8 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.get=<domains>
     if (cmdLen >= 4 && strncmp(cmd, "get=", 4) == 0) {
       uint8_t mask = parseDomainQuery(cmd + 4);
-      String rep = RichClientAdapter::buildTelemetry(mask);
+      MachineModel m = MachineModel::captureAll();
+      String rep = RichClientAdapter::buildTelemetry(m, mask);
       if (reply) *reply = rep;
       return true;
     }

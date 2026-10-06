@@ -15,8 +15,8 @@ static void serializeKinematics(String* out, const KinematicsState& k) {
   *out += "K.xDis=" + String(k.xDisabled ? 1 : 0) + "\n";
   *out += "K.yDis=" + String(k.yDisabled ? 1 : 0) + "\n";
   *out += "K.rpm=" + String(k.rpm) + "\n";
-  *out += "K.turns=" + String(k.turns) + "\n";
-  *out += "K.angle=" + String(k.angle) + "\n";
+  *out += "K.turns=" + String(k.turns, 2) + "\n";
+  *out += "K.angle=" + String(k.angle, 2) + "\n";
   *out += "K.mode=" + String(k.mode) + "\n";
   *out += "K.on=" + String(k.isOn ? 1 : 0) + "\n";
   *out += "K.estop=" + String(k.estop ? 1 : 0) + "\n";
@@ -87,19 +87,17 @@ static void serializeLegacyM(String* out, const MachineModel& m) {
   *out += "M.zDro=" + String(m.properties.zDroActive ? 1 : 0) + "\n";
   *out += "M.xDro=" + String(m.properties.xDroActive ? 1 : 0) + "\n";
   *out += "M.rpm=" + String(m.kinematics.rpm) + "\n";
-  *out += "M.turns=" + String(m.kinematics.turns) + "\n";
-  *out += "M.angle=" + String(m.kinematics.angle) + "\n";
+  *out += "M.turns=" + String(m.kinematics.turns, 2) + "\n";
+  *out += "M.angle=" + String(m.kinematics.angle, 2) + "\n";
   *out += "M.starts=" + String(m.cycle.starts) + "\n";
   *out += "M.passes=" + String(m.cycle.turnPasses) + "\n";
   *out += "M.opIdx=" + String(m.cycle.currentPass) + "\n";
   *out += "M.setupIdx=" + String(m.cycle.setupIndex) + "\n";
 }
 
-String RichClientAdapter::buildTelemetry(uint8_t domainMask) {
+String RichClientAdapter::buildTelemetry(const MachineModel& m, uint8_t domainMask) {
   String out = "";
   out.reserve(768);
-
-  MachineModel m = MachineModel::captureAll();
 
   if (domainMask & DOMAIN_KINEMATICS) {
     serializeKinematics(&out, m.kinematics);

@@ -447,7 +447,7 @@ static void dispatchTelemetry() {
   String droPayload = "";
 
   if (activeChannelMask & CHANNEL_CANONICAL) {
-    canonicalPayload = RichClientAdapter::buildTelemetry(changedDomains);
+    canonicalPayload = RichClientAdapter::buildTelemetry(current, changedDomains);
   }
   if ((activeChannelMask & CHANNEL_GRBL) && (changedDomains & DOMAIN_KINEMATICS)) {
     grblPayload = GrblSerializer::buildStatus(current);
@@ -906,14 +906,15 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     }
 
     // Unicast initial hydration frame strictly to the connecting client 'num'
+    MachineModel hydrationModel = MachineModel::captureAll();
     if (ch == CHANNEL_CANONICAL) {
-      String hydration = RichClientAdapter::buildTelemetry(DOMAIN_ALL);
+      String hydration = RichClientAdapter::buildTelemetry(hydrationModel, DOMAIN_ALL);
       webSocket.sendTXT(num, hydration);
     } else if (ch == CHANNEL_GRBL) {
-      String hydration = GrblSerializer::buildStatus(MachineModel::captureAll());
+      String hydration = GrblSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     } else if (ch == CHANNEL_DRO) {
-      String hydration = DroSerializer::buildStatus(MachineModel::captureAll());
+      String hydration = DroSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     }
   } else if (type == WStype_DISCONNECTED) {

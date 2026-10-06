@@ -1326,6 +1326,51 @@ Different clients require different wire protocols, but runtime packet parsing i
 * **Exponential Backoff Reconnect (3s $\rightarrow$ 30s)**: On genuine AP disconnect, retries back off exponentially (3s $\rightarrow$ 6s $\rightarrow$ 12s $\rightarrow$ 24s $\rightarrow$ 30s max cap) to prevent radio saturation.
 * **Nextion Hardware Status Integration**: Physical Nextion display widget `t3` displays real-time countdown status (`"WiFi retry (Xs)"`) and recovers to `"See <ip>"` upon reconnection.
 
+---
+
+## 33. Point-in-Time Atomic Snapshot Architecture & Firmware Separation
+
+### 1. Architectural Layer Separation
+To maintain modularity and prevent torn state across concurrent interrupt-driven motion tasks, the firmware strictly enforces a 3-tier unidirectional pipeline:
+
+```text
+Low-Level Hardware Layer (Input.cpp, Motion.cpp, Axis.cpp)
+  - Raw pulse counts (spindlePos, PCNT), step timings, microstepping, leadscrew pitches
+       │
+       ▼
+Canonical Machine Domain Model (MachineModel.h / MachineModel.cpp)
+  - The SOLE conversion boundary translating raw pulses to canonical physical units:
+    • turns: float revolutions
+    • angle: float degrees [0.0°, 360.0°)
+    • zDu / xDu: long deci-microns
+    • dupr: long deci-microns / rev
+       │
+       ▼
+Client Adapters & Serializers (RichClientAdapter, ClientEndpoint)
+  - Zero hardware calculations (no encoder PPR, screw pitch, or pulse math)
+  - Pure serializers consuming `const MachineModel&`
+  - Emit wire formats (WebSocket key-value, GRBL status string, DRO coordinates)
+       │
+       ▼
+Presentation Layer (Web UI Prototype / Companion Screens)
+  - Pure presentation clients consuming canonical values and applying operator preferences (mm/in, dia/rad)
+```
+
+### 2. Elimination of Torn State & Redundant Captures
+* **Atomic State Snapshots**: Push telemetry (`dispatchTelemetry`) and pull queries (`?get=`, `CMD.get=`, on-connect hydration) capture `MachineModel` exactly **once** at instant $t_0$.
+* **Forwarding Model References**: `RichClientAdapter::buildTelemetry(const MachineModel& model, uint8_t domainMask)` receives the captured snapshot directly. This eliminates the hazard of torn data where properties sampled microseconds apart could reflect different spindle rotations or axis steps.
+* **Legacy Boundary Isolation**: The physical Nextion display implementation in `Display.cpp` / `DisplayModel.cpp` remains isolated in its legacy baseline to guarantee screen stability until it is formally migrated as a unified `ClientEndpoint`.
+
+### 3. Web UI & Prototype Synchronization Fixes
+* **Continuous Spindle Kinematics**:
+  * `KinematicsState::turns` and `KinematicsState::angle` upgraded to single-precision floating point.
+  * Web UI and emulator format fractional turns (`String(k.turns, 2)`) and full 360° spindle angles without decimal stutter or artificial multiplier bugs.
+* **Robust Soft-Limit Lifecycle**:
+  * Unset limits (`LONG_MAX`, `LONG_MIN`) are sanitized across `nanoels-formatters.js`, `nanoels-service.js`, and `nanoels-state.js`, completely preventing `NaN` displays.
+  * Limit clear button dispatches explicit `clearAxisLimit` commands, resolving 0-toggle ambiguities.
+  * Keypad direct coordinate and limit entry dispatches canonical `setAxisPosDu` and `setAxisLimitDu` commands.
+
+
 
 
 

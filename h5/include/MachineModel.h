@@ -29,8 +29,8 @@ struct KinematicsState {
   bool xDisabled;
   bool yDisabled;
   int rpm;
-  long turns;
-  long angle;
+  float turns;
+  float angle;
   int mode;
   bool isOn;
   bool estop;

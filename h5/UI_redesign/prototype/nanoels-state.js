@@ -235,7 +235,13 @@ function registerMachineStore() {
         if ('on' in c) this.isOn = !!c.on;
         for (const k in c) {
           if (k in this && typeof this[k] !== 'function') {
-            this[k] = c[k];
+            if ((k === 'zRightDu' || k === 'xDownDu') && (c[k] === undefined || c[k] === null || isNaN(c[k]) || Number(c[k]) <= -2147483640)) {
+              this[k] = -2147483648;
+            } else if ((k === 'zLeftDu' || k === 'xUpDu') && (c[k] === undefined || c[k] === null || isNaN(c[k]) || Number(c[k]) >= 2147483640)) {
+              this[k] = 2147483647;
+            } else {
+              this[k] = c[k];
+            }
           }
         }
       }

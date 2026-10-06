@@ -39,8 +39,8 @@ KinematicsState MachineModel::captureKinematics() {
   k.xDisabled = x.disabled;
   k.yDisabled = y.disabled;
   k.rpm = getApproxRpm();
-  k.turns = (ENCODER_PPR > 0) ? (spindlePos / ENCODER_PPR) : 0;
-  k.angle = (ENCODER_PPR > 0) ? (abs(spindlePos) % ENCODER_PPR) * 3600 / ENCODER_PPR : 0;
+  k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
+  k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
   k.mode = mode;
   k.isOn = isOn;
   k.estop = emergencyStop;
@@ -107,8 +107,8 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
       prev.kinematics.xDisabled != current.kinematics.xDisabled ||
       prev.kinematics.yDisabled != current.kinematics.yDisabled ||
       prev.kinematics.rpm != current.kinematics.rpm ||
-      prev.kinematics.turns != current.kinematics.turns ||
-      prev.kinematics.angle != current.kinematics.angle ||
+      fabsf(prev.kinematics.turns - current.kinematics.turns) > 0.005f ||
+      fabsf(prev.kinematics.angle - current.kinematics.angle) > 0.05f ||
       prev.kinematics.mode != current.kinematics.mode ||
       prev.kinematics.isOn != current.kinematics.isOn ||
       prev.kinematics.estop != current.kinematics.estop ||

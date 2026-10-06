@@ -21,10 +21,16 @@
 
     // Limit distance-to-boundary countdown (always positive distance remaining)
     formatLimitDistance(carriageDu, limitDu, unit = 'mm', isDiameter = false) {
-      if (limitDu === undefined || limitDu === null || limitDu === 2147483647 || limitDu === -2147483648) {
+      if (limitDu === undefined || limitDu === null || limitDu === '' || isNaN(limitDu)) {
         return null;
       }
-      const distDu = Math.abs(carriageDu - limitDu);
+      const numLimit = Number(limitDu);
+      if (isNaN(numLimit) || numLimit >= 2147483640 || numLimit <= -2147483640) {
+        return null;
+      }
+      const cDu = Number(carriageDu);
+      if (isNaN(cDu)) return null;
+      const distDu = Math.abs(cDu - numLimit);
       const factor = isDiameter ? 2.0 : 1.0;
       const divisor = unit === 'in' ? 254000.0 : 10000.0;
       const dist = (distDu * factor) / divisor;
@@ -206,8 +212,6 @@
     // Spindle Angle: Strictly [0.00°, 359.99°], resets cleanly after 360
     formatAngle(angle) {
       let a = Number(angle) || 0;
-      // If angle is provided in tenths of a degree (firmware K.angle = 0..3599), convert to degrees
-      if (a > 360) a = a / 10.0;
       // Strict modulo 360 wrap
       a = ((a % 360) + 360) % 360;
       // Precision rounding near 360.00 boundary (never display 360.00)

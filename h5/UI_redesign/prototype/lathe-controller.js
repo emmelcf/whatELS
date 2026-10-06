@@ -1890,10 +1890,12 @@
   });
   $('limitCancelBtn').addEventListener('click', function(){ $('limitOverlay').classList.remove('show'); });
   $('limitSetBtn').addEventListener('click', function(){
+    var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
+    var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
     if(window.nanoelsClient){
-      var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
-      var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
-      window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
+      var curDu = isZ ? (window.nanoelsClient.canonical.zDu !== undefined ? window.nanoelsClient.canonical.zDu : Math.round(state.z * 10000.0))
+                      : (window.nanoelsClient.canonical.xDu !== undefined ? window.nanoelsClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
+      window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
     }
     state[limitTarget] = 0.000;
     $('limitOverlay').classList.remove('show'); render();
@@ -1904,10 +1906,10 @@
     openKeypad('limitTarget', curr);
   });
   $('limitClearBtn').addEventListener('click', function(){ 
+    var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
+    var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
     if(window.nanoelsClient){
-      var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
-      var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
-      window.nanoelsClient.toggleStop(isZ ? 'z' : 'x', isMin ? 'min' : 'max');
+      window.nanoelsClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
     }
     state[limitTarget] = null; $('limitOverlay').classList.remove('show'); render(); 
   });
@@ -3343,14 +3345,65 @@
     var v = parseFloat(raw !== '' ? raw : '0');
     if(!isNaN(v)){
       var mm = state.unit==='mm' ? v : v*25.4;
-      if(kpTarget==='coordZ'){ state.z = mm; }
-      else if(kpTarget==='coordX'){ state.xDia = state.xRep==='diameter' ? mm : mm*2; }
-      else if(kpTarget==='limitTarget'){ state[limitTarget] = mm; }
+      if(kpTarget==='coordZ'){
+        state.z = mm;
+        var zDu = Math.round(mm * 10000.0);
+        if(window.nanoelsClient){
+          window.nanoelsClient.setAxisPosDu('z', zDu);
+        }
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').zDu = zDu;
+        }
+      }
+      else if(kpTarget==='coordX'){
+        state.xDia = state.xRep==='diameter' ? mm : mm*2;
+        var radiusMm = state.xRep==='diameter' ? mm / 2.0 : mm;
+        var xDu = Math.round(radiusMm * 10000.0);
+        if(window.nanoelsClient){
+          window.nanoelsClient.setAxisPosDu('x', xDu);
+        }
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').xDu = xDu;
+        }
+      }
+      else if(kpTarget==='limitTarget'){
+        var distMm = Math.abs(mm);
+        state[limitTarget] = distMm;
+        if(window.nanoelsClient){
+          var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
+          var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
+          var targetCoordDu = 0;
+          if(limitTarget === 'zLeft'){
+            var curZ = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.zDu !== undefined) ? (window.nanoelsClient.canonical.zDu / 10000.0) : state.z;
+            targetCoordDu = Math.round((curZ - distMm) * 10000.0);
+          } else if(limitTarget === 'zRight'){
+            var curZ = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.zDu !== undefined) ? (window.nanoelsClient.canonical.zDu / 10000.0) : state.z;
+            targetCoordDu = Math.round((curZ + distMm) * 10000.0);
+          } else if(limitTarget === 'xLeft'){
+            var curRad = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.xDu !== undefined) ? (window.nanoelsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
+            targetCoordDu = Math.round((curRad - deltaRad) * 10000.0);
+          } else if(limitTarget === 'xRight'){
+            var curRad = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.xDu !== undefined) ? (window.nanoelsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
+            targetCoordDu = Math.round((curRad + deltaRad) * 10000.0);
+          }
+          window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
+        }
+      }
       else if(kpTarget==='step'){
+        var stepVal = Math.abs(v);
         if(state.unit === 'mm'){
-          JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length] = Math.abs(v);
+          JOG_STEPS_MM[state.stepIdx % JOG_STEPS_MM.length] = stepVal;
         } else {
-          JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = Math.abs(v);
+          JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = stepVal;
+        }
+        var stepDu = Math.round((state.unit === 'in' ? stepVal * 254000.0 : stepVal * 10000.0));
+        if(window.nanoelsClient){
+          window.nanoelsClient.setJogStepDu(stepDu);
+        }
+        if(window.Alpine && Alpine.store('machine')){
+          Alpine.store('machine').jogStepDu = stepDu;
         }
       }
       else if(kpTarget==='gearPitchZ'){
@@ -3940,28 +3993,40 @@
         }
 
         // 7. Soft Limits (Z Left/Right, X Up/Down)
-        if(c && c.zLeftDu !== undefined){
-          state.zLeft = (c.zLeftDu === 2147483647) ? null : Math.abs(c.zDu - c.zLeftDu) / 10000.0;
-        } else if(data.zLeft !== undefined){
-          state.zLeft = (data.zLeft === '') ? null : Math.abs(parseFloat(data.zLeft)) * scale;
+        if(c && c.zLeftDu !== undefined && !isNaN(c.zLeftDu)){
+          var vZL = Number(c.zLeftDu);
+          state.zLeft = (vZL >= 2147483640 || vZL <= -2147483640) ? null : Math.abs(c.zDu - vZL) / 10000.0;
+        } else if(data.zLeft !== undefined && data.zLeft !== '' && data.zLeft !== '--' && !isNaN(data.zLeft)){
+          state.zLeft = Math.abs(parseFloat(data.zLeft)) * scale;
+        } else {
+          state.zLeft = null;
         }
 
-        if(c && c.zRightDu !== undefined){
-          state.zRight = (c.zRightDu === -2147483648) ? null : Math.abs(c.zRightDu - c.zDu) / 10000.0;
-        } else if(data.zRight !== undefined){
-          state.zRight = (data.zRight === '') ? null : Math.abs(parseFloat(data.zRight)) * scale;
+        if(c && c.zRightDu !== undefined && !isNaN(c.zRightDu)){
+          var vZR = Number(c.zRightDu);
+          state.zRight = (vZR >= 2147483640 || vZR <= -2147483640) ? null : Math.abs(vZR - c.zDu) / 10000.0;
+        } else if(data.zRight !== undefined && data.zRight !== '' && data.zRight !== '--' && !isNaN(data.zRight)){
+          state.zRight = Math.abs(parseFloat(data.zRight)) * scale;
+        } else {
+          state.zRight = null;
         }
 
-        if(c && c.xUpDu !== undefined){
-          state.xLeft = (c.xUpDu === 2147483647) ? null : Math.abs(c.xDu - c.xUpDu) / 10000.0;
-        } else if(data.xLeft !== undefined){
-          state.xLeft = (data.xLeft === '') ? null : Math.abs(parseFloat(data.xLeft)) * scale;
+        if(c && c.xUpDu !== undefined && !isNaN(c.xUpDu)){
+          var vXU = Number(c.xUpDu);
+          state.xLeft = (vXU >= 2147483640 || vXU <= -2147483640) ? null : Math.abs(c.xDu - vXU) / 10000.0;
+        } else if(data.xLeft !== undefined && data.xLeft !== '' && data.xLeft !== '--' && !isNaN(data.xLeft)){
+          state.xLeft = Math.abs(parseFloat(data.xLeft)) * scale;
+        } else {
+          state.xLeft = null;
         }
 
-        if(c && c.xDownDu !== undefined){
-          state.xRight = (c.xDownDu === -2147483648) ? null : Math.abs(c.xDownDu - c.xDu) / 10000.0;
-        } else if(data.xRight !== undefined){
-          state.xRight = (data.xRight === '') ? null : Math.abs(parseFloat(data.xRight)) * scale;
+        if(c && c.xDownDu !== undefined && !isNaN(c.xDownDu)){
+          var vXD = Number(c.xDownDu);
+          state.xRight = (vXD >= 2147483640 || vXD <= -2147483640) ? null : Math.abs(vXD - c.xDu) / 10000.0;
+        } else if(data.xRight !== undefined && data.xRight !== '' && data.xRight !== '--' && !isNaN(data.xRight)){
+          state.xRight = Math.abs(parseFloat(data.xRight)) * scale;
+        } else {
+          state.xRight = null;
         }
 
         // 8. Authoritative Taper Intent (Domain I)

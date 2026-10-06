@@ -474,7 +474,10 @@ class NanoelsEmulator {
       `UI.step=${stepStr}\n` +
       `UI.rpm=${this.rpm}\n` +
       `UI.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
-      `UI.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
+      `UI.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(2)}\n` +
+      `UI.z=${zMm}\n` +
+      `UI.zLeft=${zLeftStr}\n` +
+      `UI.zRight=${zRightStr}\n` +
       `UI.x=${xMm}\n` +
       `UI.diameter=${this.isDiameterMode ? '1' : '0'}\n` +
       `UI.xLeft=${xLeftStr}\n` +
@@ -510,8 +513,8 @@ class NanoelsEmulator {
       `M.xUpDu=${xUpVal}\n` +
       `M.xDownDu=${xDownVal}\n` +
       `M.rpm=${Math.round(this.rpm)}\n` +
-      `M.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
-      `M.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
+      `M.turns=${this.turns.toFixed(2)}\n` +
+      `M.angle=${(this.angle % 360).toFixed(2)}\n` +
       `M.dia=${this.isDiameterMode ? 1 : 0}\n` +
       `M.abs=1\n` +
       `M.zDro=0\n` +
@@ -548,8 +551,8 @@ class NanoelsEmulator {
              `K.xDis=0\n` +
              `K.yDis=0\n` +
              `K.rpm=${Math.round(this.rpm)}\n` +
-             `K.turns=${typeof Formatters !== 'undefined' ? Formatters.formatTurns(this.turns) : this.turns.toFixed(2)}\n` +
-             `K.angle=${typeof Formatters !== 'undefined' ? Formatters.formatAngle(this.angle) : this.angle.toFixed(1)}\n` +
+             `K.turns=${this.turns.toFixed(2)}\n` +
+             `K.angle=${(this.angle % 360).toFixed(2)}\n` +
              `K.mode=${modeInt}\n` +
              `K.on=${this.isOn ? 1 : 0}\n` +
              `K.estop=0\n` +

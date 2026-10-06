@@ -534,7 +534,14 @@ class NanoelsService extends EventTarget {
             if (typeof this.canonical[key] === 'boolean') {
               this.canonical[key] = val === '1' || val === 'true';
             } else if (typeof this.canonical[key] === 'number') {
-              this.canonical[key] = parseFloat(val);
+              const num = parseFloat(val);
+              if (!isNaN(num)) {
+                this.canonical[key] = num;
+              } else if (key === 'zRightDu' || key === 'xDownDu') {
+                this.canonical[key] = -2147483648;
+              } else if (key === 'zLeftDu' || key === 'xUpDu') {
+                this.canonical[key] = 2147483647;
+              }
             } else {
               this.canonical[key] = val;
             }
