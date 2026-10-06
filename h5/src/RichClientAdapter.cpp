@@ -117,32 +117,19 @@ String RichClientAdapter::buildTelemetry(uint8_t domainMask) {
   return out;
 }
 
+static MachineModel lastCapturedModel = {};
+static bool hasCapturedInitial = false;
+
 bool RichClientAdapter::hasStateChanged() {
   MachineModel m = MachineModel::captureAll();
-
-  unsigned long hash = 0;
-  hash += (unsigned long)m.kinematics.mode * 31;
-  hash += (unsigned long)(m.kinematics.isOn ? 1 : 0) * 17;
-  hash += (unsigned long)m.kinematics.dupr;
-  hash += (unsigned long)round(m.intent.thread.authorPitch * 1000.0f);
-  hash += (unsigned long)round(m.intent.taper.authorVal * 1000.0f);
-  hash += (unsigned long)m.intent.feedStepDu;
-  hash += (unsigned long)m.intent.jogStepDu;
-  hash += (unsigned long)m.kinematics.zDu;
-  hash += (unsigned long)m.kinematics.xDu * 3;
-  hash += (unsigned long)m.kinematics.zLeftDu;
-  hash += (unsigned long)m.kinematics.zRightDu;
-  hash += (unsigned long)m.kinematics.xUpDu;
-  hash += (unsigned long)m.kinematics.xDownDu;
-  hash += (unsigned long)m.kinematics.rpm * 7;
-  hash += (unsigned long)(m.kinematics.estop ? 1 : 0) * 13;
-  hash += (unsigned long)(m.kinematics.zDisabled ? 1 : 0);
-  hash += (unsigned long)(m.kinematics.xDisabled ? 1 : 0);
-  hash += (unsigned long)(m.properties.isDiameterMode ? 1 : 0);
-  hash += (unsigned long)(m.properties.isAbsoluteMode ? 1 : 0);
-
-  if (hash != lastTelemetryHash) {
-    lastTelemetryHash = hash;
+  if (!hasCapturedInitial) {
+    hasCapturedInitial = true;
+    lastCapturedModel = m;
+    return true;
+  }
+  uint8_t changed = MachineModel::detectChangedDomains(lastCapturedModel, m);
+  if (changed != DOMAIN_NONE) {
+    lastCapturedModel = m;
     return true;
   }
   return false;

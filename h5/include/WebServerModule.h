@@ -28,6 +28,23 @@ extern volatile byte webUiHeldMoveAction;
 extern volatile unsigned long webUiHeldMoveMillis;
 extern volatile bool webUiMoveReleaseRequested;
 
+enum ClientChannel : uint8_t {
+  CHANNEL_NONE      = 0,
+  CHANNEL_CANONICAL = 1 << 0,
+  CHANNEL_GRBL      = 1 << 1,
+  CHANNEL_DRO       = 1 << 2
+};
+
+struct ClientSession {
+  uint8_t clientId;
+  bool active;
+  ClientChannel channel;
+  uint32_t lastPushMillis;
+};
+
+extern ClientSession clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX];
+extern uint8_t activeChannelMask;
+
 extern WebServer server;
 extern WebSocketsServer webSocket;
 extern volatile int webSocketClientCount;

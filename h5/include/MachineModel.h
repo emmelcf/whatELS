@@ -77,4 +77,8 @@ struct MachineModel {
   static CycleState captureCycle();
   static MachineProperties captureProperties();
   static MachineModel captureAll();
+
+  // Returns bitmask of DomainFlags that changed between prev and current
+  static uint8_t detectChangedDomains(const MachineModel& prev, const MachineModel& current);
+  static bool hasChanged(const MachineModel& prev, const MachineModel& current, uint8_t domainMask = DOMAIN_ALL);
 };

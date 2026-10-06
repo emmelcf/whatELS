@@ -165,6 +165,60 @@ Configuration settings follow a strict transaction flow:
 2. **Write**: `SETTINGS.set=<key>,<val>` $\rightarrow$ Controller validates bounds, persists to NVS `Preferences`, updates `MachineModel::properties`, and replies unicast: `OK:SETTINGS.<key>=<val>`.
 3. **Synchronization**: Controller marks `DOMAIN_PROPERTIES` as modified, triggering an automatic push of `P.*` to all canonical channel subscribers so all screens update in real time.
 
+### 3.6 Multi-Task Concurrency & Mutex Protection (`wsMutex`)
+The ESP32-S3 runs a dual-core FreeRTOS architecture where hard real-time stepper motors and asynchronous network/display I/O must coexist without race conditions or latency spikes:
+
+- **Core 1 (Real-Time Motion Priority)**:
+  - `taskMoveZ`, `taskMoveX`: DDA stepper pulse timing and hardware encoder quadrature ISRs run at maximum FreeRTOS priority.
+  - Motion loops **never** acquire network locks or wait on WiFi I/O, guaranteeing zero step pulse jitter regardless of network load.
+- **Core 0 (Network & Display Pipeline)**:
+  - `taskWiFi`: Runs `webSocket.loop()`, WiFi connection management, and HTTP REST handlers.
+  - `taskDisplay`: Periodically runs `publishMachineStatus()` to push state updates to WebSocket and Nextion displays.
+- **Recursive FreeRTOS Mutex (`wsMutex`)**:
+  - `webSocket` packet transmission (`sendTXT`), client session enumeration, and `loop()` are guarded by a recursive mutex (`xSemaphoreCreateRecursiveMutex`).
+  - A recursive mutex is mandatory because `webSocket.loop()` inside `taskWiFi` invokes `handleWebSocketEvent()`, which can in turn invoke `handleWebUiEventCommand()` and synchronously call `sendTXT(clientId, ...)` without self-deadlock.
+  - When `publishMachineStatus()` is called from `taskDisplay`, it acquires `wsMutex` with a non-blocking timeout, serializing telemetry and pushing frames cleanly without memory corruption or socket race conditions.
+
+### 3.7 Dedicated Settings Service & Parameter Ledger
+Configuration reads and writes are managed by [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h) and [`SettingsService.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp), isolating NVS persistence and validation from command routing:
+
+| Setting Key | Type | Min | Max | NVS Key | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `screwZDu` | `int32_t` | 1,000 | 500,000 | `"screwZ"` | Z leadscrew pitch in deci-microns (e.g. `20000` = 2.0mm) |
+| `screwXDu` | `int32_t` | 1,000 | 500,000 | `"screwX"` | X leadscrew pitch in deci-microns |
+| `screwYDu` | `int32_t` | 1,000 | 500,000 | `"screwY"` | Y auxiliary leadscrew pitch in deci-microns |
+| `motorStepsZ` | `uint16_t` | 200 | 25,600 | `"stepsZ"` | Microsteps per revolution for Z stepper |
+| `motorStepsX` | `uint16_t` | 200 | 25,600 | `"stepsX"` | Microsteps per revolution for X stepper |
+| `motorStepsY` | `uint16_t` | 200 | 25,600 | `"stepsY"` | Microsteps per revolution for Y stepper |
+| `encoderPpr` | `uint16_t` | 100 | 40,000 | `"encPpr"` | Spindle encoder quadrature pulses per rev |
+| `measure` | `uint8_t` | 0 | 1 | `"measure"` | Display units: `0` = Metric (mm), `1` = Imperial (inch) |
+| `dia` | `uint8_t` | 0 | 1 | `"dia"` | X DRO mode: `0` = Radius, `1` = Diameter |
+| `abs` | `uint8_t` | 0 | 1 | `"abs"` | Coordinate mode: `0` = Incremental, `1` = Absolute |
+| `zDro` | `uint8_t` | 0 | 1 | `"zDro"` | Z scale source: `0` = Motor steps, `1` = External glass DRO |
+| `xDro` | `uint8_t` | 0 | 1 | `"xDro"` | X scale source: `0` = Motor steps, `1` = External glass DRO |
+| `feedStepDu` | `int32_t` | 1 | 100,000 | `"feedStep"` | Feedrate nudge increment in deci-microns |
+| `jogStepDu` | `int32_t` | 1 | 100,000 | `"jogStep"` | Manual jog step increment in deci-microns |
+| `backlashZDu` | `int32_t` | 0 | 50,000 | `"backlashZ"`| Z axis leadscrew backlash compensation in `du` |
+| `backlashXDu` | `int32_t` | 0 | 50,000 | `"backlashX"`| X axis leadscrew backlash compensation in `du` |
+
+- Out-of-range values are rejected immediately with `ERR:INVALID_RANGE`.
+- Unrecognized keys return `ERR:UNKNOWN_KEY`.
+- Valid writes automatically mutate `MachineModel::properties`, save to NVS flash via `Preferences`, and mark `DOMAIN_PROPERTIES` as changed so all connected displays receive updated `P.*` packets.
+
+### 3.8 Industrial Shop-Floor EMI & Transient Network Hardening
+Machine shop environments feature high electrical interference (VFD spindle drives, contactor arcing, servo switching), leading to occasional 2.4 GHz packet drops or beacon timeouts:
+
+1. **Transient Disconnect Debounce (2.5 seconds)**:
+   - When `WiFi.status() != WL_CONNECTED`, the controller does not immediately tear down connections or trigger a reconnection storm.
+   - It debounces for 2,500 ms. If the AP beacon recovers during this window, normal streaming resumes without dropping TCP sockets or disrupting operator UI views.
+2. **Exponential Backoff Reconnect Loop (3s $\rightarrow$ 30s)**:
+   - If AP connectivity is genuinely lost, the controller initiates a background reconnection sequence.
+   - Initial retry occurs after 3 seconds, doubling on subsequent failures (6s $\rightarrow$ 12s $\rightarrow$ 24s $\rightarrow$ 30s maximum cap) to prevent radio bus saturation and excessive CPU consumption.
+3. **Physical Display Status Integration (Nextion LCD)**:
+   - During reconnection, the controller publishes countdown telemetry to physical displays (`t3.txt="WiFi retry (Xs)"`).
+   - Hardware operators at the lathe are immediately informed that remote web clients are in reconnect state.
+   - Once reconnected, `t3.txt` is updated with `"See <ip>"`, and remote Web UIs reconnect and receive a fresh hydration frame automatically.
+
 ---
 
 ## 4. Semantic Intent Wire Protocol

@@ -1287,8 +1287,45 @@ The controller maintains an authoritative `IntentState` structure in firmware (`
    * `CMD.taperPreset=2,1.4306,20.0196`
    * `CMD.taperRatio=19`
    * `CMD.taperAngle=1.79`
-3. **Telemetry Hydration**: Telemetry parsers (`nanoels-service.js` and `lathe-controller.js`) hydrate `Alpine.store('machine')` and `state` directly from `c.thPitch`, `c.thFmt`, `c.tpPreset`, and `c.tpVal`.
 4. **Render-Time Formatters**: Formatters in `nanoels-formatters.js` render primary strings directly from the intent registers, and calculate companions on demand, guaranteeing zero decimal flicker and zero cumulative drift.
+
+---
+
+## 32. Multi-Client WebSocket Server Architecture & Shop-Hardened Resilience
+
+### 1. Heterogeneous Channel Routing (`/canonical`, `/grbl`, `/dro`)
+Different clients require different wire protocols, but runtime packet parsing introduces CPU and latency overhead:
+* **HTTP Upgrade URL Routing**:
+  * `ws://<ip>:81/` or `ws://<ip>:81/canonical` $\rightarrow$ `CHANNEL_CANONICAL`: Full 4-domain semantic state (`K.*`, `I.*`, `C.*`, `P.*`) for the rich Web UI and companion touchscreens.
+  * `ws://<ip>:81/grbl` $\rightarrow$ `CHANNEL_GRBL`: Emits `<Idle|WPos:...|FS:...>` format compatible with standard CNC senders (Universal Gcode Sender, CNCjs).
+  * `ws://<ip>:81/dro` $\rightarrow$ `CHANNEL_DRO`: Emits lightweight coordinate stream (`K.zDu`, `K.xDu`, `K.rpm`) for minimal wireless digital readouts.
+* **Zero Runtime Packet Overhead**: Routing is established once during the WebSocket handshake (`WStype_CONNECTED`). Subscriptions do not require dynamic parsing or filtering per frame.
+* **Active Channel Masking**: Channels without active client connections are never serialized, burning zero CPU cycles.
+
+### 2. Change-Driven Telemetry & Quiescence
+* **Zero Minimum Rate**: When the lathe is idle and spindle is stationary, the telemetry engine enters total quiescence (`changedDomains == DOMAIN_NONE`). No packets are emitted, conserving radio bandwidth and CPU cycles.
+* **35 ms Rate-Ceiling Clamp (~28 Hz)**: Rapid motion (2,500+ RPM spindle rotation or fast carriage rapids) is clamped to a clean 35 ms minimum interval, preventing TCP buffer bloat and ensuring Core 1 stepper timing (`taskMoveZ`, `taskMoveX`) is never starved.
+
+### 3. Dedicated `SettingsService` & Unicast Transaction Protocol
+* **Strict Unicast Request/Reply**: Commands (`SETTINGS.get`, `SETTINGS.set`, `?sysinfo`, `?get`) reply exclusively to the requesting client ID via `webSocket.sendTXT(clientId, ...)` rather than broadcasting to all connected screens.
+* **Settings Bounds Checking & NVS Storage**:
+  * Handled by dedicated [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h) and [`SettingsService.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp).
+  * Validates leadscrew pitches, microsteps, encoder PPR, backlash compensation, and DRO scale sources against strict physical bounds.
+  * Mutates `Preferences` in non-volatile flash and sets `DOMAIN_PROPERTIES` dirty so all canonical clients synchronize automatically.
+* **Client-Side Promise Transactions**:
+  * [`nanoels-service.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-service.js) implements `getSettings(key)` and `setSetting(key, val)` using asynchronous Promise queues matching incoming `SETTING.<key>`, `OK:SETTINGS.<key>`, or `ERR:SETTINGS.<key>`.
+  * [`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js) mirrors this interface for seamless offline UI development.
+
+### 4. Multi-Core Concurrency & Recursive Mutex (`wsMutex`)
+* Stepper pulse generation runs on Core 1 at maximum FreeRTOS priority with zero network mutex acquisition.
+* Display updates (`taskDisplay`) and WebSocket networking (`taskWiFi`) run on Core 0.
+* WebSocket loop and transmission are protected by a FreeRTOS recursive mutex (`xSemaphoreCreateRecursiveMutex`), preventing memory corruption across tasks while safely allowing synchronous command replies from inside the socket loop without self-deadlock.
+
+### 5. Shop-Hardened Transient Network & EMI Resilience
+* **2.5s Disconnect Debounce**: Machine shop electrical noise (spindle VFD switching, contactors) can cause brief WiFi frame drops. The firmware debounces disconnections for 2,500 ms before resetting the connection, avoiding false alarms and socket teardowns.
+* **Exponential Backoff Reconnect (3s $\rightarrow$ 30s)**: On genuine AP disconnect, retries back off exponentially (3s $\rightarrow$ 6s $\rightarrow$ 12s $\rightarrow$ 24s $\rightarrow$ 30s max cap) to prevent radio saturation.
+* **Nextion Hardware Status Integration**: Physical Nextion display widget `t3` displays real-time countdown status (`"WiFi retry (Xs)"`) and recovers to `"See <ip>"` upon reconnection.
+
 
 
 

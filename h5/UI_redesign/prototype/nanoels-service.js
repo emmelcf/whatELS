@@ -17,6 +17,7 @@ class NanoelsService extends EventTarget {
     this.heartbeatTimer = null;
     this.activeHolds = new Set();
     this.reconnectTimer = null;
+    this._settingsTransactions = [];
 
     // Normalized controller state (UI display strings)
     this.state = {
@@ -195,7 +196,7 @@ class NanoelsService extends EventTarget {
   }
 
   _connectWebSocket() {
-    const wsUrl = `ws://${this.host}:${this.port}`;
+    const wsUrl = `ws://${this.host}:${this.port}/canonical`;
     this._log('SYS', `Connecting to ${wsUrl}...`, 'Opening WebSocket connection');
     this._emit('connection', { connected: false, connecting: true, mode: 'live', host: this.host });
 
@@ -203,9 +204,8 @@ class NanoelsService extends EventTarget {
       this.ws = new WebSocket(wsUrl);
       this.ws.onopen = () => {
         this.state.connected = true;
-        this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established');
+        this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established (Channel: Canonical)');
         this._emit('connection', { connected: true, mode: 'live', host: this.host });
-        this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
         this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
       };
 
@@ -432,6 +432,63 @@ class NanoelsService extends EventTarget {
     this.sendRaw(`?get=${domains}\n`, `Query state [${domains}]`);
   }
 
+  // Settings Transaction API (Unicast Request-Response)
+  getSettings(key = 'ALL') {
+    return new Promise((resolve, reject) => {
+      const txnId = Math.random().toString(36).substring(2, 9);
+      const timer = setTimeout(() => {
+        const idx = this._settingsTransactions.findIndex(t => t.id === txnId);
+        if (idx !== -1) {
+          const txn = this._settingsTransactions[idx];
+          this._settingsTransactions.splice(idx, 1);
+          if (txn.type === 'get' && txn.key === 'all' && Object.keys(txn.results).length > 0) {
+            resolve(txn.results);
+          } else {
+            reject(new Error(`SETTINGS.get timeout for ${key}`));
+          }
+        }
+      }, 1500);
+
+      this._settingsTransactions.push({
+        id: txnId,
+        type: 'get',
+        key: key.toLowerCase(),
+        targetKey: key,
+        resolve,
+        reject,
+        timer,
+        results: {}
+      });
+
+      this.sendRaw(`SETTINGS.get=${key}\n`, `Get Setting [${key}]`);
+    });
+  }
+
+  setSetting(key, val) {
+    return new Promise((resolve, reject) => {
+      const txnId = Math.random().toString(36).substring(2, 9);
+      const timer = setTimeout(() => {
+        const idx = this._settingsTransactions.findIndex(t => t.id === txnId);
+        if (idx !== -1) {
+          this._settingsTransactions.splice(idx, 1);
+          reject(new Error(`SETTINGS.set timeout for ${key}`));
+        }
+      }, 2000);
+
+      this._settingsTransactions.push({
+        id: txnId,
+        type: 'set',
+        key: key.toLowerCase(),
+        targetKey: key,
+        resolve,
+        reject,
+        timer
+      });
+
+      this.sendRaw(`SETTINGS.set=${key},${val}\n`, `Set Setting [${key}=${val}]`);
+    });
+  }
+
   // Backward-compatible Pitch / Feedrate setters
   setPitch(pitchMm) {
     this.setFeedMm(pitchMm);
@@ -521,6 +578,55 @@ class NanoelsService extends EventTarget {
             telemetryChanged = true;
           }
         }
+      } else if (line.startsWith('SETTING.')) {
+        this._log('RX', line, 'Setting Value');
+        const eq = line.indexOf('=');
+        if (eq !== -1) {
+          const k = line.substring(8, eq);
+          const v = line.substring(eq + 1);
+          if (k in this.canonical) {
+            this.canonical[k] = (typeof this.canonical[k] === 'number') ? parseFloat(v) : v;
+            telemetryChanged = true;
+          }
+          for (let i = this._settingsTransactions.length - 1; i >= 0; i--) {
+            const txn = this._settingsTransactions[i];
+            if (txn.type === 'get') {
+              if (txn.key === k.toLowerCase()) {
+                clearTimeout(txn.timer);
+                this._settingsTransactions.splice(i, 1);
+                txn.resolve({ [k]: v });
+              } else if (txn.key === 'all') {
+                txn.results[k] = v;
+              }
+            }
+          }
+        }
+      } else if (line.startsWith('OK:SETTINGS.')) {
+        this._log('RX', line, 'Setting Updated');
+        const eq = line.indexOf('=');
+        const k = eq !== -1 ? line.substring(12, eq) : line.substring(12);
+        const v = eq !== -1 ? line.substring(eq + 1) : '';
+        for (let i = this._settingsTransactions.length - 1; i >= 0; i--) {
+          const txn = this._settingsTransactions[i];
+          if (txn.type === 'set' && txn.key === k.toLowerCase()) {
+            clearTimeout(txn.timer);
+            this._settingsTransactions.splice(i, 1);
+            txn.resolve({ key: k, val: v, status: 'ok' });
+          }
+        }
+      } else if (line.startsWith('ERR:SETTINGS.')) {
+        this._log('ERR', line, 'Setting Error');
+        const eq = line.indexOf('=');
+        const k = eq !== -1 ? line.substring(13, eq) : line.substring(13);
+        const reason = eq !== -1 ? line.substring(eq + 1) : 'Unknown error';
+        for (let i = this._settingsTransactions.length - 1; i >= 0; i--) {
+          const txn = this._settingsTransactions[i];
+          if (txn.key === k.toLowerCase()) {
+            clearTimeout(txn.timer);
+            this._settingsTransactions.splice(i, 1);
+            txn.reject(new Error(reason));
+          }
+        }
       } else if (line.startsWith('SYSINFO.')) {
         if (line.startsWith('SYSINFO.version=')) {
           this.state.version = line.substring('SYSINFO.version='.length);
@@ -534,6 +640,16 @@ class NanoelsService extends EventTarget {
         this._log('RX', line, 'Key Press Remote Event');
       } else {
         this._log('RX', line, 'Controller Message');
+      }
+    }
+
+    // Resolve any 'get all' settings transactions that accumulated values
+    for (let i = this._settingsTransactions.length - 1; i >= 0; i--) {
+      const txn = this._settingsTransactions[i];
+      if (txn.type === 'get' && txn.key === 'all' && Object.keys(txn.results).length > 0) {
+        clearTimeout(txn.timer);
+        this._settingsTransactions.splice(i, 1);
+        txn.resolve(txn.results);
       }
     }
 

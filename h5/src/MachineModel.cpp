@@ -93,6 +93,70 @@ MachineModel MachineModel::captureAll() {
   return m;
 }
 
+uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const MachineModel& current) {
+  uint8_t changed = DOMAIN_NONE;
+
+  if (prev.kinematics.zDu != current.kinematics.zDu ||
+      prev.kinematics.xDu != current.kinematics.xDu ||
+      prev.kinematics.yDu != current.kinematics.yDu ||
+      prev.kinematics.zLeftDu != current.kinematics.zLeftDu ||
+      prev.kinematics.zRightDu != current.kinematics.zRightDu ||
+      prev.kinematics.xUpDu != current.kinematics.xUpDu ||
+      prev.kinematics.xDownDu != current.kinematics.xDownDu ||
+      prev.kinematics.zDisabled != current.kinematics.zDisabled ||
+      prev.kinematics.xDisabled != current.kinematics.xDisabled ||
+      prev.kinematics.yDisabled != current.kinematics.yDisabled ||
+      prev.kinematics.rpm != current.kinematics.rpm ||
+      prev.kinematics.turns != current.kinematics.turns ||
+      prev.kinematics.angle != current.kinematics.angle ||
+      prev.kinematics.mode != current.kinematics.mode ||
+      prev.kinematics.isOn != current.kinematics.isOn ||
+      prev.kinematics.estop != current.kinematics.estop ||
+      prev.kinematics.dupr != current.kinematics.dupr ||
+      prev.kinematics.nextDupr != current.kinematics.nextDupr) {
+    changed |= DOMAIN_KINEMATICS;
+  }
+
+  if (prev.intent.thread.format != current.intent.thread.format ||
+      abs(prev.intent.thread.authorPitch - current.intent.thread.authorPitch) > 0.0001f ||
+      prev.intent.thread.dupr != current.intent.thread.dupr ||
+      prev.intent.taper.modeType != current.intent.taper.modeType ||
+      abs(prev.intent.taper.authorVal - current.intent.taper.authorVal) > 0.0001f ||
+      abs(prev.intent.taper.coneRatio - current.intent.taper.coneRatio) > 0.000001f ||
+      prev.intent.taper.presetId != current.intent.taper.presetId ||
+      prev.intent.feedStepDu != current.intent.feedStepDu ||
+      prev.intent.jogStepDu != current.intent.jogStepDu ||
+      prev.intent.feedReverse != current.intent.feedReverse) {
+    changed |= DOMAIN_INTENT;
+  }
+
+  if (prev.cycle.turnPasses != current.cycle.turnPasses ||
+      prev.cycle.currentPass != current.cycle.currentPass ||
+      prev.cycle.setupIndex != current.cycle.setupIndex ||
+      prev.cycle.starts != current.cycle.starts) {
+    changed |= DOMAIN_CYCLE;
+  }
+
+  if (prev.properties.measure != current.properties.measure ||
+      prev.properties.isDiameterMode != current.properties.isDiameterMode ||
+      prev.properties.isAbsoluteMode != current.properties.isAbsoluteMode ||
+      prev.properties.zDroActive != current.properties.zDroActive ||
+      prev.properties.xDroActive != current.properties.xDroActive ||
+      prev.properties.screwZDu != current.properties.screwZDu ||
+      prev.properties.screwXDu != current.properties.screwXDu ||
+      prev.properties.motorStepsZ != current.properties.motorStepsZ ||
+      prev.properties.motorStepsX != current.properties.motorStepsX ||
+      prev.properties.encoderPpr != current.properties.encoderPpr) {
+    changed |= DOMAIN_PROPERTIES;
+  }
+
+  return changed;
+}
+
+bool MachineModel::hasChanged(const MachineModel& prev, const MachineModel& current, uint8_t domainMask) {
+  return (detectChangedDomains(prev, current) & domainMask) != 0;
+}
+
 uint8_t parseDomainQuery(const char* query) {
   if (!query || *query == '\0') return DOMAIN_ALL;
 

@@ -25,6 +25,30 @@ public:
   virtual bool hasChanged(const MachineModel& model) = 0;
 };
 
+// GRBL Serializer (CNC Senders / Compact status string)
+class GrblSerializer : public ITelemetrySerializer {
+public:
+  String serialize(const MachineModel& model, uint8_t domainMask) override {
+    return buildStatus(model);
+  }
+  bool hasChanged(const MachineModel& model) override {
+    return true;
+  }
+  static String buildStatus(const MachineModel& model);
+};
+
+// DRO Serializer (Minimal Wireless DRO Coordinates)
+class DroSerializer : public ITelemetrySerializer {
+public:
+  String serialize(const MachineModel& model, uint8_t domainMask) override {
+    return buildStatus(model);
+  }
+  bool hasChanged(const MachineModel& model) override {
+    return true;
+  }
+  static String buildStatus(const MachineModel& model);
+};
+
 // -----------------------------------------------------------------------------
 // 3. Translator Interface (Translates Inbound Wire Events -> Canonical Commands)
 // -----------------------------------------------------------------------------

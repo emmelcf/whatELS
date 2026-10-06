@@ -6,6 +6,7 @@
 #include "MachineModel.h"
 #include "RichClientAdapter.h"
 #include "WebServerModule.h"
+#include "SettingsService.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -14,7 +15,7 @@ static Axis* parseAxis(char c) {
   return nullptr;
 }
 
-bool CommandDispatcher::dispatch(const char* payload, size_t length, String* reply) {
+bool CommandDispatcher::dispatch(const char* payload, size_t length, String* reply, uint8_t clientId) {
   if (!payload || length == 0) return false;
 
   // Trim leading whitespace
@@ -38,7 +39,19 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     return true;
   }
 
-  // 2. Domain State Queries (?get=K,I / ?state / ?get=ALL)
+  // 2. Settings Namespace (SETTINGS.get / SETTINGS.set)
+  if (length >= 8 && strncasecmp(payload, "SETTINGS", 8) == 0) {
+    const char* sub = payload + 8;
+    if (*sub == '.') sub++;
+    if (strncasecmp(sub, "get", 3) == 0) {
+      const char* key = (sub[3] == '=') ? sub + 4 : nullptr;
+      return SettingsService::get(key, reply);
+    } else if (strncasecmp(sub, "set=", 4) == 0) {
+      return SettingsService::set(sub + 4, reply);
+    }
+  }
+
+  // 3. Domain State Queries (?get=K,I / ?state / ?get=ALL)
   if ((length >= 4 && strncmp(payload, "?get", 4) == 0) ||
       (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
     uint8_t mask = parseDomainQuery(payload);
@@ -47,7 +60,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     return true;
   }
 
-  // 2. Canonical CMD.* Namespace
+  // 4. Canonical CMD.* Namespace
   if (length >= 4 && strncmp(payload, "CMD.", 4) == 0) {
     const char* cmd = payload + 4;
     size_t cmdLen = length - 4;
@@ -58,6 +71,17 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       String rep = RichClientAdapter::buildTelemetry(mask);
       if (reply) *reply = rep;
       return true;
+    }
+
+    // CMD.settings.get / CMD.settings.set
+    if (cmdLen >= 12 && strncasecmp(cmd, "settings.", 9) == 0) {
+      const char* sub = cmd + 9;
+      if (strncasecmp(sub, "get", 3) == 0) {
+        const char* key = (sub[3] == '=') ? sub + 4 : nullptr;
+        return SettingsService::get(key, reply);
+      } else if (strncasecmp(sub, "set=", 4) == 0) {
+        return SettingsService::set(sub + 4, reply);
+      }
     }
 
     // CMD.feedDupr=<du>

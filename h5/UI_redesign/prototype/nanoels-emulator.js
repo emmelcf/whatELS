@@ -97,6 +97,17 @@ class NanoelsEmulator {
       this._emitDomainQuery(line);
       return;
     }
+    if (line.startsWith('SETTINGS.get') || line.startsWith('CMD.settings.get')) {
+      const eq = line.indexOf('=');
+      const key = eq !== -1 ? line.substring(eq + 1).trim() : 'ALL';
+      this._emitSettingsGet(key);
+      return;
+    }
+    if (line.startsWith('SETTINGS.set=') || line.startsWith('CMD.settings.set=')) {
+      const idx = line.indexOf('=');
+      this._emitSettingsSet(line.substring(idx + 1).trim());
+      return;
+    }
     if (line === '!') {
       this.isOn = false;
       return;
@@ -614,6 +625,58 @@ class NanoelsEmulator {
     const z = (this.z / divisor).toFixed(3);
     const state = this.isOn ? 'Run' : 'Idle';
     this._emitRaw(`<${state}|WPos:${x},0.000,${z}|FS:0,${this.rpm}|Id:H${this.HARDWARE_VERSION}V${this.SOFTWARE_VERSION}>\n`);
+  }
+
+  _emitSettingsGet(key) {
+    const k = key.toLowerCase();
+    const props = {
+      screwZDu: 40000,
+      screwXDu: 40000,
+      screwYDu: 20000,
+      motorStepsZ: 800,
+      motorStepsX: 800,
+      motorStepsY: 300,
+      encoderPpr: 1200,
+      measure: this.measure === 'IN' ? 2 : (this.measure === 'TPI' ? 1 : 0),
+      dia: this.isDiameterMode ? 1 : 0,
+      abs: 1,
+      zDro: 0,
+      xDro: 0,
+      feedStepDu: this.feedStepDu || 500,
+      jogStepDu: this.moveStep || 10000,
+      backlashZDu: 0,
+      backlashXDu: 0
+    };
+    if (k === 'all' || k === '') {
+      let out = '';
+      for (const [propKey, propVal] of Object.entries(props)) {
+        out += `SETTING.${propKey}=${propVal}\n`;
+      }
+      this._emitRaw(out);
+    } else {
+      const found = Object.keys(props).find(p => p.toLowerCase() === k);
+      if (found) {
+        this._emitRaw(`SETTING.${found}=${props[found]}\n`);
+      } else {
+        this._emitRaw(`ERR:SETTINGS.${key}=unknown key\n`);
+      }
+    }
+  }
+
+  _emitSettingsSet(keyVal) {
+    const sep = keyVal.indexOf(',') !== -1 ? ',' : '=';
+    const parts = keyVal.split(sep);
+    const key = parts[0].trim();
+    const val = (parts[1] || '').trim();
+    if (key.toLowerCase() === 'feedstepdu') {
+      this.feedStepDu = parseInt(val, 10);
+    } else if (key.toLowerCase() === 'jogstepdu') {
+      this.moveStep = parseInt(val, 10);
+    } else if (key.toLowerCase() === 'dia') {
+      this.isDiameterMode = val === '1';
+    }
+    this._emitRaw(`OK:SETTINGS.${key}=${val}\n`);
+    this._emitRaw(`P.${key}=${val}\n`);
   }
 
   _emitRaw(data) {

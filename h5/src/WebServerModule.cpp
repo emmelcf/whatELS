@@ -7,6 +7,8 @@
 #include "Motion.h"
 #include "CommandDispatcher.h"
 #include "RichClientAdapter.h"
+#include "ClientEndpoint.h"
+#include "SettingsService.h"
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
@@ -24,6 +26,10 @@ const unsigned long WEB_UI_MOVE_TIMEOUT_MS = 600;
 volatile byte webUiHeldMoveAction = 0;
 volatile unsigned long webUiHeldMoveMillis = 0;
 volatile bool webUiMoveReleaseRequested = false;
+
+ClientSession clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+uint8_t activeChannelMask = CHANNEL_NONE;
+static SemaphoreHandle_t wsMutex = NULL;
 
 WebServer server(80);
 WebSocketsServer webSocket(81);
@@ -405,18 +411,74 @@ static void appendUiLine(String* response, const char* name, const String& value
   appendConfigLine(response, name, webSafeText(value));
 }
 
+static const unsigned long MIN_PUSH_INTERVAL_MS = 35; // ~28 Hz max rate ceiling
+static unsigned long lastPushMillis = 0;
+static MachineModel lastSentModel = {};
+static bool hasInitialSent = false;
+
+static void dispatchTelemetry() {
+  if (!webBuffersReady || activeChannelMask == 0) return;
+
+  unsigned long now = millis();
+  if (!machineStatusForcePublish && (now - lastPushMillis < MIN_PUSH_INTERVAL_MS)) {
+    return;
+  }
+
+  MachineModel current = MachineModel::captureAll();
+  uint8_t changedDomains = DOMAIN_NONE;
+  if (!hasInitialSent || machineStatusForcePublish) {
+    changedDomains = DOMAIN_ALL;
+    machineStatusForcePublish = false;
+    hasInitialSent = true;
+  } else {
+    changedDomains = MachineModel::detectChangedDomains(lastSentModel, current);
+  }
+
+  if (changedDomains == DOMAIN_NONE) {
+    return; // Lathe is idle: zero packets sent! True quiescence.
+  }
+
+  lastPushMillis = now;
+  lastSentModel = current;
+
+  // Single-pass serialization per active channel
+  String canonicalPayload = "";
+  String grblPayload = "";
+  String droPayload = "";
+
+  if (activeChannelMask & CHANNEL_CANONICAL) {
+    canonicalPayload = RichClientAdapter::buildTelemetry(changedDomains);
+  }
+  if ((activeChannelMask & CHANNEL_GRBL) && (changedDomains & DOMAIN_KINEMATICS)) {
+    grblPayload = GrblSerializer::buildStatus(current);
+  }
+  if ((activeChannelMask & CHANNEL_DRO) && (changedDomains & DOMAIN_KINEMATICS)) {
+    droPayload = DroSerializer::buildStatus(current);
+  }
+
+  for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+    if (!clientSessions[i].active) continue;
+    if (clientSessions[i].channel == CHANNEL_CANONICAL && canonicalPayload.length() > 0) {
+      webSocket.sendTXT(i, canonicalPayload);
+    } else if (clientSessions[i].channel == CHANNEL_GRBL && grblPayload.length() > 0) {
+      webSocket.sendTXT(i, grblPayload);
+    } else if (clientSessions[i].channel == CHANNEL_DRO && droPayload.length() > 0) {
+      webSocket.sendTXT(i, droPayload);
+    }
+  }
+}
+
 void publishMachineStatus(const String& status, const String& modeText, const String& pitchText, const String& measureText,
     const String& stepText, const String& rpmText, const String& turnsText, const String& angleText,
     const String& xText, const String& xLeftText, const String& xRightText,
     const String& yText, const String& yLeftText, const String& yRightText,
     const String& zText, const String& zLeftText, const String& zRightText, const String& messageText,
     bool isDiameterMode, bool isAbsoluteMode, bool xIsDroActive, bool zIsDroActive) {
-  if (!webBuffersReady || !webUiIsConnected()) return;
-
-  // Broadcast Canonical Telemetry (Layer 2 / Layer 3)
-  if (RichClientAdapter::hasStateChanged() || machineStatusForcePublish) {
-    machineStatusForcePublish = false;
-    queueWebSocketText(RichClientAdapter::buildTelemetry(DOMAIN_ALL));
+  if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    dispatchTelemetry();
+    xSemaphoreGiveRecursive(wsMutex);
+  } else if (!wsMutex) {
+    dispatchTelemetry();
   }
 }
 
@@ -586,16 +648,18 @@ void updateWebUiMoveWatchdog(byte actionCode, bool isPress) {
   }
 }
 
-static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
+static bool handleWebUiEventCommand(uint8_t num, uint8_t* payload, size_t length) {
   // First, delegate to CommandDispatcher for all domain and system commands
   String reply = "";
-  if (CommandDispatcher::dispatch((const char*)payload, length, &reply)) {
+  if (CommandDispatcher::dispatch((const char*)payload, length, &reply, num)) {
     if (reply.length() > 0) {
-      queueWebSocketText(reply);
+      webSocket.sendTXT(num, reply);
     }
     bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
                    (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
-                   (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0);
+                   (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
+                   (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0) ||
+                   (length >= 16 && strncasecmp((const char*)payload, "CMD.settings.get", 16) == 0);
     if (!isQuery) {
       machineStatusForcePublish = true;
     }
@@ -609,11 +673,11 @@ static bool handleWebUiEventCommand(uint8_t* payload, size_t length) {
     return false;
   }
   if (error.length() > 0) {
-    queueWebSocketText(String("WEBUI.error=") + error + "\n");
+    webSocket.sendTXT(num, String("WEBUI.error=") + error + "\n");
     return true;
   }
   if (!queueWebUiEvent(event.actionCode, event.isPress)) {
-    queueWebSocketText("WEBUI.error=event queue full\n");
+    webSocket.sendTXT(num, "WEBUI.error=event queue full\n");
   }
   return true;
 }
@@ -816,21 +880,74 @@ static void firmwareUploadLog(const String& message) {
 
 static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   if (type == WStype_CONNECTED) {
-    webSocketClientCount = webSocketClientCount + 1;
-    machineStatusForcePublish = true;
+    ClientChannel ch = CHANNEL_CANONICAL;
+    if (payload && length > 0) {
+      if (strncmp((const char*)payload, "/grbl", 5) == 0) {
+        ch = CHANNEL_GRBL;
+      } else if (strncmp((const char*)payload, "/dro", 4) == 0) {
+        ch = CHANNEL_DRO;
+      } else {
+        ch = CHANNEL_CANONICAL;
+      }
+    }
+    if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
+      clientSessions[num].clientId = num;
+      clientSessions[num].active = true;
+      clientSessions[num].channel = ch;
+      clientSessions[num].lastPushMillis = 0;
+    }
+    activeChannelMask = CHANNEL_NONE;
+    webSocketClientCount = 0;
+    for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+      if (clientSessions[i].active) {
+        activeChannelMask |= clientSessions[i].channel;
+        webSocketClientCount++;
+      }
+    }
+
+    // Unicast initial hydration frame strictly to the connecting client 'num'
+    if (ch == CHANNEL_CANONICAL) {
+      String hydration = RichClientAdapter::buildTelemetry(DOMAIN_ALL);
+      webSocket.sendTXT(num, hydration);
+    } else if (ch == CHANNEL_GRBL) {
+      String hydration = GrblSerializer::buildStatus(MachineModel::captureAll());
+      webSocket.sendTXT(num, hydration);
+    } else if (ch == CHANNEL_DRO) {
+      String hydration = DroSerializer::buildStatus(MachineModel::captureAll());
+      webSocket.sendTXT(num, hydration);
+    }
   } else if (type == WStype_DISCONNECTED) {
+    if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
+      clientSessions[num].active = false;
+      clientSessions[num].channel = CHANNEL_NONE;
+    }
+    activeChannelMask = CHANNEL_NONE;
+    webSocketClientCount = 0;
+    for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+      if (clientSessions[i].active) {
+        activeChannelMask |= clientSessions[i].channel;
+        webSocketClientCount++;
+      }
+    }
     requestWebUiMoveRelease();
-    if (webSocketClientCount > 0) webSocketClientCount = webSocketClientCount - 1;
   } else if (type == WStype_TEXT) {
     String cmdStr = "";
     for (size_t i = 0; i < length; i++) {
       if (payload[i] >= 32 && payload[i] <= 126) cmdStr += (char)payload[i];
     }
     if (cmdStr != "?" && cmdStr != "?sysinfo") {
-      Serial.printf("WebSocket Command: %s\n", cmdStr.c_str());
+      Serial.printf("WebSocket Command [%d]: %s\n", num, cmdStr.c_str());
     }
 
-    if (handleWebUiEventCommand(payload, length)) {
+    // Direct routing for GRBL CNC stream
+    if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_GRBL) {
+      for (size_t i = 0; i < length; i++) {
+        writeBuffer(&inBuffer, payload[i]);
+      }
+      return;
+    }
+
+    if (handleWebUiEventCommand(num, payload, length)) {
       return;
     }
     for (size_t i = 0; i < length; i++) {
@@ -1626,19 +1743,69 @@ void taskWiFi(void *param) {
   server.serveStatic("/", LittleFS, "/www/");
   server.begin();
 
+  if (!wsMutex) {
+    wsMutex = xSemaphoreCreateRecursiveMutex();
+  }
+
   webSocket.begin();
   webSocket.onEvent(handleWebSocketEvent);
 
   while (emergencyStop == ESTOP_NONE) {
     server.handleClient();
-    webSocket.loop();
-    if (wifiStationConnected && WiFi.status() != WL_CONNECTED) {
-      DEBUG_PRINTLN("WiFi connection lost! Disconnected.");
-      requestWebUiMoveRelease();
-      webSocketClientCount = 0;
-      wifiStationConnected = false;
-      wifiIpAddress = "";
-      setWiFiStatus("WiFi lost");
+    if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+      webSocket.loop();
+      dispatchTelemetry();
+      xSemaphoreGiveRecursive(wsMutex);
+    } else if (!wsMutex) {
+      webSocket.loop();
+      dispatchTelemetry();
+    }
+    // WiFi connection watchdog & exponential backoff retry strategy
+    const unsigned long WIFI_DISCONNECT_DEBOUNCE_MS = 2500;
+    const unsigned long WIFI_RETRY_INITIAL_INTERVAL_MS = 3000;
+    const unsigned long WIFI_RETRY_MAX_INTERVAL_MS = 30000;
+    static unsigned long wifiDisconnectStartedAt = 0;
+    static unsigned long wifiNextRetryAt = 0;
+    static unsigned long wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
+
+    if (wifiStationConnected) {
+      if (WiFi.status() != WL_CONNECTED) {
+        if (wifiDisconnectStartedAt == 0) {
+          wifiDisconnectStartedAt = millis();
+        } else if (millis() - wifiDisconnectStartedAt >= WIFI_DISCONNECT_DEBOUNCE_MS) {
+          DEBUG_PRINTLN("WiFi connection lost! Confirmed disconnected after debounce.");
+          requestWebUiMoveRelease();
+          webSocketClientCount = 0;
+          activeChannelMask = CHANNEL_NONE;
+          for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+            clientSessions[i].active = false;
+            clientSessions[i].channel = CHANNEL_NONE;
+          }
+          wifiStationConnected = false;
+          wifiIpAddress = "";
+          wifiDisconnectStartedAt = 0;
+          wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
+          wifiNextRetryAt = millis() + wifiRetryIntervalMs;
+          setWiFiStatus("WiFi lost");
+        }
+      } else {
+        wifiDisconnectStartedAt = 0;
+      }
+    } else if (!wifiSetupApActive && WIFI_SSID.length() > 0) {
+      if (WiFi.status() == WL_CONNECTED) {
+        wifiStationConnected = true;
+        wifiIpAddress = WiFi.localIP().toString();
+        wifiDisconnectStartedAt = 0;
+        wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
+        setWiFiStatus("See " + wifiIpAddress);
+        DEBUG_PRINTLN("WiFi reconnected successfully!");
+      } else if ((long)(millis() - wifiNextRetryAt) >= 0) {
+        DEBUG_PRINTF("WiFi retrying connection (interval %lu ms)...\n", wifiRetryIntervalMs);
+        setWiFiStatus("WiFi retry (" + String(wifiRetryIntervalMs / 1000) + "s)");
+        WiFi.reconnect();
+        wifiRetryIntervalMs = min(wifiRetryIntervalMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
+        wifiNextRetryAt = millis() + wifiRetryIntervalMs;
+      }
     }
     if (firmwareUploadRestartPending && ((long)(millis() - firmwareUploadRestartAt) >= 0)) {
       firmwareUploadLog("restarting now");
@@ -1668,7 +1835,12 @@ void taskWiFi(void *param) {
         }
       }
       if (outData.length() > 0) {
-        webSocket.broadcastTXT(outData);
+        if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+          webSocket.broadcastTXT(outData);
+          xSemaphoreGiveRecursive(wsMutex);
+        } else if (!wsMutex) {
+          webSocket.broadcastTXT(outData);
+        }
       }
     }
     taskYIELD();
