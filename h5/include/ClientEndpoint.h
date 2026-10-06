@@ -66,6 +66,16 @@ public:
   }
 };
 
+// Canonical Command Translator (sanitizes line buffers, strips transport framing, routes @-actions and CMD.*)
+class CanonicalCommandTranslator : public ICommandTranslator {
+private:
+  uint8_t _clientId;
+public:
+  CanonicalCommandTranslator(uint8_t clientId = 0) : _clientId(clientId) {}
+  void setClientId(uint8_t clientId) { _clientId = clientId; }
+  bool translateAndDispatch(const char* payload, size_t length, String* reply) override;
+};
+
 // -----------------------------------------------------------------------------
 // 4. Client Endpoint (Composite: Transport + Serializer + Translator)
 // -----------------------------------------------------------------------------

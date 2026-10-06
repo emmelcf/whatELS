@@ -29,6 +29,13 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
   }
   if (length == 0) return false;
 
+  // Guarantee clean, null-terminated local buffer for all string tokens
+  char cleanBuf[256];
+  if (length >= sizeof(cleanBuf)) length = sizeof(cleanBuf) - 1;
+  memcpy(cleanBuf, payload, length);
+  cleanBuf[length] = '\0';
+  payload = cleanBuf;
+
   // 1. Sysinfo request
   if (length >= 8 && strncmp(payload, "?sysinfo", 8) == 0) {
     String rep = "SYSINFO.version=" CONTROLLER_VERSION_TEXT "\n";
@@ -141,13 +148,14 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       const char* p = strchr(cmd + 8, ',');
       if (p) {
         p++;
+        while (*p == ' ' || *p == '\t') p++;
         byte code = 0;
         if (ax == 'Z' || ax == 'z') {
-          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0) code = B_LEFT;
-          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0) code = B_RIGHT;
+          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0 || strcmp(p, "-1") == 0) code = B_LEFT;
+          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0 || strcmp(p, "1") == 0 || strcmp(p, "+1") == 0) code = B_RIGHT;
         } else if (ax == 'X' || ax == 'x') {
-          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0) code = B_UP;
-          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0) code = B_DOWN;
+          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0 || strcmp(p, "-1") == 0) code = B_UP;
+          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0 || strcmp(p, "1") == 0 || strcmp(p, "+1") == 0) code = B_DOWN;
         }
         if (code != 0) {
           queueWebUiEvent(code, true);
@@ -155,7 +163,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         }
       }
     }
-    // CMD.jogRelease=<axis>
+    // CMD.jogRelease=<axis> or CMD.jogRelease
     if (cmdLen >= 11 && strncmp(cmd, "jogRelease=", 11) == 0) {
       char ax = cmd[11];
       if (ax == 'Z' || ax == 'z') {
@@ -166,7 +174,20 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         queueWebUiEvent(B_UP, false);
         queueWebUiEvent(B_DOWN, false);
         return true;
+      } else if (strcasecmp(cmd + 11, "ALL") == 0) {
+        queueWebUiEvent(B_LEFT, false);
+        queueWebUiEvent(B_RIGHT, false);
+        queueWebUiEvent(B_UP, false);
+        queueWebUiEvent(B_DOWN, false);
+        return true;
       }
+    }
+    if (cmdLen == 10 && strncmp(cmd, "jogRelease", 10) == 0) {
+      queueWebUiEvent(B_LEFT, false);
+      queueWebUiEvent(B_RIGHT, false);
+      queueWebUiEvent(B_UP, false);
+      queueWebUiEvent(B_DOWN, false);
+      return true;
     }
     // CMD.jogStep=<axis>,<semanticDir>
     if (cmdLen >= 8 && strncmp(cmd, "jogStep=", 8) == 0) {
@@ -174,13 +195,14 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       const char* p = strchr(cmd + 8, ',');
       if (p) {
         p++;
+        while (*p == ' ' || *p == '\t') p++;
         byte code = 0;
         if (ax == 'Z' || ax == 'z') {
-          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0) code = B_LEFT;
-          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0) code = B_RIGHT;
+          if (strcasecmp(p, "CHUCK") == 0 || strcasecmp(p, "LEFT") == 0 || strcmp(p, "-1") == 0) code = B_LEFT;
+          else if (strcasecmp(p, "TAIL") == 0 || strcasecmp(p, "RIGHT") == 0 || strcmp(p, "1") == 0 || strcmp(p, "+1") == 0) code = B_RIGHT;
         } else if (ax == 'X' || ax == 'x') {
-          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0) code = B_UP;
-          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0) code = B_DOWN;
+          if (strcasecmp(p, "INFEED") == 0 || strcasecmp(p, "IN") == 0 || strcasecmp(p, "UP") == 0 || strcmp(p, "-1") == 0) code = B_UP;
+          else if (strcasecmp(p, "RETRACT") == 0 || strcasecmp(p, "OUT") == 0 || strcasecmp(p, "DOWN") == 0 || strcmp(p, "1") == 0 || strcmp(p, "+1") == 0) code = B_DOWN;
         }
         if (code != 0) {
           queueWebUiEvent(code, true);

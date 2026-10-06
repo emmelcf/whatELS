@@ -1960,6 +1960,7 @@
       }
       render();
     }
+    var isContinuous = false;
     function start(e){
       e.preventDefault();
       var blk = isBlocked();
@@ -1968,12 +1969,15 @@
         return;
       }
       isPressed = true;
+      isContinuous = false;
       btn.classList.add('pressed');
-      if (window.nanoelsClient) {
-        window.nanoelsClient.jog(axis, dir, true);
-      }
-      doStep();
-      holdTimer = setTimeout(function(){ repeatTimer = setInterval(doStep, 110); }, 350);
+      holdTimer = setTimeout(function(){
+        isContinuous = true;
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jog(axis, dir, true);
+        }
+        repeatTimer = setInterval(doStep, 110);
+      }, 300);
     }
     function stop(){
       if (!isPressed) return;
@@ -1981,8 +1985,16 @@
       btn.classList.remove('pressed');
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
-      if (window.nanoelsClient) {
-        window.nanoelsClient.jog(axis, dir, false);
+      if (isContinuous) {
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jog(axis, dir, false);
+        }
+      } else {
+        // Quick tap: issue discrete 1-step canonical command
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jogStep(axis, dir);
+        }
+        doStep();
       }
     }
     btn.addEventListener('pointerdown', start);
@@ -1997,6 +2009,7 @@
     var zDir = diag==='nw' ? -1 : 1;
     var xDir = diag==='nw' ? -1 : 1;
     var isPressed = false;
+    var isContinuous = false;
     function isBlocked(){
       var eps = 0.001;
       if(zDir === -1 && state.zLeft !== null && state.zLeft <= eps) return 'Z CHUCK LIMIT';
@@ -2038,13 +2051,16 @@
         return;
       }
       isPressed = true;
+      isContinuous = false;
       btn.classList.add('pressed');
-      if (window.nanoelsClient) {
-        window.nanoelsClient.jog('z', zDir, true);
-        window.nanoelsClient.jog('x', xDir, true);
-      }
-      doStep();
-      holdTimer = setTimeout(function(){ repeatTimer = setInterval(doStep, 110); }, 350);
+      holdTimer = setTimeout(function(){
+        isContinuous = true;
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jog('z', zDir, true);
+          window.nanoelsClient.jog('x', xDir, true);
+        }
+        repeatTimer = setInterval(doStep, 110);
+      }, 300);
     }
     function stop(){
       if (!isPressed) return;
@@ -2052,9 +2068,18 @@
       btn.classList.remove('pressed');
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
-      if (window.nanoelsClient) {
-        window.nanoelsClient.jog('z', zDir, false);
-        window.nanoelsClient.jog('x', xDir, false);
+      if (isContinuous) {
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jog('z', zDir, false);
+          window.nanoelsClient.jog('x', xDir, false);
+        }
+      } else {
+        // Quick tap: issue discrete 1-step canonical commands on both axes
+        if (window.nanoelsClient) {
+          window.nanoelsClient.jogStep('z', zDir);
+          window.nanoelsClient.jogStep('x', xDir);
+        }
+        doStep();
       }
     }
     btn.addEventListener('pointerdown', start);

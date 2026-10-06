@@ -1464,6 +1464,151 @@ For operations like threading, electronic gearing, and taper turning, the contro
      - The visualizer UI validates `features.includes('spindleSim')` before allowing the override checkbox to be checked, completely preventing command injection into older firmware releases.
    * **High-Visibility Status Alert**: Renders an alert badge (`OVERRIDE ACTIVE - REAL CONTROLLER`) with pulsing indicator when active on physical hardware.
 
+---
+
+## 36. Canonical Command Protocol & UI Client Translation Ledger
+
+### 1. Architectural Philosophy & Layer Decoupling
+To achieve rock-solid reliability across diverse client types (capacitive touch Web UI, wireless DRO tablets, CNC senders, and the legacy Nextion UART display), the system enforces strict separation of concerns across three distinct architectural layers:
+
+```mermaid
+graph TD
+    subgraph Client Layer
+        WebUI[Modern Web / Touch UI]
+        DROClient[Wireless DRO Display]
+        GrblClient[CNC / GRBL Sender]
+        NextionHMI[Legacy Nextion Display]
+    end
+
+    subgraph Transport Layer
+        WSServer[WebSockets Server :81]
+        Serial1UART[Hardware UART / Serial1]
+    end
+
+    subgraph Client Translation Layer
+        CanonicalTrans[CanonicalCommandTranslator]
+        GrblTrans[GrblCommandTranslator]
+        InputNextion[Input.cpp Nextion Handler]
+    end
+
+    subgraph Core Motion Engine
+        Dispatcher[CommandDispatcher]
+        Motion[Motion Kinematics & PCNT]
+        Settings[SettingsService & NVS]
+    end
+
+    WebUI -->|WebSocket /canonical| WSServer
+    DROClient -->|WebSocket /dro| WSServer
+    GrblClient -->|WebSocket /grbl| WSServer
+    NextionHMI -->|UART 115200| Serial1UART
+
+    WSServer --> CanonicalTrans
+    WSServer --> GrblTrans
+    Serial1UART --> InputNextion
+
+    CanonicalTrans --> Dispatcher
+    GrblTrans --> Dispatcher
+    InputNextion -->|Direct C++ Calls| Motion
+
+    Dispatcher --> Motion
+    Dispatcher --> Settings
+```
+
+1. **Transport Layer (`ITransport`)**:
+   - Manages raw byte streams and sockets (e.g. `WebSocketsServer` on port 81, hardware `Serial1` UART).
+   - Responsible strictly for connection state, frame buffering, and packet delivery. Knows nothing about command syntax or controller kinematics.
+
+2. **Client Translation Layer (`ICommandTranslator`)**:
+   - Sanitizes and translates client-specific wire events into canonical internal calls.
+   - Strips transport artifacts (`\r`, `\n`, whitespace), guarantees clean null-terminated strings (`char[256]`), and rejects malformed framing before it ever touches kinematic code.
+   - Enables heterogeneous clients (e.g., GRBL jogging syntax vs. Web UI button pulses) without coupling the core motion engine to any specific client quirk.
+
+3. **Core Motion Dispatcher & Kinematics (`CommandDispatcher`)**:
+   - Single point of truth for canonical machine commands (`CMD.*`, `SETTINGS.*`, `?get`, `?sysinfo`).
+   - Dispatches sanitized parameters directly to hardware registers (`Axis`, `Motion`, `SettingsService`).
+
+4. **Zero Impact on Legacy Physical Nextion UART (`Input.cpp`)**:
+   - The physical Nextion display communicates exclusively over `Serial1` via `processNextionMessage()` and `processKeypad()`.
+   - Nextion messages bypass the WebSocket transport and translation layers completely, calling internal motion methods directly. Modernizing the WebSocket API guarantees 100% isolation and zero regression for the physical Nextion hardware.
+
+---
+
+### 2. UI Interaction to Canonical Wire Command Ledger
+The following ledger maps every primary user interaction on the capacitive touch UI to its client service method, wire command, controller translation, and physical motion effect:
+
+| UI Control / Gesture | Alpine / Controller Trigger | JS Client Method ([`nanoels-service.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-service.js)) | Wire Command (`/canonical`) | Controller Translation & Kinematic Effect |
+| :--- | :--- | :--- | :--- | :--- |
+| **D-Pad Tap Z+ (Tailstock)** (<300ms) | `@click` / pointer tap | `jogStep('Z', 'TAIL')` | `CMD.jogStep=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, 1)` followed by `0`. Moves carriage right by exactly 1 step (`moveStep` deci-microns). |
+| **D-Pad Tap Z- (Chuck)** (<300ms) | `@click` / pointer tap | `jogStep('Z', 'CHUCK')` | `CMD.jogStep=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, 1)` followed by `0`. Moves carriage left by exactly 1 step (`moveStep` deci-microns). |
+| **D-Pad Tap X+ (Retract)** (<300ms) | `@click` / pointer tap | `jogStep('X', 'RETRACT')` | `CMD.jogStep=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, 1)` followed by `0`. Cross-slide backs out by 1 step (`moveStep` deci-microns). |
+| **D-Pad Tap X- (Infeed)** (<300ms) | `@click` / pointer tap | `jogStep('X', 'INFEED')` | `CMD.jogStep=X,INFEED\n` | `queueWebUiEvent(B_UP, 1)` followed by `0`. Cross-slide plunges in by 1 step (`moveStep` deci-microns). |
+| **D-Pad Hold Z+** (≥300ms) | Pointerdown hold | `jog('Z', 'TAIL', true)` | `CMD.jogHold=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, true)`. Continuous carriage motion right until released. Failsafe watchdog auto-releases if heartbeat drops >500ms. |
+| **D-Pad Release Z+** | Pointerup / cancel | `jog('Z', 'TAIL', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_RIGHT, false)`. Decelerates carriage smoothly to a stop. |
+| **D-Pad Hold Z-** (≥300ms) | Pointerdown hold | `jog('Z', 'CHUCK', true)` | `CMD.jogHold=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, true)`. Continuous carriage motion left toward chuck until released. |
+| **D-Pad Release Z-** | Pointerup / cancel | `jog('Z', 'CHUCK', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_LEFT, false)`. Decelerates carriage smoothly to a stop. |
+| **D-Pad Hold X+** (≥300ms) | Pointerdown hold | `jog('X', 'RETRACT', true)` | `CMD.jogHold=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, true)`. Continuous cross-slide retract until released. |
+| **D-Pad Release X+** | Pointerup / cancel | `jog('X', 'RETRACT', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_DOWN, false)`. Decelerates cross-slide to a stop. |
+| **D-Pad Hold X-** (≥300ms) | Pointerdown hold | `jog('X', 'INFEED', true)` | `CMD.jogHold=X,INFEED\n` | `queueWebUiEvent(B_UP, true)`. Continuous cross-slide plunge until released. |
+| **D-Pad Release X-** | Pointerup / cancel | `jog('X', 'INFEED', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_UP, false)`. Decelerates cross-slide to a stop. |
+| **Runstack: START** | Primary Start button | `startCycle()` | `CMD.on=1\n` | `setIsOnFromTask(true)`. Arms/engages active kinematic cycle (electronic gearing, turning, facing, thread sync). |
+| **Runstack: STOP** | Stationary Stop button | `stopCycle()` | `CMD.on=0\n` | `setIsOnFromTask(false)`. Immediately disengages synchronized leadscrew motion and returns to idle. |
+| **Zero Z Axis** | DRO Z0 button | `zeroAxis('Z')` | `CMD.axisZero=Z\n` | `setAxisZero(&z)`. Sets current carriage position as $Z=0.000$ machine coordinate. |
+| **Zero X Axis** | DRO X0 button | `zeroAxis('X')` | `CMD.axisZero=X\n` | `setAxisZero(&x)`. Sets current cross-slide position as $X=0.000$ machine coordinate. |
+| **Mode Selector** | Nav bar / Mode buttons | `setMode(modeId)` | `CMD.mode=<id>\n` | `setOperatingMode(id)`. Switches mode (`0`=Gear, `1`=Turn, `2`=Face, `3`=Cone, `4`=Cut, `5`=Thread, `6`=Slot, `7`=Ellipse, `8`=GCode). |
+| **Reverse Feed / Pitch** | Pitch/Feed chips | `reverseFeed()` | `CMD.feedRev\n` | `reverseFeedDirection()`. Inverts sign of active `dupr` pitch, reversing leadscrew sync direction. |
+| **Jog Step Increment** | Step selector chip | `cycleStep()` | `CMD.jogStepDu=<du>\n` | Sets in-memory `moveStep` variable to target deci-microns (e.g., 100, 1000, 10000). |
+| **Unit System Toggle** | Unit chip (MM/IN/TPI) | `cycleMeasure()` | `CMD.measure=<0|1|2>\n` | Calls `setMeasure(m)`: `0` = Metric (mm), `1` = TPI, `2` = Imperial (in). Updates display formatting and conversion factors. |
+| **Diameter / Radius** | DRO Dia/Rad chip | `toggleDiaRad()` | `SETTINGS.set=dia,<0|1>\n` | Calls `SettingsService::setDiameterMode()`. Updates NVS flash and switches X DRO display between Ø and R. |
+| **Set Z Left Limit** | DRO limit edit modal | `setLimit('Z', 'left', valDu)` | `CMD.axisLimitDu=Z,L,<val>\n` | `setAxisLimitDu(&z, true, valDu)`. Programs hardware left limit register (`z.leftStop`). |
+| **Set Z Right Limit** | DRO limit edit modal | `setLimit('Z', 'right', valDu)` | `CMD.axisLimitDu=Z,R,<val>\n` | `setAxisLimitDu(&z, false, valDu)`. Programs hardware right limit register (`z.rightStop`). |
+| **Clear Z Limits** | DRO limit clear button | `clearLimit('Z', 'left')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded travel. |
+| **Set Metric Pitch** | Pitch keypad submit | `setFeedrateMm(mm)` | `CMD.feedMm=<val>\n` | Computes deci-microns per revolution and engages metric leadscrew ratio. |
+| **Set TPI Pitch** | Pitch keypad submit | `setFeedrateTpi(tpi)` | `CMD.feedTpi=<val>\n` | Computes fractional leadscrew ratio for imperial threads per inch. |
+| **Set Taper Angle** | Taper keypad submit | `setTaperAngle(deg)` | `CMD.taperAngle=<val>\n` | Computes $K = 2\tan(\theta)$ and configures dual-axis synchronized cone kinematics. |
+| **Set Taper Ratio** | Taper keypad submit | `setTaperRatio(1/K)` | `CMD.taperRatio=<val>\n` | Configures cone slope ratio directly (e.g. 1:10, 1:20). |
+| **Spindle Sim RPM** | Visualizer Spindle HUD | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
+| **Spindle Sim Turn** | Visualizer Chuck Wheel | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Smoothly generates queued encoder pulses equivalent to specified hand rotation. |
+
+---
+
+### 3. Canonical Protocol Command Reference (`CMD.*` & `SETTINGS.*`)
+
+#### Motion & Cycle Commands
+* `CMD.on=1`: Starts current cycle or feed.
+* `CMD.on=0`: Stops current cycle or feed immediately.
+* `CMD.jogHold=<axis>,<dir>`: Starts continuous manual jog along `<axis>` (`Z` or `X`) in `<dir>` (`TAIL`, `CHUCK`, `INFEED`, `RETRACT`, `1`, `-1`).
+* `CMD.jogRelease=<axis>`: Stops manual jog along `<axis>` (or all axes if omitted).
+* `CMD.jogStep=<axis>,<dir>`: Executes a discrete single-step move of `moveStep` deci-microns in `<dir>`.
+* `CMD.jogStepDu=<du>`: Sets single-step increment size in deci-microns (e.g. `100` = $0.01\text{ mm}$).
+* `CMD.axisZero=<axis>`: Zeroes machine coordinate origin for `<axis>` (`Z`, `X`, `Y`).
+* `CMD.axisPosDu=<axis>,<posDu>`: Sets absolute DRO position coordinate for `<axis>`.
+* `CMD.axisLimitDu=<axis>,<L|R>,<du>`: Programs hardware travel limit for `<axis>`.
+* `CMD.axisClearLimit=<axis>,<L|R>`: Clears specified travel limit register.
+
+#### Mode & Kinematics Commands
+* `CMD.mode=<modeId>`: Sets operational mode (`0`=GEAR, `1`=TURN, `2`=FACE, `3`=CONE, `4`=CUT, `5`=THREAD, `6`=SLOT, `7`=ELLIPSE, `8`=GCODE).
+* `CMD.feedRev`: Reverses feed direction (toggles sign of active pitch).
+* `CMD.feedDupr=<du>`: Sets feedrate in deci-microns per spindle revolution.
+* `CMD.feedMm=<mm>`: Sets feedrate/pitch in millimeters.
+* `CMD.feedTpi=<tpi>`: Sets threading pitch in threads per inch.
+* `CMD.feedInch=<inch>`: Sets threading pitch in decimal inches.
+* `CMD.feedStepDu=<du>`: Sets manual feed step size in deci-microns.
+* `CMD.feedStepCycle`: Cycles through standard feed step table entries.
+* `CMD.taperAngle=<deg>`: Sets taper angle in degrees.
+* `CMD.taperRatio=<ratioK>`: Sets taper ratio $1:K$.
+* `CMD.taperPreset=<id>,<deg>,<ratio>`: Loads predefined standard taper preset (Morse, Brown & Sharpe, etc.).
+
+#### Settings & Configuration Commands
+* `SETTINGS.get` / `SETTINGS.get=*`: Returns all persistent machine and operational settings.
+* `SETTINGS.get=<key>`: Returns specific setting value.
+* `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
+  - Keys: `dia`, `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
+
+#### System & State Queries
+* `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
+* `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
+
+
 
 
 

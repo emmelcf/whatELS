@@ -190,11 +190,19 @@ function registerMachineStore() {
     // Store Actions
     // -------------------------------------------------------------
     cycleMeasure() {
-      this.measure = this.measure === 0 ? 1 : 0;
+      if (window.nanoelsClient) {
+        window.nanoelsClient.cycleMeasure();
+      } else {
+        this.measure = this.measure === 0 ? 1 : 0;
+      }
     },
 
     toggleDiaRad() {
-      this.dia = !this.dia;
+      if (window.nanoelsClient) {
+        window.nanoelsClient.toggleDiaRad();
+      } else {
+        this.dia = !this.dia;
+      }
     },
 
     cycleJogStep() {

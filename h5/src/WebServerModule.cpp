@@ -649,9 +649,10 @@ void updateWebUiMoveWatchdog(byte actionCode, bool isPress) {
 }
 
 static bool handleWebUiEventCommand(uint8_t num, uint8_t* payload, size_t length) {
-  // First, delegate to CommandDispatcher for all domain and system commands
+  // First, delegate to CanonicalCommandTranslator for sanitized parsing and canonical dispatch
+  CanonicalCommandTranslator translator(num);
   String reply = "";
-  if (CommandDispatcher::dispatch((const char*)payload, length, &reply, num)) {
+  if (translator.translateAndDispatch((const char*)payload, length, &reply)) {
     if (reply.length() > 0) {
       webSocket.sendTXT(num, reply);
     }
@@ -951,9 +952,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     if (handleWebUiEventCommand(num, payload, length)) {
       return;
     }
-    for (size_t i = 0; i < length; i++) {
-      writeBuffer(&inBuffer, payload[i]);
-    }
+    webSocket.sendTXT(num, "CMD.error=unknown_command\n");
   }
 }
 

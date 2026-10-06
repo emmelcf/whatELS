@@ -236,6 +236,9 @@ class NanoelsEmulator {
       } else if (cmd.startsWith('on=')) {
         this.isOn = cmd.substring(3) === '1';
         if (this.isOn) this.spindleRunning = true;
+      } else if (cmd.startsWith('measure=')) {
+        const m = parseInt(cmd.substring(8), 10);
+        this.measure = (m === 1) ? 'IN' : ((m === 2) ? 'TPI' : 'MM');
       }
       this._lastTelemetryStr = '';
       return;

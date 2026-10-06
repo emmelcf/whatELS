@@ -293,28 +293,29 @@ class NanoelsService extends EventTarget {
   jog(axis, dirOrSemantic, isPress) {
     const upper = axis.toUpperCase();
     let semanticDir = '';
-    let code = 0;
-    let label = '';
+    const num = Number(dirOrSemantic);
+    const isNum = !isNaN(num) && dirOrSemantic !== '' && typeof dirOrSemantic !== 'boolean';
 
     if (upper === 'Z') {
-      if (typeof dirOrSemantic === 'string') {
+      if (isNum) {
+        semanticDir = num < 0 ? 'CHUCK' : 'TAIL';
+      } else if (typeof dirOrSemantic === 'string') {
         semanticDir = dirOrSemantic.toUpperCase();
-      } else {
-        semanticDir = dirOrSemantic < 0 ? 'CHUCK' : 'TAIL';
       }
-      code = (semanticDir === 'CHUCK' || semanticDir === 'LEFT') ? this.ACTIONS.B_LEFT : this.ACTIONS.B_RIGHT;
-      label = semanticDir === 'CHUCK' ? 'Jog Z (← Chuck)' : 'Jog Z (→ Tail)';
+      if (semanticDir === 'LEFT') semanticDir = 'CHUCK';
+      if (semanticDir === 'RIGHT') semanticDir = 'TAIL';
     } else if (upper === 'X') {
-      if (typeof dirOrSemantic === 'string') {
+      if (isNum) {
+        semanticDir = num > 0 ? 'INFEED' : 'RETRACT';
+      } else if (typeof dirOrSemantic === 'string') {
         semanticDir = dirOrSemantic.toUpperCase();
-      } else {
-        semanticDir = dirOrSemantic > 0 ? 'INFEED' : 'RETRACT';
       }
-      code = (semanticDir === 'INFEED' || semanticDir === 'IN' || semanticDir === 'UP') ? this.ACTIONS.B_UP : this.ACTIONS.B_DOWN;
-      label = semanticDir === 'INFEED' ? 'Jog X (↑ Infeed / Center)' : 'Jog X (↓ Retract)';
+      if (semanticDir === 'IN' || semanticDir === 'UP') semanticDir = 'INFEED';
+      if (semanticDir === 'OUT' || semanticDir === 'DOWN') semanticDir = 'RETRACT';
     }
 
-    if (!code) return;
+    if (!semanticDir) return;
+    const label = `Jog ${upper} ${semanticDir}`;
     if (isPress) {
       this.sendRaw(`CMD.jogHold=${upper},${semanticDir}\n`, `${label} [Held]`);
       if (!this.heartbeatTimer) {
@@ -332,41 +333,76 @@ class NanoelsService extends EventTarget {
   jogStep(axis, dirOrSemantic) {
     const upper = axis.toUpperCase();
     let semanticDir = '';
+    const num = Number(dirOrSemantic);
+    const isNum = !isNaN(num) && dirOrSemantic !== '' && typeof dirOrSemantic !== 'boolean';
+
     if (upper === 'Z') {
-      semanticDir = typeof dirOrSemantic === 'string' ? dirOrSemantic.toUpperCase() : (dirOrSemantic < 0 ? 'CHUCK' : 'TAIL');
+      if (isNum) {
+        semanticDir = num < 0 ? 'CHUCK' : 'TAIL';
+      } else if (typeof dirOrSemantic === 'string') {
+        semanticDir = dirOrSemantic.toUpperCase();
+      }
+      if (semanticDir === 'LEFT') semanticDir = 'CHUCK';
+      if (semanticDir === 'RIGHT') semanticDir = 'TAIL';
     } else if (upper === 'X') {
-      semanticDir = typeof dirOrSemantic === 'string' ? dirOrSemantic.toUpperCase() : (dirOrSemantic < 0 ? 'INFEED' : 'RETRACT');
+      if (isNum) {
+        semanticDir = num > 0 ? 'INFEED' : 'RETRACT';
+      } else if (typeof dirOrSemantic === 'string') {
+        semanticDir = dirOrSemantic.toUpperCase();
+      }
+      if (semanticDir === 'IN' || semanticDir === 'UP') semanticDir = 'INFEED';
+      if (semanticDir === 'OUT' || semanticDir === 'DOWN') semanticDir = 'RETRACT';
     }
     if (!semanticDir) return;
     this.sendRaw(`CMD.jogStep=${upper},${semanticDir}\n`, `Jog Step ${upper} ${semanticDir}`);
   }
 
   // Cycle Start / Stop
-  startCycle() { this.pulseAction(this.ACTIONS.B_ON, 'START FEED / CYCLE'); }
-  stopCycle()  { this.pulseAction(this.ACTIONS.B_OFF, 'STOP FEED / CYCLE'); }
+  startCycle() { this.sendRaw('CMD.on=1\n', 'START FEED / CYCLE'); }
+  stopCycle()  { this.sendRaw('CMD.on=0\n', 'STOP FEED / CYCLE'); }
 
   // Zero axes
   zeroAxis(axis) {
     const upper = axis.toUpperCase();
-    if (upper === 'Z') this.pulseAction(this.ACTIONS.B_Z, 'Zero Z Axis');
-    if (upper === 'X') this.pulseAction(this.ACTIONS.B_X, 'Zero X Axis');
+    this.sendRaw(`CMD.axisZero=${upper}\n`, `Zero Axis ${upper}`);
   }
 
   // Set / Clear Stops
   toggleStop(axis, bound) {
     const upper = axis.toUpperCase();
-    if (upper === 'Z' && bound === 'min') this.pulseAction(this.ACTIONS.B_STOPL, 'Toggle Z Left Stop');
-    if (upper === 'Z' && bound === 'max') this.pulseAction(this.ACTIONS.B_STOPR, 'Toggle Z Right Stop');
-    if (upper === 'X' && bound === 'min') this.pulseAction(this.ACTIONS.B_STOPU, 'Toggle X In/Forward Stop');
-    if (upper === 'X' && bound === 'max') this.pulseAction(this.ACTIONS.B_STOPD, 'Toggle X Out/Rear Stop');
+    const isLeftOrUp = (bound === 'min' || bound === 'left' || bound === 'up');
+    const curDu = upper === 'Z' ? this.canonical.zDu : this.canonical.xDu;
+    this.sendRaw(`CMD.axisLimitDu=${upper},${isLeftOrUp ? 1 : 0},${Math.round(curDu)}\n`, `Set Stop ${upper} ${bound}`);
   }
 
   // Step and Measure cycles
-  cycleStep() { this.pulseAction(this.ACTIONS.B_STEP, 'Cycle Move Step'); }
-  cycleMeasure() { this.pulseAction(this.ACTIONS.B_MEASURE, 'Cycle Measure Units'); }
-  toggleDiaRad() { this.pulseAction(this.ACTIONS.B_DIA_RAD, 'Toggle Diameter/Radius'); }
-  reversePitch() { this.pulseAction(this.ACTIONS.B_REVERSE, 'Reverse Pitch Sign'); }
-  nudgePitch(plus) { this.pulseAction(plus ? this.ACTIONS.B_PLUS : this.ACTIONS.B_MINUS, plus ? 'Pitch +' : 'Pitch -'); }
+  cycleStep() {
+    const cur = this.canonical.jogStepDu || 10000;
+    let next = 10000;
+    if (cur === 10000) next = 1000;
+    else if (cur === 1000) next = 100;
+    else next = 10000;
+    this.canonical.jogStepDu = next;
+    this.sendRaw(`CMD.jogStepDu=${next}\n`, `Set Jog Step ${next} du`);
+  }
+  cycleMeasure() {
+    const cur = this.canonical.measure !== undefined ? this.canonical.measure : 0;
+    const nextM = (cur + 1) % 3;
+    this.canonical.measure = nextM;
+    this.sendRaw(`CMD.measure=${nextM}\n`, `Cycle Measure Units (${nextM})`);
+  }
+  toggleDiaRad() {
+    const nextDia = !this.canonical.dia;
+    this.canonical.dia = nextDia;
+    this.setSetting('dia', nextDia ? 1 : 0);
+  }
+  reversePitch() { this.reverseFeed(); }
+  nudgePitch(plus) {
+    const deltaDu = plus ? 500 : -500;
+    const curDu = this.canonical.dupr || 15000;
+    const nextDu = Math.max(100, curDu + deltaDu);
+    this.setFeedDupr(nextDu);
+  }
 
   // --- Canonical 4-Layer Command APIs ---
   setFeedDupr(du) {
@@ -496,11 +532,30 @@ class NanoelsService extends EventTarget {
   }
 
   // Mode Selection
-  setMode(modeKey) {
-    const action = this.ACTIONS[`B_MODE_${modeKey.toUpperCase()}`];
-    if (action) {
-      this.pulseAction(action, `Set Mode ${modeKey}`);
+  setMode(modeKeyOrId) {
+    let modeId = 0;
+    if (typeof modeKeyOrId === 'number') {
+      modeId = modeKeyOrId;
+    } else if (typeof modeKeyOrId === 'string') {
+      const map = {
+        'GEAR': 0, 'GEARS': 0, 'NORMAL': 0, 'GEARBOX': 0,
+        'XGEAR': 1, 'X-GEAR': 1,
+        'ASYNC': 2,
+        'CONE': 3, 'TAPER': 3,
+        'TURN': 4, 'TURNING': 4,
+        'FACE': 5, 'FACING': 5,
+        'CUT': 6, 'CUTOFF': 6,
+        'THREAD': 7, 'THREADING': 7,
+        'ELLIPSE': 8, 'SPHERE': 8,
+        'GCODE': 9,
+        'Y': 10,
+        'JOYSTICK': 11,
+        'SLOT': 12, 'SLOTTING': 12
+      };
+      const upper = modeKeyOrId.toUpperCase();
+      modeId = upper in map ? map[upper] : 0;
     }
+    this.sendRaw(`CMD.mode=${modeId}\n`, `Set Mode ${modeKeyOrId} [ID ${modeId}]`);
   }
 
   setLogStatusPushes(enabled) {
