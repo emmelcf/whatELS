@@ -364,25 +364,112 @@ long spindleModulo(long value) {
   return value;
 }
 
+#if ENABLE_SPINDLE_SIM
+// ---------------------------------------------------------------------------
+// Dev spindle simulation (driven by CMD.spindleSim / CMD.spindleSimTurn).
+// Replaces the real encoder count source while active; everything downstream
+// of the count delta (spindlePos, RPM timing, sync) is untouched.
+// ---------------------------------------------------------------------------
+static volatile bool spindleSimActive = false;
+static volatile float spindleSimRpm = 0.0f;          // signed; + = same direction as encoder counts up
+static volatile long spindleSimManualCounts = 0;     // pending hand-rotation counts
+static volatile unsigned long spindleSimHeartbeatMs = 0;
+static bool spindleSimResync = false;                // re-sync the PCNT baseline when leaving override
+static unsigned long spindleSimLastMicros = 0;
+static float spindleSimFraction = 0.0f;
+
+void spindleSimSet(bool active, float rpm) {
+  spindleSimRpm = rpm;
+  spindleSimHeartbeatMs = millis();
+  if (active && !spindleSimActive) {
+    spindleSimLastMicros = micros();
+    spindleSimFraction = 0.0f;
+    spindleSimManualCounts = 0;
+  }
+  if (!active && spindleSimActive) {
+    spindleSimResync = true;
+  }
+  spindleSimActive = active;
+}
+
+void spindleSimTurnDeg(float deg) {
+  if (!spindleSimActive) return;
+  long counts = lroundf(deg / 360.0f * (float) ENCODER_STEPS_INT);
+  __atomic_fetch_add(&spindleSimManualCounts, counts, __ATOMIC_RELAXED);
+  spindleSimHeartbeatMs = millis();
+}
+
+bool spindleSimIsActive() { return spindleSimActive; }
+float spindleSimGetRpm() { return spindleSimActive ? spindleSimRpm : 0.0f; }
+
+static int spindleSimNextDelta() {
+  unsigned long nowUs = micros();
+  float dt = (float)(nowUs - spindleSimLastMicros) * 1e-6f;
+  spindleSimLastMicros = nowUs;
+  if (dt > 0.1f) dt = 0.1f;
+  if (millis() - spindleSimHeartbeatMs > SPINDLE_SIM_TIMEOUT_MS) {
+    // Visualizer went away: hand control back to the real encoder.
+    spindleSimActive = false;
+    spindleSimRpm = 0.0f;
+    spindleSimResync = true;
+    return 0;
+  }
+  float counts = spindleSimRpm / 60.0f * (float) ENCODER_STEPS_INT * dt + spindleSimFraction;
+  int delta = (int) counts;            // truncate toward zero, carry the remainder
+  spindleSimFraction = counts - (float) delta;
+  long pending = __atomic_load_n(&spindleSimManualCounts, __ATOMIC_RELAXED);
+  if (pending != 0) {
+    // Spread hand rotation over ~20 ms so ~30-50 Hz updates look smooth.
+    float k = dt / 0.02f;
+    if (k > 1.0f) k = 1.0f;
+    long take = lroundf((float) pending * k);
+    if (take == 0) take = pending > 0 ? 1 : -1;
+    if (labs(take) > labs(pending)) take = pending;
+    __atomic_fetch_sub(&spindleSimManualCounts, take, __ATOMIC_RELAXED);
+    delta += (int) take;
+  }
+  return delta;
+}
+#endif
+
 void processSpindleCounter() {
-  if (!pulseCountersReady) {
-    return;
-  }
-  pcnt_unit_handle_t unit = pulseUnits[PULSE_COUNTER_SPINDLE];
-  if (!unit) {
-    return;
-  }
-  int count = 0;
-  pcnt_unit_get_count(unit, &count);
-  int delta = count - spindleCount;
-  if (delta == 0) {
-    return;
-  }
-  if (count >= PCNT_CLEAR || count <= -PCNT_CLEAR) {
-    pcnt_unit_clear_count(unit);
-    spindleCount = 0;
-  } else {
-    spindleCount = count;
+  int delta = 0;
+#if ENABLE_SPINDLE_SIM
+  if (spindleSimActive) {
+    delta = spindleSimNextDelta();
+    if (delta == 0) {
+      return;
+    }
+  } else
+#endif
+  {
+    if (!pulseCountersReady) {
+      return;
+    }
+    pcnt_unit_handle_t unit = pulseUnits[PULSE_COUNTER_SPINDLE];
+    if (!unit) {
+      return;
+    }
+#if ENABLE_SPINDLE_SIM
+    if (spindleSimResync) {
+      pcnt_unit_clear_count(unit);
+      spindleCount = 0;
+      spindleSimResync = false;
+      return;
+    }
+#endif
+    int count = 0;
+    pcnt_unit_get_count(unit, &count);
+    delta = count - spindleCount;
+    if (delta == 0) {
+      return;
+    }
+    if (count >= PCNT_CLEAR || count <= -PCNT_CLEAR) {
+      pcnt_unit_clear_count(unit);
+      spindleCount = 0;
+    } else {
+      spindleCount = count;
+    }
   }
 
   unsigned long microsNow = micros();

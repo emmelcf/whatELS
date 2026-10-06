@@ -204,6 +204,7 @@ class NanoelsService extends EventTarget {
       this.ws = new WebSocket(wsUrl);
       this.ws.onopen = () => {
         this.state.connected = true;
+        this.state.features = [];
         this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established (Channel: Canonical)');
         this._emit('connection', { connected: true, mode: 'live', host: this.host });
         this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
@@ -235,9 +236,9 @@ class NanoelsService extends EventTarget {
   // --- Outbound Action API ---
 
   // Raw transmitter with logging
-  sendRaw(data, annotation = '') {
+  sendRaw(data, annotation = '', quiet = false) {
     const isTelemetryPing = data === '?' || data === '?sysinfo' || data === '?sysinfo\n';
-    if (!isTelemetryPing || this.logStatusPushes) {
+    if (!quiet && (!isTelemetryPing || this.logStatusPushes)) {
       this._log('TX', data.trim(), annotation, isTelemetryPing);
     }
 
@@ -637,6 +638,10 @@ class NanoelsService extends EventTarget {
       } else if (line.startsWith('SYSINFO.')) {
         if (line.startsWith('SYSINFO.version=')) {
           this.state.version = line.substring('SYSINFO.version='.length);
+        }
+        if (line.startsWith('SYSINFO.features=')) {
+          this.state.features = line.substring('SYSINFO.features='.length).split(',').map((f) => f.trim()).filter(Boolean);
+          this._emit('features', this.state.features);
         }
         this._log('RX', line, 'Hardware Info');
       } else if (line.startsWith('WEBUI.warning=')) {

@@ -35,6 +35,9 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     rep += "SYSINFO.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
     rep += "SYSINFO.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
     rep += "SYSINFO.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
+#if ENABLE_SPINDLE_SIM
+    rep += "SYSINFO.features=spindleSim\n";
+#endif
     if (reply) *reply = rep;
     return true;
   }
@@ -256,6 +259,22 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       setOperatingMode(m);
       return true;
     }
+#if ENABLE_SPINDLE_SIM
+    // CMD.spindleSim=<0|1>,<signedRpm>   (re-send every <=1s as a heartbeat while active)
+    if (cmdLen >= 11 && strncmp(cmd, "spindleSim=", 11) == 0) {
+      int active = atoi(cmd + 11);
+      const char* p = strchr(cmd + 11, ',');
+      float rpm = p ? atof(p + 1) : 0.0f;
+      spindleSimSet(active != 0, rpm);
+      if (reply) *reply = String("SIM.spindle=") + (spindleSimIsActive() ? "1" : "0") + "," + String(spindleSimGetRpm(), 1) + "\n";
+      return true;
+    }
+    // CMD.spindleSimTurn=<signedDegrees>  (hand-rotate the chuck; ignored unless override active)
+    if (cmdLen >= 15 && strncmp(cmd, "spindleSimTurn=", 15) == 0) {
+      spindleSimTurnDeg(atof(cmd + 15));
+      return true;
+    }
+#endif
     // CMD.on=<0|1>
     if (cmdLen >= 3 && strncmp(cmd, "on=", 3) == 0) {
       int on = atoi(cmd + 3);

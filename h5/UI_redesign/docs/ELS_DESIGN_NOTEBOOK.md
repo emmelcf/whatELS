@@ -1400,6 +1400,71 @@ Centralized mutation methods in `SettingsService`:
 
 Each method updates the live in-memory state, persists to NVS flash, and sets `machineStatusForcePublish = true` to broadcast updated properties to all connected clients immediately.
 
+---
+
+## 35. Lathe Digital Twin Visualizer & Interactive Spindle Simulation Architecture
+
+### 1. Architectural Motivation & Presentation Decoupling
+During UI development and cycle testing, verifying controller behavior (such as thread synchronization, multi-pass turning, soft-limit clamping, and taper angle kinematics) is challenging without physical lathe access. 
+
+To address this, a dedicated **Lathe Digital Twin Visualizer** was created in [`UI_redesign/prototype/dev/`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/):
+* **Zero Production Footprint**: The visualizer is entirely self-contained inside the `dev/` directory. It is included via two clean `<script>` tags at the bottom of the prototype HTML and can be removed with zero residue when preparing production firmware deployments for LittleFS.
+* **Passive Reactive Observation**: The visualizer is a pure subscriber to the Alpine.js `machine` store. It reads deci-micron positions (`zDu`, `xDu`), limits (`zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`), spindle state (`rpm`, `turns`, `angle`), and operation modes (`mode`, `dia`). It works identically whether connected to the local browser emulator or the physical ESP32 controller over WebSocket.
+* **Non-Obtrusive Page Docking**: Positioned directly below the primary controller face and above the external developer console, preserving full view and touch ergonomics of all primary controls.
+
+---
+
+### 2. Extensible Lathe Profiles & Hardware Modules
+Machine geometries and user setups vary widely across the machinist community. The visualizer supports declarative profiles ([`lathe-viz-profiles.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz-profiles.js)) and modular SVG rendering layers ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)):
+
+1. **Declarative Machine Profiles**:
+   * **Physical Dimensions**: Bed length, swing diameter, carriage Z travel, cross-slide X travel, chuck length/diameter, workpiece stock diameter, and Z0/X0 origin offsets.
+   * **Kinematic Conventions**: Configurable axis directions (`zPositive: 'left' | 'right'`, `xPositive: 'out' | 'in'`) stored with persistence in `localStorage`.
+   * **Preset Library**:
+     - *Z + X motors*: Dual-axis motorized CNC-style lathe.
+     - *Z motor only (manual X)*: Traditional leadscrew ELS with manual cross-slide handwheel and DRO scale.
+     - *Z + X motors, MPG on both*: Independent electronic handwheels on carriage and cross-slide.
+     - *Z motor, MPG on Z only*: Electronic handwheel on carriage leadscrew only.
+     - *Joystick*: Deflecting HUD joystick widget tracking live carriage velocity vectors.
+     - *Large lathe*: Extended bed ($1200\text{ mm}$), large swing ($350\text{ mm}$), heavy chuck ($200\text{ mm}$).
+
+2. **Pluggable Visualizer Modules (`LatheVizModules`)**:
+   * Each visual component registers via `{ id, when(profile), build(ctx) -> { update(state, dynamics) } }`:
+     - `bed`: Lathe bed casting, ground prism ways, swing boundary, and centerline.
+     - `headstock`: Headstock casting, 3-jaw chuck, reference stock cylinder, and rotating spindle gauge.
+     - `tailstock`: Tailstock body and quill.
+     - `carriage`: Longitudinal saddle, transverse cross-slide, and cutting tool insert.
+     - `zMotor`: Leadscrew and stepper motor attached to bed foot.
+     - `limits`: Real-time amber Z-limit lines (`Z L`, `Z R`) and green X-limit lines (`X ↑`, `X ↓`) rendered strictly when limits are configured.
+     - `mpg`: Carriage-mounted handwheels that rotate dynamically based on axis displacement and illuminate during active motion.
+     - `joystick`: Real-time deflection indicator showing tool motion vector and velocity.
+
+---
+
+### 3. Spindle Encoder Input Simulation (`CMD.spindleSim` & `CMD.spindleSimTurn`)
+For operations like threading, electronic gearing, and taper turning, the controller's motion engine relies on spindle rotation. Simply faking an RPM readout in the UI is insufficient; the motion controller must receive actual spindle counts to drive synchronized leadscrew steps.
+
+1. **Raw Pulse Stream Override**:
+   * Implemented in core firmware ([`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp)) and mirrored in offline emulator ([`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js)).
+   * When simulation mode is enabled via `CMD.spindleSim=1,<rpm>`, [`processSpindleCounter()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp) substitutes the physical ESP32 PCNT pulse counter with a high-resolution synthetic pulse generator (`spindleSimNextDelta()`).
+   * **Zero Downstream Modification**: Downstream kinematics, including `spindlePos`, `spindlePosGlobal`, backlash compensation, threading sync modulo (`spindlePosSync`), and RPM interval calculations (`spindleEncTimeDiffBulk`), run completely unmodified.
+
+2. **Dual-Mode Operation**:
+   * **Motorized Spindle**: Continuously generates pulses corresponding to signed target RPM ($\pm 0\text{ to }2000\text{ RPM}$) with CW/CCW direction toggle.
+   * **Manual Hand Rotation**:
+     - Dedicated touch chips for incremental nudges: $\pm 1^\circ$, $\pm 10^\circ$, $\pm 90^\circ$, $+1\text{ rev}$ (`CMD.spindleSimTurn=<deg>`).
+     - Interactive headstock gauge: Clicking and dragging the chuck circle rotates the spindle in real-time.
+     - **Stepper-Safe Rate Limiting**: Manual degree steps are queued and smoothly dispatched at $\le 180^\circ/\text{s}$ ($\le 30\text{ RPM}$ equivalent) to ensure connected physical stepper motors do not stall from instantaneous step impulses.
+
+3. **Safety Watchdogs & Capability Negotiation**:
+   * **2000 ms Heartbeat Failsafe**: The UI sends `CMD.spindleSim` every $500\text{ ms}$ while active. If the browser closes or communication drops for $\ge 2000\text{ ms}$, firmware automatically disengages the override, resets PCNT counters, and safely returns control to the physical spindle encoder.
+   * **Compile-Time Guard**: Controlled by `#define ENABLE_SPINDLE_SIM 1` in [`Input.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Input.h); can be set to `0` to compile out entirely from release builds.
+   * **Feature Discovery Negotiation**:
+     - Firmware advertises capabilities in `?sysinfo` via `SYSINFO.features=spindleSim`.
+     - The visualizer UI validates `features.includes('spindleSim')` before allowing the override checkbox to be checked, completely preventing command injection into older firmware releases.
+   * **High-Visibility Status Alert**: Renders an alert badge (`OVERRIDE ACTIVE - REAL CONTROLLER`) with pulsing indicator when active on physical hardware.
+
+
 
 
 

@@ -36,6 +36,11 @@ class NanoelsEmulator {
     this.rpm = 0;
     this.targetRpm = 640;
     this.spindlePos = 0;
+    // Spindle encoder override (set by the dev visualizer; mirrors firmware CMD.spindleSim)
+    this.simActive = false;
+    this.simRpm = 0;          // signed
+    this.simPendingDeg = 0;   // hand-rotation not yet applied
+    this.simHeartbeat = 0;
     this.turns = 0;
     this.angle = 0;
 
@@ -189,6 +194,18 @@ class NanoelsEmulator {
         const ratio = parseFloat(parts[2]) || 0.0;
         this.tpVal = ratio > 0 ? ratio : deg;
         this.coneRatio = ratio > 0 ? (1.0 / ratio) : (2.0 * Math.tan(deg * (Math.PI / 180.0)));
+      } else if (cmd.startsWith('spindleSim=')) {
+        const parts = cmd.substring(11).split(',');
+        this.simActive = parts[0].trim() === '1';
+        this.simRpm = parseFloat(parts[1]) || 0;
+        this.simHeartbeat = Date.now();
+        if (!this.simActive) { this.simRpm = 0; this.simPendingDeg = 0; }
+        this._emitRaw(`SIM.spindle=${this.simActive ? 1 : 0},${this.simRpm.toFixed(1)}\n`);
+      } else if (cmd.startsWith('spindleSimTurn=')) {
+        if (this.simActive) {
+          this.simPendingDeg += parseFloat(cmd.substring(15)) || 0;
+          this.simHeartbeat = Date.now();
+        }
       } else if (cmd.startsWith('axisZero=')) {
         const ax = cmd.substring(9).toUpperCase();
         if (ax === 'Z') { this.zOrigin += this.z; this.z = 0; }
@@ -378,16 +395,27 @@ class NanoelsEmulator {
     }
 
     // 2. Spindle Simulation
-    if (this.spindleRunning || this.isOn) {
+    let revsDelta = 0; // signed revolutions this 50ms tick
+    if (this.simActive && Date.now() - this.simHeartbeat > 2000) {
+      this.simActive = false; // heartbeat watchdog -> back to normal emulated spindle
+      this.simRpm = 0;
+      this.simPendingDeg = 0;
+    }
+    if (this.simActive) {
+      revsDelta = (this.simRpm / 60) * 0.050 + this.simPendingDeg / 360;
+      this.simPendingDeg = 0;
+      this.rpm = Math.round(Math.abs(revsDelta) / 0.050 * 60);
+    } else if (this.spindleRunning || this.isOn) {
       this.rpm = this.targetRpm + Math.round((Math.random() - 0.5) * 15);
-      const revsPerSec = this.rpm / 60;
-      const revsDelta = revsPerSec * 0.050; // 50ms tick
+      revsDelta = (this.rpm / 60) * 0.050; // 50ms tick
+    } else {
+      this.rpm = 0;
+    }
+    if (revsDelta !== 0) {
       this.turns += revsDelta;
       this.angle = ((this.angle + revsDelta * 360) % 360 + 360) % 360;
       if (this.angle >= 359.95) this.angle = 0.0;
       this.spindlePos += revsDelta * this.ENCODER_STEPS;
-    } else {
-      this.rpm = 0;
     }
 
     // 3. Stepper Jogging Motion
@@ -409,8 +437,7 @@ class NanoelsEmulator {
     }
 
     // 4. Synchronized Feed Motion (When Controller ON)
-    if (this.isOn && this.rpm > 0) {
-      const revsDelta = (this.rpm / 60) * 0.050;
+    if (this.isOn && revsDelta !== 0) {
       const feedDu = this.dupr * revsDelta;
 
       if (this.mode === 'GEAR') {
@@ -618,7 +645,8 @@ class NanoelsEmulator {
       `SYSINFO.version=H${this.HARDWARE_VERSION}V${this.SOFTWARE_VERSION} (EMU)\n` +
       `SYSINFO.chip=ESP32-S3 (Virtual)\n` +
       `SYSINFO.flash=8MB\n` +
-      `SYSINFO.heap=240KB\n`;
+      `SYSINFO.heap=240KB\n` +
+      `SYSINFO.features=spindleSim\n`;
     this._emitRaw(sysinfo);
   }
 

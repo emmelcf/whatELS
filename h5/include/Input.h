@@ -36,6 +36,20 @@ extern int spindleEncTimeIndex;
 long spindleModulo(long value);
 void processSpindleCounter();
 
+// Dev spindle encoder simulation (set to 0 to compile it out of release builds).
+#ifndef ENABLE_SPINDLE_SIM
+#define ENABLE_SPINDLE_SIM 1
+#endif
+#ifndef SPINDLE_SIM_TIMEOUT_MS
+#define SPINDLE_SIM_TIMEOUT_MS 2000  // heartbeat watchdog: revert to real encoder if silent
+#endif
+#if ENABLE_SPINDLE_SIM
+void spindleSimSet(bool active, float rpm);
+void spindleSimTurnDeg(float deg);
+bool spindleSimIsActive();
+float spindleSimGetRpm();
+#endif
+
 // Joystick State
 struct JoystickAxisState {
   Axis* axis;
