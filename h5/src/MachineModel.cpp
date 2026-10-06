@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "Display.h"
 #include "DisplayModel.h"
+#include "SettingsService.h"
 #include <limits.h>
 
 static long getAxisCanonicalPosDu(Axis* a) {
@@ -81,6 +82,10 @@ MachineProperties MachineModel::captureProperties() {
   p.motorStepsZ = (long)round(z.motorSteps);
   p.motorStepsX = (long)round(x.motorSteps);
   p.encoderPpr = ENCODER_PPR;
+  p.deadbandAngle = SettingsService::getDeadbandAngle();
+  p.deadbandAngleAuto = SettingsService::isDeadbandAngleAuto();
+  p.deadbandTurns = SettingsService::getDeadbandTurns();
+  p.deadbandTurnsAuto = SettingsService::isDeadbandTurnsAuto();
   return p;
 }
 
@@ -96,6 +101,9 @@ MachineModel MachineModel::captureAll() {
 uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const MachineModel& current) {
   uint8_t changed = DOMAIN_NONE;
 
+  float angleThreshold = SettingsService::getDeadbandAngle();
+  float turnsThreshold = SettingsService::getDeadbandTurns();
+
   if (prev.kinematics.zDu != current.kinematics.zDu ||
       prev.kinematics.xDu != current.kinematics.xDu ||
       prev.kinematics.yDu != current.kinematics.yDu ||
@@ -107,8 +115,8 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
       prev.kinematics.xDisabled != current.kinematics.xDisabled ||
       prev.kinematics.yDisabled != current.kinematics.yDisabled ||
       prev.kinematics.rpm != current.kinematics.rpm ||
-      fabsf(prev.kinematics.turns - current.kinematics.turns) > 0.005f ||
-      fabsf(prev.kinematics.angle - current.kinematics.angle) > 0.05f ||
+      fabsf(prev.kinematics.turns - current.kinematics.turns) > turnsThreshold ||
+      fabsf(prev.kinematics.angle - current.kinematics.angle) > angleThreshold ||
       prev.kinematics.mode != current.kinematics.mode ||
       prev.kinematics.isOn != current.kinematics.isOn ||
       prev.kinematics.estop != current.kinematics.estop ||
@@ -146,7 +154,11 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
       prev.properties.screwXDu != current.properties.screwXDu ||
       prev.properties.motorStepsZ != current.properties.motorStepsZ ||
       prev.properties.motorStepsX != current.properties.motorStepsX ||
-      prev.properties.encoderPpr != current.properties.encoderPpr) {
+      prev.properties.encoderPpr != current.properties.encoderPpr ||
+      prev.properties.deadbandAngle != current.properties.deadbandAngle ||
+      prev.properties.deadbandAngleAuto != current.properties.deadbandAngleAuto ||
+      prev.properties.deadbandTurns != current.properties.deadbandTurns ||
+      prev.properties.deadbandTurnsAuto != current.properties.deadbandTurnsAuto) {
     changed |= DOMAIN_PROPERTIES;
   }
 

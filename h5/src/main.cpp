@@ -10,6 +10,7 @@
 #include "DRO_Scale.h"
 #include "Debug.h"
 #include "UsbKeyboard.h"
+#include "SettingsService.h"
 
 void setup() {
   Serial.begin(DEBUG_UART_BAUD, SERIAL_8N1, DEBUG_UART_RX_PIN, DEBUG_UART_TX_PIN);
@@ -127,6 +128,7 @@ void setup() {
   DEBUG_PRINTLN("pref.end()...");
   Serial.flush();
   pref.end();
+  SettingsService::init();
 
   DEBUG_PRINTLN("Enabling stepper pins...");
   Serial.flush();

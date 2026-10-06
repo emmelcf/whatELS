@@ -55,6 +55,10 @@ static void serializeProperties(String* out, const MachineProperties& p) {
   *out += "P.motorStepsZ=" + String(p.motorStepsZ) + "\n";
   *out += "P.motorStepsX=" + String(p.motorStepsX) + "\n";
   *out += "P.encoderPpr=" + String(p.encoderPpr) + "\n";
+  *out += "P.dbAngle=" + String(p.deadbandAngle, 3) + "\n";
+  *out += "P.dbAngleAuto=" + String(p.deadbandAngleAuto ? 1 : 0) + "\n";
+  *out += "P.dbTurns=" + String(p.deadbandTurns, 4) + "\n";
+  *out += "P.dbTurnsAuto=" + String(p.deadbandTurnsAuto ? 1 : 0) + "\n";
 }
 
 static void serializeLegacyM(String* out, const MachineModel& m) {

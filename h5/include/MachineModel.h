@@ -64,6 +64,10 @@ struct MachineProperties {
   long motorStepsZ;
   long motorStepsX;
   long encoderPpr;
+  float deadbandAngle;
+  bool deadbandAngleAuto;
+  float deadbandTurns;
+  bool deadbandTurnsAuto;
 };
 
 struct MachineModel {

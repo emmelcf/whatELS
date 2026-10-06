@@ -1370,6 +1370,37 @@ Presentation Layer (Web UI Prototype / Companion Screens)
   * Limit clear button dispatches explicit `clearAxisLimit` commands, resolving 0-toggle ambiguities.
   * Keypad direct coordinate and limit entry dispatches canonical `setAxisPosDu` and `setAxisLimitDu` commands.
 
+---
+
+## 34. In-Memory Cached Settings Registry & Dynamic Hardware Deadbands
+
+### 1. The Dynamic Default vs. User Override Architecture
+Settings that rely on machine physics (e.g. spindle angle and turns deadbands for telemetry change detection) must avoid "default pollution" in persistent storage:
+* **Sparse NVS Flash Storage**: NVS flash strictly stores explicit user overrides. If the operator has not modified a setting, the key does not exist in NVS flash.
+* **Auto-Derivation**: When a setting is unset (`std::nullopt`), firmware computes its sane value dynamically from live hardware parameters:
+  * **Spindle Angle Deadband**: $\Delta\theta_{\text{auto}} = \frac{360.0^\circ}{\text{ENCODER\_STEPS\_FLOAT}}$ (e.g. $0.300^\circ$ for 600 PPR, $0.180^\circ$ for 1000 PPR).
+  * **Spindle Turns Deadband**: $\Delta\text{turns}_{\text{auto}} = \frac{2.0}{\text{ENCODER\_STEPS\_FLOAT}}$ ($\approx 2$ encoder pulses to reject edge dithering).
+* **Firmware Update Immunity**: If a future firmware update tunes or sharpens the derivation formula, any user on "Auto" automatically benefits on next boot without requiring database migrations or flash wipes.
+
+### 2. High-Performance In-Memory Cache (Write-Through)
+* **Boot-Time Hydration**: [`SettingsService::init()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp) loads user overrides once from flash into fast RAM.
+* **Nanosecond Loop Access**: Core motion and change-detection loops (`MachineModel::detectChangedDomains`) query in-memory RAM getters (`SettingsService::getDeadbandAngle()`), causing zero SPI flash bus contention or flash wear.
+* **Clean Reset to Auto**: Sending `"auto"` or `"default"` via `SETTINGS.set` calls `pref.remove()` and resets the memory cache to `std::nullopt`, cleanly reverting to the derived default.
+
+### 3. Consolidated Operational Setters
+Centralized mutation methods in `SettingsService`:
+* `setDiameterMode(bool dia)`
+* `setAbsoluteMode(bool abs)`
+* `setZDroMode(bool zdro)`
+* `setXDroMode(bool xdro)`
+* `setMeasure(int m)`
+* `setJogStepDu(long du)`
+* `setDeadbandAngle(const char* val)`
+* `setDeadbandTurns(const char* val)`
+
+Each method updates the live in-memory state, persists to NVS flash, and sets `machineStatusForcePublish = true` to broadcast updated properties to all connected clients immediately.
+
+
 
 
 
