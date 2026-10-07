@@ -7,6 +7,9 @@
 > * For the generalized mode lifecycle, contract, inheritance hierarchy, and multi-client safety: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
 > * For the authoritative physical lathe geometry, axis kinematics, capability bitmasks, and preset library: see [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
 > * For the generic client architecture, 3-tier pipeline, and protocols: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> * For the 800×480 Rich Touch HMI Profile (visual layout, typography, keypad, runstack safety): see [`hmi/RICH_TOUCH_800X480.md`](./hmi/RICH_TOUCH_800X480.md).
+> * For individual mode kinematics, manifests, and deck interaction specs: see [`modes/README.md`](./modes/README.md).
+
 
 ---
 
@@ -1129,6 +1132,11 @@ All core architectural domains are decoupled and authoritatively specified in th
 * **Mode Lifecycle, Interfaces, FSM & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
 * **Lathe Hardware Geometry, Profiles & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
 * **Generic Client Architecture, Pipeline & Wire Protocols:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
+* **800×480 Rich Touch HMI Profile (Cross-Client Standards):** [`hmi/RICH_TOUCH_800X480.md`](./hmi/RICH_TOUCH_800X480.md)
+* **Operational Modes Catalog & Deck Specifications:** [`modes/README.md`](./modes/README.md)
+  * **Electronic Gearbox Specification:** [`modes/gearbox/SPECIFICATION.md`](./modes/gearbox/SPECIFICATION.md)
+  * **Threading Specification:** [`modes/threading/SPECIFICATION.md`](./modes/threading/SPECIFICATION.md)
 * **Web UI Reference Implementation & Module Architecture:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
 * **Comprehensive Web UI Interaction-to-Wire Ledger:** [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)
+
 
