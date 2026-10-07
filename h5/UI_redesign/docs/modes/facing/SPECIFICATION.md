@@ -98,3 +98,5 @@ In manual lathe facing, feeding tool tip strictly to $X = 0.000$ frequently leav
 1. **Dynamic Deck Feed Nudges:** `[ − ]` and `[ + ]` nudge buttons allow active trimming of the synchronized cross-feed rate while facing under load, especially critical when approaching the center where surface speed drops to zero.
 2. **Dimension-First Stroke:** Entering part radius or OD into `STROKE` automatically configures the travel limit relative to the outer edge touch-off.
 3. **Safety Lockout:** Parameter inputs are suppressed while facing. The red `STOP` button terminates cross-slide motion immediately.
+4. **Coupled Parameter Visual Affordance (Right Bracket):** Similar to Turning, `MAX DOC` and `PASSES` are enclosed in an engineering right bracket (`]`) container to clarify two-way pass/DOC recalculation.
+

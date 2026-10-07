@@ -105,3 +105,5 @@ NanoELS core firmware executes discrete passes based on an integer `turnPasses`.
 1. **Dimension-First Entry:** Tapping `LENGTH` or `TOTAL DEPTH` opens the calculator keypad. Entering `25.0 mm` shoulder sets the hardware limit relative to current touch-off automatically.
 2. **Live Feed Trimming During Pass:** While cutting, the `[ − ]` and `[ + ]` nudge buttons in the dynamic deck remain active, allowing immediate feed rate adjustment without halting the spindle or breaking the carbide insert.
 3. **Running Telemetry & Lockout:** During active execution, all dimension setup fields are locked. The center deck displays live progress (`PASS 03 / 06`), and the permanent red `STOP` button is the sole exit path.
+4. **Coupled Parameter Visual Affordance (Right Bracket):** Because editing `MAX DOC` dynamically recalculates `PASSES` (and vice versa), the two rows are visually grouped inside an engineering right bracket (`]`) container. This visual coupling clarifies why altering one field updates the other without confusing the operator.
+

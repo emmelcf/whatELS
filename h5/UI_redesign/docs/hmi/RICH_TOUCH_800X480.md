@@ -2,7 +2,7 @@
 ## Industrial Ergonomics, Canvas Topology & Human-Machine Interface Standards
 *Target Devices:* 5.0"–7.0" 800×480 Landscape Capacitive Panels (Web UI Browser, Native ESP32-S3 LVGL 9, Companion Tablets)
 
-> **Architectural Scope:** This document defines the technology-agnostic **HMI Interaction Profile** for 800×480 rich capacitive touch displays. It governs layout geometry, visual hierarchy, touch sizing, safety lockouts, keypad mechanics, and color semantics across all rich graphics implementations (whether rendered in HTML/CSS/Alpine or native C++/LVGL).
+> **Architectural Scope:** This document defines the concrete **800×480 Capacitive Touch HMI Profile**, extending the universal principles defined in [`HMI_DESIGN_GUIDELINES.md`](./HMI_DESIGN_GUIDELINES.md). It governs canvas geometry, touch hitbox thresholds, visual hierarchy, typography, keypad mechanics, and color semantics across all rich graphics implementations (whether rendered in HTML/CSS/Alpine or native C++/LVGL).
 
 ---
 

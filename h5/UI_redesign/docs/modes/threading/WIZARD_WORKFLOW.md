@@ -116,3 +116,23 @@ Cutting an incorrect thread pitch (e.g., cutting 13 TPI on an expensive 1/2-20 s
 ```
 
 * **Safety Invariant:** The controller halts automatically after the single scratch stroke and waits for explicit operator confirmation. It never proceeds to deep roughing passes without manual clearance.
+
+---
+
+## 5. "Prepare Stock" Cross-Mode Workflow Bridge
+
+A major source of scrapped parts in lathe screw cutting is improper stock diameter prior to threading. The `[ PREPARE STOCK ➔ ]` action button bridges conversational threading into roughing preparation:
+
+* **For Straight Threads (Metric, UN, Freeform):**
+  1. Caches thread specification and target stock OD (e.g. $\varnothing 11.88\text{ mm}$ for M12).
+  2. Automatically transitions the controller to **`TURNING` mode**.
+  3. Pre-populates `TOTAL DEPTH` based on the delta between active measured X diameter and target prep OD ($\Delta X = X_{\text{current}} - X_{\text{target}}$).
+  4. Derives pass count from `MAX DOC`.
+  5. Displays advisory telemetry: `PREPARE STOCK: SWITCHED TO TURNING (TARGET OD: Ø 11.88 mm FOR M12 × 1.75)`.
+* **For Pipe Threads (NPT, BSPT):**
+  1. Caches pipe thread standard.
+  2. Automatically transitions the controller to **`TAPER` mode**.
+  3. Pre-populates the exact $1:16$ cone angle ($1.7899^\circ$).
+  4. Pre-populates taper stroke length to standard pipe engagement length ($L_2$).
+  5. Displays advisory telemetry: `PREPARE STOCK: SWITCHED TO TAPER (1:16 CONE, L=13.6mm FOR 1/2" NPT)`.
+

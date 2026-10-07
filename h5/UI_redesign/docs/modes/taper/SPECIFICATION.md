@@ -56,6 +56,12 @@ NanoELS firmware implements two operational workflows using `MODE_CONE`:
 1. **Continuous Angled Gearing (`GEARBOX -> AXIS: Z+X`):** Single continuous cut along the taper angle, bounded by machine soft limits.
 2. **Automated Multi-Pass Cycle (`TAPER`):** Autonomous multi-pass cycle taking multiple roughing passes parallel to the taper slope, followed by automated retract and rapid return.
 
+### 5. Multi-Client Disambiguation & Yield Triggers
+Because legacy telemetry uses `MODE_CONE` for both continuous feed and canned cycles, the display controller enforces state-ownership yield triggers:
+* **Trigger A (External Motion Inception):** If idle in `TAPER` and telemetry reports `UI.status=ON` with `UI.mode=CONE`, the UI infers the operator engaged feed at the apron/hardware, yielding immediately to `GEARBOX (Z+X)`.
+* **Trigger B (External Parameter Mutation):** If a cone parameter changes externally, the UI yields to `GEARBOX (Z+X)` to reflect the operator's manual adjustments.
+* **Trigger C (Mode Shift):** Any broadcast of a non-cone mode shifts the UI to track the new physical mode.
+
 ---
 
 ## Part 2: Deck Presentation & Touch Interaction (HMI Profile)

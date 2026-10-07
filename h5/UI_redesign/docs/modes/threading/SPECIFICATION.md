@@ -53,6 +53,16 @@ $$\Delta X_n = \text{TotalDepth} \times \sqrt{\frac{n}{\text{passes}}}$$
 * **Radial Infeed (Plunge):** Tool feeds straight into the cut along $X$. Generates heavy V-shaped chips on both flanks.
 * **Modified Flank Infeed ($29.5^\circ$):** Tool infeeds at $29.5^\circ$ (for $60^\circ$ threads), cutting primarily with the leading edge and leaving $0.5^\circ$ on the trailing flank to prevent rubbing.
 
+#### C. Benchtop Lathe Cutting Force Optimization
+* **Base Divisor ($0.10\text{ mm}$):** Standard industrial tooling catalogs suggest ~0.12 mm average DOC. On small benchtop lathes (Mini Lathes, Precision Matthews, Sieg) with 300–750W motors, the initial quadratic bite can induce belt slip or motor bogging. Shifting the base divisor to $0.10\text{ mm}$ (e.g. 11 passes on M12 instead of 9) drops peak cutting torque by ~25%, yielding cleaner threads and preventing motor stalls.
+* **Internal Threading Offset (+2 Passes):** Internal single-point threading uses slender boring bars prone to cantilever deflection and chatter. The cycle automatically schedules **+2 passes** when internal boring is selected.
+
+#### D. Directional Independence & Blind Hole Safety (Inside-Out Cutting)
+* Thread Handedness (Right-Hand vs. Left-Hand) is fundamentally distinct from Cut Direction (Carriage feed vector: Toward Chuck vs. Toward Tailstock).
+* **Blind Hole Collision Risk:** Cutting blind internal threads toward the chuck carries catastrophic risk of bottoming out the boring bar against the hole shoulder.
+* **Inside-Out Safe Vector:** The operator starts the tool inside the relief groove at the bottom of the hole and feeds outward toward the tailstock into open clearance (`→ TO TAIL / Z+`).
+* **Spindle Kinematics:** To cut an RH thread moving toward the tailstock, the spindle rotates in Reverse (CW) to maintain the right-hand helical lead angle.
+
 ---
 
 ## Part 2: Deck Presentation & Touch Interaction (HMI Profile)
