@@ -7,7 +7,7 @@
  *
  * Extending: push a module onto window.LatheVizModules:
  *   { id, when(profile) -> bool, build(ctx) -> { update(s, dyn) } }
- * ctx = { g, p, geo, el, zToX(mm), xToY(mm, isDia) }  (all SVG units are mm)
+ * ctx = { g, p, geo, el, zToX(mm), xToY(radiusMm) }  (all SVG units are mm)
  */
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
@@ -94,9 +94,9 @@
         o.ln.setAttribute('y1', -geo.bedHalfW - 6); o.ln.setAttribute('y2', geo.bedHalfW + 6);
         o.t.setAttribute('x', x + 3); o.t.setAttribute('y', -geo.bedHalfW - 9);
       };
-      const setX = (o, du, dia) => {
+      const setX = (o, du) => {
         if (!isSet(du)) { o.grp.setAttribute('visibility', 'hidden'); return; }
-        const y = xToY(du / 10000, dia);
+        const y = xToY(du / 10000);
         o.grp.setAttribute('visibility', 'visible');
         o.ln.setAttribute('x1', geo.chuckFaceX); o.ln.setAttribute('x2', p.bedLengthMm);
         o.ln.setAttribute('y1', y); o.ln.setAttribute('y2', y);
@@ -105,7 +105,7 @@
       return {
         update(s) {
           setZ(zl, s.zLeftDu); setZ(zr, s.zRightDu);
-          setX(xu, s.xUpDu, s.dia); setX(xd, s.xDownDu, s.dia);
+          setX(xu, s.xUpDu); setX(xd, s.xDownDu);
         }
       };
     }
@@ -146,7 +146,7 @@
       return {
         update(s, dyn) {
           const tx = zToX(s.zDu / 10000);
-          const ty = xToY(s.xDu / 10000, s.dia);
+          const ty = xToY(s.xDu / 10000);
           car.setAttribute('transform', `translate(${tx.toFixed(2)} 0)`);
           slide.setAttribute('transform', `translate(0 ${ty.toFixed(2)})`);
           for (const m of parts) {
@@ -317,8 +317,8 @@
       svg.innerHTML = '';
       svg.setAttribute('viewBox', `${geo.vb.x} ${geo.vb.y} ${geo.vb.w} ${geo.vb.h}`);
       const zToX = (mm) => geo.originX + (p.zPositive === 'left' ? -mm : mm);
-      const xToY = (mm, dia) => {
-        const r = dia ? mm / 2 : mm;
+      const xToY = (radiusMm) => {
+        const r = radiusMm;
         return p.xZeroRadiusMm + (p.xPositive === 'out' ? r : -r);
       };
       layers = [];
@@ -483,7 +483,7 @@
       dyn.vz += (dz / dt - dyn.vz) * a;
       dyn.vx += (dx / dt - dyn.vx) * a;
       dyn.sz = dyn.vz * (profile.zPositive === 'left' ? -1 : 1);
-      dyn.sx = dyn.vx * (profile.xPositive === 'out' ? 1 : -1) * (s.dia ? 0.5 : 1);
+      dyn.sx = dyn.vx * (profile.xPositive === 'out' ? 1 : -1);
       // Spindle needle: integrate visually while the spindle is turning, otherwise show the
       // controller-reported position (so hand-turn / drag is a closed loop).
       const simMotor = spin.active && spin.motorOn && spin.rpm > 0;
@@ -501,11 +501,21 @@
 
       for (const l of layers) l.update(s, dyn);
 
-      const lim = (label, v) => `<span><i>${label}</i> <b>${v}</b></span>`;
+      const lim = (label, v) => (v !== null && v !== undefined) ? `<span><i>${label}</i> <b>${v}</b></span>` : `<span><i>${label}</i> <b>—</b></span>`;
+      const xRad = typeof Formatters !== 'undefined'
+        ? Formatters.formatAxisDu(s.xDu, s.unitStr, false)
+        : (s.xDu / 10000).toFixed(3);
+      const xUpRad = typeof Formatters !== 'undefined'
+        ? Formatters.formatLimitDistance(s.xDu, s.xUpDu, s.unitStr, false)
+        : (isSet(s.xUpDu) ? Math.abs((s.xDu - s.xUpDu) / 10000).toFixed(3) : null);
+      const xDownRad = typeof Formatters !== 'undefined'
+        ? Formatters.formatLimitDistance(s.xDu, s.xDownDu, s.unitStr, false)
+        : (isSet(s.xDownDu) ? Math.abs((s.xDu - s.xDownDu) / 10000).toFixed(3) : null);
+
       ro.innerHTML =
-        `<span><i>Z</i> <b>${s.zDisplay}</b></span><span><i>X</i> <b>${s.xDisplay}${s.dia ? ' ø' : ' r'}</b></span>` +
+        `<span><i>Z</i> <b>${s.zDisplay}</b></span><span><i>X</i> <b>${xRad}</b></span>` +
         `<span><i>Mode</i> <b>${s.modeName}</b></span><span><i>Spindle</i> <b>${s.spindleDisplay} ${s.spindleUnit}</b></span>` +
-        lim('Z-L', s.zLeftDisplay) + lim('Z-R', s.zRightDisplay) + lim('X↑', s.xUpDisplay) + lim('X↓', s.xDownDisplay) +
+        lim('Z-L', s.zLeftDisplay) + lim('Z-R', s.zRightDisplay) + lim('X↑', xUpRad) + lim('X↓', xDownRad) +
         `<span class="${s.connected ? '' : 'lv-warn'}"><i>Link</i> <b>${s.backend}${s.connected ? '' : ' (offline)'}</b></span>`;
     }
     requestAnimationFrame(frame);

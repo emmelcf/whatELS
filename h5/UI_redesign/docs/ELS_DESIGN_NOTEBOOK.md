@@ -1409,7 +1409,7 @@ During UI development and cycle testing, verifying controller behavior (such as 
 
 To address this, a dedicated **Lathe Digital Twin Visualizer** was created in [`UI_redesign/prototype/dev/`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/):
 * **Zero Production Footprint**: The visualizer is entirely self-contained inside the `dev/` directory. It is included via two clean `<script>` tags at the bottom of the prototype HTML and can be removed with zero residue when preparing production firmware deployments for LittleFS.
-* **Passive Reactive Observation**: The visualizer is a pure subscriber to the Alpine.js `machine` store. It reads deci-micron positions (`zDu`, `xDu`), limits (`zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`), spindle state (`rpm`, `turns`, `angle`), and operation modes (`mode`, `dia`). It works identically whether connected to the local browser emulator or the physical ESP32 controller over WebSocket.
+* **Passive Reactive Observation**: The visualizer is a pure subscriber to the Alpine.js `machine` store. It reads authoritative canonical deci-micron positions (`zDu`, `xDu`), limits (`zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`), spindle state (`rpm`, `turns`, `angle`), and operation mode (`mode`). Physical SVG cross-slide translation operates strictly on canonical radius (`xDu`), completely immune to client-side diameter/radius display toggles. It works identically whether connected to the local browser emulator or the physical ESP32 controller over WebSocket.
 * **Non-Obtrusive Page Docking**: Positioned directly below the primary controller face and above the external developer console, preserving full view and touch ergonomics of all primary controls.
 
 ---
