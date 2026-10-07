@@ -1006,154 +1006,29 @@ To achieve high reliability, modularity, and future extensibility across diverse
 
 ---
 
-### 2. Domain State Architecture (`MachineModel`)
-The machine state is partitioned into four independent, cohesive domains:
+### 2. Domain State Architecture (`MachineModel`) & Wire Telemetry
 
-```
-+-------------------------------------------------------------------------+
-|                              MachineModel                               |
-+-------------------+-------------------+----------------+----------------+
-|    Kinematics     |      Intent       |     Cycle      |   Properties   |
-|   (Domain 'K')    |   (Domain 'I')    |  (Domain 'C')  |  (Domain 'P')  |
-|     Bit: 0x01     |     Bit: 0x02     |   Bit: 0x04    |   Bit: 0x08    |
-+-------------------+-------------------+----------------+----------------+
-| zDu, xDu, yDu     | thFmt, thPitch    | passes         | measure        |
-| zLeftDu, zRightDu | dupr              | opIdx (curr)   | dia, abs       |
-| xUpDu, xDownDu    | tpMode, tpVal     | setupIdx       | zDro, xDro     |
-| rpm, turns, angle | coneRatio         | starts         | screwZDu       |
-| mode, on, estop   | feedStepDu        |                | screwXDu       |
-| zDis, xDis, yDis  | jogStepDu         |                | motorStepsZ/X  |
-| dupr, nextDupr    | feedRev           |                | encoderPpr     |
-+-------------------+-------------------+----------------+----------------+
-```
+> **Authoritative Specification:** The complete struct definitions, bitmask flags (`DOMAIN_KINEMATICS`, `DOMAIN_INTENT`, `DOMAIN_CYCLE`, `DOMAIN_PROPERTIES`), multi-domain pull hydration syntax (`CMD.get=K,I,C,P`), and line-oriented wire keys (`K.*`, `I.*`, `C.*`, `P.*`) are specified authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md#4-multi-domain-state-protocol-machinemodel).
 
-#### Domain Mask Flags ([include/MachineModel.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h))
-```cpp
-enum DomainFlags : uint8_t {
-  DOMAIN_NONE       = 0x00,
-  DOMAIN_KINEMATICS = 0x01,  // Dynamic physical axes, limits, spindle, mode, on/off
-  DOMAIN_INTENT     = 0x02,  // Thread format/pitch, taper ratio/angle, steps, feed direction
-  DOMAIN_CYCLE      = 0x04,  // Multi-pass counts, current pass, operation step, multi-starts
-  DOMAIN_PROPERTIES = 0x08,  // Unit system, DRO active, leadscrew pitches, motor steps (dia decoupled to clients)
-  DOMAIN_ALL        = 0x0F   // All domains combined (0x01 | 0x02 | 0x04 | 0x08)
-};
-```
+Summary of the 4 independent domains:
+* **Domain 'K' (Kinematics — High Frequency 20–50 Hz):** Physical positions in deci-microns (`zDu`, `xDu`), limit registers, spindle speed (`rpm`, `turns`, `angle`), active `mode`, and `isOn`.
+* **Domain 'I' (Operator Intent — On Mutation):** Exact operator typed setpoints (`thFmt`, `thPitch`, `tpMode`, `tpVal`, `coneRatio`), feed step increments, and feed direction.
+* **Domain 'C' (Cycle Progress — On Pass):** Automated cycle pass counts (`passes`), active pass index (`opIdx`), and multi-start counters.
+* **Domain 'P' (Machine Properties — On Connect / Setup):** Leadscrew pitch parameters, stepper microsteps, DRO attachment flags (`zDro`, `xDro`), and absolute/incremental mode (`abs`).
 
----
-
-### 3. Flexible Multi-Domain Query Protocol
-To eliminate multiple round-trips when a client initializes or transitions pages, the client can request any arbitrary combination of domains in a single command.
-
-#### Query Syntax:
-* **Compound Request**: `?get=K,I` or `CMD.get=K,I`
-* **Single Domain**: `?get=P` or `?get=properties`
-* **All Domains**: `?get=ALL` or `?state` or `?get=*`
-
-#### Token Parser Mapping:
-| Query Token | Target Domain Flag | Description |
-| :--- | :--- | :--- |
-| `K`, `kinematics`, `kin` | `DOMAIN_KINEMATICS` (`0x01`) | High-frequency physical axis positions and limits |
-| `I`, `intent` | `DOMAIN_INTENT` (`0x02`) | Operator input setpoints (exact typed values) |
-| `C`, `cycle` | `DOMAIN_CYCLE` (`0x04`) | Automated multi-pass and multi-start cycle counters |
-| `P`, `properties`, `props` | `DOMAIN_PROPERTIES` (`0x08`) | Hardware leadscrew parameters and mode toggles |
-| `ALL`, `*` | `DOMAIN_ALL` (`0x0F`) | Full state capture across all four domains |
-
----
-
-### 4. Wire Telemetry Schema Reference
-
-#### Domain 'K' — Kinematics (`K.*`)
-| Key | Type | Unit | Description |
-| :--- | :--- | :--- | :--- |
-| `K.zDu` | `long` | `du` (0.1 µm) | Canonical Z carriage position (DRO scale or stepper pos) |
-| `K.xDu` | `long` | `du` (0.1 µm) | Canonical X cross-slide position |
-| `K.yDu` | `long` | `du` (0.1 µm) | Canonical Y auxiliary position |
-| `K.zLeftDu` | `long` | `du` (0.1 µm) | Z left/chuck limit position (`LONG_MAX` if unset) |
-| `K.zRightDu` | `long` | `du` (0.1 µm) | Z right/tailstock limit position (`LONG_MIN` if unset) |
-| `K.xUpDu` | `long` | `du` (0.1 µm) | X upper/inward limit position (`LONG_MAX` if unset) |
-| `K.xDownDu` | `long` | `du` (0.1 µm) | X lower/outward limit position (`LONG_MIN` if unset) |
-| `K.zDis` | `0` or `1` | boolean | Z axis motor disabled |
-| `K.xDis` | `0` or `1` | boolean | X axis motor disabled |
-| `K.yDis` | `0` or `1` | boolean | Y axis motor disabled |
-| `K.rpm` | `int` | RPM | Filtered spindle speed |
-| `K.turns` | `long` | revolutions | Spindle revolutions counter |
-| `K.angle` | `long` | 0.1° (0..3599) | Spindle rotary angle |
-| `K.mode` | `int` | enum | Operating mode (`0`=GEARBOX, `1`=THREAD, `2`=CONE, etc.) |
-| `K.on` | `0` or `1` | boolean | Kinematic spindle-feed sync engaged |
-| `K.estop` | `0` or `1` | boolean | Hardware emergency stop tripped |
-| `K.dupr` | `long` | `du/rev` | Active kinematic feedrate |
-| `K.nextDupr` | `long` | `du/rev` | Pending/buffered next feedrate (if changed while moving) |
-
-#### Domain 'I' — Intent (`I.*`)
-| Key | Type | Unit | Description |
-| :--- | :--- | :--- | :--- |
-| `I.thFmt` | `int` | enum | Thread format (`0`=Metric mm, `1`=Imperial TPI, `2`=Imperial Inch) |
-| `I.thPitch` | `float` | user unit | Exact authoritative pitch entered by operator (e.g. `20.0000` for 20 TPI) |
-| `I.dupr` | `long` | `du/rev` | Internal feedrate equivalent |
-| `I.tpMode` | `int` | enum | Taper input mode (`0`=Ratio 1:K, `1`=Angle °, `2`=Standard Preset) |
-| `I.tpVal` | `float` | ratio / deg | Exact authoritative taper value (e.g. `3.5000` for 1:3.5, `8.1300` for 8.13°) |
-| `I.coneRatio` | `float` | dimensionless | Resolved kinematic cone ratio ($X / Z$) |
-| `I.tpPreset` | `int` | id | Preset identifier (-1 if custom ratio/angle) |
-| `I.feedStepDu` | `long` | `du` (0.1 µm) | Discontinuous feed step size (100, 500, 1000, 2000 du) |
-| `I.jogStepDu` | `long` | `du` (0.1 µm) | Continuous manual jog step size (100, 1000, 10000 du) |
-| `I.feedRev` | `0` or `1` | boolean | Feed direction reversal state |
-
-#### Domain 'C' — Cycle (`C.*`)
-| Key | Type | Unit | Description |
-| :--- | :--- | :--- | :--- |
-| `C.passes` | `int` | count | Total programmed passes for automated cycle |
-| `C.opIdx` | `int` | index | Active cut pass index |
-| `C.setupIdx` | `int` | index | Active step in setup wizard |
-| `C.starts` | `int` | count | Multi-start thread count |
-
-#### Domain 'P' — Properties (`P.*`)
-| Key | Type | Unit | Description |
-| :--- | :--- | :--- | :--- |
-| `P.measure` | `0` or `1` | enum | Unit system (`0`=Metric, `1`=Imperial) |
-| *(P.dia)* | *(decoupled)* | *(none)* | *Decoupled:* Diameter/Radius display preference is 100% client-local; core operates strictly in canonical radius (`K.xDu`). |
-| `P.abs` | `0` or `1` | boolean | Coordinate system (`1`=Absolute, `0`=Incremental) |
-| `P.zDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on Z |
-| `P.xDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on X |
-| `P.screwZDu` | `long` | `du` (0.1 µm) | Hardware Z leadscrew pitch |
-| `P.screwXDu` | `long` | `du` (0.1 µm) | Hardware X cross-slide leadscrew pitch |
-| `P.motorStepsZ` | `long` | steps/rev | Z stepper driver microsteps per motor revolution |
-| `P.motorStepsX` | `long` | steps/rev | X stepper driver microsteps per motor revolution |
-| `P.encoderPpr` | `long` | pulses/rev | Spindle encoder pulses per revolution |
-
----
-
-### 5. Backward Compatibility Guarantee
-During the UI transition, [RichClientAdapter::buildTelemetry()](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp) simultaneously emits both the new domain keys (`K.*`, `I.*`, `C.*`, `P.*`) and the legacy mirror keys (`M.*`) whenever `DOMAIN_ALL` or `DOMAIN_KINEMATICS` is transmitted. This ensures zero regression in existing test clients or background scripts while enabling modern modular UI subscriptions.
+During the UI transition, [RichClientAdapter::buildTelemetry()](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp) simultaneously emits both the modern domain keys (`K.*`, `I.*`, `C.*`, `P.*`) and legacy mirror keys (`M.*`) to ensure zero regression in legacy clients.
 
 ---
 
 ### 6. Generic Client Architecture: Transport / Serializer / Translator Pipeline
-To ensure any future transport (physical Nextion v2 UART driver, USB-UART serial pendant, Bluetooth Low Energy, or CAN/Modbus bus) can be added cleanly without modifying core firmware or existing web clients, the system implements a composable client pipeline ([include/ClientEndpoint.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/ClientEndpoint.h)):
 
-$$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$$
+> **Authoritative Specification:** The composable client pipeline ($\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$), C++ interface definitions (`ITransport`, `ITelemetrySerializer`, `ICommandTranslator`), and concrete adapter lifecycle are specified authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md#3-composable-client-endpoint-pipeline-c-specification).
 
-```
-   Raw Wire (Bytes/Text)              Inbound Translation                   Core Controller
-[ Physical I/O Channel ] ──(Inbound)──► [ ICommandTranslator ] ──(Dispatch)──► [ Motion / Model ]
-           ▲                                                                           │
-           │                                                                           │
-           └──────────────(Outbound)── [ ITelemetrySerializer ] ◄──(Capture)───────────┘
-```
-
-1. **`ITransport` (Physical I/O)**:
-   * Pure virtual wire interface: `isConnected()`, `sendText(str)`, `sendBytes(buf, len)`.
-   * Concrete implementations: `WebSocketTransport`, `NextionUartTransport`, `SerialPendantTransport`, `BleTransport`.
-2. **`ITelemetrySerializer` (Outbound Encoding)**:
-   * Transforms typed [MachineModel](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h) structs into the client's expected wire format.
-   * `RichClientAdapter` implements this to produce line-oriented ASCII `K.*`, `I.*`, etc.
-   * A future `NextionSerializer` will produce Nextion HMI display commands (e.g. `t0.txt="..."`).
-3. **`ICommandTranslator` (Inbound Decoding)**:
-   * Decodes raw inbound wire payloads into authoritative controller actions.
-   * `DefaultCommandTranslator` passes text commands directly to [CommandDispatcher](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/CommandDispatcher.h).
-   * A future `NextionTranslator` or `PendantTranslator` can decode binary touch packets (`0x65 0x01...`) into canonical commands (`CMD.mode=...`).
-4. **`ClientEndpoint` (Composite Channel)**:
-   * Manages the lifecycle of a connected client, routing incoming messages through the translator and transmitting replies and change-triggered telemetry broadcasts over the transport.
-   * *(See Section 17 for the comprehensive client registration model, immutable `StatusSnapshot`, temporal isolation, and decentralized change-driven status dispatch architecture).*
+Summary of Pipeline Roles:
+* **`ITransport` (Physical I/O):** Abstract wire interface (`isConnected`, `sendText`, `sendBytes`) implemented across WebSocket, hardware UART (`Serial1`), serial pendants, and BLE.
+* **`ITelemetrySerializer` (Outbound Encoding):** Serializes typed `MachineModel` domain snapshots into client-expected wire streams (`K.*`, `I.*`, `C.*`, `P.*`, or Nextion display commands).
+* **`ICommandTranslator` (Inbound Decoding):** Sanitizes and decodes raw inbound client packets into canonical `CommandDispatcher` actions.
+* **`ClientEndpoint` (Composite Channel):** Couples transport, serializer, and translator into an autonomous communication channel.
 
 ---
 
@@ -1471,155 +1346,25 @@ For operations like threading, electronic gearing, and taper turning, the contro
 
 ---
 
-## 36. Canonical Command Protocol & UI Client Translation Ledger
+## 36. Canonical Command Protocol & UI Client Translation Layer
 
-> **Authoritative Specification:** For the complete, authoritative command protocol, 3-tier layering (`ITransport` $\rightarrow$ `ICommandTranslator` $\rightarrow$ `CommandDispatcher`), and interaction-to-wire ledger, see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> **Authoritative Specification:** The 3-tier architecture (`ITransport` $\rightarrow$ `ICommandTranslator` $\rightarrow$ `CommandDispatcher`), the comprehensive 40-row UI Interaction Ledger, and the complete command dictionary (`CMD.*`, `SETTINGS.*`) are maintained authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
-### 1. Architectural Philosophy & Layer Decoupling
+### 1. Architectural Summary & Layer Decoupling
 To achieve rock-solid reliability across diverse client types (capacitive touch Web UI, wireless DRO tablets, CNC senders, and the legacy Nextion UART display), the system enforces strict separation of concerns across three distinct architectural layers:
+* **Transport Layer (`ITransport`):** Manages raw byte streams and sockets (`WebSocketsServer` on port 81, hardware `Serial1` UART). Agnostic to command syntax and kinematics.
+* **Client Translation Layer (`ICommandTranslator`):** Sanitizes and decodes client-specific framing into internal canonical calls (`CMD.*`, `SETTINGS.*`), preventing malformed framing from touching kinematic code.
+* **Core Motion Dispatcher (`CommandDispatcher`):** Single point of truth for canonical machine commands. Dispatches sanitized parameters directly to hardware registers (`Axis`, `Motion`, `SettingsService`).
+* **Legacy Physical Nextion UART (`Input.cpp`):** Nextion messages bypass WebSocket transport and translation layers completely, calling internal motion methods directly with 100% backward compatibility.
 
-```mermaid
-graph TD
-    subgraph Client Layer
-        WebUI[Modern Web / Touch UI]
-        DROClient[Wireless DRO Display]
-        GrblClient[CNC / GRBL Sender]
-        NextionHMI[Legacy Nextion Display]
-    end
-
-    subgraph Transport Layer
-        WSServer[WebSockets Server :81]
-        Serial1UART[Hardware UART / Serial1]
-    end
-
-    subgraph Client Translation Layer
-        CanonicalTrans[CanonicalCommandTranslator]
-        GrblTrans[GrblCommandTranslator]
-        InputNextion[Input.cpp Nextion Handler]
-    end
-
-    subgraph Core Motion Engine
-        Dispatcher[CommandDispatcher]
-        Motion[Motion Kinematics & PCNT]
-        Settings[SettingsService & NVS]
-    end
-
-    WebUI -->|WebSocket /canonical| WSServer
-    DROClient -->|WebSocket /dro| WSServer
-    GrblClient -->|WebSocket /grbl| WSServer
-    NextionHMI -->|UART 115200| Serial1UART
-
-    WSServer --> CanonicalTrans
-    WSServer --> GrblTrans
-    Serial1UART --> InputNextion
-
-    CanonicalTrans --> Dispatcher
-    GrblTrans --> Dispatcher
-    InputNextion -->|Direct C++ Calls| Motion
-
-    Dispatcher --> Motion
-    Dispatcher --> Settings
-```
-
-1. **Transport Layer (`ITransport`)**:
-   - Manages raw byte streams and sockets (e.g. `WebSocketsServer` on port 81, hardware `Serial1` UART).
-   - Responsible strictly for connection state, frame buffering, and packet delivery. Knows nothing about command syntax or controller kinematics.
-
-2. **Client Translation Layer (`ICommandTranslator`)**:
-   - Sanitizes and translates client-specific wire events into canonical internal calls.
-   - Strips transport artifacts (`\r`, `\n`, whitespace), guarantees clean null-terminated strings (`char[256]`), and rejects malformed framing before it ever touches kinematic code.
-   - Enables heterogeneous clients (e.g., GRBL jogging syntax vs. Web UI button pulses) without coupling the core motion engine to any specific client quirk.
-
-3. **Core Motion Dispatcher & Kinematics (`CommandDispatcher`)**:
-   - Single point of truth for canonical machine commands (`CMD.*`, `SETTINGS.*`, `?get`, `?sysinfo`).
-   - Dispatches sanitized parameters directly to hardware registers (`Axis`, `Motion`, `SettingsService`).
-
-4. **Zero Impact on Legacy Physical Nextion UART (`Input.cpp`)**:
-   - The physical Nextion display communicates exclusively over `Serial1` via `processNextionMessage()` and `processKeypad()`.
-   - Nextion messages bypass the WebSocket transport and translation layers completely, calling internal motion methods directly. Modernizing the WebSocket API guarantees 100% isolation and zero regression for the physical Nextion hardware.
+### 2. UI Interaction Ledger & Protocol Reference
+The complete interaction mapping (D-pad discrete steps, continuous hold-to-jog, chamfer diagonals, runstack start/stop, DRO zeroing, soft limits, pitch/taper keypad submit, and spindle simulation) is documented in [`ELS_CLIENT_ARCHITECTURE.md#9-comprehensive-ui-interaction-to-wire-command-ledger`](./ELS_CLIENT_ARCHITECTURE.md#9-comprehensive-ui-interaction-to-wire-command-ledger).
 
 ---
 
-### 2. UI Interaction to Canonical Wire Command Ledger
-The following ledger maps every primary user interaction on the capacitive touch UI to its client service method, wire command, controller translation, and physical motion effect:
+## 37. Web UI Prototype Implementation: Alpine.js Reactive Boundary & Script Bootstrap
 
-| UI Control / Gesture | Alpine / Controller Trigger | JS Client Method ([`nanoels-service.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-service.js)) | Wire Command (`/canonical`) | Controller Translation & Kinematic Effect |
-| :--- | :--- | :--- | :--- | :--- |
-| **D-Pad Tap Z+ (Tailstock)** (<300ms) | `@click` / pointer tap | `jogStep('Z', 'TAIL')` | `CMD.jogStep=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, 1)` followed by `0`. Moves carriage right by exactly 1 step (`moveStep` deci-microns). |
-| **D-Pad Tap Z- (Chuck)** (<300ms) | `@click` / pointer tap | `jogStep('Z', 'CHUCK')` | `CMD.jogStep=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, 1)` followed by `0`. Moves carriage left by exactly 1 step (`moveStep` deci-microns). |
-| **D-Pad Tap X+ (Retract)** (<300ms) | `@click` / pointer tap | `jogStep('X', 'RETRACT')` | `CMD.jogStep=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, 1)` followed by `0`. Cross-slide backs out by 1 step (`moveStep` deci-microns). |
-| **D-Pad Tap X- (Infeed)** (<300ms) | `@click` / pointer tap | `jogStep('X', 'INFEED')` | `CMD.jogStep=X,INFEED\n` | `queueWebUiEvent(B_UP, 1)` followed by `0`. Cross-slide plunges in by 1 step (`moveStep` deci-microns). |
-| **D-Pad Hold Z+** (≥300ms) | Pointerdown hold | `jog('Z', 'TAIL', true)` | `CMD.jogHold=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, true)`. Continuous carriage motion right until released. Failsafe watchdog auto-releases if heartbeat drops >500ms. |
-| **D-Pad Release Z+** | Pointerup / cancel | `jog('Z', 'TAIL', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_RIGHT, false)`. Decelerates carriage smoothly to a stop. |
-| **D-Pad Hold Z-** (≥300ms) | Pointerdown hold | `jog('Z', 'CHUCK', true)` | `CMD.jogHold=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, true)`. Continuous carriage motion left toward chuck until released. |
-| **D-Pad Release Z-** | Pointerup / cancel | `jog('Z', 'CHUCK', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_LEFT, false)`. Decelerates carriage smoothly to a stop. |
-| **D-Pad Hold X+** (≥300ms) | Pointerdown hold | `jog('X', 'RETRACT', true)` | `CMD.jogHold=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, true)`. Continuous cross-slide retract until released. |
-| **D-Pad Release X+** | Pointerup / cancel | `jog('X', 'RETRACT', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_DOWN, false)`. Decelerates cross-slide to a stop. |
-| **D-Pad Hold X-** (≥300ms) | Pointerdown hold | `jog('X', 'INFEED', true)` | `CMD.jogHold=X,INFEED\n` | `queueWebUiEvent(B_UP, true)`. Continuous cross-slide plunge until released. |
-| **D-Pad Release X-** | Pointerup / cancel | `jog('X', 'INFEED', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_UP, false)`. Decelerates cross-slide to a stop. |
-| **Runstack: START** | Primary Start button | `startCycle()` | `CMD.on=1\n` | `setIsOnFromTask(true)`. Arms/engages active kinematic cycle (electronic gearing, turning, facing, thread sync). |
-| **Runstack: STOP** | Stationary Stop button | `stopCycle()` | `CMD.on=0\n` | `setIsOnFromTask(false)`. Immediately disengages synchronized leadscrew motion and returns to idle. |
-| **Zero Z Axis** | DRO Z0 button | `zeroAxis('Z')` | `CMD.axisZero=Z\n` | `setAxisZero(&z)`. Sets current carriage position as $Z=0.000$ machine coordinate. |
-| **Zero X Axis** | DRO X0 button | `zeroAxis('X')` | `CMD.axisZero=X\n` | `setAxisZero(&x)`. Sets current cross-slide position as $X=0.000$ machine coordinate. |
-| **Mode Selector** | Nav bar / Mode buttons | `setMode(modeId)` | `CMD.mode=<id>\n` | `setOperatingMode(id)`. Switches mode (`0`=Gear, `1`=Turn, `2`=Face, `3`=Cone, `4`=Cut, `5`=Thread, `6`=Slot, `7`=Ellipse, `8`=GCode). |
-| **Reverse Feed / Pitch** | Pitch/Feed chips | `reverseFeed()` | `CMD.feedRev\n` | `reverseFeedDirection()`. Inverts sign of active `dupr` pitch, reversing leadscrew sync direction. |
-| **Jog Step Increment** | Step selector chip | `cycleStep()` | `CMD.jogStepDu=<du>\n` | Sets in-memory `moveStep` variable to target deci-microns (e.g., 100, 1000, 10000). |
-| **Unit System Toggle** | Unit chip (MM/IN/TPI) | `cycleMeasure()` | `CMD.measure=<0|1|2>\n` | Calls `setMeasure(m)`: `0` = Metric (mm), `1` = TPI, `2` = Imperial (in). Updates display formatting and conversion factors. |
-| **Diameter / Radius** | DRO Dia/Rad chip | `toggleDiaRad()` | None (Pure Local UI Display) | Toggles local UI display preference between Ø Diameter and R Radius. Ground truth on controller is always canonical radius (`xDu`). Entering coordinates in Diameter mode converts to radius before emitting `CMD.axisPosDu`. Legacy Nextion firmware may receive setting during transitional phase, but core controller kinematics remain decoupled. |
-| **Set Z Left Limit** | DRO limit edit modal | `setLimit('Z', 'left', valDu)` | `CMD.axisLimitDu=Z,L,<val>\n` | `setAxisLimitDu(&z, true, valDu)`. Programs hardware left limit register (`z.leftStop`). |
-| **Set Z Right Limit** | DRO limit edit modal | `setLimit('Z', 'right', valDu)` | `CMD.axisLimitDu=Z,R,<val>\n` | `setAxisLimitDu(&z, false, valDu)`. Programs hardware right limit register (`z.rightStop`). |
-| **Clear Z Limits** | DRO limit clear button | `clearLimit('Z', 'left')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded travel. |
-| **Set Metric Pitch** | Pitch keypad submit | `setFeedrateMm(mm)` | `CMD.feedMm=<val>\n` | Computes deci-microns per revolution and engages metric leadscrew ratio. |
-| **Set TPI Pitch** | Pitch keypad submit | `setFeedrateTpi(tpi)` | `CMD.feedTpi=<val>\n` | Computes fractional leadscrew ratio for imperial threads per inch. |
-| **Set Taper Angle** | Taper keypad submit | `setTaperAngle(deg)` | `CMD.taperAngle=<val>\n` | Computes $K = 2\tan(\theta)$ and configures dual-axis synchronized cone kinematics. |
-| **Set Taper Ratio** | Taper keypad submit | `setTaperRatio(1/K)` | `CMD.taperRatio=<val>\n` | Configures cone slope ratio directly (e.g. 1:10, 1:20). |
-| **Spindle Sim RPM** | Visualizer Spindle HUD | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
-| **Spindle Sim Turn** | Visualizer Chuck Wheel | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Smoothly generates queued encoder pulses equivalent to specified hand rotation. |
-
----
-
-### 3. Canonical Protocol Command Reference (`CMD.*` & `SETTINGS.*`)
-
-#### Motion & Cycle Commands
-* `CMD.on=1`: Starts current cycle or feed.
-* `CMD.on=0`: Stops current cycle or feed immediately.
-* `CMD.jogHold=<axis>,<dir>`: Starts continuous manual jog along `<axis>` (`Z` or `X`) in `<dir>` (`TAIL`, `CHUCK`, `INFEED`, `RETRACT`, `1`, `-1`).
-* `CMD.jogRelease=<axis>`: Stops manual jog along `<axis>` (or all axes if omitted).
-* `CMD.jogStep=<axis>,<dir>`: Executes a discrete single-step move of `moveStep` deci-microns in `<dir>`.
-* `CMD.jogStepDu=<du>`: Sets single-step increment size in deci-microns (e.g. `100` = $0.01\text{ mm}$).
-* `CMD.axisZero=<axis>`: Zeroes machine coordinate origin for `<axis>` (`Z`, `X`, `Y`).
-* `CMD.axisPosDu=<axis>,<posDu>`: Sets absolute DRO position coordinate for `<axis>`.
-* `CMD.axisLimitDu=<axis>,<L|R>,<du>`: Programs hardware travel limit for `<axis>`.
-* `CMD.axisClearLimit=<axis>,<L|R>`: Clears specified travel limit register.
-
-#### Mode & Kinematics Commands
-* `CMD.mode=<modeId>`: Sets operational mode (`0`=GEAR, `1`=TURN, `2`=FACE, `3`=CONE, `4`=CUT, `5`=THREAD, `6`=SLOT, `7`=ELLIPSE, `8`=GCODE).
-* `CMD.feedRev`: Reverses feed direction (toggles sign of active pitch).
-* `CMD.feedDupr=<du>`: Sets feedrate in deci-microns per spindle revolution.
-* `CMD.feedMm=<mm>`: Sets feedrate/pitch in millimeters.
-* `CMD.feedTpi=<tpi>`: Sets threading pitch in threads per inch.
-* `CMD.feedInch=<inch>`: Sets threading pitch in decimal inches.
-* `CMD.feedStepDu=<du>`: Sets manual feed step size in deci-microns.
-* `CMD.feedStepCycle`: Cycles through standard feed step table entries.
-* `CMD.taperAngle=<deg>`: Sets taper angle in degrees.
-* `CMD.taperRatio=<ratioK>`: Sets taper ratio $1:K$.
-* `CMD.taperPreset=<id>,<deg>,<ratio>`: Loads predefined standard taper preset (Morse, Brown & Sharpe, etc.).
-
-#### Settings & Configuration Commands
-* `SETTINGS.get` / `SETTINGS.get=*`: Returns all persistent machine and operational settings.
-* `SETTINGS.get=<key>`: Returns specific setting value.
-* `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
-  - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
-
-#### System & State Queries
-* `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
-* `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
-
----
-
-## 16. Web UI & DRO Architecture: Alpine.js Reactive Boundary & Kinematic Decoupling
-
-### 16.1 The Surgical Boundary Rationale (Zero Lag, 100% Visual & Functional Fidelity)
+### 37.1 The Surgical Boundary Rationale (Zero Lag, 100% Visual & Functional Fidelity)
 During the prototype evolution, a full rewrite of the 4,000-line `lathe-controller.js` into Alpine.js was proposed and rejected based on three core production constraints:
 1. **Zero Display/Processing Lag:** The host UI runs on embedded touchscreens, tablets, and low-power hardware. Re-rendering massive complex DOM trees via framework diffing introduces latency spikes and frame drops during high-frequency change-driven telemetry pushes.
 2. **100% Visual Fidelity:** All custom modal overlays, multi-stage wizards (Threading, Turning, Facing), and dynamic center decks are already finalized and visually perfected in Vanilla JS.
@@ -1640,7 +1385,7 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
 
 ---
 
-### 16.2 Kinematic Ground Truth (Radius) vs. Client Presentation (Diameter)
+### 37.2 Kinematic Ground Truth (Radius) vs. Client Presentation (Diameter)
 * **Core Kinematics are Pure Radius:** In official NanoELS motion firmware (`h5.ino`), all kinematic coordinates, leadscrew calculations, and step counts operate purely in deci-microns (`du`) of carriage radius (`xDu`). The core controller has no native concept of diameter mode.
 * **Diameter is a Client-Side Translation:** The choice between Diameter (`Ø DIA`) and Radius (`R RAD`) display is strictly a client presentation and input convenience. 
 * **Zero Network Traffic on Toggle:** Clicking `#repBadge` toggles `$store.machine.dia` locally. **No command is emitted across serial/WebSocket to the controller.**
@@ -1652,7 +1397,7 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
 
 ---
 
-### 16.3 Deterministic Bootstrap & Stock Vendor Integrity
+### 37.3 Deterministic Bootstrap & Stock Vendor Integrity
 * **Untouched Stock Vendor Code:** The third-party `alpine.min.js` bundle is preserved strictly as stock upstream code with zero local modifications or forks.
 * **Script Dependency Order:**
   ```html
@@ -1668,114 +1413,10 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
 
 ---
 
-## 17. Modular Client Architecture & Change-Driven Status Dispatch
+## 38. Authoritative Specifications Cross-Index
 
-### 17.1 Client Interface Abstraction vs. Transport Layers
-The system fundamentally decouples **Client Interfaces** from **Hardware Transports**:
-* **Transports are dumb pipes:** WebSocket, UART, SPI, and BLE are physical or network byte transport mechanisms. They know nothing about lathe semantics.
-* **Clients are interface adapters:** Classes like `NextionClient`, `WebUiClient`, and `DroPendantClient` implement the core `ClientInterface`. They encapsulate all protocol serialization, page mapping, and translation logic for a given operator interface.
-* **Boot-Time Client Registration:** Client implementations are registered with the controller's `ClientManager` at boot (e.g. `NextionClient` is initialized on UART at startup, independent of whether an external network client ever opens a WebSocket connection).
+All core architectural domains are decoupled and authoritatively specified in their respective companion documents:
 
-### 17.2 Strictly Change-Driven Execution (Zero Polling Overhead)
-* Core status updates are **never driven by a fixed periodic polling timer** (such as an arbitrary 100ms interval).
-* The Core Motion Controller evaluates state changes **only when a model property actually mutates** (e.g. a step pulse is emitted, spindle encoder pulses accumulate, or an operator toggle arms a cycle).
-* When the lathe is stationary and idle, **zero status packets are generated or pushed**, preserving UART and wireless network bandwidth.
-
-### 17.3 Immutable `StatusSnapshot` & Temporal Isolation
-* **The Concurrency Problem:** On dual-core ESP32 systems, high-priority real-time motion control (stepper pulse timers, encoder ISRs on Core 0) runs asynchronously with lower-priority client communication tasks (FreeRTOS network/UART tasks on Core 1). Passing a floating pointer/reference to a mutable live model results in temporal tearing, race conditions, and inconsistent multi-word reads.
-* **Value-Semantic Snapshots:** When an internal state mutation occurs, the Core captures an immutable `StatusSnapshot` struct (~64 bytes) frozen in time, paired with a 32-bit `changedFields` bitmask:
-  ```cpp
-  struct StatusSnapshot {
-      uint32_t timestamp;
-      uint32_t changedFields; // Bitmask of which fields mutated in this event
-      
-      // Authoritative Canonical Kinematics at the instant of trigger
-      int32_t  zDu;
-      int32_t  xDu;
-      int32_t  yDu;
-      int32_t  zLeftDu;
-      int32_t  zRightDu;
-      int32_t  xUpDu;
-      int32_t  xDownDu;
-      uint16_t rpm;
-      float    turns;
-      float    angle;
-      uint8_t  mode;
-      bool     isOn;
-      bool     estop;
-      int32_t  dupr;
-  };
-
-  class ClientInterface {
-  public:
-      virtual ~ClientInterface() = default;
-      virtual void onStatusUpdate(const StatusSnapshot& snapshot) = 0;
-  };
-  ```
-* **Thread/Queue Safety:** A 64-byte value-type snapshot can be passed by const reference for immediate processing or copied directly into a FreeRTOS queue (`xQueueSend`) without mutex locks or contention with the real-time motion engine.
-
-### 17.4 Decentralized Observer Filtering & Client Autonomy
-* **The Core Does Not Filter:** The Core does not maintain or inspect client-specific interest masks. It broadcasts the immutable snapshot to all registered clients via `onStatusUpdate(snapshot)`.
-* **The Client Owns the Decision:** Each client implementation owns its own interest filter and contextual rules:
-  - **`NextionClient`**: Checks its active page interest mask. If none of the mutated fields are displayed on the active Nextion screen page, it returns immediately without burning UART bandwidth.
-  - **`WebUiClient`**: Checks whether any active WebSocket sessions are connected. If none, it returns immediately without formatting JSON or strings.
-* **Bitmask Field Flags:**
-  ```cpp
-  enum StatusField : uint32_t {
-      FIELD_NONE        = 0,
-      FIELD_POS_Z       = 1 << 0,
-      FIELD_POS_X       = 1 << 1,
-      FIELD_POS_Y       = 1 << 2,
-      FIELD_LIMITS_Z    = 1 << 3,
-      FIELD_LIMITS_X    = 1 << 4,
-      FIELD_SPINDLE_RPM = 1 << 5,
-      FIELD_SPINDLE_POS = 1 << 6,  // angle & turns
-      FIELD_MOTION_MODE = 1 << 7,
-      FIELD_MOTION_SYNC = 1 << 8,  // on/off
-      FIELD_ESTOP       = 1 << 9,
-      FIELD_FEED_RATE   = 1 << 10,
-      FIELD_ALL         = 0xFFFFFFFF
-  };
-  ```
-* **Efficient Client Filtering:** A client implementation can test `snapshot.changedFields` against its interest mask in a single CPU cycle:
-  ```cpp
-  void NextionClient::onStatusUpdate(const StatusSnapshot& snapshot) {
-      // 1. Check if any fields visible on the active Nextion page mutated
-      if (!(snapshot.changedFields & currentPageMask_)) {
-          return; // No relevant state changed; zero UART transmission
-      }
-      
-      // 2. Perform local delta comparison if needed to avoid redundant text draw
-      if ((snapshot.changedFields & FIELD_POS_X) && snapshot.xDu != lastSnapshot_.xDu) {
-          int32_t displayVal = isDiameterMode_ ? (snapshot.xDu * 2) : snapshot.xDu;
-          renderCoordinate("t1", displayVal);
-      }
-      
-      lastSnapshot_ = snapshot;
-  }
-  ```
-* **Local Client History:** If a specific client implementation needs to compare old vs. new values (e.g., to suppress redundant string re-drawing on a slow serial display), that client simply stores `lastSnapshot_` locally within its own persistent class instance (~64 bytes per client instance). The Core remains lightweight and stateless.
-
-### 17.5 Total Decoupling of Display Semantics (Diameter vs. Radius)
-* **Core Model is Pure Radius:** The Core `MachineModel` has zero knowledge of "Diameter Mode". All kinematics, software stops, and internal registers operate strictly in deci-microns (`du`) of carriage radius (`xDu`).
-* **Adapters Handle Presentation:**
-  - `NextionClient` translates `snapshot.xDu` to diameter before formatting its UART string if its local Nextion toggle is set.
-  - `WebUiClient` transmits canonical radius `K.xDu` to the browser, where the Web UI translates locally using client-side formatters.
-* **Prototype Web UI Implementation:**
-  - In `lathe_dro_nanoels_controller.html`, the diameter display preference is held in `$store.machine.dia` within Alpine.js.
-  - Toggling `toggleDiaRad()` flips `$store.machine.dia` locally with **zero wire commands emitted**.
-  - Inbound telemetry handlers (`nanoels-service.js`, `nanoels-state.js`) explicitly ignore incoming `dia` / `diameter` properties from legacy controllers or other clients, completely breaking the two-way tie.
-  - Direct coordinate entry via keypad or zeroing in diameter mode converts the entered diameter to canonical radius `xDu = diameterDu / 2` prior to emitting `CMD.axisPosDu=X,<radiusDu>`, ensuring the controller motion core remains 100% pure radius.
-* Changing a display setting on one client (e.g. Nextion) has **zero side effects** on any other client or on the Core Motion Controller.
-
-
-
-
-
-
-
-
-
-
-
-
+* **Mode Lifecycle, Interfaces & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
+* **Lathe Hardware Geometry, Profiles & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
+* **Client Architecture, Protocols & Wire Ledgers:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
