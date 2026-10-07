@@ -392,9 +392,7 @@ class NanoelsService extends EventTarget {
     this.sendRaw(`CMD.measure=${nextM}\n`, `Cycle Measure Units (${nextM})`);
   }
   toggleDiaRad() {
-    const nextDia = !this.canonical.dia;
-    this.canonical.dia = nextDia;
-    this.setSetting('dia', nextDia ? 1 : 0);
+    this.canonical.dia = !this.canonical.dia;
   }
   reversePitch() { this.reverseFeed(); }
   nudgePitch(plus) {

@@ -1558,7 +1558,7 @@ The following ledger maps every primary user interaction on the capacitive touch
 | **Reverse Feed / Pitch** | Pitch/Feed chips | `reverseFeed()` | `CMD.feedRev\n` | `reverseFeedDirection()`. Inverts sign of active `dupr` pitch, reversing leadscrew sync direction. |
 | **Jog Step Increment** | Step selector chip | `cycleStep()` | `CMD.jogStepDu=<du>\n` | Sets in-memory `moveStep` variable to target deci-microns (e.g., 100, 1000, 10000). |
 | **Unit System Toggle** | Unit chip (MM/IN/TPI) | `cycleMeasure()` | `CMD.measure=<0|1|2>\n` | Calls `setMeasure(m)`: `0` = Metric (mm), `1` = TPI, `2` = Imperial (in). Updates display formatting and conversion factors. |
-| **Diameter / Radius** | DRO Dia/Rad chip | `toggleDiaRad()` | `SETTINGS.set=dia,<0|1>\n` | Calls `SettingsService::setDiameterMode()`. Updates NVS flash and switches X DRO display between Ø and R. |
+| **Diameter / Radius** | DRO Dia/Rad chip | `toggleDiaRad()` | None (Pure Local UI Display) | Toggles local UI display preference between Ø Diameter and R Radius. Ground truth on controller is always canonical radius (`xDu`). Entering coordinates in Diameter mode converts to radius before emitting `CMD.axisPosDu`. Legacy Nextion firmware may receive setting during transitional phase, but core controller kinematics remain decoupled. |
 | **Set Z Left Limit** | DRO limit edit modal | `setLimit('Z', 'left', valDu)` | `CMD.axisLimitDu=Z,L,<val>\n` | `setAxisLimitDu(&z, true, valDu)`. Programs hardware left limit register (`z.leftStop`). |
 | **Set Z Right Limit** | DRO limit edit modal | `setLimit('Z', 'right', valDu)` | `CMD.axisLimitDu=Z,R,<val>\n` | `setAxisLimitDu(&z, false, valDu)`. Programs hardware right limit register (`z.rightStop`). |
 | **Clear Z Limits** | DRO limit clear button | `clearLimit('Z', 'left')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded travel. |
@@ -1607,6 +1607,58 @@ The following ledger maps every primary user interaction on the capacitive touch
 #### System & State Queries
 * `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
 * `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
+
+---
+
+## 16. Web UI & DRO Architecture: Alpine.js Reactive Boundary & Kinematic Decoupling
+
+### 16.1 The Surgical Boundary Rationale (Zero Lag, 100% Visual & Functional Fidelity)
+During the prototype evolution, a full rewrite of the 4,000-line `lathe-controller.js` into Alpine.js was proposed and rejected based on three core production constraints:
+1. **Zero Display/Processing Lag:** The host UI runs on embedded touchscreens, tablets, and low-power hardware. Re-rendering massive complex DOM trees via framework diffing introduces latency spikes and frame drops during live 10 Hz telemetry pushes.
+2. **100% Visual Fidelity:** All custom modal overlays, multi-stage wizards (Threading, Turning, Facing), and dynamic center decks are already finalized and visually perfected in Vanilla JS.
+3. **Hardware Touch Timing Preservation:** Critical safety gestures (such as the D-pad jog timing: tap `<300ms` for discrete single step vs. hold `>300ms` for continuous jog) require tight pointer event loop control without framework synthetic event overhead.
+
+**The Boundary Contract:**
+* **Alpine.js (`$store.machine`) Exclusively Owns:**
+  - The live DRO column: Spindle card (`spindleDisplay`, `spindleUnit`), Z coordinate (`zDisplay`), X coordinate (`xDisplay`, `dia`), and limit countdown chips (`zLeftDisplay`, `zRightDisplay`, `xUpDisplay`, `xDownDisplay`).
+  - Top bar status badges and system units (`statusStr`, `unitStr`).
+* **Vanilla JS (`lathe-controller.js`) Exclusively Owns:**
+  - Modal overlays (`#axisOverlay`, `#limitOverlay`, `#settingsOverlay`, `#docOverlay`).
+  - Multi-stage machining wizards and dynamic center action decks.
+  - The numeric calculator keypad.
+  - Sub-300ms hardware jog touch timing and continuous jog repeat loops.
+* **The Strict Unidirectional Rule:**
+  - When an operator performs an action (e.g. tapping ZERO on an axis, entering a coordinate in the keypad, setting a limit), Vanilla JS emits the canonical command to the controller via `nanoelsClient` and updates the Alpine store (`Alpine.store('machine').xDu = ...`).
+  - **Vanilla JS NEVER imperatively writes strings to the DRO DOM elements** (`#zValue`, `#xValText`, `#repBadge`, `#spindleValue`, `#unitToggle`, limit chips). All DRO presentation updates flow strictly through Alpine's reactive getters.
+
+---
+
+### 16.2 Kinematic Ground Truth (Radius) vs. Client Presentation (Diameter)
+* **Core Kinematics are Pure Radius:** In official NanoELS motion firmware (`h5.ino`), all kinematic coordinates, leadscrew calculations, and step counts operate purely in deci-microns (`du`) of carriage radius (`xDu`). The core controller has no native concept of diameter mode.
+* **Diameter is a Client-Side Translation:** The choice between Diameter (`Ø DIA`) and Radius (`R RAD`) display is strictly a client presentation and input convenience. 
+* **Zero Network Traffic on Toggle:** Clicking `#repBadge` toggles `$store.machine.dia` locally. **No command is emitted across serial/WebSocket to the controller.**
+* **Input Translation:** When an operator enters an X coordinate or limit distance in Diameter mode:
+  - The client UI converts the entered diameter to canonical radius: $\text{radiusMm} = \text{diameterMm} / 2.0$.
+  - The client converts radius to deci-microns: $\text{xDu} = \text{round}(\text{radiusMm} \times 10000.0)$.
+  - The client transmits canonical radius `CMD.axisPosDu=X,<xDu>` to the controller and updates `$store.machine.xDu = xDu`.
+  - The controller motion engine is never exposed to diameter scaling.
+
+---
+
+### 16.3 Deterministic Bootstrap & Stock Vendor Integrity
+* **Untouched Stock Vendor Code:** The third-party `alpine.min.js` bundle is preserved strictly as stock upstream code with zero local modifications or forks.
+* **Script Dependency Order:**
+  ```html
+  <script src="nanoels-presets.js"></script>
+  <script src="nanoels-formatters.js"></script>
+  <script src="nanoels-emulator.js"></script>
+  <script src="nanoels-service.js"></script>
+  <script src="nanoels-state.js"></script>
+  <script defer src="alpine.min.js"></script>
+  <script defer src="lathe-controller.js"></script>
+  ```
+  `nanoels-state.js` attaches an `alpine:init` event listener synchronously. When `alpine.min.js` executes (deferred), it dispatches `alpine:init`, synchronously registering `$store.machine` before Alpine walks the DOM. This guarantees zero initial expression evaluation errors and identical deterministic startup across `http://` and local file previews.
+
 
 
 

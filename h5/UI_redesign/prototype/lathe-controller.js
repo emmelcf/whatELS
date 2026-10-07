@@ -1285,24 +1285,11 @@
   // Universal Runstack: Binary START / STOP (matches NanoELS hardware state machine)
   var runstackBound = false;
   function renderRunstack(){
-    var hasAlpine = window.Alpine && Alpine.store('machine');
-    var isRun = state.runState === 'running';
-
-    if(!hasAlpine){
-      var runText = isRun ? (state.mode === 'GEARBOX' ? 'FEEDING' : 'RUNNING') : (state.mode === 'GEARBOX' ? 'START FEED' : 'START CYCLE');
-      var runClass = isRun ? 'running' : 'start';
-      var stopClass = isRun ? 'active' : 'idle';
-
-      $('runstackArea').innerHTML = '' +
-        '<div class="rbtn ' + runClass + ' tap" id="btnRun">' + (isRun ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:8px; box-shadow:0 0 6px var(--green);"></span>' : '') + runText + '</div>' +
-        '<div class="rbtn stop ' + stopClass + ' ' + (isRun ? 'tap' : '') + '" id="btnStop">STOP</div>';
-    }
-
     if(!runstackBound){
       var bRun = $('btnRun');
       var bStop = $('btnStop');
       if(bRun && bStop){
-        if(hasAlpine) runstackBound = true;
+        runstackBound = true;
 
         bRun.addEventListener('click', function(){
           if(window.nanoelsClient){
@@ -1545,41 +1532,6 @@
 
   var lastRenderedModeKey = '';
   function render(forceModeRebuild){
-    var hasAlpine = window.Alpine && Alpine.store('machine');
-    if(!hasAlpine){
-      $('zValue').textContent = lenStr(state.z);
-      renderLimitChip('lim-zMin', 'zLeft');
-      renderLimitChip('lim-zMax', 'zRight');
-
-      var isDia = state.xRep === 'diameter';
-      var xVal = isDia ? state.xDia : state.xDia / 2;
-      var glyphClass = isDia ? 'dia' : 'rad';
-      var glyphChar = isDia ? 'Ø' : 'R';
-      var gEl = $('xDiaGlyph');
-      if(gEl){
-        gEl.className = 'dia-glyph ' + glyphClass;
-        gEl.textContent = glyphChar;
-      }
-      var tEl = $('xValText');
-      if(tEl){
-        tEl.textContent = lenStr(xVal);
-      } else {
-        $('xValue').textContent = lenStr(xVal);
-      }
-      renderLimitChip('lim-xMaxDia', 'xRight');
-      renderLimitChip('lim-xMinDia', 'xLeft');
-      $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
-      $('repBadge').className = 'chip-sm rep-toggle tap ' + (isDia ? 'is-dia' : 'is-rad');
-
-      $('stepValue').textContent = getActiveJogStepDisplay();
-
-      if(state.spindleCycle === 0){ $('spindleValue').textContent = fmt(state.rpm,0); $('spindleUnit').textContent = 'RPM'; }
-      else if(state.spindleCycle === 1){ $('spindleValue').textContent = (typeof Formatters !== 'undefined' ? Formatters.formatTurns(state.turns) : Math.floor(state.turns).toString()); $('spindleUnit').textContent = 'TURNS'; }
-      else if(state.spindleCycle === 2){ $('spindleValue').textContent = (typeof Formatters !== 'undefined' ? Formatters.formatAngle(state.angle) : fmt(state.angle,1)); $('spindleUnit').textContent = '°'; }
-
-      $('modeName').textContent = state.mode + (state.runState === 'running' ? ' 🔒' : '');
-    }
-
     $('modeHead').classList.toggle('locked', state.runState === 'running');
 
     // Only rebuild modeBody DOM when mode or state parameters change, avoiding 10Hz DOM thrash
@@ -1593,20 +1545,6 @@
     renderRunstack();
     renderDynamicDeck();
     updateJogAntiTrap();
-
-    if(!hasAlpine){
-      var sp = $('statusPill');
-      if(isFeeding()){
-        sp.className = 'pill running'; sp.innerHTML = '<span class="dot"></span>FEEDING';
-      } else if(state.runState === 'running' && !state.spindleSimRunning && (state.mode!=='GEARBOX'||state.gearboxMode==='SYNC')){
-        sp.className = 'pill paused'; sp.innerHTML = '<span class="dot"></span>ARMED (WAIT)';
-      } else {
-        sp.className = 'pill stopped'; sp.innerHTML = '<span class="dot"></span>STOPPED';
-      }
-
-      $('unitToggle').textContent = state.unit;
-      $('device').classList.toggle('is-running', state.runState === 'running');
-    }
   }
 
   // Header Handlers
@@ -1802,15 +1740,15 @@
   $('repBadge').addEventListener('click', function(e){
     e.stopPropagation();
     state.xRep = state.xRep === 'diameter' ? 'radius' : 'diameter';
-    if(window.Alpine && Alpine.store('machine')){
-      Alpine.store('machine').dia = state.xRep === 'diameter';
+    if(window.Alpine && Alpine.store && Alpine.store('machine')){
+      Alpine.store('machine').dia = (state.xRep === 'diameter');
     }
     render();
   });
 
   $('spindleBox').addEventListener('click', function(){
     state.spindleCycle = (state.spindleCycle + 1) % 3;
-    if(window.Alpine && Alpine.store('machine')){
+    if(window.Alpine && Alpine.store && Alpine.store('machine')){
       Alpine.store('machine').spindleMode = state.spindleCycle;
     }
     render(true);
@@ -1838,7 +1776,7 @@
       state.stepIdx = (state.stepIdx + 1) % maxLen;
       var curVal = state.unit === 'mm' ? JOG_STEPS_MM[state.stepIdx] : JOG_STEPS_IN[state.stepIdx];
       var stepDu = Math.round((state.unit === 'in' ? curVal * 254000 : curVal * 10000));
-      if(window.Alpine && Alpine.store('machine')){
+      if(window.Alpine && Alpine.store && Alpine.store('machine')){
         Alpine.store('machine').jogStepDu = stepDu;
       }
       render();
@@ -1851,14 +1789,19 @@
   function openAxisOverlay(axis){
     if(state.runState === 'running') return;
     axisTarget = axis;
+    var m = window.Alpine && Alpine.store && Alpine.store('machine');
     if(axis==='z'){
       $('axisOverlayTitle').textContent = 'Z AXIS COORDINATE';
-      $('axisOverlayValue').textContent = lenStr(state.z) + ' ' + unitLabel();
+      var zStr = m ? m.zDisplay : lenStr(state.z);
+      var uStr = m ? m.unitStr : unitLabel();
+      $('axisOverlayValue').textContent = zStr + ' ' + uStr;
     } else {
       $('axisOverlayTitle').textContent = 'X AXIS COORDINATE';
-      var xVal = state.xRep==='diameter' ? state.xDia : state.xDia/2;
-      var prefix = state.xRep==='diameter' ? 'Ø' : 'R';
-      $('axisOverlayValue').textContent = prefix + lenStr(xVal) + ' ' + unitLabel();
+      var isDia = m ? m.dia : (state.xRep === 'diameter');
+      var prefix = isDia ? 'Ø ' : 'R ';
+      var xStr = m ? m.xDisplay : lenStr(isDia ? state.xDia : state.xDia / 2);
+      var uStr = m ? m.unitStr : unitLabel();
+      $('axisOverlayValue').textContent = prefix + xStr + ' ' + uStr;
     }
     $('axisOverlay').classList.add('show');
   }
@@ -1870,6 +1813,10 @@
       window.nanoelsClient.zeroAxis(axisTarget);
     }
     if(axisTarget==='z') state.z = 0; else state.xDia = 0;
+    if(window.Alpine && Alpine.store && Alpine.store('machine')){
+      if(axisTarget === 'z') Alpine.store('machine').zDu = 0;
+      else Alpine.store('machine').xDu = 0;
+    }
     $('axisOverlay').classList.remove('show'); render();
   });
   $('axisSetBtn').addEventListener('click', function(){
@@ -1902,12 +1849,22 @@
   $('limitSetBtn').addEventListener('click', function(){
     var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
     var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
+    var curDu = 0;
     if(window.nanoelsClient){
-      var curDu = isZ ? (window.nanoelsClient.canonical.zDu !== undefined ? window.nanoelsClient.canonical.zDu : Math.round(state.z * 10000.0))
+      curDu = isZ ? (window.nanoelsClient.canonical.zDu !== undefined ? window.nanoelsClient.canonical.zDu : Math.round(state.z * 10000.0))
                       : (window.nanoelsClient.canonical.xDu !== undefined ? window.nanoelsClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
       window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
+    } else {
+      curDu = isZ ? Math.round(state.z * 10000.0) : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0);
     }
     state[limitTarget] = 0.000;
+    if(window.Alpine && Alpine.store && Alpine.store('machine')){
+      var m = Alpine.store('machine');
+      if(limitTarget === 'zLeft') m.zLeftDu = curDu;
+      else if(limitTarget === 'zRight') m.zRightDu = curDu;
+      else if(limitTarget === 'xLeft') m.xUpDu = curDu;
+      else if(limitTarget === 'xRight') m.xDownDu = curDu;
+    }
     $('limitOverlay').classList.remove('show'); render();
   });
   $('limitManualBtn').addEventListener('click', function(){
@@ -1921,7 +1878,15 @@
     if(window.nanoelsClient){
       window.nanoelsClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
     }
-    state[limitTarget] = null; $('limitOverlay').classList.remove('show'); render(); 
+    state[limitTarget] = null;
+    if(window.Alpine && Alpine.store && Alpine.store('machine')){
+      var m = Alpine.store('machine');
+      if(limitTarget === 'zLeft') m.zLeftDu = 2147483647;
+      else if(limitTarget === 'zRight') m.zRightDu = -2147483648;
+      else if(limitTarget === 'xLeft') m.xUpDu = 2147483647;
+      else if(limitTarget === 'xRight') m.xDownDu = -2147483648;
+    }
+    $('limitOverlay').classList.remove('show'); render(); 
   });
 
   // Asynchronous Jogging (UP = into cut / to center, DOWN = retract)
@@ -3424,6 +3389,13 @@
             targetCoordDu = Math.round((curRad + deltaRad) * 10000.0);
           }
           window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
+        }
+        if(window.Alpine && Alpine.store && Alpine.store('machine')){
+          var m = Alpine.store('machine');
+          if(limitTarget === 'zLeft') m.zLeftDu = targetCoordDu;
+          else if(limitTarget === 'zRight') m.zRightDu = targetCoordDu;
+          else if(limitTarget === 'xLeft') m.xUpDu = targetCoordDu;
+          else if(limitTarget === 'xRight') m.xDownDu = targetCoordDu;
         }
       }
       else if(kpTarget==='step'){

@@ -198,11 +198,7 @@ function registerMachineStore() {
     },
 
     toggleDiaRad() {
-      if (window.nanoelsClient) {
-        window.nanoelsClient.toggleDiaRad();
-      } else {
-        this.dia = !this.dia;
-      }
+      this.dia = !this.dia;
     },
 
     cycleJogStep() {
