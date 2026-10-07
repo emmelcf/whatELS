@@ -56,7 +56,7 @@
             <div class="axis-head">
               <div class="axis-letter">X</div>
               <div class="axis-value mono tap" id="xValue">
-                <span class="dia-glyph dia" x-show="$store.machine.dia">Ø</span><span x-text="$store.machine.xDisplay">26.438</span>
+                <span class="dia-glyph dia" id="xDiaGlyph" :class="$store.machine.dia ? 'dia' : 'rad'" x-text="$store.machine.dia ? 'Ø' : 'R'">Ø</span><span id="xValText" x-text="$store.machine.xDisplay">26.438</span>
               </div>
             </div>
             <div class="axis-meta">

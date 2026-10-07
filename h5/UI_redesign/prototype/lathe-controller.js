@@ -1555,7 +1555,17 @@
       var xVal = isDia ? state.xDia : state.xDia / 2;
       var glyphClass = isDia ? 'dia' : 'rad';
       var glyphChar = isDia ? 'Ø' : 'R';
-      $('xValue').innerHTML = '<span class="dia-glyph ' + glyphClass + '">' + glyphChar + '</span>' + lenStr(xVal);
+      var gEl = $('xDiaGlyph');
+      if(gEl){
+        gEl.className = 'dia-glyph ' + glyphClass;
+        gEl.textContent = glyphChar;
+      }
+      var tEl = $('xValText');
+      if(tEl){
+        tEl.textContent = lenStr(xVal);
+      } else {
+        $('xValue').textContent = lenStr(xVal);
+      }
       renderLimitChip('lim-xMaxDia', 'xRight');
       renderLimitChip('lim-xMinDia', 'xLeft');
       $('repBadge').textContent = isDia ? 'Ø DIA' : 'R RAD';
