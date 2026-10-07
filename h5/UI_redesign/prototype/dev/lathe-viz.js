@@ -462,6 +462,54 @@
     $('lvSvg').addEventListener('pointercancel', endDrag);
     refreshSpinUi();
 
+    // -------------------------------------------------- core state ingestion
+    const core = {
+      zDu: -184260,
+      xDu: 264380,
+      zLeftDu: 2147483647,
+      zRightDu: -2147483648,
+      xUpDu: 2147483647,
+      xDownDu: -2147483648,
+      rpm: 0,
+      turns: 0,
+      angle: 0,
+      mode: 0,
+      isOn: false,
+      connected: false,
+      backend: 'emulator',
+      _hasFired: false
+    };
+
+    if (window.nanoelsClient) {
+      window.nanoelsClient.addEventListener('telemetry', (e) => {
+        const d = e.detail;
+        if (!d) return;
+        core._hasFired = true;
+        const c = d.canonical || d;
+        if (c) {
+          if ('zDu' in c && c.zDu !== undefined) core.zDu = c.zDu;
+          if ('xDu' in c && c.xDu !== undefined) core.xDu = c.xDu;
+          if ('zLeftDu' in c) core.zLeftDu = c.zLeftDu;
+          if ('zRightDu' in c) core.zRightDu = c.zRightDu;
+          if ('xUpDu' in c) core.xUpDu = c.xUpDu;
+          if ('xDownDu' in c) core.xDownDu = c.xDownDu;
+          if ('rpm' in c && c.rpm !== undefined) core.rpm = c.rpm;
+          if ('turns' in c && c.turns !== undefined) core.turns = c.turns;
+          if ('angle' in c && c.angle !== undefined) core.angle = c.angle;
+          if ('mode' in c && c.mode !== undefined) core.mode = c.mode;
+          if ('on' in c && c.on !== undefined) core.isOn = !!c.on;
+        }
+        if (d.connected !== undefined) core.connected = d.connected;
+        if (d.backend !== undefined) core.backend = d.backend;
+      });
+      window.nanoelsClient.addEventListener('connection', (e) => {
+        if (e.detail) {
+          core.connected = !!e.detail.connected;
+          core.backend = e.detail.mode || 'live';
+        }
+      });
+    }
+
     // -------------------------------------------------- render loop
     const dyn = { vz: 0, vx: 0, sz: 0, sx: 0, zAcc: 0, xAcc: 0, spinDeg: 0 };
     let last = performance.now(), pz = null, px = null;
@@ -469,11 +517,30 @@
 
     function frame(now) {
       requestAnimationFrame(frame);
-      const s = window.Alpine && Alpine.store && Alpine.store('machine');
-      if (!s || collapsed) { last = now; return; }
+      if (collapsed) { last = now; return; }
+
+      // Read authoritative core state (fallback to Alpine machine store only before first telemetry event)
+      const s = core;
+      if (!core._hasFired && window.Alpine && Alpine.store && Alpine.store('machine')) {
+        const alt = Alpine.store('machine');
+        s.zDu = alt.zDu;
+        s.xDu = alt.xDu;
+        s.zLeftDu = alt.zLeftDu;
+        s.zRightDu = alt.zRightDu;
+        s.xUpDu = alt.xUpDu;
+        s.xDownDu = alt.xDownDu;
+        s.rpm = alt.rpm;
+        s.turns = alt.turns;
+        s.angle = alt.angle;
+        s.isOn = alt.isOn;
+        s.connected = alt.connected;
+        s.backend = alt.backend;
+        s.mode = alt.mode;
+      }
+
       const dt = Math.max(0.001, (now - last) / 1000);
       last = now;
-      const zMm = s.zDu / 10000, xMm = s.xDu / 10000;
+      const zMm = s.zDu / 10000.0, xMm = s.xDu / 10000.0;
       if (pz === null) { pz = zMm; px = xMm; }
       const dz = zMm - pz, dx = xMm - px;
       pz = zMm; px = xMm;
@@ -501,21 +568,21 @@
 
       for (const l of layers) l.update(s, dyn);
 
+      // Pure Canonical Readout: always physical mm and filtered RPM (zero UI presentation dependencies)
       const lim = (label, v) => (v !== null && v !== undefined) ? `<span><i>${label}</i> <b>${v}</b></span>` : `<span><i>${label}</i> <b>—</b></span>`;
-      const xRad = typeof Formatters !== 'undefined'
-        ? Formatters.formatAxisDu(s.xDu, s.unitStr, false)
-        : (s.xDu / 10000).toFixed(3);
-      const xUpRad = typeof Formatters !== 'undefined'
-        ? Formatters.formatLimitDistance(s.xDu, s.xUpDu, s.unitStr, false)
-        : (isSet(s.xUpDu) ? Math.abs((s.xDu - s.xUpDu) / 10000).toFixed(3) : null);
-      const xDownRad = typeof Formatters !== 'undefined'
-        ? Formatters.formatLimitDistance(s.xDu, s.xDownDu, s.unitStr, false)
-        : (isSet(s.xDownDu) ? Math.abs((s.xDu - s.xDownDu) / 10000).toFixed(3) : null);
+      const zReadoutMm = (s.zDu / 10000.0).toFixed(3);
+      const xRadReadoutMm = (s.xDu / 10000.0).toFixed(3);
+      const zLeftMm = isSet(s.zLeftDu) ? Math.abs((s.zDu - s.zLeftDu) / 10000.0).toFixed(3) : null;
+      const zRightMm = isSet(s.zRightDu) ? Math.abs((s.zDu - s.zRightDu) / 10000.0).toFixed(3) : null;
+      const xUpMm = isSet(s.xUpDu) ? Math.abs((s.xDu - s.xUpDu) / 10000.0).toFixed(3) : null;
+      const xDownMm = isSet(s.xDownDu) ? Math.abs((s.xDu - s.xDownDu) / 10000.0).toFixed(3) : null;
+      const modeNames = ['GEAR', 'XGEAR', 'TURN', 'CONE', 'FACE', 'CUT', 'SLOT', 'THREAD', 'ASYNC', 'JOY'];
+      const modeStr = (typeof s.mode === 'number' && modeNames[s.mode]) ? modeNames[s.mode] : (s.mode || 'GEAR');
 
       ro.innerHTML =
-        `<span><i>Z</i> <b>${s.zDisplay}</b></span><span><i>X</i> <b>${xRad}</b></span>` +
-        `<span><i>Mode</i> <b>${s.modeName}</b></span><span><i>Spindle</i> <b>${s.spindleDisplay} ${s.spindleUnit}</b></span>` +
-        lim('Z-L', s.zLeftDisplay) + lim('Z-R', s.zRightDisplay) + lim('X↑', xUpRad) + lim('X↓', xDownRad) +
+        `<span><i>Z</i> <b>${zReadoutMm} mm</b></span><span><i>X</i> <b>${xRadReadoutMm} mm</b></span>` +
+        `<span><i>Mode</i> <b>${modeStr}</b></span><span><i>Spindle</i> <b>${Math.round(s.rpm)} RPM</b></span>` +
+        lim('Z-L', zLeftMm) + lim('Z-R', zRightMm) + lim('X↑', xUpMm) + lim('X↓', xDownMm) +
         `<span class="${s.connected ? '' : 'lv-warn'}"><i>Link</i> <b>${s.backend}${s.connected ? '' : ' (offline)'}</b></span>`;
     }
     requestAnimationFrame(frame);
