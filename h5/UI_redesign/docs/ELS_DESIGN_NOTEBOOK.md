@@ -30,6 +30,8 @@
 
 ## 2. Display & Ergonomic Standards (800×480 Landscape)
 
+> **Authoritative Specification:** For complete 800×480 layout geometry, touch sizing standards, typography, and color hierarchy: see [`hmi/RICH_TOUCH_800X480.md`](./hmi/RICH_TOUCH_800X480.md).
+
 * **DRO Layout & Typography:**
   * Coordinate readouts are locked to a static `50px` monospace font (`JetBrains Mono` / tabular lining figures). Dynamic font auto-shrinking is prohibited to prevent digit jumping during axis motion.
   * Inline unit labels (`mm`/`in`) are omitted from axis coordinate lines to guarantee full horizontal fit for negative 7-figure values (e.g., `-300.0000 in`). The active system unit is anchored prominently in the top bar.
@@ -48,6 +50,9 @@
 
 ## 3. Numeric Keypad Architecture
 
+> **Authoritative Specification:** For complete ATM calculator keypad layout, `÷ 2` key, and buffer pre-fill mechanics: see [`hmi/RICH_TOUCH_800X480.md#5-universal-atm-keypad-architecture`](./hmi/RICH_TOUCH_800X480.md#5-universal-atm-keypad-architecture).
+
+
 * **Standard Calculator/ATM Layout with Quick Math Row:**
 ```text
 [ 7 ]  [ 8 ]  [ 9 ]
@@ -65,33 +70,21 @@
 
 ## 4. Operational Modes & Dynamic Center Deck
 
-> **Authoritative Specification:** For the complete generalized mode lifecycle, C++ interfaces (`IELSMode`), parameter manifests, code-inferred inheritance, and multi-client safety lockout: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
+> **Authoritative Specifications:**
+> * For the general mode lifecycle, C++ interfaces (`IELSMode`), and FSM: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
+> * For individual mode manifests, kinematics, and deck interaction specifications: see [`modes/README.md`](./modes/README.md).
 
 * **Dynamic Center Action Deck:**
   * Situated above the jog D-pad. Houses live operational controls only.
-  * **In Gearbox Mode:** Houses large feed nudge buttons (`[ − ]` and `[ + ]`), active axis feed readout, active axis direction toggle (`DIR: ← TO CHUCK / → TO TAIL`), and feed step override chips. (Setup toggles `SYNC/ASYNC` and `AXIS Z/X` are positioned in the right Mode Card).
-  * **In Turning / Facing Modes:** Displays real-time cycle status (`PASS 02 / 06`) with feed trim buttons active.
-  * **In Threading Mode:** Houses thread lead trim buttons when stopped; transitions to locked cycle telemetry (`THREADING RUNNING`, target depth, pass count) when active, with all parameter editing and nudge buttons removed.
+  * **In Gearbox Mode:** Large feed nudge buttons (`[ − ]` and `[ + ]`), active axis feed readout, active axis direction toggle (`DIR: ← TO CHUCK / → TO TAIL`), and feed step override chips. (Setup toggles `SYNC/ASYNC` and `AXIS Z/X` are positioned in the right Mode Card).
+  * **In Turning / Facing Modes:** Real-time cycle status (`PASS 02 / 06`) with live feed trim buttons active.
+  * **In Threading Mode:** Thread lead trim buttons when stopped; transitions to locked cycle telemetry (`THREADING RUNNING`, target depth, pass count) when active, with all parameter editing and nudge buttons removed.
 * **Mode Categorization & Iconography:**
   * Operating modes are grouped into 3 distinct functional categories:
     1. **Continuous / Geared Motion:** `⚙ GEARBOX`, `✛ JOYSTICK`
     2. **Multi-Pass CNC Cycles:** `⇋ TURNING`, `⥮ FACING`, `⩚ THREADING`
     3. **Contouring & Specialty:** `⊿ TAPER`, `⭳ CUTOFF`, `⎍ SLOTTING`, `◠ HALF-SPHERES`
-  * Cutoff / parting icon arrow points away from the operator into the cut (`↑` / `X-`).
-  * `CUT PITCH` (`mm/rev` synchronized).
-  * `LENGTH` (sets $Z_{\text{MIN}}$ shoulder stop relative to start).
-  * `TOTAL DEPTH` (total diameter reduction $\Delta X$).
-  * `MAX DEPTH/PASS` (DOC ceiling).
-  * `PASSES` (two-way coupled integer: default $\lceil\Delta X / \text{DOC}\rceil$, editable to override).
-  * `RETRACT` (tool clearance off OD for rapid return stroke).
-  * `RESTORE LIMITS` (`YES` / `NO`).
-* **Facing Mode Parameters:**
-  * `FACING FEED` (`mm/rev` synchronized).
-  * `FINAL Ø` / `STROKE` (sets inner $X$ stop).
-  * `TOTAL DEPTH` ($\Delta Z$ face cleanup).
-  * `MAX DEPTH/PASS` (axial DOC ceiling).
-  * `PASSES` (two-way coupled integer, editable to override).
-  * `RESTORE LIMITS` (`YES` / `NO`).
+
 
 ---
 
@@ -170,6 +163,8 @@ In shop environments with bare or gloved hands, touch targets must satisfy indus
 
 ## 8. Gearbox Mode: Setup vs. Live Operational Separation
 
+> **Authoritative Specification:** For complete Gearbox kinematics, feed formulas, parameter manifests, and deck interaction rules: see [`modes/gearbox/SPECIFICATION.md`](./modes/gearbox/SPECIFICATION.md).
+
 The Gearbox interface splits cleanly between setup configuration and live operational control to avoid duplicate or shifting buttons:
 
 ### Mode Card (Right Column — 260px) = Configuration & Setup
@@ -208,6 +203,10 @@ Machinists do not work in arbitrary converted decimals (e.g. $0.010\text{ mm} \r
 ---
 
 ## 10. Threading Execution & TPI Display Architecture
+
+> **Authoritative Specifications:**
+> * For complete Threading kinematics, modulo phase tracking, and infeed strategies: see [`modes/threading/SPECIFICATION.md`](./modes/threading/SPECIFICATION.md).
+> * For the 4-stage conversational wizard and standard fastener datasets: see [`modes/threading/WIZARD_WORKFLOW.md`](./modes/threading/WIZARD_WORKFLOW.md).
 
 ### Thread Pitch Fidelity
 * In imperial mode, screw threads are fundamentally specified in Threads Per Inch (TPI). Converting TPI to a decimal pitch (e.g. `16 TPI` $\rightarrow$ `1.5875 mm/rev`) is confusing and contrary to standard machine shop convention.
@@ -922,7 +921,10 @@ Axis colors indicate *which physical leadscrew or tool vector is governed*:
 
 ## 26. Taper vs. Gearbox Z+X Disambiguation & State Machine Protocol
 
+> **Authoritative Specification:** For complete Taper kinematics, slope ratios, inverted profiles, and presets: see [`modes/taper/SPECIFICATION.md`](./modes/taper/SPECIFICATION.md).
+>
 > **Architectural Resolution:** The telemetry collision described below arose from the legacy firmware's single `MODE_CONE` bucket. In the new Generalized Mode Architecture ([`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)), this is resolved at the root: `PRIM_CONE` is an atomic primitive, while `UnifiedGearboxMode` and `MultiPassTaperCycle` are distinct, first-class composite modes on the controller with unambiguous `ModeId`s.
+
 
 ### 1. The Core Architecture Conflict
 NanoELS core firmware (`Motion.cpp`) provides a single low-level motion state for 2-axis coordinated angled feed: `MODE_CONE` (Code `100`). It is fundamentally continuous electronic gearing ($Z$ leadscrew synced to spindle encoder; $X$ cross-slide slaved proportionally via `coneRatio`).
