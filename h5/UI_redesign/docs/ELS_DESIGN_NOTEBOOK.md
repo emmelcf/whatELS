@@ -2,6 +2,11 @@
 ## System Architecture, Design Decisions & Protocol Contract Ledger
 *Target Hardware:* 800×480 Capacitive Touch Display | ESP32-S3 UI Host | NanoELS Core Controller
 
+> **Authoritative Companion Architecture Documents:**
+> * For the generalized mode lifecycle, contract, inheritance hierarchy, and multi-client safety: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
+> * For the authoritative physical lathe geometry, axis kinematics, capability bitmasks, and preset library: see [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
+> * For the authoritative client architecture, multi-domain protocol (`MachineModel`), and wire interaction ledger: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+
 ---
 
 ## 1. Core System Philosophy & Safety Constraints
@@ -33,7 +38,7 @@
   * Step increment selector cycles on tap through discrete standard tables (Metric: `0.010 → 0.100 → 1.000 mm`; Imperial: `0.0010 → 0.0100 → 0.1000 in`), with long-press (>600ms) opening the numeric keypad for custom increments.
 * **Unified Universal Runstack:**
   * All modes consistently feature the primary action stack in the bottom-right corner: `START FEED` / `START CYCLE` (green) directly above `STOP` (red), separated by a generous 12px vertical safety gap.
-  * The `STOP` button is permanent and stationary across all 9 modes; it is visually subdued when idle and illuminates vibrant red with an active glow during motion.
+  * The `STOP` button is permanent and stationary across all modes; it is visually subdued when idle and illuminates vibrant red with an active glow during motion.
 
 ---
 
@@ -55,6 +60,8 @@
 ---
 
 ## 4. Operational Modes & Dynamic Center Deck
+
+> **Authoritative Specification:** For the complete generalized mode lifecycle, C++ interfaces (`IELSMode`), parameter manifests, code-inferred inheritance, and multi-client safety lockout: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
 
 * **Dynamic Center Action Deck:**
   * Situated above the jog D-pad. Houses live operational controls only.
@@ -85,6 +92,8 @@
 ---
 
 ## 5. Controller Architecture & Protocol Contracts
+
+> **Architectural Evolution Note:** The sequence below describes the legacy UART protocol adapter between the ESP32-S3 display companion and stock NanoELS core. Under the Generalized Mode Architecture ([`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)), multi-step cycle orchestration is consolidated directly on the controller MCU via `IELSMode` composite cycles, while the display controller dispatches atomic parametric cycle commands.
 
 The system divides responsibilities between **Local Display Controller UI Logic** and **Multi-Command Serial Orchestration**:
 
@@ -147,7 +156,7 @@ In shop environments with bare or gloved hands, touch targets must satisfy indus
 * **Universal Runstack Representation:**
   * Idle / Stopped: Green `START FEED` / `START CYCLE` active; red `STOP` button visually subdued (maroon `#140d0e`).
   * Running / Active: Green button transitions to dark active indicator (`FEEDING` / `CYCLE ACTIVE`); red `STOP` button illuminates vibrant red (`#ff5a5f`) with an active glow.
-  * Dedicated Stop Corner: The `STOP` button is permanently anchored in the bottom-right corner across all 9 modes so muscle memory never falters in an emergency.
+  * Dedicated Stop Corner: The `STOP` button is permanently anchored in the bottom-right corner across all modes so muscle memory never falters in an emergency.
 
 ### No "Ghost Actions" During Autonomous Multi-Pass Cycles
 * When NanoELS executes an automated multi-pass cycle (such as `THREADING`, `TURNING`, or `FACING`), the motion trajectory is computed and executed autonomously by the ESP32 motion core.
@@ -909,6 +918,8 @@ Axis colors indicate *which physical leadscrew or tool vector is governed*:
 
 ## 26. Taper vs. Gearbox Z+X Disambiguation & State Machine Protocol
 
+> **Architectural Resolution:** The telemetry collision described below arose from the legacy firmware's single `MODE_CONE` bucket. In the new Generalized Mode Architecture ([`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)), this is resolved at the root: `PRIM_CONE` is an atomic primitive, while `UnifiedGearboxMode` and `MultiPassTaperCycle` are distinct, first-class composite modes on the controller with unambiguous `ModeId`s.
+
 ### 1. The Core Architecture Conflict
 NanoELS core firmware (`Motion.cpp`) provides a single low-level motion state for 2-axis coordinated angled feed: `MODE_CONE` (Code `100`). It is fundamentally continuous electronic gearing ($Z$ leadscrew synced to spindle encoder; $X$ cross-slide slaved proportionally via `coneRatio`).
 
@@ -980,6 +991,8 @@ To remove ambiguity between travel direction and stop location, all four limit c
 ---
 
 ## 28. Decoupled MachineModel & Multi-Domain Round-Trip Protocol Specification
+
+> **Authoritative Specification:** For the complete, authoritative client transport architecture, zero-drift `MachineModel` 4-domain protocol, and client presentation layer, see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ### 1. Architectural Motivation & Decoupling Invariants
 To achieve high reliability, modularity, and future extensibility across diverse displays (Web UI, future Nextion v2 rewrite, serial pendants, or native LVGL displays), the firmware's internal kinematic core is completely decoupled from presentation and transport layers:
@@ -1415,29 +1428,21 @@ To address this, a dedicated **Lathe Digital Twin Visualizer** was created in [`
 ---
 
 ### 2. Extensible Lathe Profiles & Hardware Modules
-Machine geometries and user setups vary widely across the machinist community. The visualizer supports declarative profiles ([`lathe-viz-profiles.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz-profiles.js)) and modular SVG rendering layers ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)):
 
-1. **Declarative Machine Profiles**:
-   * **Physical Dimensions**: Bed length, swing diameter, carriage Z travel, cross-slide X travel, chuck length/diameter, workpiece stock diameter, and Z0/X0 origin offsets.
-   * **Kinematic Conventions**: Configurable axis directions (`zPositive: 'left' | 'right'`, `xPositive: 'out' | 'in'`) stored with persistence in `localStorage`.
-   * **Preset Library**:
-     - *Z + X motors*: Dual-axis motorized CNC-style lathe.
-     - *Z motor only (manual X)*: Traditional leadscrew ELS with manual cross-slide handwheel and DRO scale.
-     - *Z + X motors, MPG on both*: Independent electronic handwheels on carriage and cross-slide.
-     - *Z motor, MPG on Z only*: Electronic handwheel on carriage leadscrew only.
-     - *Joystick*: Deflecting HUD joystick widget tracking live carriage velocity vectors.
-     - *Large lathe*: Extended bed ($1200\text{ mm}$), large swing ($350\text{ mm}$), heavy chuck ($200\text{ mm}$).
+> **Authoritative Specification:** Machine dimensions, coordinate conventions, hardware capability bitmasks, and standard preset models are specified authoritatively in [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md). The visualizer consumes these canonical profiles via [`lathe-viz-profiles.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz-profiles.js).
 
-2. **Pluggable Visualizer Modules (`LatheVizModules`)**:
-   * Each visual component registers via `{ id, when(profile), build(ctx) -> { update(state, dynamics) } }`:
-     - `bed`: Lathe bed casting, ground prism ways, swing boundary, and centerline.
-     - `headstock`: Headstock casting, 3-jaw chuck, reference stock cylinder, and rotating spindle gauge.
-     - `tailstock`: Tailstock body and quill.
-     - `carriage`: Longitudinal saddle, transverse cross-slide, and cutting tool insert.
-     - `zMotor`: Leadscrew and stepper motor attached to bed foot.
-     - `limits`: Real-time amber Z-limit lines (`Z L`, `Z R`) and green X-limit lines (`X ↑`, `X ↓`) rendered strictly when limits are configured.
-     - `mpg`: Carriage-mounted handwheels that rotate dynamically based on axis displacement and illuminate during active motion.
-     - `joystick`: Real-time deflection indicator showing tool motion vector and velocity.
+The visualizer supports modular SVG rendering layers ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)) that adapt automatically based on the active lathe profile's `capabilities`:
+
+* **Pluggable Visualizer Modules (`LatheVizModules`)**:
+  Each visual component registers via `{ id, when(profile), build(ctx) -> { update(state, dynamics) } }`:
+  - `bed`: Lathe bed casting, ground prism ways, swing boundary, and centerline.
+  - `headstock`: Headstock casting, 3-jaw chuck, reference stock cylinder, and rotating spindle gauge.
+  - `tailstock`: Tailstock body and quill.
+  - `carriage`: Longitudinal saddle, transverse cross-slide, and cutting tool insert.
+  - `zMotor`: Leadscrew and stepper motor attached to bed foot.
+  - `limits`: Real-time amber Z-limit lines (`Z L`, `Z R`) and green X-limit lines (`X ↑`, `X ↓`) rendered strictly when limits are configured.
+  - `mpg`: Carriage-mounted handwheels that rotate dynamically based on axis displacement and illuminate during active motion (rendered only when `profile.z.mpg` or `profile.x.mpg` is true).
+  - `joystick`: Real-time deflection indicator showing tool motion vector and velocity (rendered only when `profile.joystick` is true).
 
 ---
 
@@ -1467,6 +1472,8 @@ For operations like threading, electronic gearing, and taper turning, the contro
 ---
 
 ## 36. Canonical Command Protocol & UI Client Translation Ledger
+
+> **Authoritative Specification:** For the complete, authoritative command protocol, 3-tier layering (`ITransport` $\rightarrow$ `ICommandTranslator` $\rightarrow$ `CommandDispatcher`), and interaction-to-wire ledger, see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ### 1. Architectural Philosophy & Layer Decoupling
 To achieve rock-solid reliability across diverse client types (capacitive touch Web UI, wireless DRO tablets, CNC senders, and the legacy Nextion UART display), the system enforces strict separation of concerns across three distinct architectural layers:
