@@ -1,0 +1,160 @@
+# NanoELS Modular Architecture Implementation Plan
+
+> **Status:** Approved for Phased Execution  
+> **Target Version:** NanoELS H5 Modular Architecture  
+> **Source Documents:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)  
+> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/IMPLEMENTATION_PLAN.md`
+
+---
+
+## 1. Overview & Phased Roadmap Strategy
+
+To transform the NanoELS firmware and client ecosystem from its legacy monolithic structure into the modular architecture defined in `UI_redesign/docs`, the implementation is partitioned into three progressive phases.
+
+Because this represents a significant engineering effort across firmware C++ (ESP32-S3), wire protocols, and frontend JavaScript, **each phase is structured into discrete, single-conversation milestones**. Each conversation milestone produces compilable, testable code without breaking existing lathe operation.
+
+```mermaid
+graph TD
+    subgraph Phase1 ["Phase 1: Machine Profile & Capabilities (Detailed Plan)"]
+        P1_1["Session 1.1: LatheProfile Types & Bitmasks"] --> P1_2["Session 1.2: NVS Persistence & Machine Config"]
+        P1_2 --> P1_3["Session 1.3: Telemetry P.caps & State Model"]
+        P1_3 --> P1_4["Session 1.4: Command Dispatcher CMD.machine"]
+        P1_4 --> P1_5["Session 1.5: Web UI Dynamic Capability Gating"]
+    end
+
+    subgraph Phase2 ["Phase 2: Modular Mode Engine (High-Level Architecture)"]
+        P2_1["Session 2.1: IELSMode Interface & ModeRegistry"]
+        P2_2["Session 2.2: Primitive Kinematic Kernels (Gear, Async, Cone)"]
+        P2_3["Session 2.3: Composite Modes (Unified Gearbox)"]
+        P2_4["Session 2.4: Multi-Pass Cycles (Turn, Face, Thread)"]
+        P2_5["Session 2.5: Supervisor & Legacy Input Decoupling"]
+    end
+
+    subgraph Phase3 ["Phase 3: Production Deployment & Verification"]
+        P3_1["Session 3.1: Flash Packaging into LittleFS (data/www)"]
+        P3_2["Session 3.2: Wired Bus / High-EMI Serial Control Plane"]
+        P3_3["Session 3.3: Multi-Client Benchmarking & Physical Lathe Test"]
+    end
+
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+```
+
+---
+
+## 2. Phase 1: Lathe Machine Profile & Hardware Capabilities (Comprehensive Plan)
+
+### Objective
+Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with a dynamic, capability-negotiating hardware abstraction. Expose hardware reality to connected clients so the UI can adapt dynamically to any lathe configuration (from a basic 7×14 mini-lathe to a motorized 2-axis bench lathe).
+
+---
+
+### Session 1.1: Core Data Structures & Capability Bitmask Definition
+* **Goal:** Create a standalone, self-contained header [`include/LatheProfile.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/LatheProfile.h) declaring the typed profile structs and bitmasks without modifying existing motion logic.
+* **Firmware Scope:**
+  1. Define `LatheCapabilityFlags` bitmask (`uint32_t`):
+     - Spindle: `CAP_SPINDLE_ENCODER`, `CAP_SPINDLE_INDEX`, `CAP_SPINDLE_VFD`.
+     - Axes: `CAP_MOTOR_Z`, `CAP_MOTOR_X`, `CAP_MOTOR_Y`.
+     - Scales: `CAP_DRO_Z`, `CAP_DRO_X`, `CAP_DRO_Y`.
+     - Limits & Inputs: `CAP_LIMIT_SWITCH_Z`, `CAP_LIMIT_SWITCH_X`, `CAP_MPG_Z`, `CAP_MPG_X`, `CAP_JOYSTICK`.
+  2. Define component structs:
+     - [`AxisHardwareConfig`](./LATHE_MACHINE_PROFILE.md#32-axis-hardware-configuration-axishardwareconfig) (pitch, steps/mm, backlash, travel limits, rapid ceilings).
+     - [`SpindleHardwareConfig`](./LATHE_MACHINE_PROFILE.md#33-spindle-hardware-configuration-spindlehardwareconfig) (encoder PPR, max safe RPM, min sync RPM, VFD parameters).
+     - [`LatheDimensions`](./LATHE_MACHINE_PROFILE.md#34-physical-envelope--geometry-lathedimensions) (bed length, max swing, cross-slide clearance, chuck dimensions).
+     - [`LatheConfiguration`](./LATHE_MACHINE_PROFILE.md#35-the-complete-lathe-profile-latheconfiguration) aggregating all parameters.
+  3. Declare standard preset library factory functions (e.g., `getPresetMini7x14()`, `getPresetWM210V()`, `getPresetEngine1440()`).
+* **Verification:** Run PlatformIO build to ensure header compiles cleanly with zero warnings and no runtime changes.
+
+---
+
+### Session 1.2: Machine Configuration Storage & NVS Persistence
+* **Goal:** Integrate `LatheConfiguration` into [`Config.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Config.h) / [`Config.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Config.cpp) and enable persistent storage.
+* **Firmware Scope:**
+  1. Add an active `LatheConfiguration activeMachineProfile` instance.
+  2. Implement `loadMachineProfile()` and `saveMachineProfile()` using ESP32 `Preferences` under namespace `"machine"`.
+  3. **Zero-Regression Invariant:** If NVS namespace `"machine"` is uninitialized, automatically populate `activeMachineProfile` using the existing compile-time defaults (`DEFAULT_SCREW_Z_DU`, `MOTOR_STEPS_Z`, `HAS_DRO_Z`, etc.).
+  4. Expose getters/setters in [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h).
+* **Verification:** Verify ESP32 boot log outputs active machine capabilities and loads stored overrides cleanly.
+
+---
+
+### Session 1.3: Telemetry Stream & State Model Integration
+* **Goal:** Extend the 4-Domain State Model to publish hardware capabilities and machine geometry to connected clients.
+* **Firmware Scope:**
+  1. Add `uint32_t capabilities` to [`MachineProperties`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h#L56-L71) in [`MachineModel.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h).
+  2. Update [`MachineModel::captureProperties()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/MachineModel.cpp#L73-L90) to sample `activeMachineProfile.capabilities`.
+  3. In [`RichClientAdapter.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp), serialize `P.caps=0x<HEX>` into the Properties domain stream.
+  4. Ensure `hasChanged()` triggers a push update when machine capabilities or profile properties are modified.
+* **Verification:** Connect to WebSocket endpoint and verify telemetry emits `P.caps` in response to `CMD.get=P`.
+
+---
+
+### Session 1.4: Command Dispatcher Wire Protocol (`CMD.machine.*`)
+* **Goal:** Allow client interfaces to query machine geometry, modify calibration, and select presets over canonical wire commands.
+* **Firmware Scope:**
+  1. Extend [`CommandDispatcher.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp):
+     - `CMD.machine.get`: Returns active profile ID, model name, capability bitmask, and dimensions.
+     - `CMD.machine.preset=<slug>`: Loads preset (e.g., `mini_7x14`, `bench_1022`) and persists to NVS.
+     - `CMD.machine.cap=<flag>,<0|1>`: Dynamically toggles individual capability flags (e.g., enabling linear scale on X).
+     - `CMD.machine.screwPitch=<axis>,<pitchDu>`: Updates physical screw pitch calibration.
+  2. Enforce safety checks: Disallow profile changes while lathe motion is active (`isOn == true`).
+* **Verification:** Dispatch commands from WebSocket terminal / test harness and verify round-trip persistence in NVS.
+
+---
+
+### Session 1.5: Client-Side Capability Hydration & UI Gating (Web UI & Simulator)
+* **Goal:** Update the Web UI client and emulator to dynamically adapt layout and controls based on reported `P.caps`.
+* **Frontend Scope:**
+  1. **Store Extension ([`nanoels-state.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-state.js)):**
+     - Parse `P.caps` into a reactive capability object (`$store.machine.capabilities`).
+     - Provide helper method `$store.machine.hasCap(flagName)`.
+  2. **Simulator Parity ([`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js)):**
+     - Emulate `P.caps` and wire `CMD.machine.*` responses for offline browser testing.
+  3. **Adaptive UI Controls ([`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html)):**
+     - Visually gate cross-slide power feed / facing buttons if `!hasCap('CAP_MOTOR_X')`.
+     - Toggle DRO indicator badges (`DRO X`, `DRO Z`) based on `CAP_DRO_*`.
+     - Link machine profile dimensions directly to the Digital Twin visualizer ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)).
+* **Verification:** Verify in browser with simulator and live controller; switching profiles dynamically updates UI controls and canvas dimensions.
+
+---
+
+## 3. Phase 2: Operational Mode Architecture (`IELSMode`) (High-Level Architecture)
+
+> **Objective:** Transition the motion engine from procedural functions in [`Motion.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp) into polymorphic, modular classes adhering to [`IELSMode`](./ELS_MODE_ARCHITECTURE.md#32-the-mode-interface-contract-ielsmode).
+
+### Planned Conversations:
+* **Session 2.1: `IELSMode` Base Interface & `ModeRegistry` Framework**
+  - Implement base lifecycle: `init()`, `enter()`, `loop()`, `exit()`, `handleCommand()`, `getTelemetry()`, `isSafetyTripped()`.
+  - Create `ModeRegistry` to map `ModeId` to mode instances with hardware capability preconditions.
+* **Session 2.2: Extraction of Primitive Kinematic Kernels**
+  - Extract deterministic step math from `Motion.cpp`: `PrimGearZ` (leadscrew sync), `PrimGearX` (cross-slide sync), `PrimAsync` (timed feed), `PrimCone` (coordinated slope).
+* **Session 2.3: Unified Gearbox Composite Mode**
+  - Replace `MODE_NORMAL`, `MODE_XGEAR`, `MODE_ASYNC`, and `MODE_CONE` with `UnifiedGearboxMode`, orchestrating primitives based on operator axis selection.
+* **Session 2.4: Multi-Pass Machining Cycles (Turning, Facing, Threading)**
+  - Implement `TurnCycleMode`, `FaceCycleMode`, and `ThreadCycleMode` as clean state machines using the primitives, eliminating duplicated pass sequencing.
+* **Session 2.5: Supervisor & Legacy Input Adapter Refactoring**
+  - Route all mode activations from Nextion serial ([`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp)) and Web UI through `ModeRegistry` and [`CommandDispatcher`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp).
+
+---
+
+## 4. Phase 3: Production Web UI Deployment & Validation (High-Level Architecture)
+
+> **Objective:** Deploy the prototype web application to the ESP32 filesystem and validate multi-client industrial operation.
+
+### Planned Conversations:
+* **Session 3.1: Production Asset Packaging for LittleFS (`data/www`)**
+  - Package [`UI_redesign/prototype`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype) assets (HTML, CSS, JS, Alpine runtime) into [`data/www`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/data/www).
+  - Configure LittleFS build flags and gzip asset compression to minimize flash footprint and load times.
+* **Session 3.2: Wired Bus / High-EMI Serial Control Plane Validation**
+  - Enforce the Zero-WiFi Control Plane Mandate: verify that motion commands and safety interlocks operate with 100% determinism over physical UART (`Serial1`), while Wi-Fi remains dedicated to supervisory DRO telemetry.
+* **Session 3.3: Multi-Client Concurrency & Real-Hardware Benchmark**
+  - Verify concurrent operation across heterogeneous clients: Nextion machine-mounted LCD, tablet Web DRO, and USB serial pendant.
+  - Test E-stop priority and state synchronization under spindle load.
+
+---
+
+## 5. Execution Protocol & Verification Milestones
+
+1. **Self-Contained Sessions:** Each session represents one focused conversational pair-programming session.
+2. **Compile-Pass Invariant:** At the conclusion of every session, `pio run` must pass with zero compilation errors.
+3. **Safety Guarantee:** Lathe motion and limit stop enforcement remain functional at every step.

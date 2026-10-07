@@ -223,16 +223,19 @@ The system provides pre-configured profiles for common workshop lathes and retro
   * Spindle Encoder: $1024\text{ PPR}$
   * $Z$ Travel: $300\text{ mm}$, $X$ Travel: $65\text{ mm}$
 
-### Preset 2: 10x22 Benchtop Lathe (Dual-Axis Motorized)
-* **Target Machines:** Precision Matthews PM-1022V, Grizzly G0602, Weiss WM210V.
-* **Capabilities:** `CAP_SPINDLE_ENCODER | CAP_SPINDLE_INDEX | CAP_MOTOR_Z | CAP_MOTOR_X | CAP_DRO_Z | CAP_DRO_X`.
+### Preset 2: WM210V 8x16 Bench Lathe (Dual-Axis Motorized)
+* **Target Machines:** Weiss / CJ0618-WM210V 8x16, Mini/Bench hybrids with 38mm spindle bore.
+* **Capabilities:** `CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_MOTOR_X | CAP_DRO_Z | CAP_DRO_X`.
 * **Specifications:**
-  * Bed Length: $600\text{ mm}$
-  * Swing over bed: $250\text{ mm}$ ($10"$)
+  * Bed Length: $400\text{ mm}$ ($16"$)
+  * Swing over bed: $210\text{ mm}$ ($8.25"$)
+  * Swing over cross-slide: $110\text{ mm}$
   * Chuck Diameter: $125\text{ mm}$ ($5"$)
-  * Leadscrew Pitch: $2.0\text{ mm}$ or $8\text{ TPI}$
-  * Spindle Encoder: $2400\text{ PPR}$
-  * $Z$ Travel: $550\text{ mm}$, $X$ Travel: $115\text{ mm}$
+  * Spindle Bore: $38\text{ mm}$ ($1.5"$)
+  * Spindle Drive: $1100\text{W}$ BLDC motor (variable 50–2500 RPM)
+  * Leadscrew Pitch: $2.0\text{ mm}$ (Metric) or $10\text{ TPI}$ (Imperial)
+  * Spindle Encoder: $1200\text{ PPR}$ / $2400\text{ PPR}$ optical quadrature
+  * $Z$ Travel: $350\text{ mm}$, $X$ Travel: $100\text{ mm}$
 
 ### Preset 3: Large Toolroom Lathe (Heavy Duty)
 * **Target Machines:** 12x36 / 14x40 Toolroom Lathes (South Bend, Colchester, Precision Matthews 1440).
