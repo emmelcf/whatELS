@@ -3,9 +3,10 @@
 *Target Hardware:* 800×480 Capacitive Touch Display | ESP32-S3 UI Host | NanoELS Core Controller
 
 > **Authoritative Companion Architecture Documents:**
+> * For the central state container, 4-domain model (`MachineModel`), and snapshot mechanics: see [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md).
 > * For the generalized mode lifecycle, contract, inheritance hierarchy, and multi-client safety: see [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
 > * For the authoritative physical lathe geometry, axis kinematics, capability bitmasks, and preset library: see [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
-> * For the authoritative client architecture, multi-domain protocol (`MachineModel`), and wire interaction ledger: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> * For the generic client architecture, 3-tier pipeline, and protocols: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ---
 
@@ -1417,6 +1418,8 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
 
 All core architectural domains are decoupled and authoritatively specified in their respective companion documents:
 
+* **Core State Model, 4 Domains & Invariants:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md)
 * **Mode Lifecycle, Interfaces & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
 * **Lathe Hardware Geometry, Profiles & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
 * **Client Architecture, Protocols & Wire Ledgers:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
+* **Web UI Reference Implementation:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)

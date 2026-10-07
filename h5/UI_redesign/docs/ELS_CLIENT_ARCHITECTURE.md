@@ -242,40 +242,38 @@ void NextionClient::onStatusUpdate(const StatusSnapshot& snapshot) {
 
 ---
 
-## 5. Web UI Frontend Architecture & Module Structure
+## 5. Generic Client Authoring Guide & Invariants
 
-The client codebase is decomposed into cohesive, decoupled ES modules:
+Every client implementation (Web UI, tablet DRO, physical serial pendant, or embedded display) must adhere to five universal architectural invariants:
 
-```
-UI_redesign/prototype/
-├── lathe_dro_nanoels_controller.html  # Declarative HTML5 markup (Alpine directives)
-├── alpine.min.js                      # Alpine.js v3.17.4 local offline runtime
-├── lathe-controller.css               # Design system tokens, styles, layout
-├── nanoels-service.js                 # Transport service, lifecycle & backend selector
-├── nanoels-state.js                   # Alpine.store('machine') 4-domain reactive model
-├── nanoels-presets.js                 # Standard thread tables (Metric/TPI) & taper angles
-├── nanoels-formatters.js              # Pure render-time formatters (du -> human strings)
-├── lathe-controller.js                # Modal dialog controllers, keypad & wizard logic
-├── nanoels-emulator.js                # Full offline physics/kinematics simulator
-└── dev/
-    ├── lathe-viz.js                   # Digital twin SVG canvas visualizer engine
-    └── lathe-viz-profiles.js          # Declarative machine geometry profile library
-```
+### 5.1 Presentation is Client-Local (Zero Network Math)
+* **Canonical Radius Invariant:** The core motion controller operates strictly in canonical radius (`xDu`). Clients commanding positions or limits in Diameter mode must convert to radius before transmission (`xDu = diameterDu / 2`).
+* **Unit System Decoupling:** Toggling units between Metric (`mm`) and Imperial (`in`) must never transmit wire packets or mutate controller state. Conversion is performed strictly at render time.
+* **Tearing & Decimal Drift:** Clients must never backward-calculate operator setpoints (such as TPI from a floating-point pitch or taper ratio from an angle). Always read the authoritative Intent domain (`I.*`).
 
-### Module Responsibilities:
+### 5.2 Universal Emergency Stop & Feed Hold Access
+* Regardless of the client's internal page hierarchy, menu depth, or active modal dialog, **the operator's tactile or visual path to Emergency Stop (`CMD.on=0` / `CMD.stop=1`) must remain 100% unobstructed at all times**.
+* Full-screen dialogs, warnings, or toasts must never occlude the stop control.
 
-| File | Purpose | Key Responsibilities |
-| :--- | :--- | :--- |
-| **`nanoels-service.js`** | **Transport & Network Abstraction** | Manages WebSocket connections, automatic reconnection with exponential backoff, backend switching (`mock` vs `bridge` vs `live`), and command queuing. |
-| **`nanoels-state.js`** | **Authoritative Reactive Store** | Implements `Alpine.store('machine')`. Ingests line-oriented domain telemetry, handles client-local presentation state, and triggers reactive UI updates with zero DOM thrashing. |
-| **`nanoels-formatters.js`** | **Pure Presentation Math** | Pure functions that format deci-microns into localized strings (`duToMm`, `duToInch`, `formatFeed`, `formatSurfaceSpeed`). Zero state mutations. |
-| **`nanoels-presets.js`** | **Machining Knowledge Base** | Complete lookup tables for standard threads (Metric standard/fine, UNC, UNF, UNEF, Pipe NPT/BSPT) and standard machine tapers (Morse, Brown & Sharpe, R8, ISO). |
-| **`nanoels-emulator.js`** | **Offline Physics Simulator** | Full software model of the ESP32 motion controller. Emulates stepper timing, encoder ticks, soft limits, and tool kinematics for offline browser testing. |
-| **`lathe-viz.js`** | **Digital Twin Visualizer** | Passive reactive SVG renderer that ingests canonical coordinates and draws the lathe bed, carriage, toolpost, and workpiece to true physical scale. |
+### 5.3 Communication Heartbeats & Safety Watchdogs
+* When commanding continuous motion (e.g. `CMD.jogHold=<axis>,<dir>`), the client must emit periodic heartbeats ($\le 250\text{ ms}$).
+* If network or serial communication drops for $>500\text{ ms}$, the controller automatically decelerates all stepping to a safe stop.
+
+### 5.4 Decentralized Filtering & Bandwidth Conservation
+* Clients must inspect `snapshot.changedFields` or domain dirty masks before processing or re-rendering.
+* Clients on constrained serial buses (e.g. Nextion LCD on UART) must filter updates against the active display page to prevent buffer congestion.
+
+### 5.5 Architectural Hook: Controller-Backed Client Properties (Stateless Clients)
+* Low-cost or stateless clients (e.g., bare microcontrollers without flash, or ephemeral browser sessions) may persist client-side preferences on the controller MCU via namespaced keys:
+  - `client.global.<key>`: Preferences shared across all operator terminals (e.g. default startup units).
+  - `client.<clientId>.<key>`: Private client preferences (e.g. theme, brightness, screen layout).
+* The controller treats these keys as opaque byte storage in NVS flash and never consumes them for motion kinematics.
 
 ---
 
 ## 6. Multi-Domain State Protocol (`MachineModel`)
+
+> **Authoritative Specification:** Complete C++ struct definitions, bitmask flags (`DomainFlags`), and temporal snapshot mechanics are specified authoritatively in [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md).
 
 State synchronization between controller and clients is partitioned into four independent, cohesive domains:
 
@@ -296,23 +294,6 @@ State synchronization between controller and clients is partitioned into four in
 | dupr, nextDupr    | feedRev           |                | encoderPpr     |
 +-------------------+-------------------+----------------+----------------+
 ```
-
-### Domain Definitions
-
-1. **Domain 'K' (Kinematics — High Frequency: 20–50 Hz):**
-   * Live physical positions in canonical deci-microns: `zDu`, `xDu`, `yDu`.
-   * Active soft limit registers: `zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`.
-   * Live spindle dynamics: `rpm`, `turns`, `angle` ($0.0^\circ$–$359.9^\circ$).
-   * Discrete execution state: `mode` (active mode ID), `isOn` (motion active), `estop`.
-2. **Domain 'I' (Operator Intent — On Mutation):**
-   * Exact operator typed setpoints: `thFmt` (0: mm, 1: TPI, 2: Inch), `thPitch` (e.g. `20.0`).
-   * Taper parameters: `tpMode` (Ratio, Angle, Preset), `tpVal`, `coneRatio`.
-   * Gearing & jog increments: `feedStepDu`, `jogStepDu`, `feedRev`.
-3. **Domain 'C' (Cycle Progress — On Pass / Step):**
-   * Multi-pass cycle tracking: `passes` (total passes), `opIdx` (current pass index), `setupIdx`.
-4. **Domain 'P' (Machine Properties — On Connect / Setup):**
-   * Hardware kinematics configuration: `screwZDu`, `screwXDu`, `motorStepsZ`, `encoderPpr`.
-   * Hardware DRO attachment flags: `zDro`, `xDro`.
 
 ### 6.1 Wire Telemetry Format (Line-Oriented Stream)
 
@@ -346,7 +327,7 @@ A cornerstone of this architecture is that **display presentation is strictly cl
 * **Client Translation:**
   * When in Metric mode: `displayZ = zDu / 10000.0`
   * When in Imperial mode: `displayZ = zDu / 254000.0`
-* Tapping the unit toggle chip in the UI alters `$store.machine.measure` locally. **No network packets are dispatched.**
+* Tapping the unit toggle chip in the UI alters local presentation state. **No network packets are dispatched.**
 
 ### 7.2 Cross-Slide Representation (`dia`: Diameter `Ø` vs. Radius `R`)
 * Physical leadscrew movement is always radial ($1.0\text{ mm}$ cross-slide movement $= 1.0\text{ mm}$ change in radius).
@@ -355,7 +336,7 @@ A cornerstone of this architecture is that **display presentation is strictly cl
 * Workpiece drawing diameters can be dialed directly on screen without mutating internal motion math.
 
 ### 7.3 Live Spindle Cutting Speed ($SMM$ / $SFM$)
-* Tapping the spindle display cycles through `RPM` $\rightarrow$ `TURNS` $\rightarrow$ `ANGLE (°)` $\rightarrow$ `SURFACE SPEED`.
+* Spindle displays cycle through `RPM` $\rightarrow$ `TURNS` $\rightarrow$ `ANGLE (°)` $\rightarrow$ `SURFACE SPEED`.
 * Surface cutting speed is computed purely on the client at render time from live $X$ diameter and spindle RPM:
   $$\text{SMM (m/min)} = \frac{\pi \times \text{Dia}_{\text{mm}} \times \text{RPM}}{1000.0}$$
   $$\text{SFM (ft/min)} = \frac{\pi \times \text{Dia}_{\text{in}} \times \text{RPM}}{12.0}$$
@@ -375,53 +356,21 @@ CMD.jogRelease=<axis>      // Operator released jog button
 CMD.jogStep=<axis>,<dir>   // Discrete 1-step increment in semantic direction
 ```
 
-### Safety Watchdog (Heartbeat Failsafe)
-For continuous jogging (`CMD.jogHold`), the client sends periodic heartbeats. If communication drops for $>500\text{ ms}$, the controller automatically decelerates the axis to a stop.
-
 ---
 
-## 9. Comprehensive UI Interaction to Wire Command Ledger
+## 9. UI Interaction Mapping & Client Ledger Reference
 
-The following ledger exhaustively maps every user interaction on the Web UI to its event trigger, client method, wire command, and MCU kinematic effect:
+Because different physical clients (Web touchscreens, Nextion LCDs, wireless pendants) have different input capabilities, button layouts, and touch timings, **each client maintains its own interaction mapping and ledger**.
 
-| UI Control / Action | Event Trigger | JS Client Method | Wire Command | MCU Kinematic Effect |
-| :--- | :--- | :--- | :--- | :--- |
-| **D-Pad Tap Z-** (<300ms) | Pointerup click | `jogStep('Z', 'CHUCK')` | `CMD.jogStep=Z,CHUCK\n` | `queueWebUiStep(B_LEFT)`. Moves carriage 1 step toward chuck. |
-| **D-Pad Hold Z-** (≥300ms) | Pointerdown hold | `jog('Z', 'CHUCK', true)` | `CMD.jogHold=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, true)`. Continuous carriage feed until released. |
-| **D-Pad Release Z-** | Pointerup / cancel | `jog('Z', 'CHUCK', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_LEFT, false)`. Decelerates carriage to a stop. |
-| **D-Pad Tap Z+** (<300ms) | Pointerup click | `jogStep('Z', 'TAIL')` | `CMD.jogStep=Z,TAIL\n` | `queueWebUiStep(B_RIGHT)`. Moves carriage 1 step toward tailstock. |
-| **D-Pad Hold Z+** (≥300ms) | Pointerdown hold | `jog('Z', 'TAIL', true)` | `CMD.jogHold=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, true)`. Continuous carriage feed until released. |
-| **D-Pad Release Z+** | Pointerup / cancel | `jog('Z', 'TAIL', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_RIGHT, false)`. Decelerates carriage to a stop. |
-| **D-Pad Tap X+** (<300ms) | Pointerup click | `jogStep('X', 'RETRACT')` | `CMD.jogStep=X,RETRACT\n` | `queueWebUiStep(B_DOWN)`. Steps cross-slide 1 step away from centerline. |
-| **D-Pad Hold X+** (≥300ms) | Pointerdown hold | `jog('X', 'RETRACT', true)` | `CMD.jogHold=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, true)`. Continuous cross-slide retract until released. |
-| **D-Pad Release X+** | Pointerup / cancel | `jog('X', 'RETRACT', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_DOWN, false)`. Decelerates cross-slide to a stop. |
-| **D-Pad Tap X-** (<300ms) | Pointerup click | `jogStep('X', 'INFEED')` | `CMD.jogStep=X,INFEED\n` | `queueWebUiStep(B_UP)`. Steps cross-slide 1 step inward toward centerline. |
-| **D-Pad Hold X-** (≥300ms) | Pointerdown hold | `jog('X', 'INFEED', true)` | `CMD.jogHold=X,INFEED\n` | `queueWebUiEvent(B_UP, true)`. Continuous cross-slide plunge until released. |
-| **D-Pad Release X-** | Pointerup / cancel | `jog('X', 'INFEED', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_UP, false)`. Decelerates cross-slide to a stop. |
-| **Chamfer NW (↖ Z- X-)** | Pointerdown hold | `jogChamfer('NW', true)` | `CMD.jogChamfer=NW,1\n` | Coordinated dual-axis jog: Z toward chuck, X infeed. |
-| **Chamfer SE (↘ Z+ X+)** | Pointerdown hold | `jogChamfer('SE', true)` | `CMD.jogChamfer=SE,1\n` | Coordinated dual-axis jog: Z toward tailstock, X retract. |
-| **Runstack: START** | Primary Start button | `startCycle()` | `CMD.on=1\n` | `setIsOnFromTask(true)`. Arms active kinematic cycle. |
-| **Runstack: STOP** | Stationary Stop button | `stopCycle()` | `CMD.on=0\n` | `setIsOnFromTask(false)`. Immediately disengages synchronized leadscrew motion. |
-| **Zero Z Axis** | DRO Z0 button | `zeroAxis('Z')` | `CMD.axisZero=Z\n` | `setAxisZero(&z)`. Sets current carriage position as $Z=0.000$. |
-| **Zero X Axis** | DRO X0 button | `zeroAxis('X')` | `CMD.axisZero=X\n` | `setAxisZero(&x)`. Sets current cross-slide position as $X=0.000$. |
-| **Mode Selector** | Nav bar / Mode buttons | `setMode(modeId)` | `CMD.mode=<id>\n` | `setOperatingMode(id)`. Switches mode (`0`=Gear, `1`=Turn, `2`=Face, `3`=Cone, `4`=Cut, `5`=Thread...). |
-| **Reverse Feed / Pitch** | Pitch/Feed chips | `reverseFeed()` | `CMD.feedRev\n` | `reverseFeedDirection()`. Inverts sign of active `dupr` pitch. |
-| **Jog Step Increment** | Step selector chip | `cycleStep()` | `CMD.jogStepDu=<du>\n` | Sets in-memory `moveStep` variable to target deci-microns (e.g. 100, 1000, 10000). |
-| **Unit System Toggle** | Unit chip (MM/IN/TPI) | `cycleMeasure()` | None (Client-Local Presentation) | Toggles `$store.machine.measure`. Zero wire traffic. |
-| **Diameter / Radius** | DRO Dia/Rad chip | `toggleDiaRad()` | None (Client-Local Presentation) | Toggles `$store.machine.dia`. Core kinematics remain pure radius. |
-| **Set Z Left Limit** | DRO limit edit modal | `setLimit('Z', 'left', valDu)` | `CMD.axisLimitDu=Z,L,<val>\n` | `setAxisLimitDu(&z, true, valDu)`. Programs hardware left limit register. |
-| **Set Z Right Limit** | DRO limit edit modal | `setLimit('Z', 'right', valDu)` | `CMD.axisLimitDu=Z,R,<val>\n` | `setAxisLimitDu(&z, false, valDu)`. Programs hardware right limit register. |
-| **Clear Z Limits** | DRO limit clear button | `clearLimit('Z', 'left')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded travel. |
-| **Set Metric Pitch** | Pitch keypad submit | `setFeedrateMm(mm)` | `CMD.feedMm=<val>\n` | Computes deci-microns per revolution and engages metric leadscrew ratio. |
-| **Set TPI Pitch** | Pitch keypad submit | `setFeedrateTpi(tpi)` | `CMD.feedTpi=<val>\n` | Computes fractional leadscrew ratio for imperial threads per inch. |
-| **Set Taper Angle** | Taper keypad submit | `setTaperAngle(deg)` | `CMD.taperAngle=<val>\n` | Computes $K = 2\tan(\theta)$ and configures cone kinematics. |
-| **Set Taper Ratio** | Taper keypad submit | `setTaperRatio(1/K)` | `CMD.taperRatio=<val>\n` | Configures cone slope ratio directly (e.g. 1:10, 1:20). |
-| **Spindle Sim RPM** | Visualizer Spindle HUD | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
-| **Spindle Sim Turn** | Visualizer Chuck Wheel | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Generates queued encoder pulses equivalent to specified hand rotation. |
+* For the canonical reference implementation of the Modern Web / Touch DRO interface, see:
+  👉 **[`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)**  
+  👉 **[`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)** (Complete 40-row interaction-to-wire ledger)
 
 ---
 
 ## 10. Canonical Protocol Command Reference (`CMD.*` & `SETTINGS.*`)
+
+The motion controller dispatcher responds to the following standardized command vocabulary across all transports:
 
 ### Motion & Cycle Commands
 * `CMD.on=1`: Starts current cycle or feed.
@@ -468,8 +417,13 @@ This specification establishes:
 * **Deterministic protocol**: Line-oriented, typed domain telemetry completely eliminates floating-point round-trip drift.
 * **Maximum shop safety**: Semantic operator directions and hardware heartbeats prevent tool crashes.
 
-### Related Documents:
-* **Physical Hardware & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
+### Related Architecture Documents:
+* **Core State Model & Domains:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md)
+* **Physical Lathe Hardware & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
 * **Mode Lifecycle & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
 * **UI Design Decisions & Ergonomics:** [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md)
+
+### Client Reference Implementations:
+* **Modern Web UI / Touch DRO:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
+* **Web UI Interaction Ledger:** [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)
 
