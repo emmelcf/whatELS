@@ -1,0 +1,387 @@
+# NanoELS Properties & Settings Architecture Specification
+
+> **Status:** Authoritative Specification  
+> **Target Version:** NanoELS H5 Modular Architecture  
+> **Author:** Antigravity & Emil  
+> **Date:** October 7, 2026  
+> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/ELS_PROPERTIES_AND_SETTINGS.md`  
+> **Referenced By:** [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
+
+---
+
+## 1. Executive Summary & Architectural Role
+
+The **NanoELS Properties & Settings System** (`SettingsService`) is the centralized configuration engine, parameter registry, and persistence manager for the entire NanoELS motion platform.
+
+### 1.1 The Core Problem
+In the original legacy `h5.ino` implementation and its initial modular extraction (`Config.cpp`), system settings suffered from three major architectural flaws:
+1. **Conflated Responsibilities:** Machine physical dimensions (leadscrew pitches), host controller electronics (WiFi passwords), and operator display choices (diameter vs. radius mode) were dumped into flat, unstructured global variables.
+2. **NVS "Default Pollution":** Every factory default was written into non-volatile flash on first boot. If a firmware update improved default motor timings or encoder noise thresholds, existing machines never saw the update because stale values were frozen in flash.
+3. **No Distinction Between Machine Iron, Controller Host, and Display Clients:** A shop lathe's physical leadscrew pitch was stored alongside Nextion LCD button debounce repeat timers.
+
+### 1.2 Governing Tenets of the Modern Architecture
+1. **Clean 4-Tier Separation:** Physical machine iron, controller electronics, workshop operator preferences, and client display ergonomics are strictly isolated into independent tiers.
+2. **The "Dynamic Default vs. Sparse Override" Paradigm:** NVS flash strictly stores user customizations. If a setting matches the active machine preset or hardware default, it consumes zero flash space. Updating a preset automatically updates all un-overridden properties.
+3. **High-Speed In-Memory Cache (Zero ISR Contention):** Real-time stepper timers (Core 1) read physical machine parameters from an in-memory RAM cache in nanoseconds without acquiring FreeRTOS mutexes or accessing SPI flash.
+4. **Universal Default Inheritance & Reset Authority:** Every property knows its factory/preset default. Operators can query defaults and instantly reset an individual key or an entire group back to baseline.
+5. **Controller-Backed Broker for Stateless Clients:** The controller provides pass-through persistent storage for connected clients (e.g., bare-metal hardware pendants or ephemeral tablet browsers) without polluting motion kinematics.
+
+---
+
+## 2. The 4-Tier Properties Taxonomy
+
+Properties across the NanoELS ecosystem are partitioned into four distinct tiers of authority and ownership:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 1: PHYSICAL MACHINE PROFILE (`machine.*`)                                         │
+│ Intrinsic to the machine tool iron (stays with the lathe if controller is replaced).   │
+│ NVS Namespace: "machine" | Authority: Machine Profile & Lathe Configuration            │
+├───────────────────────┬────────────────────────────────────────────────────────────────┤
+│ Machine Identity      │ `preset` (slug), `profileId`, `modelName`                      │
+│ Physical Geometry     │ `bedLengthMm`, `maxSwingDiameterMm`, `swingOverCrossSlideMm`,  │
+│                       │ `chuckDiameterMm`, `chuckLengthMm`, `spindleBoreDiameterMm`,   │
+│                       │ `zZeroFromChuckFaceMm`, `xZeroFromCenterlineMm`                │
+│ Spindle Mechanics     │ `encoderPpr`, `encoderBacklash`, `maxSafeRpm`, `minSyncRpm`,   │
+│                       │ `hasIndexPulse`, `vfdControl`, `vfdMaxHz`                      │
+│ Z Carriage Mechanics  │ `zScrewDu` (pitch), `zMotorSteps`, `zPulsePpr` (MPG),          │
+│                       │ `zTravelMinMm`, `zTravelMaxMm`, `zBacklashDu`, `zInvertDir`,   │
+│                       │ `zInvertEnable`, `zSpeedStart`, `zAcceleration`, `zManualSpeed`│
+│ X Slide Mechanics     │ `xScrewDu` (pitch), `xMotorSteps`, `xPulsePpr` (MPG),          │
+│                       │ `xTravelMinMm`, `xTravelMaxMm`, `xBacklashDu`, `xInvertDir`,   │
+│                       │ `xInvertEnable`, `xSpeedStart`, `xAcceleration`, `xManualSpeed`│
+│ Y Auxiliary Mechanics │ `activeY`, `rotaryY`, `yMotorSteps`, `yScrewDu`, `yBacklashDu` │
+│ Capabilities Bitmask  │ `capabilities` (32-bit LatheCapabilityFlags)                   │
+└───────────────────────┴────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 2: CONTROLLER INFRASTRUCTURE & HARDWARE (`sys.*`)                                 │
+│ Specific to the ESP32 compute host, network interfaces, and connected peripherals.   │
+│ NVS Namespace: "sys" / "wifi" / "keys" | Authority: Controller Firmware                │
+├───────────────────────┬────────────────────────────────────────────────────────────────┤
+│ Network & WiFi        │ `wifi.enabled`, `wifi.ssid`, `wifi.password`, `wifi.hostname`, │
+│                       │ `wifi.apMode`, `wifi.channel`                                  │
+│ Optical Linear Scales │ `zScalePulsesPerMm`, `xScalePulsesPerMm`, `scaleSampleFilter`  │
+│ Motion Timing HAL     │ `stepPulseWidthUs`, `dirSetupTimeUs`, `jogHoldTimeoutMs`       │
+│ Analog Joystick ADC   │ `joystick.enabled`, `joystick.centerSamples`, `oversamples`,   │
+│                       │ `sampleIntervalMs`, `adcMax`, `deadband`, `normalRps`,         │
+│                       │ `rapidRps`, `invertAxes`, `buttonMode`                         │
+│ Physical Key Mappings │ `keyboard.bindingTable` (USB Host / Nextion action code maps)  │
+└───────────────────────┴────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 3: OPERATOR & WORKSHOP PREFERENCES (`prefs.*`)                                    │
+│ Shared workshop behavioral defaults. Stored per controller.                            │
+│ NVS Namespace: "prefs" | Authority: Workshop Machinist / Operator                      │
+├───────────────────────┬────────────────────────────────────────────────────────────────┤
+│ Default System Units  │ `startupMeasure` (0 = Metric mm, 1 = Imperial in, 2 = Pitch)   │
+│ Step Increment Tables │ `jogStepDu` (D-pad step: 10µm, 100µm, 1mm), `feedStepDu`       │
+│ Telemetry Deadbands   │ `deadbandAngle` (with `isAuto`), `deadbandTurns` (with `isAuto`)│
+└───────────────────────┴────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 4: CLIENT-SCOPED PRESENTATION (`client.<clientId>.*`)                             │
+│ Ephemeral display choices. Decoupled from motion. Stored on client or broker NVS.      │
+│ NVS Namespace: "clients" | Authority: Connected Terminal / Display UI                  │
+├───────────────────────┬────────────────────────────────────────────────────────────────┤
+│ Client Session Info   │ `clientType` (web, nextion, pendant), `clientId`, `version`    │
+│ Coordinate Display    │ `diaRad` (Diameter Ø vs Radius R), `absInc` (Abs vs Inc)       │
+│ Readout Feedback      │ `zDroActive` (Leadscrew count vs Scale), `xDroActive`          │
+│ Ergonomics & Audio    │ `speechFeedback`, `announceStatus`, `speechRate`, `theme`      │
+└───────────────────────┴────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. The "Dynamic Default vs. Sparse User Override" Paradigm
+
+In traditional embedded systems, default configurations are dumped into EEPROM/NVS flash upon initialization. This causes severe technical debt: if the firmware author adjusts default acceleration curves, machines already flashed in the field remain permanently frozen on obsolete values.
+
+### 3.1 Architecture Overview
+
+```
+                      ┌─────────────────────────────────────────┐
+                      │ Active Machine Preset (e.g. WM210V)     │
+                      │ • screwZ = 20000 du                     │
+                      │ • chuckDia = 125 mm                     │
+                      │ • encoderPpr = 1200                     │
+                      └────────────────────┬────────────────────┘
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        │ (if no user override in NVS)        │
+                        ▼                                     ▼
+           ┌─────────────────────────┐           ┌─────────────────────────┐
+           │ Dynamic Hardware        │           │ Active Preset Defaults  │
+           │ Auto-Derivation         │           │ (Machine Profile)       │
+           │ (e.g. Angle Deadband =  │           │                         │
+           │  360° / ENCODER_TICKS)  │           │                         │
+           └────────────┬────────────┘           └────────────┬────────────┘
+                        │                                     │
+                        └──────────────────┬──────────────────┘
+                                           │ fallback default
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ SettingsService In-Memory Cache (RAM)                                                  │
+│                                                                                        │
+│ Value Resolution:                                                                      │
+│   effectiveValue = userOverride.has_value() ? userOverride.value() : presetDefault;    │
+│                                                                                        │
+│ Override Tracking:                                                                     │
+│   isOverridden = userOverride.has_value();                                             │
+└──────────────────────────────────────────▲─────────────────────────────────────────────┘
+                                           │ (only when customized)
+                      ┌────────────────────┴────────────────────┐
+                      │ Sparse NVS Flash Storage ("machine")    │
+                      │ • Only stores explicitly modified keys  │
+                      │ • Empty NVS = 100% Stock Preset Baseline│
+                      └─────────────────────────────────────────┘
+```
+
+### 3.2 In-Memory Caching (`std::optional`)
+To eliminate SPI flash reads during active machining, all overrides are cached in fast RAM:
+
+```cpp
+struct CachedProperty {
+    std::optional<long>   overrideLong;
+    std::optional<float>  overrideFloat;
+    std::optional<bool>   overrideBool;
+    std::optional<String> overrideString;
+};
+```
+
+1. **Unmodified System:** When a user unpacks or initializes NanoELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
+2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
+3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
+
+---
+
+## 4. Legacy Properties Audit & Deprecation Map
+
+The legacy `h5.ino` code and early `Config.cpp` module contained over 45 properties. Below is the authoritative audit classifying each setting into **Keep & Modernize**, **Relocate to Cycle/Intent**, or **Discard/Deprecate**.
+
+### 4.1 Physical Machine Properties (Tier 1)
+
+| Legacy Identifier | New Canonical Key | Unit | Architectural Action & Rationale |
+| :--- | :--- | :---: | :--- |
+| `SCREW_Z_DU` | `machine.z.pitchDu` | `du` | **KEEP & MODERNIZE:** Core leadscrew pitch ($10{,}000\text{ du} = 1\text{ mm}$). |
+| `SCREW_X_DU` | `machine.x.pitchDu` | `du` | **KEEP & MODERNIZE:** Core cross-slide pitch. |
+| `SCREW_Y_DU` | `machine.y.pitchDu` | `du` | **KEEP & MODERNIZE:** Auxiliary axis screw/worm pitch. |
+| `MOTOR_STEPS_Z` | `machine.z.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
+| `MOTOR_STEPS_X` | `machine.x.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
+| `ENCODER_PPR` | `machine.spindle.encoderPpr` | `ppr` | **KEEP & MODERNIZE:** Spindle quadrature encoder pulses per rev. |
+| `ENCODER_BACKLASH` | `machine.spindle.backlash` | `pulses` | **KEEP & MODERNIZE:** Encoder edge filter on spindle direction reverse. |
+| `BACKLASH_DU_Z` | `machine.z.backlashDu` | `du` | **KEEP & MODERNIZE:** Carriage screw backlash compensation. |
+| `BACKLASH_DU_X` | `machine.x.backlashDu` | `du` | **KEEP & MODERNIZE:** Cross-slide screw backlash compensation. |
+| `MAX_TRAVEL_MM_Z` | `machine.dimensions.maxZTravelMm` | `mm` | **MODERNIZE:** Replaced with travel envelope from chuck datum. |
+| `MAX_TRAVEL_MM_X` | `machine.dimensions.maxXTravelMm` | `mm` | **MODERNIZE:** Replaced with cross-slide travel envelope. |
+| `SPEED_START_Z/X` | `machine.z.speedStartMmSec` | `mm/s` | **MODERNIZE:** Convert raw step pulses to physical linear speed. |
+| `ACCELERATION_Z/X`| `machine.z.accelMmSec2` | `mm/s²` | **MODERNIZE:** Convert raw pulses/s² to physical acceleration. |
+| `SPEED_MANUAL_MOVE`| `machine.z.maxRapidMmMin` | `mm/min` | **MODERNIZE:** Convert raw pulses/s to industry-standard rapid feed. |
+| `INVERT_Z / INVERT_X` | `machine.z.invertDir` | `bool` | **KEEP:** Motor direction polarity flag. |
+| `INVERT_Z/X_ENABLE`| `machine.z.invertEnable` | `bool` | **KEEP:** Stepper driver active-high vs active-low enable flag. |
+| *(None - New)* | `machine.dimensions.bedLengthMm` | `mm` | **NEW:** Lathe bed length for digital twin & clearance bounds. |
+| *(None - New)* | `machine.dimensions.chuckDiameterMm` | `mm` | **NEW:** Outside chuck diameter for safety envelope. |
+| *(None - New)* | `machine.dimensions.spindleBoreDiameterMm` | `mm` | **NEW:** Spindle through-bore diameter. |
+
+### 4.2 Controller Infrastructure & Hardware (Tier 2)
+
+| Legacy Identifier | New Canonical Key | Unit | Architectural Action & Rationale |
+| :--- | :--- | :---: | :--- |
+| `wifi_ssid` | `sys.wifi.ssid` | string | **KEEP:** Network credentials. |
+| `wifi_password` | `sys.wifi.password` | string | **KEEP:** Network credentials (write-only / masked). |
+| `wifi_hostname` | `sys.wifi.hostname` | string | **KEEP:** mDNS network discovery hostname. |
+| `Z_SCALE_PULSES_PER_MM` | `sys.dro.zPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
+| `X_SCALE_PULSES_PER_MM` | `sys.dro.xPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
+| `PULSE_PER_REV_Z/X` | `sys.mpg.zPulsesPerRev` | float | **KEEP:** Manual Pulse Generator handwheel encoder resolution. |
+| `JOYSTICK_*` (16 fields) | `sys.joystick.*` | mixed | **KEEP:** Analog joystick calibration and ADC oversampling. |
+| `keyboardBindings[]` | `sys.keys.bindings` | table | **KEEP:** USB keyboard physical key mapping table. |
+
+### 4.3 Relocated to Cycle / Intent Domain (NOT Machine Settings)
+
+| Legacy Identifier | Original Location | New Architectural Home | Rationale |
+| :--- | :--- | :--- | :--- |
+| `SAFE_DISTANCE_DU` | `Config.cpp` | **Cycle Parameter (`C.safeRetractDu`)** | **RELOCATE:** Retract clearance between passes is a property of the cutting operation, NOT the physical lathe. |
+| `SLOT_LEFT_REDUCTION_DU`| `Config.cpp` | **Cycle Parameter (`C.slotTaperDu`)** | **RELOCATE:** Step reduction for blind broaching is specific to Slotting Mode. |
+
+### 4.4 Discarded Legacy Baggage
+
+| Legacy Identifier | Original Role in `h5.ino` | Architectural Verdict & Rationale |
+| :--- | :--- | :--- |
+| `STEP_TIME_MS` | Software delay loop for button repeat | **DISCARD:** In the new client architecture, jogging is event-driven via `CMD.jogHold` / `CMD.jogRelease` with hardware timer ramping. |
+| `DELAY_BETWEEN_STEPS_MS`| Software pause between repeated steps | **DISCARD:** Replaced by hardware acceleration ramping in motion HAL. |
+| `ENABLE_CONTINUOUS_MOVE` | Auto-switch from step to continuous | **DISCARD:** Replaced by explicit semantic gestures in HMI profile. |
+| `Z_NEEDS_REST / X_NEEDS_REST`| Cut stepper current while stationary | **DISCARD:** Disabling holding torque on a lathe carriage without a mechanical brake causes tool deflection and leadscrew back-drive. |
+| `SHOW_KEY_PRESSES` | Debug overlay flag on Nextion LCD | **DISCARD:** Obsolete display debugging artifact. |
+| `tftFirstUpload` | Nextion 9600 baud flashing flag | **DISCARD:** Firmware flashing utility flag, not a machine setting. |
+
+---
+
+## 5. Master Property Catalog & Schema Descriptors
+
+Every setting in the system is defined by a formal `PropertyDescriptor` containing validation bounds, data types, and presentation metadata:
+
+```cpp
+enum PropertyType : uint8_t {
+    PROP_TYPE_INT    = 0,
+    PROP_TYPE_LONG   = 1,
+    PROP_TYPE_FLOAT  = 2,
+    PROP_TYPE_BOOL   = 3,
+    PROP_TYPE_STRING = 4,
+    PROP_TYPE_ENUM   = 5
+};
+
+struct PropertyDescriptor {
+    const char*  key;          // Canonical wire key, e.g. "machine.z.pitch"
+    uint8_t      tier;         // 1: Machine, 2: Sys, 3: Prefs, 4: Client
+    PropertyType type;         // Data type
+    const char*  label;        // Human-readable title
+    const char*  unit;         // Display unit ("mm", "du", "RPM", "steps/rev")
+    float        minValue;     // Validation floor
+    float        maxValue;     // Validation ceiling
+    float        step;         // Input step increment
+    const char*  helpText;     // Tooltip / operator guidance
+};
+```
+
+### 5.1 Canonical Property Catalog (Representative Subset)
+
+```text
+TIER 1: MACHINE PROFILE
+---------------------------------------------------------------------------------------------------------------------
+Key                     Type    Unit    Min     Max       Default (WM210V)   Description
+---------------------------------------------------------------------------------------------------------------------
+machine.preset          STRING  -       -       -         "wm210v_dual"      Active preset identifier
+machine.caps            UINT32  hex     0       0xFFFFFFFF 0x000000DB        LatheCapabilityFlags bitmask
+machine.dim.bedLength   FLOAT   mm      50.0    5000.0    400.0              Total lathe bed length
+machine.dim.swingDia    FLOAT   mm      50.0    2000.0    210.0              Maximum swing diameter over bed
+machine.dim.chuckDia    FLOAT   mm      20.0    1000.0    125.0              Outside diameter of chuck
+machine.dim.spindleBore FLOAT   mm      5.0     300.0     38.0               Through-hole spindle bore diameter
+machine.spindle.ppr     INT     ppr     100     30000     1200               Spindle encoder pulses per rev
+machine.spindle.maxRpm  FLOAT   RPM     100.0   10000.0   2500.0             Headstock mechanical safety ceiling
+machine.z.pitchDu       LONG    du      100     1000000   20000              Carriage leadscrew pitch (20000 = 2.0mm)
+machine.z.motorSteps    LONG    steps   100     100000    800                Carriage driver microsteps per rev
+machine.z.maxRapidMmMin FLOAT   mm/min  100.0   10000.0   1500.0             Carriage rapid traverse ceiling
+machine.z.accelMmSec2   FLOAT   mm/s²   10.0    2000.0    250.0              Carriage acceleration ramp rate
+machine.x.pitchDu       LONG    du      100     1000000   20000              Cross-slide leadscrew pitch
+machine.x.motorSteps    LONG    steps   100     100000    800                Cross-slide driver microsteps per rev
+machine.x.maxRapidMmMin FLOAT   mm/min  50.0    5000.0    800.0              Cross-slide rapid traverse ceiling
+
+TIER 2: CONTROLLER INFRASTRUCTURE
+---------------------------------------------------------------------------------------------------------------------
+sys.wifi.enabled        BOOL    -       0       1         1                  Enable wireless network radio
+sys.wifi.ssid           STRING  -       -       -         "NanoELS-AP"       Network SSID name
+sys.wifi.hostname       STRING  -       -       -         "nanoels"          mDNS network address
+sys.dro.zPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   1250.67            Z optical linear scale calibration
+sys.dro.xPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   501.20             X optical linear scale calibration
+
+TIER 3: OPERATOR PREFERENCES
+---------------------------------------------------------------------------------------------------------------------
+prefs.startupMeasure    ENUM    -       0       2         0                  Default units (0:mm, 1:in, 2:pitch)
+prefs.jogStepDu         LONG    du      10      100000    1000               Default D-pad jog step (1000 = 0.1mm)
+prefs.dbAngle           FLOAT   deg     0.0     10.0      (Auto-derived)     Spindle angle change deadband
+prefs.dbTurns           FLOAT   turns   0.0     1.0       (Auto-derived)     Spindle turns change deadband
+```
+
+---
+
+## 6. C++ Interface Contract (`SettingsService`)
+
+`SettingsService` is a static service class with high-speed in-memory cached state, FreeRTOS thread safety, and write-through NVS persistence:
+
+```cpp
+// include/SettingsService.h
+
+class SettingsService {
+public:
+    // Boot Initialization: Loads overrides into RAM cache
+    static void init();
+
+    // Query Engine (Supports unicast request/reply)
+    static bool get(const char* key, String* reply);
+    static bool getGroup(const char* groupName, String* reply);
+    static bool getSchema(const char* key, String* reply);
+
+    // Mutation Engine (Bounds checked, updates RAM cache & write-through NVS)
+    static bool set(const char* keyVal, String* reply);
+    
+    // Universal Reset Engine (Removes NVS key, reverts RAM cache to preset baseline)
+    static bool reset(const char* key, String* reply);
+    static bool resetGroup(const char* groupName, String* reply);
+
+    // High-Speed Real-Time Getters (Nanosecond access for Core 1 / MachineModel)
+    static const LatheConfiguration& getActiveProfile();
+    static float getDeadbandAngle();
+    static bool  isDeadbandAngleAuto();
+    static float getDeadbandTurns();
+    static bool  isDeadbandTurnsAuto();
+
+    // Tier 4 Stateless Client Storage Broker
+    static bool getClientProperty(const char* clientId, const char* key, String* outVal);
+    static bool setClientProperty(const char* clientId, const char* key, const char* val);
+
+    // Dirty Notification
+    static void notifyPropertiesChanged();
+};
+```
+
+### 6.1 Multi-Core Concurrency & Lock-Free Execution
+* **Core 1 (Motion & Stepper ISRs):** Reads physical parameters directly from `activeMachineProfile` in RAM. Zero mutex locks, zero flash reads, zero heap allocation.
+* **Core 0 (Communications & WebSockets):** Handles incoming `SETTINGS.set` commands. Mutates the RAM struct, persists to NVS, and flags `machineStatusForcePublish = true` so all connected screens receive an updated Domain `'P'` broadcast on the next frame.
+
+---
+
+## 7. Canonical Wire Protocol Contracts
+
+All communication with `SettingsService` adheres to clean, line-oriented ASCII formatting:
+
+### 7.1 Querying Settings (`SETTINGS.get`)
+Clients query individual keys, whole groups, or all settings:
+```text
+-> SETTINGS.get=machine.z.pitchDu\n
+<- SETTING.machine.z.pitchDu=20000 (default=20000, overridden=0)\n
+
+-> SETTINGS.getGroup=machine.dim\n
+<- SETTING.machine.dim.bedLength=400.0\n
+<- SETTING.machine.dim.chuckDia=125.0\n
+<- SETTING.machine.dim.spindleBore=38.0\n
+```
+
+### 7.2 Mutating Settings (`SETTINGS.set`)
+Clients update settings with automatic range validation:
+```text
+-> SETTINGS.set=machine.z.pitchDu,20025\n
+<- OK:SETTINGS.machine.z.pitchDu=20025\n
+
+-> SETTINGS.set=machine.z.pitchDu,-50\n
+<- ERR:SETTINGS.machine.z.pitchDu=out of bounds (100..1000000)\n
+```
+
+### 7.3 Resetting to Baseline Defaults (`SETTINGS.reset`)
+Clients can reset an individual key or an entire machine group back to preset baseline:
+```text
+-> SETTINGS.reset=machine.z.pitchDu\n
+<- OK:SETTINGS.machine.z.pitchDu=20000 (reverted to preset default)\n
+
+-> SETTINGS.resetGroup=machine\n
+<- OK:SETTINGS.resetGroup=machine (all physical parameters reverted to WM210V)\n
+```
+
+### 7.4 Client-Scoped Storage Hook (`SETTINGS.client.*`)
+Stateless clients persist their UI presentation preferences on the controller broker:
+```text
+-> SETTINGS.client.set=tablet_shop,diaRad=1\n
+<- OK:SETTINGS.client.set=tablet_shop,diaRad=1\n
+
+-> SETTINGS.client.get=tablet_shop,diaRad\n
+<- SETTING.client.tablet_shop.diaRad=1\n
+```
+
+---
+
+## 8. Summary of Architectural Guarantees
+
+1. **Zero NVS Default Pollution:** Fresh machines have pristine flash; only intentional customizations are saved.
+2. **Firmware Upgrade Resilience:** Firmware improvements to default curves or deadbands propagate automatically to all non-overridden machines.
+3. **Decoupled Responsibilities:** Machine physical dimensions never collide with network credentials or client themes.
+4. **Instant Reset Assurance:** An operator can always safely revert a customized axis or machine back to factory defaults with a single command.
+5. **Rock-Solid Motion Safety:** Core 1 motion control reads validated physical settings from fast RAM with zero FreeRTOS lock contention.

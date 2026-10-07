@@ -75,6 +75,8 @@ bool INVERT_JOYSTICK_X = DEFAULT_INVERT_JOYSTICK_X;
 bool INVERT_JOYSTICK_Y = DEFAULT_INVERT_JOYSTICK_Y;
 bool INVERT_JOYSTICK_BUTTON = DEFAULT_INVERT_JOYSTICK_BUTTON;
 
+LatheConfiguration activeMachineProfile = {};
+
 int ENCODER_STEPS_INT = DEFAULT_ENCODER_PPR * 2;
 float ENCODER_STEPS_FLOAT = DEFAULT_ENCODER_PPR * 2;
 long RPM_BULK = DEFAULT_ENCODER_PPR * 2;
@@ -371,6 +373,7 @@ void loadMachineConfig() {
   INVERT_JOYSTICK_BUTTON = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, INVERT_JOYSTICK_BUTTON);
   cfg.end();
   normalizeMachineConfig();
+  loadMachineProfile();
 }
 
 void saveMachineConfig() {
@@ -439,6 +442,136 @@ void saveMachineConfig() {
   cfg.putBool(CFG_INVERT_JOYSTICK_Y, INVERT_JOYSTICK_Y);
   cfg.putBool(CFG_INVERT_JOYSTICK_BUTTON, INVERT_JOYSTICK_BUTTON);
   cfg.end();
+}
+
+void setMachineProfileDefaults() {
+  activeMachineProfile = getDefaultProfile();
+  if (HAS_DRO_Z) {
+    activeMachineProfile.capabilities |= CAP_DRO_Z;
+    activeMachineProfile.zAxis.hasDroScale = true;
+  }
+  if (HAS_DRO_X) {
+    activeMachineProfile.capabilities |= CAP_DRO_X;
+    activeMachineProfile.xAxis.hasDroScale = true;
+  }
+  if (ACTIVE_Y) {
+    activeMachineProfile.capabilities |= CAP_MOTOR_Y;
+    activeMachineProfile.yAxis.hasMotor = true;
+  }
+  activeMachineProfile.zAxis.leadscrewPitchMm = (float)SCREW_Z_DU / 10000.0f;
+  activeMachineProfile.xAxis.leadscrewPitchMm = (float)SCREW_X_DU / 10000.0f;
+  activeMachineProfile.spindle.encoderPpr = ENCODER_PPR;
+}
+
+void loadMachineProfile() {
+  DEBUG_PRINTLN("loadMachineProfile...");
+  Preferences pref;
+  pref.begin(MACHINE_PROFILE_NAMESPACE, false);
+
+  if (!pref.isKey("p_id")) {
+    DEBUG_PRINTLN("No saved machine profile in NVS, writing defaults...");
+    pref.end();
+    setMachineProfileDefaults();
+    saveMachineProfile();
+    return;
+  }
+
+  String pid = pref.getString("p_id", "wm210v_dual");
+  strncpy(activeMachineProfile.profileId, pid.c_str(), sizeof(activeMachineProfile.profileId) - 1);
+  activeMachineProfile.profileId[sizeof(activeMachineProfile.profileId) - 1] = '\0';
+
+  String pname = pref.getString("p_name", "WM210V 8x16 (Dual Motor)");
+  strncpy(activeMachineProfile.modelName, pname.c_str(), sizeof(activeMachineProfile.modelName) - 1);
+  activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
+
+  activeMachineProfile.capabilities = pref.getUInt("p_caps", (uint32_t)(CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_MOTOR_X | CAP_DRO_Z | CAP_DRO_X));
+
+  // Dimensions
+  activeMachineProfile.dimensions.bedLengthMm = pref.getFloat("dim_bed", 400.0f);
+  activeMachineProfile.dimensions.maxSwingDiameterMm = pref.getFloat("dim_swg", 210.0f);
+  activeMachineProfile.dimensions.swingOverCrossSlideMm = pref.getFloat("dim_cs", 110.0f);
+  activeMachineProfile.dimensions.maxZTravelMm = pref.getFloat("dim_zt", 350.0f);
+  activeMachineProfile.dimensions.maxXTravelMm = pref.getFloat("dim_xt", 100.0f);
+  activeMachineProfile.dimensions.chuckDiameterMm = pref.getFloat("dim_chk", 125.0f);
+  activeMachineProfile.dimensions.chuckLengthMm = pref.getFloat("dim_chkl", 65.0f);
+  activeMachineProfile.dimensions.spindleBoreDiameterMm = pref.getFloat("dim_bore", 38.0f);
+  activeMachineProfile.dimensions.zZeroFromChuckFaceMm = pref.getFloat("dim_zoff", 10.0f);
+  activeMachineProfile.dimensions.xZeroFromCenterlineMm = pref.getFloat("dim_xoff", 0.0f);
+
+  // Spindle
+  activeMachineProfile.spindle.encoderPpr = pref.getUShort("sp_ppr", (uint16_t)ENCODER_PPR);
+  activeMachineProfile.spindle.hasIndexPulse = pref.getBool("sp_idx", false);
+  activeMachineProfile.spindle.maxSafeRpm = pref.getFloat("sp_rpm", 2500.0f);
+  activeMachineProfile.spindle.minSyncRpm = pref.getFloat("sp_minrpm", 15.0f);
+  activeMachineProfile.spindle.hasVfdControl = pref.getBool("sp_vfd", false);
+
+  // Axes
+  activeMachineProfile.zAxis.hasMotor = pref.getBool("z_motor", true);
+  activeMachineProfile.zAxis.hasDroScale = pref.getBool("z_dro", (activeMachineProfile.capabilities & CAP_DRO_Z) != 0);
+  activeMachineProfile.zAxis.leadscrewPitchMm = pref.getFloat("z_pitch", (float)SCREW_Z_DU / 10000.0f);
+  activeMachineProfile.zAxis.maxVelocityMmMin = pref.getFloat("z_maxvel", 1500.0f);
+  activeMachineProfile.zAxis.maxAccelMmSec2 = pref.getFloat("z_accel", 250.0f);
+
+  activeMachineProfile.xAxis.hasMotor = pref.getBool("x_motor", true);
+  activeMachineProfile.xAxis.hasDroScale = pref.getBool("x_dro", (activeMachineProfile.capabilities & CAP_DRO_X) != 0);
+  activeMachineProfile.xAxis.leadscrewPitchMm = pref.getFloat("x_pitch", (float)SCREW_X_DU / 10000.0f);
+  activeMachineProfile.xAxis.maxVelocityMmMin = pref.getFloat("x_maxvel", 800.0f);
+  activeMachineProfile.xAxis.maxAccelMmSec2 = pref.getFloat("x_accel", 200.0f);
+
+  pref.end();
+  DEBUG_PRINTF("Active machine profile loaded: %s (%s), caps=0x%08X\n", activeMachineProfile.profileId, activeMachineProfile.modelName, activeMachineProfile.capabilities);
+}
+
+void saveMachineProfile() {
+  DEBUG_PRINTLN("saveMachineProfile...");
+  Preferences pref;
+  pref.begin(MACHINE_PROFILE_NAMESPACE, false);
+
+  pref.putString("p_id", activeMachineProfile.profileId);
+  pref.putString("p_name", activeMachineProfile.modelName);
+  pref.putUInt("p_caps", activeMachineProfile.capabilities);
+
+  // Dimensions
+  pref.putFloat("dim_bed", activeMachineProfile.dimensions.bedLengthMm);
+  pref.putFloat("dim_swg", activeMachineProfile.dimensions.maxSwingDiameterMm);
+  pref.putFloat("dim_cs", activeMachineProfile.dimensions.swingOverCrossSlideMm);
+  pref.putFloat("dim_zt", activeMachineProfile.dimensions.maxZTravelMm);
+  pref.putFloat("dim_xt", activeMachineProfile.dimensions.maxXTravelMm);
+  pref.putFloat("dim_chk", activeMachineProfile.dimensions.chuckDiameterMm);
+  pref.putFloat("dim_chkl", activeMachineProfile.dimensions.chuckLengthMm);
+  pref.putFloat("dim_bore", activeMachineProfile.dimensions.spindleBoreDiameterMm);
+  pref.putFloat("dim_zoff", activeMachineProfile.dimensions.zZeroFromChuckFaceMm);
+  pref.putFloat("dim_xoff", activeMachineProfile.dimensions.xZeroFromCenterlineMm);
+
+  // Spindle
+  pref.putUShort("sp_ppr", activeMachineProfile.spindle.encoderPpr);
+  pref.putBool("sp_idx", activeMachineProfile.spindle.hasIndexPulse);
+  pref.putFloat("sp_rpm", activeMachineProfile.spindle.maxSafeRpm);
+  pref.putFloat("sp_minrpm", activeMachineProfile.spindle.minSyncRpm);
+  pref.putBool("sp_vfd", activeMachineProfile.spindle.hasVfdControl);
+
+  // Axes
+  pref.putBool("z_motor", activeMachineProfile.zAxis.hasMotor);
+  pref.putBool("z_dro", activeMachineProfile.zAxis.hasDroScale);
+  pref.putFloat("z_pitch", activeMachineProfile.zAxis.leadscrewPitchMm);
+  pref.putFloat("z_maxvel", activeMachineProfile.zAxis.maxVelocityMmMin);
+  pref.putFloat("z_accel", activeMachineProfile.zAxis.maxAccelMmSec2);
+
+  pref.putBool("x_motor", activeMachineProfile.xAxis.hasMotor);
+  pref.putBool("x_dro", activeMachineProfile.xAxis.hasDroScale);
+  pref.putFloat("x_pitch", activeMachineProfile.xAxis.leadscrewPitchMm);
+  pref.putFloat("x_maxvel", activeMachineProfile.xAxis.maxVelocityMmMin);
+  pref.putFloat("x_accel", activeMachineProfile.xAxis.maxAccelMmSec2);
+
+  pref.end();
+}
+
+bool setMachineProfilePreset(const char* slug) {
+  const LatheConfiguration* p = findPresetBySlug(slug);
+  if (!p) return false;
+  activeMachineProfile = *p;
+  saveMachineProfile();
+  return true;
 }
 
 void setKeyboardConfigDefaults() {
