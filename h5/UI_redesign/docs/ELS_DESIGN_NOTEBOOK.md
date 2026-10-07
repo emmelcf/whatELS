@@ -1134,9 +1134,17 @@ All core architectural domains are decoupled and authoritatively specified in th
 * **Generic Client Architecture, Pipeline & Wire Protocols:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
 * **800×480 Rich Touch HMI Profile (Cross-Client Standards):** [`hmi/RICH_TOUCH_800X480.md`](./hmi/RICH_TOUCH_800X480.md)
 * **Operational Modes Catalog & Deck Specifications:** [`modes/README.md`](./modes/README.md)
-  * **Electronic Gearbox Specification:** [`modes/gearbox/SPECIFICATION.md`](./modes/gearbox/SPECIFICATION.md)
-  * **Threading Specification:** [`modes/threading/SPECIFICATION.md`](./modes/threading/SPECIFICATION.md)
+  * **Electronic Gearbox:** [`modes/gearbox/SPECIFICATION.md`](./modes/gearbox/SPECIFICATION.md)
+  * **Threading:** [`modes/threading/SPECIFICATION.md`](./modes/threading/SPECIFICATION.md) & [`WIZARD_WORKFLOW.md`](./modes/threading/WIZARD_WORKFLOW.md)
+  * **Turning Cycle:** [`modes/turning/SPECIFICATION.md`](./modes/turning/SPECIFICATION.md)
+  * **Facing Cycle:** [`modes/facing/SPECIFICATION.md`](./modes/facing/SPECIFICATION.md)
+  * **Taper & Chamfer:** [`modes/taper/SPECIFICATION.md`](./modes/taper/SPECIFICATION.md)
+  * **Cutoff & Parting:** [`modes/cutoff/SPECIFICATION.md`](./modes/cutoff/SPECIFICATION.md)
+  * **Slotting & Keyway:** [`modes/slotting/SPECIFICATION.md`](./modes/slotting/SPECIFICATION.md)
+  * **Half-Spheres:** [`modes/spheres/SPECIFICATION.md`](./modes/spheres/SPECIFICATION.md)
+  * **Joystick & MPG:** [`modes/joystick/SPECIFICATION.md`](./modes/joystick/SPECIFICATION.md)
 * **Web UI Reference Implementation & Module Architecture:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
 * **Comprehensive Web UI Interaction-to-Wire Ledger:** [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)
+
 
 
