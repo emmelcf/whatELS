@@ -509,7 +509,6 @@ class NanoelsEmulator {
       `UI.zLeft=${zLeftStr}\n` +
       `UI.zRight=${zRightStr}\n` +
       `UI.x=${xMm}\n` +
-      `UI.diameter=${this.isDiameterMode ? '1' : '0'}\n` +
       `UI.xLeft=${xLeftStr}\n` +
       `UI.xRight=${xRightStr}\n`;
     const modeInt = this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)));
@@ -545,7 +544,6 @@ class NanoelsEmulator {
       `M.rpm=${Math.round(this.rpm)}\n` +
       `M.turns=${this.turns.toFixed(2)}\n` +
       `M.angle=${(this.angle % 360).toFixed(2)}\n` +
-      `M.dia=${this.isDiameterMode ? 1 : 0}\n` +
       `M.abs=1\n` +
       `M.zDro=0\n` +
       `M.xDro=0\n` +
@@ -609,7 +607,6 @@ class NanoelsEmulator {
     }
     if (domainMask & 0x08) { // Properties (P)
       out += `P.measure=${this.measure === 'MM' ? 0 : (this.measure === 'IN' ? 1 : 2)}\n` +
-             `P.dia=${this.isDiameterMode ? 1 : 0}\n` +
              `P.abs=1\n` +
              `P.zDro=0\n` +
              `P.xDro=0\n` +
@@ -672,7 +669,6 @@ class NanoelsEmulator {
       motorStepsY: 300,
       encoderPpr: 1200,
       measure: this.measure === 'IN' ? 2 : (this.measure === 'TPI' ? 1 : 0),
-      dia: this.isDiameterMode ? 1 : 0,
       abs: 1,
       zDro: 0,
       xDro: 0,
@@ -706,8 +702,6 @@ class NanoelsEmulator {
       this.feedStepDu = parseInt(val, 10);
     } else if (key.toLowerCase() === 'jogstepdu') {
       this.moveStep = parseInt(val, 10);
-    } else if (key.toLowerCase() === 'dia') {
-      this.isDiameterMode = val === '1';
     }
     this._emitRaw(`OK:SETTINGS.${key}=${val}\n`);
     this._emitRaw(`P.${key}=${val}\n`);

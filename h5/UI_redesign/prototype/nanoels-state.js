@@ -238,6 +238,7 @@ function registerMachineStore() {
       if (c) {
         if ('on' in c) this.isOn = !!c.on;
         for (const k in c) {
+          if (k === 'dia' || k === 'diameter') continue; // Decoupled: Diameter/Radius is purely client-local
           if (k in this && typeof this[k] !== 'function') {
             if ((k === 'zRightDu' || k === 'xDownDu') && (c[k] === undefined || c[k] === null || isNaN(c[k]) || Number(c[k]) <= -2147483640)) {
               this[k] = -2147483648;

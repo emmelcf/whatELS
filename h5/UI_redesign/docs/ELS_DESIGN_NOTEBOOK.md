@@ -1021,7 +1021,7 @@ enum DomainFlags : uint8_t {
   DOMAIN_KINEMATICS = 0x01,  // Dynamic physical axes, limits, spindle, mode, on/off
   DOMAIN_INTENT     = 0x02,  // Thread format/pitch, taper ratio/angle, steps, feed direction
   DOMAIN_CYCLE      = 0x04,  // Multi-pass counts, current pass, operation step, multi-starts
-  DOMAIN_PROPERTIES = 0x08,  // Unit system, diameter mode, DRO active, leadscrew pitches
+  DOMAIN_PROPERTIES = 0x08,  // Unit system, DRO active, leadscrew pitches, motor steps (dia decoupled to clients)
   DOMAIN_ALL        = 0x0F   // All domains combined (0x01 | 0x02 | 0x04 | 0x08)
 };
 ```
@@ -1097,7 +1097,7 @@ To eliminate multiple round-trips when a client initializes or transitions pages
 | Key | Type | Unit | Description |
 | :--- | :--- | :--- | :--- |
 | `P.measure` | `0` or `1` | enum | Unit system (`0`=Metric, `1`=Imperial) |
-| `P.dia` | `0` or `1` | boolean | Lathe X cross-slide diameter mode enabled |
+| *(P.dia)* | *(decoupled)* | *(none)* | *Decoupled:* Diameter/Radius display preference is 100% client-local; core operates strictly in canonical radius (`K.xDu`). |
 | `P.abs` | `0` or `1` | boolean | Coordinate system (`1`=Absolute, `0`=Incremental) |
 | `P.zDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on Z |
 | `P.xDro` | `0` or `1` | boolean | Physical optical/magnetic DRO scale active on X |
@@ -1140,6 +1140,7 @@ $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translato
    * A future `NextionTranslator` or `PendantTranslator` can decode binary touch packets (`0x65 0x01...`) into canonical commands (`CMD.mode=...`).
 4. **`ClientEndpoint` (Composite Channel)**:
    * Manages the lifecycle of a connected client, routing incoming messages through the translator and transmitting replies and change-triggered telemetry broadcasts over the transport.
+   * *(See Section 17 for the comprehensive client registration model, immutable `StatusSnapshot`, temporal isolation, and decentralized change-driven status dispatch architecture).*
 
 ---
 
@@ -1233,7 +1234,7 @@ Decoupling units is not merely about toggling `mm` and `in` labels on coordinate
   3. `°`: Spindle rotational position ($0.0^\circ$ to $359.9^\circ$).
   4. `SMM / SFM`: Live Cutting Surface Speed.
 * **Surface Speed Calculation**:
-  Derived at 10 Hz from the current workpiece diameter (live $X$ DRO position in diameter mode) and spindle RPM:
+  Derived reactively in the client UI upon telemetry updates from the current workpiece diameter (live $X$ DRO position in diameter mode) and spindle RPM:
   * Metric mode ($SMM$, Surface Meters per Minute):
     $$SMM = \frac{\pi \times \text{Dia}_{\text{mm}} \times \text{RPM}}{1000.0}$$
   * Imperial mode ($SFM$, Surface Feet per Minute):
@@ -1388,8 +1389,7 @@ Settings that rely on machine physics (e.g. spindle angle and turns deadbands fo
 * **Clean Reset to Auto**: Sending `"auto"` or `"default"` via `SETTINGS.set` calls `pref.remove()` and resets the memory cache to `std::nullopt`, cleanly reverting to the derived default.
 
 ### 3. Consolidated Operational Setters
-Centralized mutation methods in `SettingsService`:
-* `setDiameterMode(bool dia)`
+Centralized mutation methods in `SettingsService` (note that Diameter/Radius mode is not stored here, as it is decoupled to client presentation adapters):
 * `setAbsoluteMode(bool abs)`
 * `setZDroMode(bool zdro)`
 * `setXDroMode(bool xdro)`
@@ -1398,7 +1398,7 @@ Centralized mutation methods in `SettingsService`:
 * `setDeadbandAngle(const char* val)`
 * `setDeadbandTurns(const char* val)`
 
-Each method updates the live in-memory state, persists to NVS flash, and sets `machineStatusForcePublish = true` to broadcast updated properties to all connected clients immediately.
+Each method updates the live in-memory state, persists to NVS flash, and sets `machineStatusForcePublish = true` to broadcast updated properties to all registered clients immediately.
 
 ---
 
@@ -1602,7 +1602,7 @@ The following ledger maps every primary user interaction on the capacitive touch
 * `SETTINGS.get` / `SETTINGS.get=*`: Returns all persistent machine and operational settings.
 * `SETTINGS.get=<key>`: Returns specific setting value.
 * `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
-  - Keys: `dia`, `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
+  - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
 
 #### System & State Queries
 * `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
@@ -1614,7 +1614,7 @@ The following ledger maps every primary user interaction on the capacitive touch
 
 ### 16.1 The Surgical Boundary Rationale (Zero Lag, 100% Visual & Functional Fidelity)
 During the prototype evolution, a full rewrite of the 4,000-line `lathe-controller.js` into Alpine.js was proposed and rejected based on three core production constraints:
-1. **Zero Display/Processing Lag:** The host UI runs on embedded touchscreens, tablets, and low-power hardware. Re-rendering massive complex DOM trees via framework diffing introduces latency spikes and frame drops during live 10 Hz telemetry pushes.
+1. **Zero Display/Processing Lag:** The host UI runs on embedded touchscreens, tablets, and low-power hardware. Re-rendering massive complex DOM trees via framework diffing introduces latency spikes and frame drops during high-frequency change-driven telemetry pushes.
 2. **100% Visual Fidelity:** All custom modal overlays, multi-stage wizards (Threading, Turning, Facing), and dynamic center decks are already finalized and visually perfected in Vanilla JS.
 3. **Hardware Touch Timing Preservation:** Critical safety gestures (such as the D-pad jog timing: tap `<300ms` for discrete single step vs. hold `>300ms` for continuous jog) require tight pointer event loop control without framework synthetic event overhead.
 
@@ -1658,6 +1658,109 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
   <script defer src="lathe-controller.js"></script>
   ```
   `nanoels-state.js` attaches an `alpine:init` event listener synchronously. When `alpine.min.js` executes (deferred), it dispatches `alpine:init`, synchronously registering `$store.machine` before Alpine walks the DOM. This guarantees zero initial expression evaluation errors and identical deterministic startup across `http://` and local file previews.
+
+---
+
+## 17. Modular Client Architecture & Change-Driven Status Dispatch
+
+### 17.1 Client Interface Abstraction vs. Transport Layers
+The system fundamentally decouples **Client Interfaces** from **Hardware Transports**:
+* **Transports are dumb pipes:** WebSocket, UART, SPI, and BLE are physical or network byte transport mechanisms. They know nothing about lathe semantics.
+* **Clients are interface adapters:** Classes like `NextionClient`, `WebUiClient`, and `DroPendantClient` implement the core `ClientInterface`. They encapsulate all protocol serialization, page mapping, and translation logic for a given operator interface.
+* **Boot-Time Client Registration:** Client implementations are registered with the controller's `ClientManager` at boot (e.g. `NextionClient` is initialized on UART at startup, independent of whether an external network client ever opens a WebSocket connection).
+
+### 17.2 Strictly Change-Driven Execution (Zero Polling Overhead)
+* Core status updates are **never driven by a fixed periodic polling timer** (such as an arbitrary 100ms interval).
+* The Core Motion Controller evaluates state changes **only when a model property actually mutates** (e.g. a step pulse is emitted, spindle encoder pulses accumulate, or an operator toggle arms a cycle).
+* When the lathe is stationary and idle, **zero status packets are generated or pushed**, preserving UART and wireless network bandwidth.
+
+### 17.3 Immutable `StatusSnapshot` & Temporal Isolation
+* **The Concurrency Problem:** On dual-core ESP32 systems, high-priority real-time motion control (stepper pulse timers, encoder ISRs on Core 0) runs asynchronously with lower-priority client communication tasks (FreeRTOS network/UART tasks on Core 1). Passing a floating pointer/reference to a mutable live model results in temporal tearing, race conditions, and inconsistent multi-word reads.
+* **Value-Semantic Snapshots:** When an internal state mutation occurs, the Core captures an immutable `StatusSnapshot` struct (~64 bytes) frozen in time, paired with a 32-bit `changedFields` bitmask:
+  ```cpp
+  struct StatusSnapshot {
+      uint32_t timestamp;
+      uint32_t changedFields; // Bitmask of which fields mutated in this event
+      
+      // Authoritative Canonical Kinematics at the instant of trigger
+      int32_t  zDu;
+      int32_t  xDu;
+      int32_t  yDu;
+      int32_t  zLeftDu;
+      int32_t  zRightDu;
+      int32_t  xUpDu;
+      int32_t  xDownDu;
+      uint16_t rpm;
+      float    turns;
+      float    angle;
+      uint8_t  mode;
+      bool     isOn;
+      bool     estop;
+      int32_t  dupr;
+  };
+
+  class ClientInterface {
+  public:
+      virtual ~ClientInterface() = default;
+      virtual void onStatusUpdate(const StatusSnapshot& snapshot) = 0;
+  };
+  ```
+* **Thread/Queue Safety:** A 64-byte value-type snapshot can be passed by const reference for immediate processing or copied directly into a FreeRTOS queue (`xQueueSend`) without mutex locks or contention with the real-time motion engine.
+
+### 17.4 Decentralized Observer Filtering & Client Autonomy
+* **The Core Does Not Filter:** The Core does not maintain or inspect client-specific interest masks. It broadcasts the immutable snapshot to all registered clients via `onStatusUpdate(snapshot)`.
+* **The Client Owns the Decision:** Each client implementation owns its own interest filter and contextual rules:
+  - **`NextionClient`**: Checks its active page interest mask. If none of the mutated fields are displayed on the active Nextion screen page, it returns immediately without burning UART bandwidth.
+  - **`WebUiClient`**: Checks whether any active WebSocket sessions are connected. If none, it returns immediately without formatting JSON or strings.
+* **Bitmask Field Flags:**
+  ```cpp
+  enum StatusField : uint32_t {
+      FIELD_NONE        = 0,
+      FIELD_POS_Z       = 1 << 0,
+      FIELD_POS_X       = 1 << 1,
+      FIELD_POS_Y       = 1 << 2,
+      FIELD_LIMITS_Z    = 1 << 3,
+      FIELD_LIMITS_X    = 1 << 4,
+      FIELD_SPINDLE_RPM = 1 << 5,
+      FIELD_SPINDLE_POS = 1 << 6,  // angle & turns
+      FIELD_MOTION_MODE = 1 << 7,
+      FIELD_MOTION_SYNC = 1 << 8,  // on/off
+      FIELD_ESTOP       = 1 << 9,
+      FIELD_FEED_RATE   = 1 << 10,
+      FIELD_ALL         = 0xFFFFFFFF
+  };
+  ```
+* **Efficient Client Filtering:** A client implementation can test `snapshot.changedFields` against its interest mask in a single CPU cycle:
+  ```cpp
+  void NextionClient::onStatusUpdate(const StatusSnapshot& snapshot) {
+      // 1. Check if any fields visible on the active Nextion page mutated
+      if (!(snapshot.changedFields & currentPageMask_)) {
+          return; // No relevant state changed; zero UART transmission
+      }
+      
+      // 2. Perform local delta comparison if needed to avoid redundant text draw
+      if ((snapshot.changedFields & FIELD_POS_X) && snapshot.xDu != lastSnapshot_.xDu) {
+          int32_t displayVal = isDiameterMode_ ? (snapshot.xDu * 2) : snapshot.xDu;
+          renderCoordinate("t1", displayVal);
+      }
+      
+      lastSnapshot_ = snapshot;
+  }
+  ```
+* **Local Client History:** If a specific client implementation needs to compare old vs. new values (e.g., to suppress redundant string re-drawing on a slow serial display), that client simply stores `lastSnapshot_` locally within its own persistent class instance (~64 bytes per client instance). The Core remains lightweight and stateless.
+
+### 17.5 Total Decoupling of Display Semantics (Diameter vs. Radius)
+* **Core Model is Pure Radius:** The Core `MachineModel` has zero knowledge of "Diameter Mode". All kinematics, software stops, and internal registers operate strictly in deci-microns (`du`) of carriage radius (`xDu`).
+* **Adapters Handle Presentation:**
+  - `NextionClient` translates `snapshot.xDu` to diameter before formatting its UART string if its local Nextion toggle is set.
+  - `WebUiClient` transmits canonical radius `K.xDu` to the browser, where the Web UI translates locally using client-side formatters.
+* **Prototype Web UI Implementation:**
+  - In `lathe_dro_nanoels_controller.html`, the diameter display preference is held in `$store.machine.dia` within Alpine.js.
+  - Toggling `toggleDiaRad()` flips `$store.machine.dia` locally with **zero wire commands emitted**.
+  - Inbound telemetry handlers (`nanoels-service.js`, `nanoels-state.js`) explicitly ignore incoming `dia` / `diameter` properties from legacy controllers or other clients, completely breaking the two-way tie.
+  - Direct coordinate entry via keypad or zeroing in diameter mode converts the entered diameter to canonical radius `xDu = diameterDu / 2` prior to emitting `CMD.axisPosDu=X,<radiusDu>`, ensuring the controller motion core remains 100% pure radius.
+* Changing a display setting on one client (e.g. Nextion) has **zero side effects** on any other client or on the Core Motion Controller.
+
 
 
 

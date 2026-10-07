@@ -69,7 +69,6 @@ class NanoelsService extends EventTarget {
       zDis: false,
       xDis: false,
       yDis: false,
-      dia: true,
       abs: true,
       zDro: false,
       xDro: false,
@@ -583,6 +582,7 @@ class NanoelsService extends EventTarget {
         const idx = line.indexOf('=');
         if (idx !== -1) {
           const key = line.substring(2, idx);
+          if (key === 'dia' || key === 'diameter') continue; // Decoupled: pure client-side presentation
           const val = line.substring(idx + 1);
           if (key in this.canonical) {
             if (typeof this.canonical[key] === 'boolean') {
@@ -607,6 +607,7 @@ class NanoelsService extends EventTarget {
         const idx = line.indexOf('=');
         if (idx !== -1) {
           const key = line.substring(3, idx);
+          if (key === 'dia' || key === 'diameter') continue; // Decoupled: pure client-side presentation
           const val = line.substring(idx + 1);
 
           if (key in this.state) {
@@ -644,6 +645,7 @@ class NanoelsService extends EventTarget {
         const eq = line.indexOf('=');
         if (eq !== -1) {
           const k = line.substring(8, eq);
+          if (k.toLowerCase() === 'dia' || k.toLowerCase() === 'diameter') continue; // Decoupled
           const v = line.substring(eq + 1);
           if (k in this.canonical) {
             this.canonical[k] = (typeof this.canonical[k] === 'number') ? parseFloat(v) : v;
