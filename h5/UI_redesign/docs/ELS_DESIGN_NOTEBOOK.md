@@ -993,424 +993,131 @@ To remove ambiguity between travel direction and stop location, all four limit c
 
 ## 28. Decoupled MachineModel & Multi-Domain Round-Trip Protocol Specification
 
-> **Authoritative Specification:** For the complete, authoritative client transport architecture, zero-drift `MachineModel` 4-domain protocol, and client presentation layer, see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> **Authoritative Specifications:**
+> * For the authoritative 4-domain state architecture, C++ struct definitions, temporal snapshots, and change detection: see [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md).
+> * For the generic client transport pipeline and wire serialization: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ### 1. Architectural Motivation & Decoupling Invariants
 To achieve high reliability, modularity, and future extensibility across diverse displays (Web UI, future Nextion v2 rewrite, serial pendants, or native LVGL displays), the firmware's internal kinematic core is completely decoupled from presentation and transport layers:
 1. **The Controller is the Sole Authority**: Connected clients (browsers, displays, pendants) are pure reactive observers. Setpoints and mode changes flow into the controller via authoritative intent commands (`CMD.*`), and state flows outward via domain-namespaced telemetry.
 2. **Zero In-Server Math**: All string parsing, floating-point arithmetic, unit conversions, and pitch-to-DURP translations are removed from transport code ([src/WebServerModule.cpp](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/WebServerModule.cpp)) and encapsulated into the core kinematics API ([include/Motion.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h), [src/Motion.cpp](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp)).
 3. **Preservation of Authoritative Intent**: To prevent floating-point round-trip display drift (such as an operator entering taper `1:3.5` and having it return as `1:3.4985`, or entering `20 TPI` and having it return as `19.9998`), the controller stores the operator's exact typed intent alongside the hardware kinematics value.
-4. **Layered Transport Separation**:
-   * **Layer 1 (Core Kinematics)**: [include/Motion.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h), [include/Axis.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Axis.h) — Hardware timers, step generators, integer deci-micron (`du`) coordinate tracking.
-   * **Layer 2 (State & Serialization Adapter)**: [include/MachineModel.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h), [include/RichClientAdapter.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/RichClientAdapter.h) — Structured domain capture and line-oriented streaming.
-   * **Layer 3 (Command Dispatcher)**: [include/CommandDispatcher.h](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/CommandDispatcher.h) — Unified command dispatcher handling all transport sources (WebSocket, Serial, Web API).
+4. **Layered Transport Separation**: Core Kinematics (`Layer 1`), State Adapter (`Layer 2`), and Command Dispatcher (`Layer 3`) are strictly decoupled.
+
+For complete domain struct definitions (`K`, `I`, `C`, `P`), multi-domain pull syntax (`CMD.get=K,I,C,P`), and the 3-tier client pipeline (`ITransport` $\rightarrow$ `ITelemetrySerializer` $\rightarrow$ `ICommandTranslator`), consult [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md) and [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ---
 
-### 2. Domain State Architecture (`MachineModel`) & Wire Telemetry
+## 29. Web UI Modular Decomposition & Zero-Build Runtime
 
-> **Authoritative Specification:** The complete struct definitions, bitmask flags (`DOMAIN_KINEMATICS`, `DOMAIN_INTENT`, `DOMAIN_CYCLE`, `DOMAIN_PROPERTIES`), multi-domain pull hydration syntax (`CMD.get=K,I,C,P`), and line-oriented wire keys (`K.*`, `I.*`, `C.*`, `P.*`) are specified authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md#4-multi-domain-state-protocol-machinemodel).
-
-Summary of the 4 independent domains:
-* **Domain 'K' (Kinematics — High Frequency 20–50 Hz):** Physical positions in deci-microns (`zDu`, `xDu`), limit registers, spindle speed (`rpm`, `turns`, `angle`), active `mode`, and `isOn`.
-* **Domain 'I' (Operator Intent — On Mutation):** Exact operator typed setpoints (`thFmt`, `thPitch`, `tpMode`, `tpVal`, `coneRatio`), feed step increments, and feed direction.
-* **Domain 'C' (Cycle Progress — On Pass):** Automated cycle pass counts (`passes`), active pass index (`opIdx`), and multi-start counters.
-* **Domain 'P' (Machine Properties — On Connect / Setup):** Leadscrew pitch parameters, stepper microsteps, DRO attachment flags (`zDro`, `xDro`), and absolute/incremental mode (`abs`).
-
-During the UI transition, [RichClientAdapter::buildTelemetry()](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp) simultaneously emits both the modern domain keys (`K.*`, `I.*`, `C.*`, `P.*`) and legacy mirror keys (`M.*`) to ensure zero regression in legacy clients.
-
----
-
-### 6. Generic Client Architecture: Transport / Serializer / Translator Pipeline
-
-> **Authoritative Specification:** The composable client pipeline ($\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$), C++ interface definitions (`ITransport`, `ITelemetrySerializer`, `ICommandTranslator`), and concrete adapter lifecycle are specified authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md#3-composable-client-endpoint-pipeline-c-specification).
-
-Summary of Pipeline Roles:
-* **`ITransport` (Physical I/O):** Abstract wire interface (`isConnected`, `sendText`, `sendBytes`) implemented across WebSocket, hardware UART (`Serial1`), serial pendants, and BLE.
-* **`ITelemetrySerializer` (Outbound Encoding):** Serializes typed `MachineModel` domain snapshots into client-expected wire streams (`K.*`, `I.*`, `C.*`, `P.*`, or Nextion display commands).
-* **`ICommandTranslator` (Inbound Decoding):** Sanitizes and decodes raw inbound client packets into canonical `CommandDispatcher` actions.
-* **`ClientEndpoint` (Composite Channel):** Couples transport, serializer, and translator into an autonomous communication channel.
-
----
-
-## 29. Monolith Decomposition, Alpine.js Store & Semantic Intent Architecture
+> **Authoritative Specifications:**
+> * For the Web UI modular ES architecture, script dependencies, and reactive boundary: see [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md).
+> * For the canonical Semantic Operator Intent wire protocol: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md#8-semantic-operator-intent-protocol).
+> * For the authoritative 4-domain reactive state model: see [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md).
 
 ### 1. Architectural Motivation
-The monolithic prototype HTML file grew to over 5,700 lines containing embedded CSS stylesheets, math utilities, modal controllers, and DOM manipulation scripts. To make the architecture scalable, modular, and compatible with ESP32 LittleFS and LVGL 9, the monolithic structure was decomposed into decoupled layers, and the data model was unified around **Semantic Operator Intent**.
+The initial monolithic prototype HTML file grew to over 5,700 lines containing embedded CSS stylesheets, math utilities, modal controllers, and DOM manipulation scripts. To make the architecture scalable, modular, and compatible with ESP32 LittleFS and LVGL 9, the monolithic structure was decomposed into decoupled layers, and the data model was unified around **Semantic Operator Intent**.
 
-### 2. File Organization & Zero-Build Runtime
-Everything runs **100% offline** with **zero build step**, operating identically whether served from ESP32 LittleFS or opened directly via `file:///`:
+Everything runs **100% offline** with **zero build step**, operating identically whether served from ESP32 LittleFS or opened directly via `file:///`.
 
-| File | Purpose | Lines |
-| :--- | :--- | :--- |
-| [`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html) | Declarative HTML5 markup bound to Alpine store | ~530 |
-| [`alpine.min.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/alpine.min.js) | Alpine.js v3.17.4 local offline runtime | ~43 KB |
-| [`lathe-controller.css`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe-controller.css) | Extracted modular styles, typography, and layout | ~1,250 |
-| [`nanoels-presets.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-presets.js) | Standard engineering thread families & taper data | ~350 |
-| [`nanoels-formatters.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-formatters.js) | Pure render-time formatters (deci-microns $\rightarrow$ human strings) | ~90 |
-| [`nanoels-state.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-state.js) | `Alpine.store('machine')` reactive 4-domain model | ~240 |
-| [`lathe-controller.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe-controller.js) | UI modal controllers, wizard engines, and dev console | ~4,000 |
+For the complete file directory layout, ES module roles, and semantic intent command dispatches (`CMD.jogHold`, `CMD.jogStep`), consult [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md) and [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
 
 ---
 
-### 3. Display Units & Diameter Mode Decoupling
-A crucial architectural decision was made to **completely decouple display presentation from the controller core**:
+## 30. Comprehensive Display Presentation Decoupling
 
-1. **Physical Invariance in the Core**:
-   * The ESP32 kinematics and stepper pulse generators deal strictly in canonical **deci-microns (`du`)** and microsteps.
-   * The core controller does not care whether a user is looking at inches or millimeters.
-2. **Multi-Display Independence**:
-   * One operator on an apron tablet can view the DRO in **Inches** (reading an imperial print), while a second display on the headstock or phone displays **Millimeters**.
-   * Tapping `unitToggle` (`mm/in`) or `repBadge` (`Ø DIA / R RAD`) **does not transmit wire commands to the controller**.
-   * It purely updates the client-local presentation store (`$store.machine.measure` and `$store.machine.dia`), eliminating round-trip latency and cross-client interference.
+> **Authoritative Specification:** For all client presentation formatting, live cutting surface speed ($SMM/SFM$) calculations, thread companions, and taper conversions, see [`clients/web_ui/OVERVIEW.md#6-presentation-layer-unit-conversions--companions`](./clients/web_ui/OVERVIEW.md#6-presentation-layer-unit-conversions--companions).
 
----
-
-### 4. Semantic Intent vs. Raw Directional Signs
-Hardcoding $+/-$ coordinate math into a UI creates serious safety hazards (e.g. rear-toolpost parting blades or slant-bed lathes moving opposite to front toolposts).
-
-Instead of commanding raw coordinate signs, clients transmit **operator semantic intent**:
-
-```text
-CMD.jogHold=X,INFEED       // Operator wants to move tool into the cut / towards centerline
-CMD.jogHold=X,RETRACT      // Operator wants to back the tool out of the cut
-CMD.jogHold=Z,CHUCK        // Operator wants to feed carriage toward the chuck
-CMD.jogHold=Z,TAIL         // Operator wants to feed carriage toward the tailstock
-CMD.jogRelease=<axis>      // Operator released the jog key
-CMD.jogStep=<axis>,<dir>   // Discrete 1-step movement in semantic direction
-```
-
-#### Example: Cutting an Inverted Taper
-When turning an inverted taper (narrow at the chuck, wide at the tailstock) from the narrow end to the wide end:
-* **`TAPER_PROFILE`**: `INVERTED` (Narrow at Chuck $\rightarrow$ Wide at Tailstock).
-* **`SURFACE`**: `EXTERNAL` (OD Turning) vs `INTERNAL` (Boring).
-* **`FEED_DIR`**: `TO_TAIL` (traveling from Chuck toward Tailstock).
-* **Controller Kinematics Execution**:
-  * Primary axis $Z$ feeds `TO_TAIL`.
-  * Synchronized cross-slide $X$ is calculated by the core: since diameter expands toward the tailstock on an external cut, $X$ automatically moves **`RETRACT`** at the precise taper ratio $K$.
-  * The physical motor pin polarities are resolved exclusively in firmware configuration (`Config.h`), protecting against crashes regardless of toolpost orientation.
-
----
-
-### 5. Verification Status
-* **PlatformIO ESP32-S3 Build**: Succeeded in 11.97s, 0 errors, 0 warnings (Flash 19.4%, RAM 25.0%).
-* **Browser Runtime Verification**: Verified against local emulator, 0 console errors, instantaneous client-side unit toggles, and clean semantic packet streams.
-
----
-
-## 30. Comprehensive Display Presentation Decoupling (Feeds, Spindle Surface Speed, Threads, Tapers)
-
-### 1. Architectural Motivation
-Decoupling units is not merely about toggling `mm` and `in` labels on coordinates. A high-performance digital lathe interface must allow an operator to view machining parameters in the units that match their tooling, stock material, and mental model without mutating the controller's underlying canonical kinematics or creating network thrashing.
-
-### 2. Decoupled Display Domains
-
-#### A. Feed & Rapid Rates (`formatFeed`)
-* **Controller Canonical Invariant**: Synchronized feed is stored as `dupr` (deci-microns per spindle revolution, where $10{,}000\text{ dupr} = 1.000\text{ mm/rev}$).
-* **Client Presentation**:
-  * Metric mode: Formatted to 3 decimal places as `mm/rev` (e.g. `0.100 mm/rev`).
-  * Imperial mode: Computed as $\text{dupr} / 254{,}000.0$ and formatted to 4 decimal places as `in/rev` (e.g. `0.0039 in/rev`).
-  * Time-based Async Rapid/Feed:
-    * Metric mode: `mm/min` (e.g. `150 mm/min`).
-    * Imperial mode: Converted via $\text{speed} / 25.4$ to `in/min` (e.g. `5.9 in/min`).
-  * When the operator toggles the unit chip in the topbar, the feed display converts instantly with zero lag and zero network traffic.
-
-#### B. Live Spindle Surface Speed Readout (`formatSurfaceSpeed`)
-* **4-Way Spindle Readout Cycling**:
-  Tapping `#spindleBox` cycles through 4 real-time telemetry modes:
-  1. `RPM`: Spindle revolutions per minute.
-  2. `TURNS`: Cumulative spindle revolutions (useful for coil winding, precise manual indexing).
-  3. `°`: Spindle rotational position ($0.0^\circ$ to $359.9^\circ$).
-  4. `SMM / SFM`: Live Cutting Surface Speed.
-* **Surface Speed Calculation**:
-  Derived reactively in the client UI upon telemetry updates from the current workpiece diameter (live $X$ DRO position in diameter mode) and spindle RPM:
-  * Metric mode ($SMM$, Surface Meters per Minute):
-    $$SMM = \frac{\pi \times \text{Dia}_{\text{mm}} \times \text{RPM}}{1000.0}$$
-  * Imperial mode ($SFM$, Surface Feet per Minute):
-    $$SFM = \frac{\pi \times \text{Dia}_{\text{in}} \times \text{RPM}}{12.0} \approx \frac{\text{Dia}_{\text{in}} \times \text{RPM}}{3.8197}$$
-  * Toggling `mm` $\leftrightarrow$ `in` instantly flips the readout between `SMM` and `SFM`.
-
-#### C. Dual Thread Companion Readouts (`formatPitchWithCompanion`)
-* Machinists frequently work from drawings specified in metric pitch ($P$ in mm) while using imperial leadscrews or vice versa.
-* The decoupled display shows the primary pitch plus the companion metric in parentheses:
-  * Imperial Primary: `20 TPI (1.270 mm)`
-  * Metric Primary: `1.500 mm (16.93 TPI)`
-  * Fractional Inch Primary: `0.0500 in (20.0 TPI)`
-
-#### D. Multi-Format Taper Companions (`formatTaperCompanions`)
-* A lathe taper is physically defined by a single slope ratio $C = \Delta \text{Dia} / \Delta Z$.
-* The display simultaneously provides companion conversions across all 3 machining conventions:
-  * **Ratio**: $1 : K$ (e.g. `1 : 20.00` or `1 : 19.25` for MT2).
-  * **Angle**: Half-angle ($\theta = \arctan(C/2)$) and Included Angle ($2\theta$).
-  * **Taper Per Foot (TPF)**: $C \times 12.0\text{ in/ft}$ (e.g. `0.5994 in/ft` for MT2, `0.7500 in/ft` for NPT).
-  * **Metric Taper**: $C \times 1000.0\text{ mm/m}$ (e.g. `50.0 mm/m`).
-
-#### E. Ergonomic Jog Step Presets
-* Metric mode cycles: `1.000 mm`, `0.100 mm`, `0.010 mm`.
-* Imperial mode cycles: `0.1000 in`, `0.0100 in`, `0.0010 in`.
-* When switching units, the active step snaps to the equivalent ergonomic preset index rather than an awkward fractional conversion (e.g. `0.0010 in` instead of `0.00039 in`).
+### 1. Core Decoupling Invariants
+Display presentation is completely decoupled from the controller core:
+1. **Physical Invariance in the Core**: The ESP32 kinematics and stepper pulse generators deal strictly in canonical **deci-microns (`du`)** and microsteps. The core controller does not track display units (`mm` vs `in`) or display modes (`Ø DIA` vs `R RAD`).
+2. **Multi-Display Independence**: Multiple connected clients can display different units simultaneously without transmitting wire commands or causing network traffic.
+3. **Pure Presentation Formatting**: Conversions for feed rates, surface speeds ($SMM / SFM$), companion pitches (`20 TPI (1.270 mm)`), and taper ratios are computed purely at render time in [`nanoels-formatters.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-formatters.js).
 
 ---
 
 ## 31. Lossless Intent State Architecture (`IntentState` / `I.*`)
 
-### 1. The Problem: Floating-Point Round-Trip Degradation
-In traditional electronic leadscrew implementations, operator authoring values are immediately flattened into a single kinematic float (e.g. `dupr` for pitch or $C = \Delta \text{Dia}/\Delta Z$ for taper).
-When these values are transmitted back across telemetry or parsed by a secondary display:
+> **Authoritative Specification:** For the complete `IntentState` struct definition, canonical wire registers, and lifecycle guarantees, see [`ELS_CORE_STATE_MODEL.md#24-lossless-operator-intent-architecture`](./ELS_CORE_STATE_MODEL.md#24-lossless-operator-intent-architecture) and [`ELS_CLIENT_ARCHITECTURE.md#8-semantic-operator-intent-protocol`](./ELS_CLIENT_ARCHITECTURE.md#8-semantic-operator-intent-protocol).
+
+### 1. The Floating-Point Round-Trip Degradation Hazard
+In traditional electronic leadscrew implementations, operator authoring values are immediately flattened into a single kinematic float (e.g. `dupr` for pitch or $C = \Delta \text{Dia}/\Delta Z$ for taper). When these values are queried or transmitted back across telemetry:
 1. Entering **`1 : 19`** taper ratio ($C = 1/19 \approx 0.052631578...$) degrades to **`1 : 18.99`** or **`1 : 19.0002`** when backwards-calculated from $C$.
 2. Selecting standard preset **`MT2`** ($C \approx 0.04995$) degrades into an arbitrary decimal `0.0499` without memory that the operator chose Morse Taper #2.
 3. Entering **`13 TPI`** ($P = 25.4 / 13 \approx 1.953846...$) degrades into `13.0003 TPI` or `12.9998 TPI`.
 
-### 2. The Solution: First-Class Intent Domain
+### 2. Architectural Solution
 The controller maintains an authoritative `IntentState` structure in firmware (`MachineModel.h`) and telemetry broadcasts (`I.*` / `M.*`):
-* `I.tpPreset`: Selected preset ID (`-1` for custom, $\ge 0$ for Morse, Brown & Sharpe, R8, etc.).
-* `I.tpMode`: Authoring mode (`0` = 1:K Ratio, `1` = Angle degrees, `2` = Preset).
-* `I.tpVal`: Exact user-entered scalar (e.g. `19.0` for 1:19, `1.79` for 1.79°).
-* `I.thFmt`: Thread format (`0` = Metric mm, `1` = Imperial TPI, `2` = Imperial Inch).
-* `I.thPitch`: Exact user-entered pitch (e.g. `13.0` for 13 TPI, `1.500` for 1.5mm).
-
-### 3. End-to-End Pipeline Guarantees
-1. **Keypad & Wizard Entry**: `kpConfirm` and `commitThreadSettingsFromWiz` capture exact numeric user input into `state.threadTpiVal`, `state.gearPitchZ_tpi`, `state.gearTaperAuthVal`, and `state.gearTaperPresetIdx`.
-2. **Wire Dispatch**: Commands explicitly serialize intent:
-   * `CMD.feedTpi=13`
-   * `CMD.feedMm=1.5`
-   * `CMD.taperPreset=2,1.4306,20.0196`
-   * `CMD.taperRatio=19`
-   * `CMD.taperAngle=1.79`
-4. **Render-Time Formatters**: Formatters in `nanoels-formatters.js` render primary strings directly from the intent registers, and calculate companions on demand, guaranteeing zero decimal flicker and zero cumulative drift.
+* Operator authoring inputs (`thFmt`, `thPitch`, `tpMode`, `tpVal`, `tpPreset`) are captured as exact typed intent.
+* Wire commands serialize explicit intent (`CMD.feedTpi=13`, `CMD.taperRatio=19`, `CMD.taperPreset=...`).
+* Render-time formatters display primary strings directly from intent registers, guaranteeing zero decimal jitter and zero cumulative drift.
 
 ---
 
 ## 32. Multi-Client WebSocket Server Architecture & Shop-Hardened Resilience
 
-### 1. Heterogeneous Channel Routing (`/canonical`, `/grbl`, `/dro`)
-Different clients require different wire protocols, but runtime packet parsing introduces CPU and latency overhead:
-* **HTTP Upgrade URL Routing**:
-  * `ws://<ip>:81/` or `ws://<ip>:81/canonical` $\rightarrow$ `CHANNEL_CANONICAL`: Full 4-domain semantic state (`K.*`, `I.*`, `C.*`, `P.*`) for the rich Web UI and companion touchscreens.
-  * `ws://<ip>:81/grbl` $\rightarrow$ `CHANNEL_GRBL`: Emits `<Idle|WPos:...|FS:...>` format compatible with standard CNC senders (Universal Gcode Sender, CNCjs).
-  * `ws://<ip>:81/dro` $\rightarrow$ `CHANNEL_DRO`: Emits lightweight coordinate stream (`K.zDu`, `K.xDu`, `K.rpm`) for minimal wireless digital readouts.
-* **Zero Runtime Packet Overhead**: Routing is established once during the WebSocket handshake (`WStype_CONNECTED`). Subscriptions do not require dynamic parsing or filtering per frame.
-* **Active Channel Masking**: Channels without active client connections are never serialized, burning zero CPU cycles.
+> **Authoritative Specification:** For the complete WebSocket server implementation, URL endpoint routing, rate clamping, and unicast transaction queues, see [`ELS_CLIENT_ARCHITECTURE.md#5-multi-client-websocket-server-architecture`](./ELS_CLIENT_ARCHITECTURE.md#5-multi-client-websocket-server-architecture).
 
-### 2. Change-Driven Telemetry & Quiescence
-* **Zero Minimum Rate**: When the lathe is idle and spindle is stationary, the telemetry engine enters total quiescence (`changedDomains == DOMAIN_NONE`). No packets are emitted, conserving radio bandwidth and CPU cycles.
-* **35 ms Rate-Ceiling Clamp (~28 Hz)**: Rapid motion (2,500+ RPM spindle rotation or fast carriage rapids) is clamped to a clean 35 ms minimum interval, preventing TCP buffer bloat and ensuring Core 1 stepper timing (`taskMoveZ`, `taskMoveX`) is never starved.
-
-### 3. Dedicated `SettingsService` & Unicast Transaction Protocol
-* **Strict Unicast Request/Reply**: Commands (`SETTINGS.get`, `SETTINGS.set`, `?sysinfo`, `?get`) reply exclusively to the requesting client ID via `webSocket.sendTXT(clientId, ...)` rather than broadcasting to all connected screens.
-* **Settings Bounds Checking & NVS Storage**:
-  * Handled by dedicated [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h) and [`SettingsService.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp).
-  * Validates leadscrew pitches, microsteps, encoder PPR, backlash compensation, and DRO scale sources against strict physical bounds.
-  * Mutates `Preferences` in non-volatile flash and sets `DOMAIN_PROPERTIES` dirty so all canonical clients synchronize automatically.
-* **Client-Side Promise Transactions**:
-  * [`nanoels-service.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-service.js) implements `getSettings(key)` and `setSetting(key, val)` using asynchronous Promise queues matching incoming `SETTING.<key>`, `OK:SETTINGS.<key>`, or `ERR:SETTINGS.<key>`.
-  * [`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js) mirrors this interface for seamless offline UI development.
-
-### 4. Multi-Core Concurrency & Recursive Mutex (`wsMutex`)
-* Stepper pulse generation runs on Core 1 at maximum FreeRTOS priority with zero network mutex acquisition.
-* Display updates (`taskDisplay`) and WebSocket networking (`taskWiFi`) run on Core 0.
-* WebSocket loop and transmission are protected by a FreeRTOS recursive mutex (`xSemaphoreCreateRecursiveMutex`), preventing memory corruption across tasks while safely allowing synchronous command replies from inside the socket loop without self-deadlock.
-
-### 5. Shop-Hardened Transient Network & EMI Resilience
-* **2.5s Disconnect Debounce**: Machine shop electrical noise (spindle VFD switching, contactors) can cause brief WiFi frame drops. The firmware debounces disconnections for 2,500 ms before resetting the connection, avoiding false alarms and socket teardowns.
-* **Exponential Backoff Reconnect (3s $\rightarrow$ 30s)**: On genuine AP disconnect, retries back off exponentially (3s $\rightarrow$ 6s $\rightarrow$ 12s $\rightarrow$ 24s $\rightarrow$ 30s max cap) to prevent radio saturation.
-* **Nextion Hardware Status Integration**: Physical Nextion display widget `t3` displays real-time countdown status (`"WiFi retry (Xs)"`) and recovers to `"See <ip>"` upon reconnection.
+### 1. Heterogeneous Channel Routing & Rate Clamping
+* **URL Routing**: Clients subscribe to `/canonical`, `/grbl`, or `/dro` during the WebSocket handshake with zero per-packet runtime parsing overhead.
+* **Quiescence & Rate Clamping**: Telemetry enters total quiescence when idle, while rapid motion is clamped to a clean 35 ms rate ceiling (~28 Hz) to protect Core 1 stepper timing.
+* **Unicast Settings Transactions**: `SETTINGS.*` queries and mutations reply exclusively to the requesting client endpoint via dedicated promise queues.
+* **EMI Resilience**: Includes 2.5-second disconnect debounce and exponential backoff to handle electrical noise from machine shop VFDs and contactors.
 
 ---
 
-## 33. Point-in-Time Atomic Snapshot Architecture & Firmware Separation
+## 33. Point-in-Time Atomic Snapshot Architecture & Temporal Concurrency
 
-### 1. Architectural Layer Separation
-To maintain modularity and prevent torn state across concurrent interrupt-driven motion tasks, the firmware strictly enforces a 3-tier unidirectional pipeline:
+> **Authoritative Specification:** For the complete multi-core concurrency model, FreeRTOS task assignment, atomic snapshot guarantees, and C++ snapshot signatures, see [`ELS_CORE_STATE_MODEL.md#5-temporal-isolation--concurrency-architecture`](./ELS_CORE_STATE_MODEL.md#5-temporal-isolation--concurrency-architecture).
 
-```text
-Low-Level Hardware Layer (Input.cpp, Motion.cpp, Axis.cpp)
-  - Raw pulse counts (spindlePos, PCNT), step timings, microstepping, leadscrew pitches
-       │
-       ▼
-Canonical Machine Domain Model (MachineModel.h / MachineModel.cpp)
-  - The SOLE conversion boundary translating raw pulses to canonical physical units:
-    • turns: float revolutions
-    • angle: float degrees [0.0°, 360.0°)
-    • zDu / xDu: long deci-microns
-    • dupr: long deci-microns / rev
-       │
-       ▼
-Client Adapters & Serializers (RichClientAdapter, ClientEndpoint)
-  - Zero hardware calculations (no encoder PPR, screw pitch, or pulse math)
-  - Pure serializers consuming `const MachineModel&`
-  - Emit wire formats (WebSocket key-value, GRBL status string, DRO coordinates)
-       │
-       ▼
-Presentation Layer (Web UI Prototype / Companion Screens)
-  - Pure presentation clients consuming canonical values and applying operator preferences (mm/in, dia/rad)
-```
-
-### 2. Elimination of Torn State & Redundant Captures
-* **Atomic State Snapshots**: Push telemetry (`dispatchTelemetry`) and pull queries (`?get=`, `CMD.get=`, on-connect hydration) capture `MachineModel` exactly **once** at instant $t_0$.
-* **Forwarding Model References**: `RichClientAdapter::buildTelemetry(const MachineModel& model, uint8_t domainMask)` receives the captured snapshot directly. This eliminates the hazard of torn data where properties sampled microseconds apart could reflect different spindle rotations or axis steps.
-* **Legacy Boundary Isolation**: The physical Nextion display implementation in `Display.cpp` / `DisplayModel.cpp` remains isolated in its legacy baseline to guarantee screen stability until it is formally migrated as a unified `ClientEndpoint`.
-
-### 3. Web UI & Prototype Synchronization Fixes
-* **Continuous Spindle Kinematics**:
-  * `KinematicsState::turns` and `KinematicsState::angle` upgraded to single-precision floating point.
-  * Web UI and emulator format fractional turns (`String(k.turns, 2)`) and full 360° spindle angles without decimal stutter or artificial multiplier bugs.
-* **Robust Soft-Limit Lifecycle**:
-  * Unset limits (`LONG_MAX`, `LONG_MIN`) are sanitized across `nanoels-formatters.js`, `nanoels-service.js`, and `nanoels-state.js`, completely preventing `NaN` displays.
-  * Limit clear button dispatches explicit `clearAxisLimit` commands, resolving 0-toggle ambiguities.
-  * Keypad direct coordinate and limit entry dispatches canonical `setAxisPosDu` and `setAxisLimitDu` commands.
+### 1. Elimination of Torn State
+To eliminate torn state across concurrent interrupt-driven motion tasks, push telemetry and pull queries capture `MachineModel` exactly once at instant $t_0$. Pure serializers consume `const MachineModel&` snapshots without querying live hardware registers, preventing race conditions between Core 1 stepper pulses and Core 0 communications.
 
 ---
 
 ## 34. In-Memory Cached Settings Registry & Dynamic Hardware Deadbands
 
-### 1. The Dynamic Default vs. User Override Architecture
-Settings that rely on machine physics (e.g. spindle angle and turns deadbands for telemetry change detection) must avoid "default pollution" in persistent storage:
-* **Sparse NVS Flash Storage**: NVS flash strictly stores explicit user overrides. If the operator has not modified a setting, the key does not exist in NVS flash.
-* **Auto-Derivation**: When a setting is unset (`std::nullopt`), firmware computes its sane value dynamically from live hardware parameters:
-  * **Spindle Angle Deadband**: $\Delta\theta_{\text{auto}} = \frac{360.0^\circ}{\text{ENCODER\_STEPS\_FLOAT}}$ (e.g. $0.300^\circ$ for 600 PPR, $0.180^\circ$ for 1000 PPR).
-  * **Spindle Turns Deadband**: $\Delta\text{turns}_{\text{auto}} = \frac{2.0}{\text{ENCODER\_STEPS\_FLOAT}}$ ($\approx 2$ encoder pulses to reject edge dithering).
-* **Firmware Update Immunity**: If a future firmware update tunes or sharpens the derivation formula, any user on "Auto" automatically benefits on next boot without requiring database migrations or flash wipes.
+> **Authoritative Specification:** For the 4-tier properties hierarchy, sparse NVS storage contract, and dynamic hardware deadband derivation, see [`ELS_CORE_STATE_MODEL.md#3-four-tier-properties-model`](./ELS_CORE_STATE_MODEL.md#3-four-tier-properties-model) and [`ELS_CORE_STATE_MODEL.md#6-change-detection--dynamic-deadbands`](./ELS_CORE_STATE_MODEL.md#6-change-detection--dynamic-deadbands).
 
-### 2. High-Performance In-Memory Cache (Write-Through)
-* **Boot-Time Hydration**: [`SettingsService::init()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp) loads user overrides once from flash into fast RAM.
-* **Nanosecond Loop Access**: Core motion and change-detection loops (`MachineModel::detectChangedDomains`) query in-memory RAM getters (`SettingsService::getDeadbandAngle()`), causing zero SPI flash bus contention or flash wear.
-* **Clean Reset to Auto**: Sending `"auto"` or `"default"` via `SETTINGS.set` calls `pref.remove()` and resets the memory cache to `std::nullopt`, cleanly reverting to the derived default.
-
-### 3. Consolidated Operational Setters
-Centralized mutation methods in `SettingsService` (note that Diameter/Radius mode is not stored here, as it is decoupled to client presentation adapters):
-* `setAbsoluteMode(bool abs)`
-* `setZDroMode(bool zdro)`
-* `setXDroMode(bool xdro)`
-* `setMeasure(int m)`
-* `setJogStepDu(long du)`
-* `setDeadbandAngle(const char* val)`
-* `setDeadbandTurns(const char* val)`
-
-Each method updates the live in-memory state, persists to NVS flash, and sets `machineStatusForcePublish = true` to broadcast updated properties to all registered clients immediately.
+### 1. Dynamic Defaults vs. User Overrides
+* **Sparse NVS Storage**: NVS flash strictly stores explicit user overrides. If a key is unset (`std::nullopt`), firmware computes its sane value dynamically from live hardware parameters (e.g. encoder PPR).
+* **RAM Write-Through Cache**: Boot-time hydration loads overrides into fast RAM. High-frequency loops read in-memory getters with zero flash bus contention.
+* **Clean Revert**: Sending `"auto"` removes the key from flash and resets memory cache to the dynamically derived default.
 
 ---
 
 ## 35. Lathe Digital Twin Visualizer & Interactive Spindle Simulation Architecture
 
-### 1. Architectural Motivation & Presentation Decoupling
-During UI development and cycle testing, verifying controller behavior (such as thread synchronization, multi-pass turning, soft-limit clamping, and taper angle kinematics) is challenging without physical lathe access. 
+> **Authoritative Specifications:**
+> * For lathe machine profiles, geometry, and capabilities: see [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
+> * For visualizer integration, SVG modules, and spindle simulation: see [`clients/web_ui/OVERVIEW.md#7-digital-twin-visualizer-integration`](./clients/web_ui/OVERVIEW.md#7-digital-twin-visualizer-integration).
 
-To address this, a dedicated **Lathe Digital Twin Visualizer** was created in [`UI_redesign/prototype/dev/`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/):
-* **Zero Production Footprint**: The visualizer is entirely self-contained inside the `dev/` directory. It is included via two clean `<script>` tags at the bottom of the prototype HTML and can be removed with zero residue when preparing production firmware deployments for LittleFS.
-* **Passive Reactive Observation via Event Ingestion**: The visualizer is a pure subscriber to `window.nanoelsClient`'s `'telemetry'` event. It ingests authoritative canonical deci-micron positions (`zDu`, `xDu`), limits (`zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`), spindle state (`rpm`, `turns`, `angle`), and operation mode (`mode`) directly from incoming change packets. Physical SVG translation and the HUD readout (`.lv-ro`) operate strictly in pure physical millimeters derived from canonical deci-microns (`zDu / 10000.0`, `xDu / 10000.0` radius), completely immune to all client-side presentation settings (`mm/in`, `dia/rad`, or spindle card view cycling). It works identically whether connected to the local browser emulator or physical ESP32 controller over WebSocket.
-* **Non-Obtrusive Page Docking**: Positioned directly below the primary controller face and above the external developer console, preserving full view and touch ergonomics of all primary controls.
-
----
-
-### 2. Extensible Lathe Profiles & Hardware Modules
-
-> **Authoritative Specification:** Machine dimensions, coordinate conventions, hardware capability bitmasks, and standard preset models are specified authoritatively in [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md). The visualizer consumes these canonical profiles via [`lathe-viz-profiles.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz-profiles.js).
-
-The visualizer supports modular SVG rendering layers ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)) that adapt automatically based on the active lathe profile's `capabilities`:
-
-* **Pluggable Visualizer Modules (`LatheVizModules`)**:
-  Each visual component registers via `{ id, when(profile), build(ctx) -> { update(state, dynamics) } }`:
-  - `bed`: Lathe bed casting, ground prism ways, swing boundary, and centerline.
-  - `headstock`: Headstock casting, 3-jaw chuck, reference stock cylinder, and rotating spindle gauge.
-  - `tailstock`: Tailstock body and quill.
-  - `carriage`: Longitudinal saddle, transverse cross-slide, and cutting tool insert.
-  - `zMotor`: Leadscrew and stepper motor attached to bed foot.
-  - `limits`: Real-time amber Z-limit lines (`Z L`, `Z R`) and green X-limit lines (`X ↑`, `X ↓`) rendered strictly when limits are configured.
-  - `mpg`: Carriage-mounted handwheels that rotate dynamically based on axis displacement and illuminate during active motion (rendered only when `profile.z.mpg` or `profile.x.mpg` is true).
-  - `joystick`: Real-time deflection indicator showing tool motion vector and velocity (rendered only when `profile.joystick` is true).
-
----
-
-### 3. Spindle Encoder Input Simulation (`CMD.spindleSim` & `CMD.spindleSimTurn`)
-For operations like threading, electronic gearing, and taper turning, the controller's motion engine relies on spindle rotation. Simply faking an RPM readout in the UI is insufficient; the motion controller must receive actual spindle counts to drive synchronized leadscrew steps.
-
-1. **Raw Pulse Stream Override**:
-   * Implemented in core firmware ([`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp)) and mirrored in offline emulator ([`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js)).
-   * When simulation mode is enabled via `CMD.spindleSim=1,<rpm>`, [`processSpindleCounter()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp) substitutes the physical ESP32 PCNT pulse counter with a high-resolution synthetic pulse generator (`spindleSimNextDelta()`).
-   * **Zero Downstream Modification**: Downstream kinematics, including `spindlePos`, `spindlePosGlobal`, backlash compensation, threading sync modulo (`spindlePosSync`), and RPM interval calculations (`spindleEncTimeDiffBulk`), run completely unmodified.
-
-2. **Dual-Mode Operation**:
-   * **Motorized Spindle**: Continuously generates pulses corresponding to signed target RPM ($\pm 0\text{ to }2000\text{ RPM}$) with CW/CCW direction toggle.
-   * **Manual Hand Rotation**:
-     - Dedicated touch chips for incremental nudges: $\pm 1^\circ$, $\pm 10^\circ$, $\pm 90^\circ$, $+1\text{ rev}$ (`CMD.spindleSimTurn=<deg>`).
-     - Interactive headstock gauge: Clicking and dragging the chuck circle rotates the spindle in real-time.
-     - **Stepper-Safe Rate Limiting**: Manual degree steps are queued and smoothly dispatched at $\le 180^\circ/\text{s}$ ($\le 30\text{ RPM}$ equivalent) to ensure connected physical stepper motors do not stall from instantaneous step impulses.
-
-3. **Safety Watchdogs & Capability Negotiation**:
-   * **2000 ms Heartbeat Failsafe**: The UI sends `CMD.spindleSim` every $500\text{ ms}$ while active. If the browser closes or communication drops for $\ge 2000\text{ ms}$, firmware automatically disengages the override, resets PCNT counters, and safely returns control to the physical spindle encoder.
-   * **Compile-Time Guard**: Controlled by `#define ENABLE_SPINDLE_SIM 1` in [`Input.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Input.h); can be set to `0` to compile out entirely from release builds.
-   * **Feature Discovery Negotiation**:
-     - Firmware advertises capabilities in `?sysinfo` via `SYSINFO.features=spindleSim`.
-     - The visualizer UI validates `features.includes('spindleSim')` before allowing the override checkbox to be checked, completely preventing command injection into older firmware releases.
-   * **High-Visibility Status Alert**: Renders an alert badge (`OVERRIDE ACTIVE - REAL CONTROLLER`) with pulsing indicator when active on physical hardware.
+### 1. Modular Simulation Architecture
+The Lathe Digital Twin Visualizer operates as a zero-production-footprint, passive subscriber to canonical telemetry events:
+* **Presentation Invariance**: Visualizer kinematics operate strictly in canonical millimeters derived from pure deci-microns (`zDu / 10000.0`, `xDu / 10000.0` radius), immune to client presentation settings.
+* **Spindle Simulation (`CMD.spindleSim`)**: Overrides ESP32 PCNT pulse counters with synthetic pulses for testing electronic gearing, threading sync, and taper kinematics without running a physical spindle. Includes a 2000 ms heartbeat watchdog failsafe.
 
 ---
 
 ## 36. Canonical Command Protocol & UI Client Translation Layer
 
-> **Authoritative Specification:** The 3-tier architecture (`ITransport` $\rightarrow$ `ICommandTranslator` $\rightarrow$ `CommandDispatcher`), the comprehensive 40-row UI Interaction Ledger, and the complete command dictionary (`CMD.*`, `SETTINGS.*`) are maintained authoritatively in [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> **Authoritative Specifications:**
+> * For the 3-tier client pipeline and canonical command dictionary: see [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md).
+> * For the comprehensive 40-row UI Interaction Ledger: see [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md).
 
-### 1. Architectural Summary & Layer Decoupling
-To achieve rock-solid reliability across diverse client types (capacitive touch Web UI, wireless DRO tablets, CNC senders, and the legacy Nextion UART display), the system enforces strict separation of concerns across three distinct architectural layers:
-* **Transport Layer (`ITransport`):** Manages raw byte streams and sockets (`WebSocketsServer` on port 81, hardware `Serial1` UART). Agnostic to command syntax and kinematics.
-* **Client Translation Layer (`ICommandTranslator`):** Sanitizes and decodes client-specific framing into internal canonical calls (`CMD.*`, `SETTINGS.*`), preventing malformed framing from touching kinematic code.
-* **Core Motion Dispatcher (`CommandDispatcher`):** Single point of truth for canonical machine commands. Dispatches sanitized parameters directly to hardware registers (`Axis`, `Motion`, `SettingsService`).
-* **Legacy Physical Nextion UART (`Input.cpp`):** Nextion messages bypass WebSocket transport and translation layers completely, calling internal motion methods directly with 100% backward compatibility.
-
-### 2. UI Interaction Ledger & Protocol Reference
-The complete interaction mapping (D-pad discrete steps, continuous hold-to-jog, chamfer diagonals, runstack start/stop, DRO zeroing, soft limits, pitch/taper keypad submit, and spindle simulation) is documented in [`ELS_CLIENT_ARCHITECTURE.md#9-comprehensive-ui-interaction-to-wire-command-ledger`](./ELS_CLIENT_ARCHITECTURE.md#9-comprehensive-ui-interaction-to-wire-command-ledger).
+### 1. Layer Decoupling & Safety
+The system decouples physical transports (`ITransport`) and wire framing from the core motion dispatcher (`CommandDispatcher`). All UI interactions (D-pad stepping, continuous jog, zeroing, keypad commit, runstack controls) map to canonical wire commands documented authoritatively in [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md).
 
 ---
 
-## 37. Web UI Prototype Implementation: Alpine.js Reactive Boundary & Script Bootstrap
+## 37. Web UI Prototype Implementation & Reactive Boundary Contract
 
-### 37.1 The Surgical Boundary Rationale (Zero Lag, 100% Visual & Functional Fidelity)
-During the prototype evolution, a full rewrite of the 4,000-line `lathe-controller.js` into Alpine.js was proposed and rejected based on three core production constraints:
-1. **Zero Display/Processing Lag:** The host UI runs on embedded touchscreens, tablets, and low-power hardware. Re-rendering massive complex DOM trees via framework diffing introduces latency spikes and frame drops during high-frequency change-driven telemetry pushes.
-2. **100% Visual Fidelity:** All custom modal overlays, multi-stage wizards (Threading, Turning, Facing), and dynamic center decks are already finalized and visually perfected in Vanilla JS.
-3. **Hardware Touch Timing Preservation:** Critical safety gestures (such as the D-pad jog timing: tap `<300ms` for discrete single step vs. hold `>300ms` for continuous jog) require tight pointer event loop control without framework synthetic event overhead.
+> **Authoritative Specification:** For the complete Alpine.js reactive boundary contract, unidirectional update rules, diameter-to-radius input translation math, and script bootstrap order, see [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md).
 
-**The Boundary Contract:**
-* **Alpine.js (`$store.machine`) Exclusively Owns:**
-  - The live DRO column: Spindle card (`spindleDisplay`, `spindleUnit`), Z coordinate (`zDisplay`), X coordinate (`xDisplay`, `dia`), and limit countdown chips (`zLeftDisplay`, `zRightDisplay`, `xUpDisplay`, `xDownDisplay`).
-  - Top bar status badges and system units (`statusStr`, `unitStr`).
-* **Vanilla JS (`lathe-controller.js`) Exclusively Owns:**
-  - Modal overlays (`#axisOverlay`, `#limitOverlay`, `#settingsOverlay`, `#docOverlay`).
-  - Multi-stage machining wizards and dynamic center action decks.
-  - The numeric calculator keypad.
-  - Sub-300ms hardware jog touch timing and continuous jog repeat loops.
-* **The Strict Unidirectional Rule:**
-  - When an operator performs an action (e.g. tapping ZERO on an axis, entering a coordinate in the keypad, setting a limit), Vanilla JS emits the canonical command to the controller via `nanoelsClient` and updates the Alpine store (`Alpine.store('machine').xDu = ...`).
-  - **Vanilla JS NEVER imperatively writes strings to the DRO DOM elements** (`#zValue`, `#xValText`, `#repBadge`, `#spindleValue`, `#unitToggle`, limit chips). All DRO presentation updates flow strictly through Alpine's reactive getters.
-
----
-
-### 37.2 Kinematic Ground Truth (Radius) vs. Client Presentation (Diameter)
-* **Core Kinematics are Pure Radius:** In official NanoELS motion firmware (`h5.ino`), all kinematic coordinates, leadscrew calculations, and step counts operate purely in deci-microns (`du`) of carriage radius (`xDu`). The core controller has no native concept of diameter mode.
-* **Diameter is a Client-Side Translation:** The choice between Diameter (`Ø DIA`) and Radius (`R RAD`) display is strictly a client presentation and input convenience. 
-* **Zero Network Traffic on Toggle:** Clicking `#repBadge` toggles `$store.machine.dia` locally. **No command is emitted across serial/WebSocket to the controller.**
-* **Input Translation:** When an operator enters an X coordinate or limit distance in Diameter mode:
-  - The client UI converts the entered diameter to canonical radius: $\text{radiusMm} = \text{diameterMm} / 2.0$.
-  - The client converts radius to deci-microns: $\text{xDu} = \text{round}(\text{radiusMm} \times 10000.0)$.
-  - The client transmits canonical radius `CMD.axisPosDu=X,<xDu>` to the controller and updates `$store.machine.xDu = xDu`.
-  - The controller motion engine is never exposed to diameter scaling.
-
----
-
-### 37.3 Deterministic Bootstrap & Stock Vendor Integrity
-* **Untouched Stock Vendor Code:** The third-party `alpine.min.js` bundle is preserved strictly as stock upstream code with zero local modifications or forks.
-* **Script Dependency Order:**
-  ```html
-  <script src="nanoels-presets.js"></script>
-  <script src="nanoels-formatters.js"></script>
-  <script src="nanoels-emulator.js"></script>
-  <script src="nanoels-service.js"></script>
-  <script src="nanoels-state.js"></script>
-  <script defer src="alpine.min.js"></script>
-  <script defer src="lathe-controller.js"></script>
-  ```
-  `nanoels-state.js` attaches an `alpine:init` event listener synchronously. When `alpine.min.js` executes (deferred), it dispatches `alpine:init`, synchronously registering `$store.machine` before Alpine walks the DOM. This guarantees zero initial expression evaluation errors and identical deterministic startup across `http://` and local file previews.
+### 1. The Surgical Boundary Contract
+* **Alpine.js (`$store.machine`) Exclusively Owns**: The live DRO column (`zDisplay`, `xDisplay`, `spindleDisplay`), limit chips, and topbar status badges.
+* **Vanilla JS (`lathe-controller.js`) Exclusively Owns**: Modal overlays, multi-stage wizards, keypad buffer, and sub-300ms hardware touch jog timing.
+* **The Strict Unidirectional Rule**: Vanilla JS dispatches wire commands and updates `$store.machine`; it **never** imperatively mutates DRO DOM strings.
 
 ---
 
@@ -1418,8 +1125,10 @@ During the prototype evolution, a full rewrite of the 4,000-line `lathe-controll
 
 All core architectural domains are decoupled and authoritatively specified in their respective companion documents:
 
-* **Core State Model, 4 Domains & Invariants:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md)
-* **Mode Lifecycle, Interfaces & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
+* **Core State Model, 4 Domains, Concurrency & Invariants:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md)
+* **Mode Lifecycle, Interfaces, FSM & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
 * **Lathe Hardware Geometry, Profiles & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
-* **Client Architecture, Protocols & Wire Ledgers:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
-* **Web UI Reference Implementation:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
+* **Generic Client Architecture, Pipeline & Wire Protocols:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
+* **Web UI Reference Implementation & Module Architecture:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
+* **Comprehensive Web UI Interaction-to-Wire Ledger:** [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)
+
