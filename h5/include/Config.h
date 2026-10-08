@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <driver/pulse_cnt.h>
+#include "LatheProfile.h"
 
 // Versioning
 #define SOFTWARE_VERSION 38
@@ -557,6 +558,12 @@ void applyDerivedMachineConfig();
 void normalizeMachineConfig();
 void loadMachineConfig();
 void saveMachineConfig();
+
+// Active Lathe Machine Profile (Tier 1 Architecture)
+extern LatheConfiguration activeMachineProfile;
+void loadMachineProfile();
+void saveMachineProfile();
+void printMachineProfileBanner();
 
 void setKeyboardConfigDefaults();
 const char* keyboardActionLabel(byte actionCode);

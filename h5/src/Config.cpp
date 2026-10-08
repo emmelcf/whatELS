@@ -3,6 +3,8 @@
 #include <LittleFS.h>
 #include "Debug.h"
 
+LatheConfiguration activeMachineProfile = {};
+
 // Variable Definitions
 int ENCODER_PPR = DEFAULT_ENCODER_PPR;
 int ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
@@ -371,6 +373,7 @@ void loadMachineConfig() {
   INVERT_JOYSTICK_BUTTON = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, INVERT_JOYSTICK_BUTTON);
   cfg.end();
   normalizeMachineConfig();
+  loadMachineProfile();
 }
 
 void saveMachineConfig() {
@@ -439,6 +442,142 @@ void saveMachineConfig() {
   cfg.putBool(CFG_INVERT_JOYSTICK_Y, INVERT_JOYSTICK_Y);
   cfg.putBool(CFG_INVERT_JOYSTICK_BUTTON, INVERT_JOYSTICK_BUTTON);
   cfg.end();
+  saveMachineProfile();
+}
+
+void printMachineProfileBanner() {
+  Serial.println("\n==================================================================");
+  Serial.printf(" NanoELS Machine Profile: %s (%s)\n", activeMachineProfile.profileId, activeMachineProfile.modelName);
+  Serial.printf(" Capabilities: 0x%08X\n", (unsigned int)activeMachineProfile.capabilities);
+  Serial.print(" Active Flags: [");
+  bool first = true;
+  for (uint32_t b = 0; b < 32; b++) {
+    uint32_t flag = 1UL << b;
+    if (activeMachineProfile.capabilities & flag) {
+      if (!first) Serial.print(", ");
+      Serial.print(getCapabilityName((LatheCapabilityFlags)flag));
+      first = false;
+    }
+  }
+  Serial.println("]");
+  Serial.printf(" Spindle: Native PPR=%u, Ratio=%.2f -> Effective PPR=%.1f\n",
+                activeMachineProfile.spindle.encoder.ppr,
+                activeMachineProfile.spindle.pulleyRatio,
+                activeMachineProfile.spindle.effectivePpr());
+  Serial.printf(" Z-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
+                activeMachineProfile.zAxis.leadscrewPitchMm,
+                activeMachineProfile.zAxis.leadscrewPitchDu(),
+                activeMachineProfile.zAxis.stepsPerMm,
+                MOTOR_STEPS_Z);
+  Serial.printf(" X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
+                activeMachineProfile.xAxis.leadscrewPitchMm,
+                activeMachineProfile.xAxis.leadscrewPitchDu(),
+                activeMachineProfile.xAxis.stepsPerMm,
+                MOTOR_STEPS_X);
+  Serial.println("==================================================================\n");
+}
+
+void loadMachineProfile() {
+  DEBUG_PRINTLN("loadMachineProfile: Checking NVS 'machine'...");
+  Preferences pref;
+  pref.begin("machine", false);
+
+  bool hasProfId = pref.isKey("prof_id");
+  bool hasCaps = pref.isKey("caps");
+
+  if (!hasProfId && !hasCaps) {
+    DEBUG_PRINTLN("loadMachineProfile: No machine profile in NVS. Loading ROM default (WM210V)...");
+    pref.end();
+    activeMachineProfile = getDefaultProfile();
+    saveMachineProfile();
+  } else {
+    DEBUG_PRINTLN("loadMachineProfile: Found profile in NVS. Loading...");
+    activeMachineProfile = getDefaultProfile(); // baseline for any unpersisted properties
+
+    String profId = pref.getString("prof_id", activeMachineProfile.profileId);
+    strncpy(activeMachineProfile.profileId, profId.c_str(), sizeof(activeMachineProfile.profileId) - 1);
+    activeMachineProfile.profileId[sizeof(activeMachineProfile.profileId) - 1] = '\0';
+
+    if (pref.isKey("model_name")) {
+      String modelName = pref.getString("model_name", activeMachineProfile.modelName);
+      strncpy(activeMachineProfile.modelName, modelName.c_str(), sizeof(activeMachineProfile.modelName) - 1);
+      activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
+    }
+
+    if (pref.isKey("caps")) {
+      activeMachineProfile.capabilities = pref.getUInt("caps");
+    }
+
+    if (pref.isKey("screw_z_du")) {
+      int32_t screwZDu = pref.getInt("screw_z_du");
+      activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
+    }
+
+    if (pref.isKey("mot_steps_z")) {
+      activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
+    }
+
+    if (pref.isKey("enc_ppr")) {
+      activeMachineProfile.spindle.encoder.ppr = pref.getUShort("enc_ppr");
+    }
+
+    if (pref.isKey("spindle_ratio")) {
+      activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
+    }
+
+    if (pref.isKey("has_dro_z")) {
+      activeMachineProfile.zAxis.hasDroScale = pref.getBool("has_dro_z");
+    }
+
+    if (pref.isKey("has_dro_x")) {
+      activeMachineProfile.xAxis.hasDroScale = pref.getBool("has_dro_x");
+    }
+
+    pref.end();
+  }
+
+  // Synchronize legacy globals for Core 1 compatibility
+  SCREW_Z_DU = activeMachineProfile.zAxis.leadscrewPitchDu();
+  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchMm;
+  if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
+    MOTOR_STEPS_Z = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
+    z.motorSteps = MOTOR_STEPS_Z;
+  }
+
+  SCREW_X_DU = activeMachineProfile.xAxis.leadscrewPitchDu();
+  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchMm;
+  if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
+    MOTOR_STEPS_X = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
+    x.motorSteps = MOTOR_STEPS_X;
+  }
+
+  ENCODER_PPR = (int)round(activeMachineProfile.spindle.effectivePpr());
+  ENCODER_STEPS_INT = ENCODER_PPR * 2;
+  ENCODER_STEPS_FLOAT = (float)(ENCODER_PPR * 2);
+  RPM_BULK = ENCODER_PPR * 2;
+
+  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale;
+  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale;
+
+  printMachineProfileBanner();
+}
+
+void saveMachineProfile() {
+  DEBUG_PRINTLN("saveMachineProfile: Persisting to NVS 'machine'...");
+  Preferences pref;
+  pref.begin("machine", false);
+
+  pref.putString("prof_id", activeMachineProfile.profileId);
+  pref.putString("model_name", activeMachineProfile.modelName);
+  pref.putUInt("caps", activeMachineProfile.capabilities);
+  pref.putInt("screw_z_du", (int32_t)activeMachineProfile.zAxis.leadscrewPitchDu());
+  pref.putFloat("mot_steps_z", activeMachineProfile.zAxis.stepsPerMm);
+  pref.putUShort("enc_ppr", activeMachineProfile.spindle.encoder.ppr);
+  pref.putFloat("spindle_ratio", activeMachineProfile.spindle.pulleyRatio);
+  pref.putBool("has_dro_z", activeMachineProfile.zAxis.hasDroScale);
+  pref.putBool("has_dro_x", activeMachineProfile.xAxis.hasDroScale);
+
+  pref.end();
 }
 
 void setKeyboardConfigDefaults() {
