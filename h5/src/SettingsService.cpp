@@ -24,14 +24,33 @@ void SettingsService::init() {
   } else {
     _deadbandAngle = std::nullopt;
   }
-  if (pref.isKey("db_turns")) {
-    _deadbandTurns = pref.getFloat("db_turns");
-  } else {
-    _deadbandTurns = std::nullopt;
+  if (pref.isKey("sdm")) {
+    spindleDisplayMode = pref.getInt("sdm", 0);
   }
   pref.end();
 
   syncLegacyGlobals();
+
+  // Synchronize Intent settings from active/restored globals
+  long absDu = abs(dupr);
+  if (measure == MEASURE_METRIC) {
+    currentThreadSetting.format = THREAD_METRIC;
+    currentThreadSetting.authorPitch = absDu / 10000.0f;
+  } else if (measure == MEASURE_TPI) {
+    currentThreadSetting.format = THREAD_TPI;
+    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
+  } else {
+    currentThreadSetting.format = THREAD_INCH;
+    currentThreadSetting.authorPitch = absDu / 254000.0f;
+  }
+  currentThreadSetting.dupr = dupr;
+
+  if (coneRatio > 0.0f) {
+    currentTaperSetting.modeType = TAPER_RATIO;
+    currentTaperSetting.authorVal = 1.0f / coneRatio;
+    currentTaperSetting.coneRatio = coneRatio;
+    currentTaperSetting.presetId = 0;
+  }
 }
 
 const LatheConfiguration& SettingsService::getActiveProfile() {

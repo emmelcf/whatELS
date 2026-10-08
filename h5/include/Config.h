@@ -540,10 +540,6 @@ extern bool isDiameterMode;
 extern bool isAbsoluteMode;
 extern int spindleDisplayMode;
 extern bool spindleValColorGreen;
-extern bool savedZDisplayModeDRO;
-extern bool savedXDisplayModeDRO;
-extern bool savedIsDiameterMode;
-extern bool savedIsAbsoluteMode;
 extern float xScaleIncrementalOffset;
 extern float zScaleIncrementalOffset;
 

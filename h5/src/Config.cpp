@@ -92,10 +92,6 @@ bool isDiameterMode = true;
 bool isAbsoluteMode = true;
 int spindleDisplayMode = 0; // 0=RPM, 1=Turns, 2=Angle
 bool spindleValColorGreen = false;
-bool savedZDisplayModeDRO = false;
-bool savedXDisplayModeDRO = false;
-bool savedIsDiameterMode = true;
-bool savedIsAbsoluteMode = true;
 float xScaleIncrementalOffset = 0.0f;
 float zScaleIncrementalOffset = 0.0f;
 NumpadMode numpadEntryMode = PITCH;

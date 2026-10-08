@@ -102,36 +102,28 @@ extern bool nextIsOn;
 extern bool nextIsOnFlag;
 
 extern long dupr;
-extern long savedDupr;
 extern long nextDupr;
 extern bool nextDuprFlag;
 
 extern int starts;
-extern int savedStarts;
 extern int nextStarts;
 extern bool nextStartsFlag;
 
 extern volatile int mode;
 extern int nextMode;
 extern bool nextModeFlag;
-extern int savedMode;
 
 extern int measure;
-extern int savedMeasure;
 
 extern long moveStep;
-extern long savedMoveStep;
 
 extern float coneRatio;
-extern float savedConeRatio;
 extern float nextConeRatio;
 extern bool nextConeRatioFlag;
 
 extern int turnPasses;
-extern int savedTurnPasses;
 
 extern bool auxForward;
-extern bool savedAuxForward;
 
 extern long spindlePos;
 extern long spindlePosAvg;

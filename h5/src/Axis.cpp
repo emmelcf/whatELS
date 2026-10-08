@@ -30,36 +30,28 @@ bool nextIsOn = false;
 bool nextIsOnFlag = false;
 
 long dupr = 0;
-long savedDupr = 0;
 long nextDupr = 0;
 bool nextDuprFlag = false;
 
 int starts = 1;
-int savedStarts = 0;
 int nextStarts = 1;
 bool nextStartsFlag = false;
 
 volatile int mode = -1;
 int nextMode = 0;
 bool nextModeFlag = false;
-int savedMode = -1;
 
 int measure = MEASURE_METRIC;
-int savedMeasure = MEASURE_METRIC;
 
 long moveStep = 0;
-long savedMoveStep = 0;
 
 float coneRatio = 1;
-float savedConeRatio = 0;
 float nextConeRatio = 0;
 bool nextConeRatioFlag = false;
 
 int turnPasses = 3;
-int savedTurnPasses = 0;
 
 bool auxForward = true;
-bool savedAuxForward = false;
 
 long spindlePos = 0;
 long spindlePosAvg = 0;

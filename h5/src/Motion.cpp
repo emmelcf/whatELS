@@ -140,16 +140,11 @@ void setDupr(long value) {
 }
 
 void setStarts(int value) {
-  nextStarts = value;
-  nextStartsFlag = true;
+  SettingsService::setStarts(value);
 }
 
 void setTurnPasses(int value) {
-  if (isOn) {
-    beep();
-  } else {
-    turnPasses = value;
-  }
+  SettingsService::setTurnPasses(value);
 }
 
 void setConeRatio(float value) {
@@ -289,8 +284,7 @@ void applyRightStop(Axis* a) {
 }
 
 void setModeFromTask(int value) {
-  nextMode = value;
-  nextModeFlag = true;
+  SettingsService::requestMode(value);
 }
 
 void setModeFromLoop(int value) {

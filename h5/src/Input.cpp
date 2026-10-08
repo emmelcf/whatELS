@@ -298,7 +298,7 @@ bool processNumpadResult(int keyCode) {
 
   if (keyCode == B_STEP) {
     if (newDu > 0) {
-      moveStep = newDu;
+      SettingsService::setJogStepDu(newDu);
     } else {
       beep();
     }
@@ -1224,7 +1224,7 @@ void processKeypadEvent() {
 
   // Setup wizard navigation.
   if (isPress && setupIndex == 2 && (keyCode == B_LEFT || keyCode == B_RIGHT)) {
-    auxForward = !auxForward;
+    SettingsService::setAuxForward(!SettingsService::getAuxForward());
   } else if (isPress && mode == MODE_GCODE && setupIndex == 1 && (keyCode == B_UP || keyCode == B_DOWN)) {
     if (gcodeProgramIndex > 0 && keyCode == B_UP) gcodeProgramIndex--;
     else if (gcodeProgramIndex == 0 && gcodeProgramCount > 0 && keyCode == B_UP) gcodeProgramIndex = gcodeProgramCount - 1;
@@ -1351,19 +1351,19 @@ void processKeypadEvent() {
     setModeFromUi(MODE_THREAD, eventFromNextion);
   } else if (keyCode == B_X_TOGGLE_DRO) {
 #if HAS_DRO_X
-    SettingsService::setXDroMode(!xDisplayModeDRO);
+    SettingsService::setXDroMode(!SettingsService::isXDroMode());
     beep();
 #endif
   } else if (keyCode == B_Z_TOGGLE_DRO) {
 #if HAS_DRO_Z
-    SettingsService::setZDroMode(!zDisplayModeDRO);
+    SettingsService::setZDroMode(!SettingsService::isZDroMode());
     beep();
 #endif
   } else if (keyCode == B_DIA_RAD) {
-    SettingsService::setDiameterMode(!isDiameterMode);
+    SettingsService::setDiameterMode(!SettingsService::isDiameterMode());
     beep();
   } else if (keyCode == B_ABS_INC) {
-    SettingsService::setAbsoluteMode(!isAbsoluteMode);
+    SettingsService::setAbsoluteMode(!SettingsService::isAbsoluteMode());
     beep();
   } else if (keyCode == B_SPINDLE_UNITS) {
     spindleValColorGreen = !spindleValColorGreen;
