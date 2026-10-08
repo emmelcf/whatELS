@@ -3,6 +3,18 @@
 #include <Arduino.h>
 #include <optional>
 #include "LatheProfile.h"
+#include "Motion.h"
+
+enum AxisId : uint8_t {
+  AXIS_Z = 0,
+  AXIS_X = 1,
+  AXIS_Y = 2
+};
+
+enum LimitDirection : uint8_t {
+  LIMIT_LEFT_OR_UP    = 0, // Z left (chuck) or X infeed (up)
+  LIMIT_RIGHT_OR_DOWN = 1  // Z right (tailstock) or X retract (down)
+};
 
 /**
  * @file SettingsService.h
@@ -33,6 +45,59 @@ public:
   static bool reset(const char* key, String* reply = nullptr);
   static bool resetGroup(const char* group, String* reply = nullptr);
 
+  // --- Tier 2 / Category 1: Travel Stops & Boundaries ---
+  static bool setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu);
+  static bool clearAxisLimit(AxisId axis, LimitDirection dir);
+  static long getAxisLimitDu(AxisId axis, LimitDirection dir);
+
+  // --- Tier 2 / Category 2: Pitch, Threading & Feed Intent ---
+  static bool setFeedrateDupr(long dupr, bool preserveDirection = true);
+  static bool setFeedrateMm(float pitchMm, bool preserveDirection = true);
+  static bool setFeedrateTpi(float tpi, bool preserveDirection = true);
+  static bool setFeedrateInch(float pitchInch, bool preserveDirection = true);
+  static bool reverseFeedDirection();
+  static ThreadSetting getThreadSetting();
+  static long getJogStepDu();
+  static bool cycleJogStep();
+
+  // --- Tier 2 / Category 3: Cycle & Geometry Parameters ---
+  static bool setStarts(int starts);
+  static int getStarts();
+  static bool setTurnPasses(int passes);
+  static int getTurnPasses();
+  static bool setTaperRatio(float ratioK);
+  static bool setTaperAngle(float angleDeg);
+  static bool setTaperPreset(int presetIdx, float angleDeg, float ratioVal);
+  static TaperSetting getTaperSetting();
+  static bool setAuxForward(bool fwd);
+  static bool getAuxForward();
+
+  // --- Tier 2 / Category 4: Display & Unit Modes ---
+  static bool setMeasure(int m);
+  static int getMeasure();
+  static bool setDiameterMode(bool dia);
+  static bool isDiameterMode();
+  static bool setAbsoluteMode(bool abs);
+  static bool isAbsoluteMode();
+  static bool setZDroMode(bool zdro);
+  static bool isZDroMode();
+  static bool setXDroMode(bool xdro);
+  static bool isXDroMode();
+  static bool setSpindleDisplayMode(int mode);
+  static int getSpindleDisplayMode();
+
+  // --- Tier 2 / Category 5: Operational Mode & Motion State ---
+  static bool requestMode(int targetMode);
+  static int getMode();
+  static bool requestIsOn(bool on);
+  static bool isOn();
+  static void triggerEstop(int estopCode);
+  static void clearEstop();
+  static int getEstopCode();
+
+  // Core 1 Synchronization Hook (Called from main.cpp / motion loop)
+  static void applyCore1PendingLatches();
+
   // --- Tier 3: Telemetry Deadband Getters ---
   static float getDeadbandAngle();
   static bool isDeadbandAngleAuto();
@@ -40,11 +105,6 @@ public:
   static bool isDeadbandTurnsAuto();
 
   // --- Typed Mutators (Updates RAM & writes sparse override to NVS) ---
-  static bool setDiameterMode(bool dia);
-  static bool setAbsoluteMode(bool abs);
-  static bool setZDroMode(bool zdro);
-  static bool setXDroMode(bool xdro);
-  static bool setMeasure(int m);
   static bool setJogStepDu(long du);
   static bool setDeadbandAngle(const char* val);
   static bool setDeadbandTurns(const char* val);

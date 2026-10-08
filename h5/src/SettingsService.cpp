@@ -3,6 +3,7 @@
 #include "Axis.h"
 #include "Motion.h"
 #include "Input.h"
+#include "Display.h"
 #include "WebServerModule.h"
 #include "Debug.h"
 #include <Preferences.h>
@@ -264,44 +265,419 @@ bool SettingsService::setSpindleRatio(float ratio) {
 }
 
 
-bool SettingsService::setDiameterMode(bool dia) {
-  isDiameterMode = dia;
+static Axis* getAxisById(AxisId axis) {
+  switch (axis) {
+    case AXIS_Z: return &z;
+    case AXIS_X: return &x;
+    case AXIS_Y: return &y;
+    default:     return nullptr;
+  }
+}
+
+// --- Tier 2 / Category 1: Travel Stops & Boundaries ---
+bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
+  if (limitDu == LONG_MAX || limitDu == LONG_MIN) {
+    return clearAxisLimit(axis, dir);
+  }
+  Axis* a = getAxisById(axis);
+  if (!a) return false;
+
+  long stopSteps = duToSteps(a, limitDu) - a->originPos;
+  const char* prefKey = nullptr;
+  if (axis == AXIS_Z) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Z : PREF_RIGHT_STOP_Z;
+  } else if (axis == AXIS_X) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_X : PREF_RIGHT_STOP_X;
+  } else if (axis == AXIS_Y) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Y : PREF_RIGHT_STOP_Y;
+  }
+
+  if (dir == LIMIT_LEFT_OR_UP) {
+    a->nextLeftStop = stopSteps;
+    a->nextLeftStopFlag = true;
+  } else {
+    a->nextRightStop = stopSteps;
+    a->nextRightStopFlag = true;
+  }
+
+  if (prefKey) {
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
+    pref.putLong(prefKey, stopSteps);
+    pref.end();
+  }
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
+  Axis* a = getAxisById(axis);
+  if (!a) return false;
+
+  long stopSteps = (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
+  const char* prefKey = nullptr;
+  if (axis == AXIS_Z) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Z : PREF_RIGHT_STOP_Z;
+  } else if (axis == AXIS_X) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_X : PREF_RIGHT_STOP_X;
+  } else if (axis == AXIS_Y) {
+    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Y : PREF_RIGHT_STOP_Y;
+  }
+
+  if (dir == LIMIT_LEFT_OR_UP) {
+    a->nextLeftStop = LONG_MAX;
+    a->nextLeftStopFlag = true;
+  } else {
+    a->nextRightStop = LONG_MIN;
+    a->nextRightStopFlag = true;
+  }
+
+  if (prefKey) {
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
+    pref.putLong(prefKey, stopSteps);
+    pref.end();
+  }
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+long SettingsService::getAxisLimitDu(AxisId axis, LimitDirection dir) {
+  Axis* a = getAxisById(axis);
+  if (!a) return (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
+
+  if (dir == LIMIT_LEFT_OR_UP) {
+    long stop = a->nextLeftStopFlag ? a->nextLeftStop : a->leftStop;
+    if (stop == LONG_MAX) return LONG_MAX;
+    return stepsToDu(a, stop + a->originPos);
+  } else {
+    long stop = a->nextRightStopFlag ? a->nextRightStop : a->rightStop;
+    if (stop == LONG_MIN) return LONG_MIN;
+    return stepsToDu(a, stop + a->originPos);
+  }
+}
+
+// --- Tier 2 / Category 2: Pitch, Threading & Feed Intent ---
+bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duprVal = -abs(duprVal);
+  }
+  long absDu = abs(duprVal);
+  if (measure == MEASURE_METRIC) {
+    currentThreadSetting.format = THREAD_METRIC;
+    currentThreadSetting.authorPitch = absDu / 10000.0f;
+  } else if (measure == MEASURE_TPI) {
+    currentThreadSetting.format = THREAD_TPI;
+    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
+  } else {
+    currentThreadSetting.format = THREAD_INCH;
+    currentThreadSetting.authorPitch = absDu / 254000.0f;
+  }
+  currentThreadSetting.dupr = duprVal;
+  nextDupr = duprVal;
+  nextDuprFlag = true;
+
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
-  pref.putBool("dia", isDiameterMode);
+  pref.putLong(PREF_DUPR, duprVal);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
+  if (pitchMm <= 0.0f) return false;
+  long duVal = (long)round(pitchMm * 10000.0f);
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_METRIC;
+  currentThreadSetting.authorPitch = pitchMm;
+  currentThreadSetting.dupr = duVal;
+  nextDupr = duVal;
+  nextDuprFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putLong(PREF_DUPR, duVal);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
+  if (tpi <= 0.0f) return false;
+  long duVal = (long)round(254000.0 / (double)tpi);
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_TPI;
+  currentThreadSetting.authorPitch = tpi;
+  currentThreadSetting.dupr = duVal;
+  nextDupr = duVal;
+  nextDuprFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putLong(PREF_DUPR, duVal);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::setFeedrateInch(float pitchInch, bool preserveDirection) {
+  if (pitchInch <= 0.0f) return false;
+  long duVal = (long)round(pitchInch * 254000.0f);
+  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+    duVal = -abs(duVal);
+  }
+  currentThreadSetting.format = THREAD_INCH;
+  currentThreadSetting.authorPitch = pitchInch;
+  currentThreadSetting.dupr = duVal;
+  nextDupr = duVal;
+  nextDuprFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putLong(PREF_DUPR, duVal);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::reverseFeedDirection() {
+  long current = nextDuprFlag ? nextDupr : dupr;
+  long reversed = -current;
+  currentThreadSetting.dupr = reversed;
+  nextDupr = reversed;
+  nextDuprFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putLong(PREF_DUPR, reversed);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+ThreadSetting SettingsService::getThreadSetting() {
+  return currentThreadSetting;
+}
+
+long SettingsService::getJogStepDu() {
+  return moveStep;
+}
+
+bool SettingsService::cycleJogStep() {
+  long nextStep = MOVE_STEP_1;
+  if (measure == MEASURE_METRIC) {
+    if (moveStep == MOVE_STEP_1) {
+      nextStep = MOVE_STEP_2;
+    } else if (moveStep == MOVE_STEP_2) {
+      nextStep = MOVE_STEP_3;
+    } else {
+      nextStep = MOVE_STEP_1;
+    }
+  } else {
+    if (moveStep == MOVE_STEP_IMP_1) {
+      nextStep = MOVE_STEP_IMP_2;
+    } else if (moveStep == MOVE_STEP_IMP_2) {
+      nextStep = MOVE_STEP_IMP_3;
+    } else {
+      nextStep = MOVE_STEP_IMP_1;
+    }
+  }
+  return setJogStepDu(nextStep);
+}
+
+// --- Tier 2 / Category 3: Cycle & Geometry Parameters ---
+bool SettingsService::setStarts(int startsVal) {
+  if (startsVal < 1 || startsVal > STARTS_MAX) return false;
+  nextStarts = startsVal;
+  nextStartsFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putInt(PREF_STARTS, startsVal);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+int SettingsService::getStarts() {
+  return nextStartsFlag ? nextStarts : starts;
+}
+
+bool SettingsService::setTurnPasses(int passes) {
+  if (passes < 1 || passes > 99) return false;
+  if (isOn) {
+    beep();
+    return false;
+  }
+  turnPasses = passes;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putInt(PREF_TURN_PASSES, passes);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+int SettingsService::getTurnPasses() {
+  return turnPasses;
+}
+
+bool SettingsService::setTaperRatio(float ratioK) {
+  if (ratioK <= 0.0f) return false;
+  float cone = 1.0f / ratioK;
+  currentTaperSetting.modeType = TAPER_RATIO;
+  currentTaperSetting.authorVal = ratioK;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = 0;
+  nextConeRatio = cone;
+  nextConeRatioFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putFloat(PREF_CONE_RATIO, cone);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::setTaperAngle(float angleDeg) {
+  if (angleDeg <= -90.0f || angleDeg >= 90.0f) return false;
+  float rad = angleDeg * 0.017453292519943295f;
+  float cone = 2.0f * tanf(rad);
+  currentTaperSetting.modeType = TAPER_ANGLE;
+  currentTaperSetting.authorVal = angleDeg;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = 0;
+  nextConeRatio = cone;
+  nextConeRatioFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putFloat(PREF_CONE_RATIO, cone);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::setTaperPreset(int presetIdx, float angleDeg, float ratioVal) {
+  float cone = 0.0f;
+  float author = 0.0f;
+  if (ratioVal > 0.0f) {
+    cone = 1.0f / ratioVal;
+    author = ratioVal;
+  } else {
+    float rad = angleDeg * 0.017453292519943295f;
+    cone = 2.0f * tanf(rad);
+    author = angleDeg;
+  }
+  currentTaperSetting.modeType = TAPER_PRESET;
+  currentTaperSetting.authorVal = author;
+  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.presetId = presetIdx;
+  nextConeRatio = cone;
+  nextConeRatioFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putFloat(PREF_CONE_RATIO, cone);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+TaperSetting SettingsService::getTaperSetting() {
+  return currentTaperSetting;
+}
+
+bool SettingsService::setAuxForward(bool fwd) {
+  auxForward = fwd;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putBool(PREF_AUX_FORWARD, fwd);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::getAuxForward() {
+  return auxForward;
+}
+
+// --- Tier 2 / Category 4: Display & Unit Modes ---
+bool SettingsService::setDiameterMode(bool dia) {
+  ::isDiameterMode = dia;
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putBool(PREF_DIAMETER_MODE, ::isDiameterMode);
   pref.end();
   machineStatusForcePublish = true;
   return true;
 }
 
+bool SettingsService::isDiameterMode() {
+  return ::isDiameterMode;
+}
+
 bool SettingsService::setAbsoluteMode(bool abs) {
-  isAbsoluteMode = abs;
+  ::isAbsoluteMode = abs;
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
-  pref.putBool("abs", isAbsoluteMode);
+  pref.putBool(PREF_ABSOLUTE_MODE, ::isAbsoluteMode);
   pref.end();
   machineStatusForcePublish = true;
   return true;
+}
+
+bool SettingsService::isAbsoluteMode() {
+  return ::isAbsoluteMode;
 }
 
 bool SettingsService::setZDroMode(bool zdro) {
   zDisplayModeDRO = zdro;
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
-  pref.putBool("zdro", zDisplayModeDRO);
+  pref.putBool(PREF_Z_DRO_MODE, zDisplayModeDRO);
   pref.end();
   machineStatusForcePublish = true;
   return true;
+}
+
+bool SettingsService::isZDroMode() {
+  return zDisplayModeDRO;
 }
 
 bool SettingsService::setXDroMode(bool xdro) {
   xDisplayModeDRO = xdro;
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
-  pref.putBool("xdro", xDisplayModeDRO);
+  pref.putBool(PREF_X_DRO_MODE, xDisplayModeDRO);
   pref.end();
   machineStatusForcePublish = true;
   return true;
+}
+
+bool SettingsService::isXDroMode() {
+  return xDisplayModeDRO;
 }
 
 bool SettingsService::setMeasure(int m) {
@@ -313,6 +689,79 @@ bool SettingsService::setMeasure(int m) {
   pref.end();
   machineStatusForcePublish = true;
   return true;
+}
+
+int SettingsService::getMeasure() {
+  return measure;
+}
+
+bool SettingsService::setSpindleDisplayMode(int m) {
+  if (m < 0 || m > 2) return false;
+  spindleDisplayMode = m;
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putInt("sdm", m);
+  pref.end();
+  machineStatusForcePublish = true;
+  return true;
+}
+
+int SettingsService::getSpindleDisplayMode() {
+  return spindleDisplayMode;
+}
+
+// --- Tier 2 / Category 5: Operational Mode & Motion State ---
+bool SettingsService::requestMode(int targetMode) {
+  if (targetMode < MODE_NORMAL || targetMode > MODE_SLOT) {
+    if (targetMode == MODE_Y && ACTIVE_Y) {
+      // Allowed
+    } else {
+      return false;
+    }
+  }
+  nextMode = targetMode;
+  nextModeFlag = true;
+
+  Preferences pref;
+  pref.begin(PREF_NAMESPACE, false);
+  pref.putInt(PREF_MODE, targetMode);
+  pref.end();
+
+  machineStatusForcePublish = true;
+  return true;
+}
+
+int SettingsService::getMode() {
+  return nextModeFlag ? nextMode : mode;
+}
+
+bool SettingsService::requestIsOn(bool on) {
+  nextIsOn = on;
+  nextIsOnFlag = true;
+  machineStatusForcePublish = true;
+  return true;
+}
+
+bool SettingsService::isOn() {
+  return nextIsOnFlag ? nextIsOn : ::isOn;
+}
+
+void SettingsService::triggerEstop(int estopCode) {
+  setEmergencyStop(estopCode);
+  machineStatusForcePublish = true;
+}
+
+void SettingsService::clearEstop() {
+  emergencyStop = ESTOP_NONE;
+  machineStatusForcePublish = true;
+}
+
+int SettingsService::getEstopCode() {
+  return emergencyStop;
+}
+
+void SettingsService::applyCore1PendingLatches() {
+  applySettings();
 }
 
 bool SettingsService::setJogStepDu(long du) {

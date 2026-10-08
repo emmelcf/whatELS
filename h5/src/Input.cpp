@@ -6,6 +6,7 @@
 #include "Motion.h"
 #include "WebServerModule.h"
 #include "UsbKeyboard.h"
+#include "SettingsService.h"
 
 // Keypad & button states
 bool buttonLeftPressed = false;
@@ -995,8 +996,7 @@ void adjustPitch(bool plus) {
       if (newDupr != currentDupr && newDupr < DUPR_MAX && newDupr > -DUPR_MAX) {
         setFeedrateTpi((float)abs(tpi), false);
         if (newDupr < 0) {
-          setDupr(newDupr);
-          currentThreadSetting.dupr = newDupr;
+          setFeedrateDupr(newDupr, false);
         }
       }
     }
@@ -1059,19 +1059,19 @@ void buttonOnOffPress(bool on) {
       } else {
         gcodeProgram += '\n';
         resetGcodeState();
-        setIsOnFromTask(true);
+        SettingsService::requestIsOn(true);
       }
     }
   } else {
-    setIsOnFromTask(on);
+    SettingsService::requestIsOn(on);
   }
 }
 
 static void buttonMultistartPress() {
   if (millis() - multistartPressMillis > 3000 && starts > 1) {
-    setStarts(1);
+    SettingsService::setStarts(1);
   } else {
-    setStarts(starts + 1);
+    SettingsService::setStarts(starts + 1);
   }
   multistartPressMillis = millis();
 }
@@ -1085,39 +1085,22 @@ static void buttonRightStopPress(Axis* a) {
 }
 
 static void buttonDisplayPress() {
-  spindleDisplayMode++;
-  if (spindleDisplayMode > 2) {
-    spindleDisplayMode = 0;
-  }
+  int next = spindleDisplayMode + 1;
+  if (next > 2) next = 0;
+  SettingsService::setSpindleDisplayMode(next);
 }
 
 static void buttonMoveStepPress() {
-  if (measure == MEASURE_METRIC) {
-    if (moveStep == MOVE_STEP_1) {
-      moveStep = MOVE_STEP_2;
-    } else if (moveStep == MOVE_STEP_2) {
-      moveStep = MOVE_STEP_3;
-    } else {
-      moveStep = MOVE_STEP_1;
-    }
-  } else {
-    if (moveStep == MOVE_STEP_IMP_1) {
-      moveStep = MOVE_STEP_IMP_2;
-    } else if (moveStep == MOVE_STEP_IMP_2) {
-      moveStep = MOVE_STEP_IMP_3;
-    } else {
-      moveStep = MOVE_STEP_IMP_1;
-    }
-  }
+  SettingsService::cycleJogStep();
 }
 
 static void buttonMeasurePress() {
   if (measure == MEASURE_METRIC) {
-    setMeasure(MEASURE_INCH);
+    SettingsService::setMeasure(MEASURE_INCH);
   } else if (measure == MEASURE_INCH) {
-    setMeasure(MEASURE_TPI);
+    SettingsService::setMeasure(MEASURE_TPI);
   } else {
-    setMeasure(MEASURE_METRIC);
+    SettingsService::setMeasure(MEASURE_METRIC);
   }
 }
 
@@ -1368,19 +1351,19 @@ void processKeypadEvent() {
     setModeFromUi(MODE_THREAD, eventFromNextion);
   } else if (keyCode == B_X_TOGGLE_DRO) {
 #if HAS_DRO_X
-    xDisplayModeDRO = !xDisplayModeDRO;
+    SettingsService::setXDroMode(!xDisplayModeDRO);
     beep();
 #endif
   } else if (keyCode == B_Z_TOGGLE_DRO) {
 #if HAS_DRO_Z
-    zDisplayModeDRO = !zDisplayModeDRO;
+    SettingsService::setZDroMode(!zDisplayModeDRO);
     beep();
 #endif
   } else if (keyCode == B_DIA_RAD) {
-    isDiameterMode = !isDiameterMode;
+    SettingsService::setDiameterMode(!isDiameterMode);
     beep();
   } else if (keyCode == B_ABS_INC) {
-    isAbsoluteMode = !isAbsoluteMode;
+    SettingsService::setAbsoluteMode(!isAbsoluteMode);
     beep();
   } else if (keyCode == B_SPINDLE_UNITS) {
     spindleValColorGreen = !spindleValColorGreen;

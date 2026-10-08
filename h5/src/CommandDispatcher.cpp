@@ -143,7 +143,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.jogStepDu=<du>
     if (cmdLen >= 10 && strncmp(cmd, "jogStepDu=", 10) == 0) {
       long val = atol(cmd + 10);
-      if (val > 0) moveStep = val;
+      if (val > 0) SettingsService::setJogStepDu(val);
       return true;
     }
     // CMD.jogHold=<axis>,<semanticDir>
@@ -304,13 +304,13 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.on=<0|1>
     if (cmdLen >= 3 && strncmp(cmd, "on=", 3) == 0) {
       int on = atoi(cmd + 3);
-      setIsOnFromTask(on != 0);
+      SettingsService::requestIsOn(on != 0);
       return true;
     }
     // CMD.measure=<0|1|2>
     if (cmdLen >= 8 && strncmp(cmd, "measure=", 8) == 0) {
       int meas = atoi(cmd + 8);
-      setMeasure(meas);
+      SettingsService::setMeasure(meas);
       return true;
     }
   }

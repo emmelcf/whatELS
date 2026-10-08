@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "Display.h"
 #include "WebServerModule.h"
+#include "SettingsService.h"
 
 // Automation and Operation State
 long setupIndex = 0;
@@ -1328,116 +1329,43 @@ void taskGcode(void *param) {
 // --- Kinematic Core Domain APIs ---
 
 bool setFeedrateDupr(long duprVal, bool preserveDirection) {
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
-    duprVal = -abs(duprVal);
-  }
-  long absDu = abs(duprVal);
-  if (measure == MEASURE_METRIC) {
-    currentThreadSetting.format = THREAD_METRIC;
-    currentThreadSetting.authorPitch = absDu / 10000.0f;
-  } else if (measure == MEASURE_TPI) {
-    currentThreadSetting.format = THREAD_TPI;
-    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
-  } else {
-    currentThreadSetting.format = THREAD_INCH;
-    currentThreadSetting.authorPitch = absDu / 254000.0f;
-  }
-  currentThreadSetting.dupr = duprVal;
-  setDupr(duprVal);
-  return true;
+  return SettingsService::setFeedrateDupr(duprVal, preserveDirection);
 }
 
 bool setFeedrateMm(float pitchMm, bool preserveDirection) {
-  long duVal = (long)round(pitchMm * 10000.0f);
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
-    duVal = -abs(duVal);
-  }
-  currentThreadSetting.format = THREAD_METRIC;
-  currentThreadSetting.authorPitch = pitchMm;
-  currentThreadSetting.dupr = duVal;
-  setDupr(duVal);
-  return true;
+  return SettingsService::setFeedrateMm(pitchMm, preserveDirection);
 }
 
 bool setFeedrateTpi(float tpi, bool preserveDirection) {
-  long duVal = (tpi > 0.0f) ? (long)round(254000.0 / (double)tpi) : 0;
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
-    duVal = -abs(duVal);
-  }
-  currentThreadSetting.format = THREAD_TPI;
-  currentThreadSetting.authorPitch = tpi;
-  currentThreadSetting.dupr = duVal;
-  setDupr(duVal);
-  return true;
+  return SettingsService::setFeedrateTpi(tpi, preserveDirection);
 }
 
 bool setFeedrateInch(float pitchInch, bool preserveDirection) {
-  long duVal = (long)round(pitchInch * 254000.0f);
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
-    duVal = -abs(duVal);
-  }
-  currentThreadSetting.format = THREAD_INCH;
-  currentThreadSetting.authorPitch = pitchInch;
-  currentThreadSetting.dupr = duVal;
-  setDupr(duVal);
-  return true;
+  return SettingsService::setFeedrateInch(pitchInch, preserveDirection);
 }
 
 bool reverseFeedDirection() {
-  long current = nextDuprFlag ? nextDupr : dupr;
-  long reversed = -current;
-  setDupr(reversed);
-  currentThreadSetting.dupr = reversed;
-  return true;
+  return SettingsService::reverseFeedDirection();
 }
 
 ThreadSetting getThreadSetting() {
-  return currentThreadSetting;
+  return SettingsService::getThreadSetting();
 }
 
 bool setTaperRatio(float ratioK) {
-  if (ratioK <= 0.0f) return false;
-  float cone = 1.0f / ratioK;
-  currentTaperSetting.modeType = TAPER_RATIO;
-  currentTaperSetting.authorVal = ratioK;
-  currentTaperSetting.coneRatio = cone;
-  currentTaperSetting.presetId = 0;
-  setConeRatio(cone);
-  return true;
+  return SettingsService::setTaperRatio(ratioK);
 }
 
 bool setTaperAngle(float angleDeg) {
-  float rad = angleDeg * 0.017453292519943295f;
-  float cone = 2.0f * tanf(rad);
-  currentTaperSetting.modeType = TAPER_ANGLE;
-  currentTaperSetting.authorVal = angleDeg;
-  currentTaperSetting.coneRatio = cone;
-  currentTaperSetting.presetId = 0;
-  setConeRatio(cone);
-  return true;
+  return SettingsService::setTaperAngle(angleDeg);
 }
 
 bool setTaperPreset(int presetIdx, float angleDeg, float ratioVal) {
-  float cone = 0.0f;
-  float author = 0.0f;
-  if (ratioVal > 0.0f) {
-    cone = 1.0f / ratioVal;
-    author = ratioVal;
-  } else {
-    float rad = angleDeg * 0.017453292519943295f;
-    cone = 2.0f * tanf(rad);
-    author = angleDeg;
-  }
-  currentTaperSetting.modeType = TAPER_PRESET;
-  currentTaperSetting.authorVal = author;
-  currentTaperSetting.coneRatio = cone;
-  currentTaperSetting.presetId = presetIdx;
-  setConeRatio(cone);
-  return true;
+  return SettingsService::setTaperPreset(presetIdx, angleDeg, ratioVal);
 }
 
 TaperSetting getTaperSetting() {
-  return currentTaperSetting;
+  return SettingsService::getTaperSetting();
 }
 
 bool setAxisZero(Axis* a) {
@@ -1455,28 +1383,20 @@ bool setAxisPositionDu(Axis* a, long posDu) {
 
 bool setAxisLimitDu(Axis* a, bool isLeftOrUp, long limitDu) {
   if (!a) return false;
-  long stopSteps = duToSteps(a, limitDu) - a->originPos;
-  if (isLeftOrUp) {
-    setLeftStop(a, stopSteps);
-  } else {
-    setRightStop(a, stopSteps);
-  }
-  return true;
+  AxisId axisId = (a == &x) ? AXIS_X : ((a == &y) ? AXIS_Y : AXIS_Z);
+  LimitDirection dir = isLeftOrUp ? LIMIT_LEFT_OR_UP : LIMIT_RIGHT_OR_DOWN;
+  return SettingsService::setAxisLimitDu(axisId, dir, limitDu);
 }
 
 bool clearAxisLimit(Axis* a, bool isLeftOrUp) {
   if (!a) return false;
-  if (isLeftOrUp) {
-    setLeftStop(a, LONG_MAX);
-  } else {
-    setRightStop(a, LONG_MIN);
-  }
-  return true;
+  AxisId axisId = (a == &x) ? AXIS_X : ((a == &y) ? AXIS_Y : AXIS_Z);
+  LimitDirection dir = isLeftOrUp ? LIMIT_LEFT_OR_UP : LIMIT_RIGHT_OR_DOWN;
+  return SettingsService::clearAxisLimit(axisId, dir);
 }
 
 bool setOperatingMode(int newMode) {
-  setModeFromUi(newMode, false);
-  return true;
+  return SettingsService::requestMode(newMode);
 }
 
 bool setFeedStepDu(long stepDu) {
