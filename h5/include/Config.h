@@ -19,16 +19,6 @@
 #define WIFI_CONFIG_NAMESPACE "h5wifi"
 #define KEYBOARD_CONFIG_VERSION 1
 #define KEYBOARD_CONFIG_NAMESPACE "h5keys"
-#define MACHINE_PROFILE_VERSION 1
-#define MACHINE_PROFILE_NAMESPACE "machine"
-
-#include "LatheProfile.h"
-extern LatheConfiguration activeMachineProfile;
-
-void setMachineProfileDefaults();
-void loadMachineProfile();
-void saveMachineProfile();
-bool setMachineProfilePreset(const char* slug);
 
 #define TIMER_FREQ 1000000 // 1MHz async timer frequency
 

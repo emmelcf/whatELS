@@ -54,6 +54,8 @@ struct CycleState {
 };
 
 struct MachineProperties {
+  uint32_t capabilities;
+  char presetId[16];
   int measure;
   bool isDiameterMode;
   bool isAbsoluteMode;

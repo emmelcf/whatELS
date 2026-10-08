@@ -72,6 +72,10 @@ CycleState MachineModel::captureCycle() {
 
 MachineProperties MachineModel::captureProperties() {
   MachineProperties p = {};
+  const LatheConfiguration& profile = SettingsService::getActiveProfile();
+  p.capabilities = profile.capabilities;
+  strncpy(p.presetId, profile.profileId, sizeof(p.presetId) - 1);
+  p.presetId[sizeof(p.presetId) - 1] = '\0';
   p.measure = measure;
   p.isDiameterMode = isDiameterMode;
   p.isAbsoluteMode = isAbsoluteMode;

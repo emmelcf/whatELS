@@ -124,6 +124,8 @@ The Core State Model partitions machine state into four independent, cohesive do
 | mode, on, estop   | feedStepDu        |                | screwXDu       |
 | zDis, xDis, yDis  | jogStepDu         |                | motorStepsZ/X  |
 | dupr, nextDupr    | feedRev           |                | encoderPpr     |
+|                   |                   |                | capabilities   |
+|                   |                   |                | presetId       |
 +-------------------+-------------------+----------------+----------------+
 ```
 
@@ -228,6 +230,8 @@ struct CycleState {
 #### Domain 'P': Machine Properties
 ```cpp
 struct MachineProperties {
+  uint32_t capabilities;     // LatheCapabilityFlags bitmask (CAP_SPINDLE_*, CAP_MOTOR_*, CAP_DRO_*)
+  char  presetId[16];       // Active lathe profile preset slug (e.g. "wm210v_dual")
   int   measure;            // 0: Metric (mm), 1: Imperial (in)
   bool  isDiameterMode;     // Legacy display flag (decoupled to client in modern architecture)
   bool  isAbsoluteMode;     // True for absolute machine coords, false for incremental DRO

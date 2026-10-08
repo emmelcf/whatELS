@@ -45,6 +45,10 @@ static void serializeCycle(String* out, const CycleState& c) {
 }
 
 static void serializeProperties(String* out, const MachineProperties& p) {
+  char hexBuf[16];
+  snprintf(hexBuf, sizeof(hexBuf), "0x%08X", (unsigned int)p.capabilities);
+  *out += "P.caps=" + String(hexBuf) + "\n";
+  *out += "P.preset=" + String(p.presetId) + "\n";
   *out += "P.measure=" + String(p.measure) + "\n";
   *out += "P.dia=" + String(p.isDiameterMode ? 1 : 0) + "\n";
   *out += "P.abs=" + String(p.isAbsoluteMode ? 1 : 0) + "\n";

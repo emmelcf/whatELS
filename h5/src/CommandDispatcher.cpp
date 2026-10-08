@@ -49,7 +49,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     return true;
   }
 
-  // 2. Settings Namespace (SETTINGS.get / SETTINGS.set)
+  // 2. Settings Namespace (SETTINGS.get / SETTINGS.set / SETTINGS.reset / SETTINGS.preset)
   if (length >= 8 && strncasecmp(payload, "SETTINGS", 8) == 0) {
     const char* sub = payload + 8;
     if (*sub == '.') sub++;
@@ -58,6 +58,10 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       return SettingsService::get(key, reply);
     } else if (strncasecmp(sub, "set=", 4) == 0) {
       return SettingsService::set(sub + 4, reply);
+    } else if (strncasecmp(sub, "reset=", 6) == 0) {
+      return SettingsService::reset(sub + 6, reply);
+    } else if (strncasecmp(sub, "preset=", 7) == 0) {
+      return SettingsService::setPreset(sub + 7, reply);
     }
   }
 

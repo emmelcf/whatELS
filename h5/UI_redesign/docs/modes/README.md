@@ -32,13 +32,13 @@ To cleanly decouple physical motion logic from presentation while ensuring high 
 
 | Mode Name | Specification Document | Category | Motion Type | Primary Axis | Key Machine Capabilities Required |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Electronic Gearbox** | [`gearbox/SPECIFICATION.md`](./gearbox/SPECIFICATION.md) | Continuous Geared | Spindle-Synchronized or Time Async | $Z$ or $X$ | `CAP_SPINDLE_ENCODER`, `CAP_Z_STEPPER` |
-| **Threading** | [`threading/SPECIFICATION.md`](./threading/SPECIFICATION.md)<br>• [`WIZARD_WORKFLOW.md`](./threading/WIZARD_WORKFLOW.md) | Multi-Pass Cycle | Rigid Spindle Sync (Modulo Phase Lock) | $Z$ (sync) + $X$ (infeed) | `CAP_SPINDLE_ENCODER`, `CAP_Z_STEPPER` |
-| **Turning** | [`turning/SPECIFICATION.md`](./turning/SPECIFICATION.md) | Multi-Pass Cycle | Canned Longitudinal Turning Cycle | $Z$ (cut) + $X$ (DOC) | `CAP_Z_STEPPER`, `CAP_X_STEPPER` (or manual $X$) |
-| **Facing** | [`facing/SPECIFICATION.md`](./facing/SPECIFICATION.md) | Multi-Pass Cycle | Canned Transverse Facing Cycle | $X$ (cut) + $Z$ (DOC) | `CAP_X_STEPPER`, `CAP_Z_STEPPER` (or manual $Z$) |
-| **Taper & Chamfer** | [`taper/SPECIFICATION.md`](./taper/SPECIFICATION.md) | Coordinated Angled | Dual-Axis Synchronized Continuous / Multi-Pass | $Z + X$ Coordinated | `CAP_Z_STEPPER`, `CAP_X_STEPPER` |
-| **Cutoff / Parting** | [`cutoff/SPECIFICATION.md`](./cutoff/SPECIFICATION.md) | Specialized Cycle | Controlled Transverse Plunge | $X$ Cross-Slide | `CAP_X_STEPPER` |
-| **Slotting / Keyway** | [`slotting/SPECIFICATION.md`](./slotting/SPECIFICATION.md) | Reciprocating Cycle | Linear Broaching Strokes | $Z$ Carriage | `CAP_Z_STEPPER`, `CAP_SPINDLE_INDEX` |
-| **Half-Spheres** | [`spheres/SPECIFICATION.md`](./spheres/SPECIFICATION.md) | Contouring Cycle | Coordinated Circular Interpolation | $Z + X$ Coordinated | `CAP_Z_STEPPER`, `CAP_X_STEPPER` |
-| **Joystick / Pendant** | [`joystick/SPECIFICATION.md`](./joystick/SPECIFICATION.md) | Manual Rapid/Feed | Deflection-Proportional Velocity | $Z$ and/or $X$ | `CAP_ANALOG_JOYSTICK` or `CAP_MPG_WHEEL` |
+| **Electronic Gearbox** | [`gearbox/SPECIFICATION.md`](./gearbox/SPECIFICATION.md) | Continuous Geared | Spindle-Synchronized or Time Async | $Z$ or $X$ | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
+| **Threading** | [`threading/SPECIFICATION.md`](./threading/SPECIFICATION.md)<br>• [`WIZARD_WORKFLOW.md`](./threading/WIZARD_WORKFLOW.md) | Multi-Pass Cycle | Rigid Spindle Sync (Modulo Phase Lock) | $Z$ (sync) + $X$ (infeed) | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
+| **Turning** | [`turning/SPECIFICATION.md`](./turning/SPECIFICATION.md) | Multi-Pass Cycle | Canned Longitudinal Turning Cycle | $Z$ (cut) + $X$ (DOC) | `CAP_MOTOR_Z`, `CAP_MOTOR_X` (or manual $X$) |
+| **Facing** | [`facing/SPECIFICATION.md`](./facing/SPECIFICATION.md) | Multi-Pass Cycle | Canned Transverse Facing Cycle | $X$ (cut) + $Z$ (DOC) | `CAP_MOTOR_X`, `CAP_MOTOR_Z` (or manual $Z$) |
+| **Taper & Chamfer** | [`taper/SPECIFICATION.md`](./taper/SPECIFICATION.md) | Coordinated Angled | Dual-Axis Synchronized Continuous / Multi-Pass | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
+| **Cutoff / Parting** | [`cutoff/SPECIFICATION.md`](./cutoff/SPECIFICATION.md) | Specialized Cycle | Controlled Transverse Plunge | $X$ Cross-Slide | `CAP_MOTOR_X` |
+| **Slotting / Keyway** | [`slotting/SPECIFICATION.md`](./slotting/SPECIFICATION.md) | Reciprocating Cycle | Linear Broaching Strokes | $Z$ Carriage | `CAP_MOTOR_Z`, `CAP_SPINDLE_INDEX` |
+| **Half-Spheres** | [`spheres/SPECIFICATION.md`](./spheres/SPECIFICATION.md) | Contouring Cycle | Coordinated Circular Interpolation | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
+| **Joystick / Pendant** | [`joystick/SPECIFICATION.md`](./joystick/SPECIFICATION.md) | Manual Rapid/Feed | Deflection-Proportional Velocity | $Z$ and/or $X$ | `CAP_JOYSTICK` or `CAP_MPG_Z` / `CAP_MPG_X` |
 

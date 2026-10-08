@@ -20,6 +20,8 @@ void setup() {
   DEBUG_PRINTLN("Loading configuration...");
   DEBUG_PRINTLN("Loading machine config...");
   loadMachineConfig();
+  DEBUG_PRINTLN("Initializing SettingsService & Machine Profile...");
+  SettingsService::init();
   DEBUG_PRINTLN("Loading wifi config...");
   loadWifiConfig();
   DEBUG_PRINTLN("Loading keyboard config...");
