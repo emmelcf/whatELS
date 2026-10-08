@@ -86,13 +86,13 @@ enum LatheCapabilityFlags : uint32_t {
     CAP_NONE            = 0,
     
     // Spindle Capabilities
-    CAP_SPINDLE_ENCODER = 1 << 0, // Quadrature pulse encoder fitted to spindle
-    CAP_SPINDLE_INDEX   = 1 << 1, // Single-pulse-per-revolution index optical switch
-    CAP_SPINDLE_VFD     = 1 << 2, // Spindle VFD speed & direction control (Modbus / 0-10V)
+    CAP_SPINDLE_ENCODER = 1 << 0, // Pulse encoder fitted to spindle (shaft or servo pass-through)
+    CAP_SPINDLE_INDEX   = 1 << 1, // Single-pulse-per-revolution index sensor (Z-channel / optical)
+    CAP_SPINDLE_VFD     = 1 << 2, // Spindle VFD / servo speed & direction control (Modbus / 0-10V)
     
     // Axis Motion Drivers
-    CAP_MOTOR_Z         = 1 << 3, // Z carriage leadscrew stepper/servo motor installed
-    CAP_MOTOR_X         = 1 << 4, // X cross-slide leadscrew stepper/servo motor installed
+    CAP_MOTOR_Z         = 1 << 3, // Z carriage leadscrew drive installed
+    CAP_MOTOR_X         = 1 << 4, // X cross-slide leadscrew drive installed
     CAP_MOTOR_Y         = 1 << 5, // Y milling/spindle auxiliary axis installed
     
     // Physical Linear DRO Scales (Glass / Magnetic)
@@ -100,70 +100,179 @@ enum LatheCapabilityFlags : uint32_t {
     CAP_DRO_X           = 1 << 7, // Optical linear scale attached to X cross-slide
     CAP_DRO_Y           = 1 << 8, // Optical linear scale attached to Y axis
     
-    // Physical Hardware Endstops / Limit Switches
-    CAP_LIMIT_SWITCH_Z  = 1 << 9, // Opto/micro-switch hardware limits on Z
-    CAP_LIMIT_SWITCH_X  = 1 << 10,// Opto/micro-switch hardware limits on X
+    // Physical & Sensorless Travel Limits
+    CAP_LIMIT_SWITCH_Z  = 1 << 9, // Physical microswitches / inductive limits on Z
+    CAP_LIMIT_SWITCH_X  = 1 << 10,// Physical microswitches / inductive limits on X
+    CAP_LIMIT_SENSORLESS= 1 << 11,// TMC StallGuard or Servo torque-sensing limits
     
-    // Operator Input Hardware
-    CAP_MPG_Z           = 1 << 11,// Manual Pulse Generator handwheel on Z
-    CAP_MPG_X           = 1 << 12,// Manual Pulse Generator handwheel on X
-    CAP_JOYSTICK        = 1 << 13,// 2-axis or 4-axis analog/contact joystick
-    CAP_TAILSTOCK       = 1 << 14 // Tailstock barrel position sensor / DRO fitted
+    // Operator Input & Pendants
+    CAP_MPG_DEDICATED   = 1 << 12,// Dedicated per-axis MPG handwheels on apron
+    CAP_MPG_SHARED      = 1 << 13,// Single shared MPG with axis selector (pendant / console)
+    CAP_JOYSTICK        = 1 << 14,// 2-axis or 4-axis analog/contact joystick
+    CAP_TAILSTOCK_DRO   = 1 << 15,// Tailstock barrel position scale fitted
+    
+    // Drive Safety Interlocks
+    CAP_DRIVE_ALARM_Z   = 1 << 16,// Closed-loop stepper / servo fault alarm pin on Z
+    CAP_DRIVE_ALARM_X   = 1 << 17 // Closed-loop stepper / servo fault alarm pin on X
 };
 ```
 
 ---
 
-### 3.2 Axis Hardware Configuration (`AxisHardwareConfig`)
+### 3.2 Reusable Encoder Configuration (`QuadratureEncoderConfig`)
 
-Each axis on the machine is described by its physical kinematics and limitations:
+Quadrature encoders are used identically across the spindle, optical linear scales (DRO), and manual pulse generator (MPG) handwheels. A single canonical struct models their properties:
 
 ```cpp
+struct QuadratureEncoderConfig {
+    uint16_t ppr;                  // Native pulses per revolution (or pulses/mm for linear scales)
+    bool     hasIndex;             // Single-pulse index signal (Z-channel)
+    bool     inverted;             // Direction phase invert (swap A/B)
+    uint8_t  filterBacklashPulses; // Noise / reversal filter deadband in counts
+};
+```
+
+---
+
+### 3.3 Axis Hardware Configuration (`AxisHardwareConfig`)
+
+Each axis on the machine is described by its physical kinematics, actuator drive technology, limits, and direct feedback:
+
+```cpp
+enum AxisDriveType : uint8_t {
+    DRIVE_NONE_MANUAL      = 0, // Unmotorized axis (manual leadscrew, DRO scale only)
+    DRIVE_GENERIC          = 1, // Minimal legacy-compatible mode (steps/mm, dir, enable)
+    DRIVE_STEPPER_OPEN     = 2, // Open-loop stepper with timing HAL specs
+    DRIVE_STEPPER_CLOSED   = 3, // Closed-loop stepper with fault/stall alarm input
+    DRIVE_AC_SERVO         = 4  // Digital AC servo with in-position & brake signals
+};
+
+enum AxisFeedbackType : uint8_t {
+    FEEDBACK_INFERRED      = 0, // Open loop: position inferred from step counts
+    FEEDBACK_OPTICAL_SCALE = 1, // Optical glass linear scale (TTL quadrature)
+    FEEDBACK_MAGNETIC_TAPE = 2  // Magnetic tape quadrature scale
+};
+
+enum HardLimitMethod : uint8_t {
+    LIMIT_NONE             = 0,
+    LIMIT_SWITCH_NC        = 1, // Mechanical microswitch (Normally Closed)
+    LIMIT_SWITCH_NO        = 2, // Mechanical microswitch (Normally Open)
+    LIMIT_INDUCTIVE        = 3, // Inductive proximity sensor (NPN / PNP)
+    LIMIT_SENSORLESS_STALL = 4, // Trinamic StallGuard back-EMF stall detection
+    LIMIT_SERVO_TORQUE     = 5  // AC Servo torque clamp threshold reached
+};
+
 struct AxisHardwareConfig {
-    bool     hasMotor;              // True if axis is driven by stepper/servo
-    bool     hasDroScale;           // True if physical glass/magnetic scale is installed
-    bool     hasMpg;                // True if dedicated MPG handwheel is fitted
-    
-    // Kinematic Step Math
-    float    stepsPerMm;            // Motor driver pulses per millimeter of linear travel
+    // 1. Kinematic Physics (Universal)
     float    leadscrewPitchMm;      // Physical pitch of screw (e.g. 2.0 mm, 4.0 mm, 10 TPI)
     float    backlashMm;            // Measured screw backlash for backlash compensation
+    bool     directionInverted;     // Invert step/dir direction
     
     // Dynamic Limits
     float    maxVelocityMmMin;      // Rapid traverse speed ceiling (e.g. 1500 mm/min)
     float    maxAccelMmSec2;        // Acceleration ramp limit (e.g. 250 mm/sec^2)
     
-    // Physical Travel Boundaries (relative to machine datum)
-    float    travelMinMm;           // Extreme physical limit toward headstock / center
-    float    travelMaxMm;           // Extreme physical limit toward bed end / slide back
+    // 2. Travel Limits (Soft Virtual & Hard Physical)
+    bool     softLimitsEnabled;     // Virtual software boundary calculation
+    float    travelMinMm;           // Extreme coordinate limit toward headstock / center
+    float    travelMaxMm;           // Extreme coordinate limit toward bed end / slide back
+    bool     hardLimitsInstalled;   // Physical limit switches or sensorless probing
+    HardLimitMethod hardLimitMethod;// Switch, inductive, StallGuard, servo torque
+    int8_t   stallSensitivity;      // Stall threshold if sensorless (-64..63)
+    float    homingBackoffMm;       // Retreat distance after touching limit
+    
+    // 3. Drive & Actuation Technology
+    AxisDriveType driveType;        // DRIVE_GENERIC, DRIVE_STEPPER_CLOSED, DRIVE_AC_SERVO, etc.
+    float    stepsPerMm;            // Driver steps per millimeter
+    bool     enableActiveLow;       // Driver enable signal polarity
+    uint16_t stepPulseWidthNs;      // Timing HAL pulse duration (e.g. 500ns for servo, 2500ns for opto)
+    
+    // Drive Electrical & Signal Interlocks (Optional / Specialized)
+    bool     hasAlarmInput;         // Fault / stall alarm pin from driver (trips E-stop on stall)
+    bool     alarmActiveLow;        // Fault pin polarity
+    bool     hasInPositionInput;    // Servo INP signal for synchronous handshake
+    bool     hasBrakeOutput;        // Electromagnetic brake release sequencing
+    float    ratedTorqueNm;         // Motor continuous torque (for thrust estimation)
+    float    ratedPowerW;           // Motor wattage
+    float    busVoltageV;           // Driver DC supply voltage
+    
+    // 4. Direct Position Feedback (Linear DRO Scale)
+    AxisFeedbackType feedbackType;  // FEEDBACK_INFERRED, FEEDBACK_OPTICAL_SCALE, etc.
+    QuadratureEncoderConfig scale;  // Reusable encoder definition (pulses/mm, etc.)
 };
 ```
 
 ---
 
-### 3.3 Spindle Hardware Configuration (`SpindleHardwareConfig`)
+### 3.4 Spindle Hardware Configuration (`SpindleHardwareConfig`)
 
-Spindle synchronization is the heartbeat of all electronic threading and gearing:
+Spindle synchronization is the heartbeat of electronic threading and gearing. The profile decouples **native encoder PPR** from **pulley transmission ratio**, perfectly handling direct spindle encoders, belted encoders, or spindle servo drives with buffered encoder outputs:
 
 ```cpp
+enum SpindleFeedbackSource : uint8_t {
+    SPINDLE_SHAFT          = 0, // Standalone encoder mounted directly on spindle shaft (1:1)
+    SERVO_DRIVE_PASSTHROUGH= 1, // Buffered OA/OB quadrature output from spindle servo drive
+    TACH_OPTICAL           = 2  // Single-pulse index or optical tachometer
+};
+
+enum SpindleDriveType : uint8_t {
+    SPINDLE_MANUAL_AC      = 0, // Uncontrolled AC induction / pulley belts
+    SPINDLE_VFD_ANALOG     = 1, // 0-10V analog speed + FWD/REV relays
+    SPINDLE_VFD_MODBUS     = 2, // RS-485 Modbus RTU digital control
+    SPINDLE_AC_SERVO       = 3  // Spindle servo (enables rigid tapping & C-axis indexing)
+};
+
 struct SpindleHardwareConfig {
-    uint16_t encoderPpr;            // Encoder pulses per revolution (e.g. 1024, 2400 PPR)
-    bool     hasIndexPulse;         // True if single-pulse index sensor installed
+    // 1. Kinematic Limits
     float    maxSafeRpm;            // Headstock mechanical safety ceiling (e.g. 2500 RPM)
     float    minSyncRpm;            // Minimum reliable encoder tracking RPM (typically 15 RPM)
+    bool     directionInverted;     // Invert CW/CCW encoder sensing
     
-    // VFD Spindle Control (Optional)
-    bool     hasVfdControl;         // True if controller commands spindle start/stop/speed
+    // 2. Spindle Feedback (Decoupled True PPR + Pulley Ratio)
+    SpindleFeedbackSource source;   // SPINDLE_SHAFT or SERVO_DRIVE_PASSTHROUGH
+    QuadratureEncoderConfig encoder;// True native encoder PPR (e.g. 1200, 2400)
+    float    pulleyRatio;           // Pulley ratio (motor/encoder revs per spindle rev, e.g. 1.0 or 1.5)
+    // NOTE: Effective Spindle PPR = encoder.ppr * pulleyRatio
+    
+    // 3. Spindle Drive & Control
+    SpindleDriveType driveType;     // SPINDLE_MANUAL_AC, SPINDLE_VFD_MODBUS, etc.
+    float    ratedPowerW;           // Spindle motor wattage (e.g. 750W, 1500W)
     uint8_t  vfdModbusAddress;      // RS-485 Modbus RTU address
-    float    vfdMaxHz;              // Maximum inverter frequency (e.g. 60 Hz or 400 Hz)
+    float    vfdMaxHz;              // Maximum inverter frequency (e.g. 50Hz, 60Hz, 400Hz)
 };
 ```
 
 ---
 
-### 3.4 Physical Envelope & Geometry (`LatheDimensions`)
+### 3.5 Operator Controls & Pendants (`ControlsHardwareConfig`)
 
-These dimensions describe the machine's physical envelope, used directly by the **Digital Twin Visualizer**, clearance collision guards, and multi-pass bounding:
+Manual jogging and safety interlocks accommodate dedicated handwheels, shared pendant selectors, and emergency stops:
+
+```cpp
+enum MpgArchitecture : uint8_t {
+    MPG_NONE               = 0,
+    MPG_DEDICATED_PER_AXIS = 1, // Independent physical handwheels on Z and X (traditional lathe apron)
+    MPG_SHARED_SELECTOR    = 2  // Single handwheel with axis selector switch (pendant / console)
+};
+
+enum PendantInterface : uint8_t {
+    PENDANT_GPIO           = 0, // Direct microcontroller GPIO pins
+    PENDANT_UART_SERIAL    = 1, // Serial bus pendant (e.g. WHB04B)
+    PENDANT_WIRELESS_ESPNOW= 2  // Wireless 2.4GHz ESP-NOW handheld
+};
+
+struct ControlsHardwareConfig {
+    MpgArchitecture  mpgArchitecture;
+    PendantInterface pendantInterface;
+    QuadratureEncoderConfig mpgEncoder; // Standard 100 PPR handwheel
+    bool             hasJoystick;
+    bool             monitoredEStop;
+};
+```
+
+---
+
+### 3.6 Physical Envelope & Complete Profile (`LatheConfiguration`)
 
 ```cpp
 struct LatheDimensions {
@@ -183,18 +292,10 @@ struct LatheDimensions {
     float zZeroFromChuckFaceMm;     // Default clearance offset from chuck face to Z=0
     float xZeroFromCenterlineMm;    // Default offset from spindle centerline
 };
-```
 
----
-
-### 3.5 The Complete Lathe Profile (`LatheConfiguration`)
-
-Combining the components into a single cohesive profile:
-
-```cpp
 struct LatheConfiguration {
-    char                   profileId[24];   // Machine slug, e.g. "pm1022_full"
-    char                   modelName[48];   // Human readable label, e.g. "Precision Matthews 1022 (2-Axis)"
+    char                   profileId[24];   // Machine slug, e.g. "wm210v_hybrid"
+    char                   modelName[48];   // Human readable label, e.g. "WM210V 8x16 (Servo Z + Stepper X)"
     uint32_t               capabilities;    // Bitmask of LatheCapabilityFlags
     
     AxisHardwareConfig     zAxis;           // Carriage (Z)
@@ -202,104 +303,480 @@ struct LatheConfiguration {
     AxisHardwareConfig     yAxis;           // Auxiliary axis (Y)
     
     SpindleHardwareConfig  spindle;         // Spindle encoder & VFD
+    ControlsHardwareConfig controls;        // MPG handwheels, pendant, joystick
     LatheDimensions        dimensions;      // Bed, chuck, and swing geometry
 };
 ```
 
 ---
 
-## 4. Standard Lathe Preset Library
+## 4. Lathe Profile Catalog Architecture & LittleFS Storage
 
-The system provides pre-configured profiles for common workshop lathes and retrofit configurations:
+Because lathe physical iron rarely changes after commissioning, baking an extensive, growing library of commercial lathe models into C++ firmware ROM is an anti-pattern that leads to firmware bloat and unnecessary recompilation.
 
-### Preset 1: 7x14 Mini Lathe (Basic ELS — Z Motor Only)
-* **Target Machines:** Sieg SC2, Grizzly G8688, Real Bull 7x14.
-* **Capabilities:** `CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_DRO_X` (Manual X handwheel with scale).
-* **Specifications:**
-  * Bed Length: $350\text{ mm}$
-  * Swing over bed: $180\text{ mm}$ ($7"$)
-  * Chuck Diameter: $80\text{ mm}$ ($3"$)
-  * Leadscrew Pitch: $1.5\text{ mm}$ (Metric) or $16\text{ TPI}$ (Imperial)
-  * Spindle Encoder: $1024\text{ PPR}$
-  * $Z$ Travel: $300\text{ mm}$, $X$ Travel: $65\text{ mm}$
+Instead, NanoELS adopts a **LittleFS-backed JSON Profile Catalog (`/presets/profiles.json`)**:
 
-### Preset 2: WM210V 8x16 Bench Lathe (Dual-Axis Motorized)
-* **Target Machines:** Weiss / CJ0618-WM210V 8x16, Mini/Bench hybrids with 38mm spindle bore.
-* **Capabilities:** `CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_MOTOR_X | CAP_DRO_Z | CAP_DRO_X`.
-* **Specifications:**
-  * Bed Length: $400\text{ mm}$ ($16"$)
-  * Swing over bed: $210\text{ mm}$ ($8.25"$)
-  * Swing over cross-slide: $110\text{ mm}$
-  * Chuck Diameter: $125\text{ mm}$ ($5"$)
-  * Spindle Bore: $38\text{ mm}$ ($1.5"$)
-  * Spindle Drive: $1100\text{W}$ BLDC motor (variable 50–2500 RPM)
-  * Leadscrew Pitch: $2.0\text{ mm}$ (Metric) or $10\text{ TPI}$ (Imperial)
-  * Spindle Encoder: $1200\text{ PPR}$ / $2400\text{ PPR}$ optical quadrature
-  * $Z$ Travel: $350\text{ mm}$, $X$ Travel: $100\text{ mm}$
+### 4.1 The Three-Tier Fallback Hierarchy
 
-### Preset 3: Large Toolroom Lathe (Heavy Duty)
-* **Target Machines:** 12x36 / 14x40 Toolroom Lathes (South Bend, Colchester, Precision Matthews 1440).
-* **Capabilities:** Full dual-axis motors, dual MPGs, optical linear glass scales, VFD spindle control.
-* **Specifications:**
-  * Bed Length: $1200\text{ mm}$
-  * Swing over bed: $360\text{ mm}$ ($14"$)
-  * Chuck Diameter: $200\text{ mm}$ ($8"$)
-  * Spindle Bore: $40\text{ mm}$
-  * $Z$ Travel: $900\text{ mm}$, $X$ Travel: $180\text{ mm}$
+The system establishes an unambiguous, fail-safe hierarchy of machine profile authority:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER A: ACTIVE PROFILE (RAM Cache + Sparse NVS Overrides)              │
+│ • Stored in NVS under key `machine.preset` (Domain 'P' telemetry)       │
+│ • Currently loaded in high-speed RAM for Core 1 real-time motion       │
+│ • Holds operator leadscrew calibrations and custom hardware tuning     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (if NVS `machine.preset` unset,
+                                    │  deleted, or reset commanded)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER B: SYSTEM DEFAULT PROFILE (`default_profile_id` in LittleFS)      │
+│ • Pointed to by `default_profile_id` in `/presets/profiles.json`       │
+│ • The designated commissioning baseline for this physical workshop     │
+│ • Reverted to when operator commands `SETTINGS.preset.resetToDefault`  │
+│   or `SETTINGS.resetGroup=machine`                                     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (if LittleFS unformatted, flash
+                                    │  corrupted, or catalog missing)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ TIER C: COMPILED-IN ROM FAILSAFE (`getDefaultProfile()`)               │
+│ • Hardcoded in C++ flash (WM210V 8×16 baseline)                        │
+│ • Zero SPI flash dependency; guarantees MCU boots safely even with     │
+│   a blank or corrupted filesystem                                      │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Active Precedence (NVS):** On boot, the controller reads `machine.preset` from NVS. If valid in the catalog, it is loaded into RAM with any sparse NVS overrides.
+2. **Default Profile Fallback:** If `machine.preset` is unset, missing, or the operator commands a reset (`SETTINGS.preset.resetToDefault`), the controller cleanly falls back to `default_profile_id` declared in the catalog.
+3. **Compiled-In Failsafe (ROM):** If LittleFS is unformatted or the catalog file is missing, the firmware boots safely to `getDefaultProfile()`.
+
+### 4.2 Single File Catalog vs. Modular Flexibility
+
+By structuring the schema as a catalog collection (`"profiles": [ ... ]`), the system gains enormous operational flexibility:
+* **One-Click Backup & Community Packs:** Exporting or importing downloads a single `.json` file containing all workshop lathes (or a community pack like "Bench Lathes 7×14 and WM210V").
+* **Single Profile Compatibility:** An individual profile file uses the identical schema—it simply has an array of length 1 (`"profiles": [ { ... } ]`).
+* **Clean State Separation:** The catalog file is a **declarative preset library**; it never stores the runtime *active* state. Importing a new pack will never unexpectedly switch the operator's active running profile.
+
+### 4.3 Canonical Universal Wire Commands for Presets
+
+All clients interact with machine profiles through standard ASCII line commands:
+
+| Command | Action | Output / Return Payload |
+| :--- | :--- | :--- |
+| `SETTINGS.preset.list` | Returns available profile slugs, labels, active profile (from NVS), and default (from catalog) | `PRESET.list=wm210v_stock,wm210v_hybrid;active=wm210v_hybrid;default=wm210v_stock\n` |
+| `SETTINGS.preset.get=<slug>` | Streams the specific profile JSON payload | Profile JSON document |
+| `SETTINGS.preset.apply=<slug>` | Sets active profile in NVS (`machine.preset = slug`) and activates in RAM | `OK:SETTINGS.preset.apply=wm210v_hybrid\n` |
+| `SETTINGS.preset.setDefault=<slug>` | Sets `default_profile_id = slug` in catalog | `OK:SETTINGS.preset.setDefault=wm210v_stock\n` |
+| `SETTINGS.preset.resetToDefault` | Clears active NVS overrides and reloads `default_profile_id` | `OK:SETTINGS.preset.resetToDefault\n` |
+| `SETTINGS.preset.save=<slug>` | Serializes current active profile and saves into catalog | `OK:SETTINGS.preset.save=custom_shop_1022\n` |
+| `SETTINGS.preset.delete=<slug>`| Removes a profile from the catalog | `OK:SETTINGS.preset.delete=old_test_profile\n` |
+| `SETTINGS.preset.export` | Streams complete catalog JSON document | Full catalog JSON payload |
 
 ---
 
-## 5. Wire Formats & Serialization
+## 5. Wire Formats, Import/Export & Schema Introspection
 
-### 5.1 JSON Telemetry & Negotiation Schema (`GET /api/lathe-profile` or WebSocket)
+### 5.1 Canonical JSON Machine Profile Document (Catalog Format)
+
+Lathe profiles are exported and imported as self-contained catalog documents:
 
 ```json
 {
-  "profile_id": "pm1022_full",
-  "model_name": "Precision Matthews 1022 (Dual Motor)",
-  "capabilities": [
-    "SPINDLE_ENCODER",
-    "SPINDLE_INDEX",
-    "MOTOR_Z",
-    "MOTOR_X",
-    "DRO_Z",
-    "DRO_X",
-    "MPG_Z",
-    "MPG_X"
-  ],
-  "axes": {
-    "z": {
-      "has_motor": true,
-      "has_dro": true,
-      "steps_per_mm": 400.0,
-      "max_velocity_mm_min": 1800.0,
-      "travel_min_mm": -550.0,
-      "travel_max_mm": 0.0
+  "$schema": "/schemas/lathe-profiles.schema.json",
+  "version": 1,
+  "default_profile_id": "wm210v_stock",
+  "profiles": [
+    {
+      "identity": {
+        "profile_id": "wm210v_hybrid",
+    "model_name": "WM210V 8x16 (Servo Z + Generic Stepper X)",
+    "manufacturer": "Weiss / Generic",
+    "revision": 2,
+    "capabilities": 219
+  },
+
+  "envelope": {
+    "bed": {
+      "total_length_mm": 600.0,
+      "bed_width_mm": 100.0,
+      "way_type": "PRISMATIC_AND_FLAT"
     },
-    "x": {
-      "has_motor": true,
-      "has_dro": true,
-      "steps_per_mm": 800.0,
-      "max_velocity_mm_min": 800.0,
-      "travel_min_mm": -115.0,
-      "travel_max_mm": 10.0
+    "swing": {
+      "over_bed_dia_mm": 210.0,
+      "over_cross_slide_dia_mm": 110.0
+    },
+    "centers": {
+      "distance_between_centers_mm": 400.0
+    },
+    "headstock": {
+      "spindle_bore_dia_mm": 38.0,
+      "spindle_nose_taper": "MT5",
+      "chuck": {
+        "type": "3_JAW_SCROLL",
+        "diameter_mm": 125.0,
+        "body_length_mm": 65.0,
+        "jaw_protrusion_max_mm": 25.0
+      },
+      "datums": {
+        "z_zero_from_chuck_face_mm": 10.0,
+        "x_zero_from_centerline_mm": 0.0
+      }
     }
   },
+
   "spindle": {
-    "encoder_ppr": 2400,
-    "has_index": true,
-    "max_safe_rpm": 2500
+    "kinematics": {
+      "max_safe_rpm": 2500.0,
+      "min_sync_rpm": 15.0,
+      "direction_inverted": false
+    },
+    "feedback": {
+      "source": "SERVO_DRIVE_PASSTHROUGH",
+      "encoder": {
+        "ppr": 2400,
+        "has_index": true,
+        "inverted": false,
+        "filter_backlash_pulses": 2
+      },
+      "pulley_ratio": 1.5
+    },
+    "drive": {
+      "type": "VFD_MODBUS",
+      "electrical": {
+        "rated_power_w": 750.0,
+        "max_frequency_hz": 60.0
+      },
+      "control": {
+        "interface": "MODBUS_RS485",
+        "slave_address": 1,
+        "baud_rate": 9600
+      }
+    }
   },
-  "dimensions": {
-    "bed_length_mm": 600.0,
-    "max_swing_dia_mm": 250.0,
-    "chuck_dia_mm": 125.0,
-    "chuck_len_mm": 65.0,
-    "max_z_travel_mm": 550.0,
-    "max_x_travel_mm": 115.0
+
+  "axes": {
+    "z": {
+      "label": "Carriage (Longitudinal)",
+      "kinematics": {
+        "leadscrew_pitch_mm": 2.0,
+        "backlash_mm": 0.015,
+        "direction_inverted": false,
+        "max_velocity_mm_min": 2500.0,
+        "max_accel_mm_sec2": 350.0
+      },
+      "limits": {
+        "soft": {
+          "enabled": true,
+          "min_mm": 0.0,
+          "max_mm": 350.0
+        },
+        "hard": {
+          "installed": true,
+          "method": "SENSORLESS_STALLGUARD",
+          "stall_sensitivity": 12,
+          "homing_backoff_mm": 2.0
+        }
+      },
+      "drive": {
+        "type": "AC_SERVO",
+        "steps_per_mm": 1000.0,
+        "step_pulse_width_ns": 500,
+        "enable_active_low": true,
+        "signals": {
+          "has_alarm_input": true,
+          "alarm_active_low": true,
+          "has_in_position_input": true,
+          "has_brake_output": false
+        },
+        "electrical": {
+          "rated_power_w": 400.0,
+          "rated_torque_nm": 1.27
+        }
+      },
+      "feedback": {
+        "type": "OPTICAL_GLASS_SCALE",
+        "scale": {
+          "ppr": 200,
+          "has_index": false,
+          "inverted": false,
+          "filter_backlash_pulses": 0
+        }
+      }
+    },
+
+    "x": {
+      "label": "Cross-Slide (Transverse)",
+      "kinematics": {
+        "leadscrew_pitch_mm": 1.5,
+        "backlash_mm": 0.025,
+        "direction_inverted": false,
+        "max_velocity_mm_min": 800.0,
+        "max_accel_mm_sec2": 200.0
+      },
+      "limits": {
+        "soft": {
+          "enabled": true,
+          "min_mm": 0.0,
+          "max_mm": 100.0
+        },
+        "hard": {
+          "installed": false,
+          "method": "LIMIT_NONE"
+        }
+      },
+      "drive": {
+        "type": "GENERIC",
+        "steps_per_mm": 400.0,
+        "direction_inverted": false,
+        "enable_active_low": true
+      },
+      "feedback": {
+        "type": "INFERRED"
+      }
+    },
+
+    "y": {
+      "label": "Auxiliary / Compound",
+      "drive": { "type": "DRIVE_NONE_MANUAL" },
+      "feedback": { "type": "FEEDBACK_INFERRED" }
+    }
+  },
+
+  "controls": {
+    "mpg": {
+      "architecture": "SHARED_SELECTOR",
+      "pendant_interface": "UART_SERIAL",
+      "encoder": {
+        "ppr": 100,
+        "has_index": false,
+        "inverted": false,
+        "filter_backlash_pulses": 0
+      },
+      "multipliers": [1, 10, 100]
+    },
+    "joystick": {
+      "installed": true,
+      "type": "2_AXIS_ANALOG",
+      "deadband_percent": 5.0
+    },
+    "emergency_stop": {
+      "monitored_by_mcu": true,
+      "active_low": true
+    }
+  }
+}
+    }
+  ]
+}
+```
+
+---
+
+### 5.2 Dynamic Schema Introspection (JSON Schema Standard)
+
+To eliminate the need to update client code whenever firmware introduces a new machine property (e.g. adding stepper vs. servo distinction, sensorless stall thresholds, or wireless pendants), the controller publishes a formal **JSON Schema (draft-07 / 2020-12)** document.
+
+* **Schema Location:** Stored as a static asset on LittleFS: `/schemas/lathe-profiles.schema.json`.
+* **Zero MCU Overhead:** The ESP32 streams the schema over HTTP (`GET /api/schema/profiles`) or WebSocket (`SETTINGS.schema=profiles`) without needing a C++ schema engine.
+* **Client Dynamic Form Generation:** Clients consume the schema to dynamically render settings forms, evaluate validation bounds, and handle conditional field visibility.
+
+#### Schema Excerpt with Reusable Definitions & Polymorphic Drive Types:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LatheProfileCatalog",
+  "type": "object",
+  "required": ["version", "default_profile_id", "profiles"],
+  "properties": {
+    "version": { "type": "integer", "default": 1 },
+    "default_profile_id": {
+      "type": "string",
+      "title": "System Baseline Default Profile ID",
+      "description": "Baseline fallback profile if NVS machine.preset is unset or reset"
+    },
+    "profiles": {
+      "type": "array",
+      "title": "Lathe Machine Profiles Catalog",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/LatheMachineProfile" }
+    }
+  },
+  "definitions": {
+    "LatheMachineProfile": {
+      "type": "object",
+      "required": ["identity", "envelope", "spindle", "axes"],
+      "properties": {
+        "identity": {
+          "type": "object",
+          "required": ["profile_id", "model_name"],
+          "properties": {
+            "profile_id": { "type": "string", "pattern": "^[a-z0-9_]{3,24}$" },
+            "model_name": { "type": "string" },
+            "capabilities": { "type": "integer" }
+          }
+        },
+        "envelope": { "type": "object" },
+        "spindle": { "type": "object" },
+        "axes": { "type": "object" },
+        "controls": { "type": "object" }
+      }
+    },
+    "QuadratureEncoder": {
+      "type": "object",
+      "title": "Quadrature Pulse Encoder",
+      "required": ["ppr"],
+      "properties": {
+        "ppr": {
+          "type": "integer",
+          "title": "Native Pulses Per Revolution / Unit",
+          "minimum": 1,
+          "maximum": 50000
+        },
+        "has_index": {
+          "type": "boolean",
+          "title": "Index Pulse (Z-Channel) Installed",
+          "default": false
+        },
+        "inverted": {
+          "type": "boolean",
+          "title": "Invert Phase (Swap A/B)",
+          "default": false
+        },
+        "filter_backlash_pulses": {
+          "type": "integer",
+          "title": "Noise / Reversal Filter Deadband (Counts)",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+
+    "AxisLimits": {
+      "type": "object",
+      "required": ["soft"],
+      "properties": {
+        "soft": {
+          "type": "object",
+          "required": ["enabled", "min_mm", "max_mm"],
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "min_mm": { "type": "number", "title": "Soft Limit Minimum (mm)" },
+            "max_mm": { "type": "number", "title": "Soft Limit Maximum (mm)" }
+          }
+        },
+        "hard": {
+          "type": "object",
+          "properties": {
+            "installed": { "type": "boolean", "default": false },
+            "method": {
+              "type": "string",
+              "enum": [
+                "LIMIT_NONE",
+                "SWITCH_NC",
+                "SWITCH_NO",
+                "INDUCTIVE",
+                "SENSORLESS_STALLGUARD",
+                "SERVO_TORQUE_LIMIT"
+              ],
+              "default": "LIMIT_NONE"
+            },
+            "stall_sensitivity": {
+              "type": "integer",
+              "title": "Stall Sensitivity Threshold",
+              "minimum": -64,
+              "maximum": 63
+            },
+            "homing_backoff_mm": {
+              "type": "number",
+              "title": "Homing Backoff Retreat (mm)",
+              "default": 2.0
+            }
+          }
+        }
+      }
+    },
+
+    "AxisDrive": {
+      "type": "object",
+      "required": ["type", "steps_per_mm"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "DRIVE_NONE_MANUAL",
+            "GENERIC",
+            "STEPPER_OPEN_LOOP",
+            "STEPPER_CLOSED_LOOP",
+            "AC_SERVO"
+          ],
+          "default": "GENERIC",
+          "title": "Actuator Technology"
+        },
+        "steps_per_mm": {
+          "type": "number",
+          "title": "Steps Per Millimeter",
+          "minimum": 1.0,
+          "maximum": 50000.0
+        },
+        "enable_active_low": {
+          "type": "boolean",
+          "title": "Enable Signal Active Low",
+          "default": true
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "STEPPER_CLOSED_LOOP" } } },
+          "then": {
+            "properties": {
+              "signals": {
+                "type": "object",
+                "required": ["has_alarm_input"],
+                "properties": {
+                  "has_alarm_input": { "type": "boolean", "title": "Fault / Stall Alarm Pin" },
+                  "alarm_active_low": { "type": "boolean", "default": true }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "AC_SERVO" } } },
+          "then": {
+            "properties": {
+              "step_pulse_width_ns": { "type": "integer", "default": 500 },
+              "signals": {
+                "type": "object",
+                "properties": {
+                  "has_alarm_input": { "type": "boolean", "default": true },
+                  "has_in_position_input": { "type": "boolean", "default": false },
+                  "has_brake_output": { "type": "boolean", "default": false }
+                }
+              },
+              "electrical": {
+                "type": "object",
+                "properties": {
+                  "rated_power_w": { "type": "number", "title": "Motor Power (W)" },
+                  "rated_torque_nm": { "type": "number", "title": "Continuous Torque (Nm)" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
 ```
+
+* **Client UI Dynamic Form Generation:**
+  * Selecting `GENERIC` renders only the essential step calibration inputs.
+  * Selecting `AC_SERVO` or `STEPPER_CLOSED_LOOP` dynamically expands advanced safety alarm pin options, pulse widths, and torque ratings.
+  * Selecting `SENSORLESS_STALLGUARD` under limits automatically reveals the stall sensitivity slider.
+  * All clients remain 100% decoupled from firmware releases.
 
 ---
 

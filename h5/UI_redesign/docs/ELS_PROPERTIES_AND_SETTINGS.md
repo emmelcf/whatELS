@@ -42,15 +42,18 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 │ Physical Geometry     │ `bedLengthMm`, `maxSwingDiameterMm`, `swingOverCrossSlideMm`,  │
 │                       │ `chuckDiameterMm`, `chuckLengthMm`, `spindleBoreDiameterMm`,   │
 │                       │ `zZeroFromChuckFaceMm`, `xZeroFromCenterlineMm`                │
-│ Spindle Mechanics     │ `encoderPpr`, `encoderBacklash`, `maxSafeRpm`, `minSyncRpm`,   │
-│                       │ `hasIndexPulse`, `vfdControl`, `vfdMaxHz`                      │
-│ Z Carriage Mechanics  │ `zScrewDu` (pitch), `zMotorSteps`, `zPulsePpr` (MPG),          │
+│ Spindle Mechanics     │ `encoderPpr`, `pulleyRatio`, `source`, `encoderBacklash`,      │
+│                       │ `maxSafeRpm`, `minSyncRpm`, `hasIndexPulse`, `vfdControl`      │
+│ Z Carriage Mechanics  │ `driveType`, `zScrewDu` (pitch), `zMotorSteps`, `zPulsePpr`,   │
 │                       │ `zTravelMinMm`, `zTravelMaxMm`, `zBacklashDu`, `zInvertDir`,   │
-│                       │ `zInvertEnable`, `zSpeedStart`, `zAcceleration`, `zManualSpeed`│
-│ X Slide Mechanics     │ `xScrewDu` (pitch), `xMotorSteps`, `xPulsePpr` (MPG),          │
+│                       │ `zAlarmPin`, `zInPositionPin`, `zBrakePin`, `zTorqueNm`        │
+│ X Slide Mechanics     │ `driveType`, `xScrewDu` (pitch), `xMotorSteps`, `xPulsePpr`,   │
 │                       │ `xTravelMinMm`, `xTravelMaxMm`, `xBacklashDu`, `xInvertDir`,   │
-│                       │ `xInvertEnable`, `xSpeedStart`, `xAcceleration`, `xManualSpeed`│
-│ Y Auxiliary Mechanics │ `activeY`, `rotaryY`, `yMotorSteps`, `yScrewDu`, `yBacklashDu` │
+│                       │ `xAlarmPin`, `xInPositionPin`, `xBrakePin`, `xTorqueNm`        │
+│ Limits & Probing      │ `softLimitsEnabled`, `hardLimitsInstalled`, `hardLimitMethod`  │
+│                       │ (switch, inductive, StallGuard, servo torque), `stallThreshold`│
+│ Operator Controls     │ `mpgArchitecture` (dedicated vs shared), `pendantInterface`,   │
+│                       │ `joystick.enabled`, `eStopMonitored`                           │
 │ Capabilities Bitmask  │ `capabilities` (32-bit LatheCapabilityFlags)                   │
 └───────────────────────┴────────────────────────────────────────────────────────────────┘
 
@@ -152,6 +155,22 @@ struct CachedProperty {
 1. **Unmodified System:** When a user unpacks or initializes NanoELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
 3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
+
+### 3.3 LittleFS Preset Catalog & Minimal ROM Baseline
+
+To prevent C++ ROM bloat and avoid recompiling firmware whenever a new lathe model is introduced:
+1. **Single Compiled-In Baseline (ROM):** Only **one** uncorruptible baseline profile is hardcoded into firmware ROM (`getDefaultProfile()`, WM210V 8×16). If LittleFS flash is corrupted or unformatted, the controller boots reliably into this baseline.
+2. **Flash Filesystem Catalog (`/presets/*.json`):** All standard stock and user-customized lathe presets live as standalone `.json` documents in LittleFS.
+3. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via the canonical `SETTINGS.preset.*` wire commands.
+
+### 3.4 Dynamic Schema Introspection (JSON Schema Standard)
+
+Firmware evolution frequently adds new machine properties (e.g. distinguishing stepper vs. servo, adding electronic spindle brakes, or optical scale configurations). If client UIs hardcode settings structures, every firmware update requires updating all client apps.
+
+To provide clean, zero-coupling introspection:
+1. **Standard JSON Schema (draft-07 / 2020-12):** The controller hosts an authoritative schema document at `/schemas/lathe-profile.schema.json` in LittleFS.
+2. **Zero MCU Computation:** The ESP32 simply serves or streams the static JSON schema file over HTTP (`GET /api/schema/profile`) or WebSocket (`SETTINGS.schema=profile`).
+3. **Dynamic Client UI & Validation:** Clients parse the JSON Schema to dynamically generate input fields, enforce validation ranges (`minimum`, `maximum`), and handle conditional visibility (`if/then` blocks, such as requiring `motor_type` and `steps_per_mm` only when `has_motor: true`).
 
 ---
 
@@ -256,7 +275,8 @@ machine.dim.bedLength   FLOAT   mm      50.0    5000.0    400.0              Tot
 machine.dim.swingDia    FLOAT   mm      50.0    2000.0    210.0              Maximum swing diameter over bed
 machine.dim.chuckDia    FLOAT   mm      20.0    1000.0    125.0              Outside diameter of chuck
 machine.dim.spindleBore FLOAT   mm      5.0     300.0     38.0               Through-hole spindle bore diameter
-machine.spindle.ppr     INT     ppr     100     30000     1200               Spindle encoder pulses per rev
+machine.spindle.ppr     INT     ppr     100     50000     1200               Spindle native encoder pulses per rev
+machine.spindle.ratio   FLOAT   ratio   0.1     50.0      1.0                Pulley ratio (encoder revs / spindle rev)
 machine.spindle.maxRpm  FLOAT   RPM     100.0   10000.0   2500.0             Headstock mechanical safety ceiling
 machine.z.pitchDu       LONG    du      100     1000000   20000              Carriage leadscrew pitch (20000 = 2.0mm)
 machine.z.motorSteps    LONG    steps   100     100000    800                Carriage driver microsteps per rev
@@ -307,6 +327,13 @@ public:
     // Universal Reset Engine (Removes NVS key, reverts RAM cache to preset baseline)
     static bool reset(const char* key, String* reply);
     static bool resetGroup(const char* groupName, String* reply);
+
+    // Preset Lifecycle Engine (LittleFS /presets/*.json)
+    static bool listPresets(String* reply);
+    static bool getPresetJson(const char* slug, String* reply);
+    static bool applyPreset(const char* slug, String* reply);
+    static bool saveCurrentAsPreset(const char* slug, String* reply);
+    static bool deletePreset(const char* slug, String* reply);
 
     // High-Speed Real-Time Getters (Nanosecond access for Core 1 / MachineModel)
     static const LatheConfiguration& getActiveProfile();
@@ -376,6 +403,33 @@ Stateless clients persist their UI presentation preferences on the controller br
 <- SETTING.client.tablet_shop.diaRad=1\n
 ```
 
+### 7.5 Machine Preset Operations (`SETTINGS.preset.*`)
+Clients discover, inspect, apply, and save machine profiles on LittleFS without touching compiled firmware:
+```text
+-> SETTINGS.preset.list\n
+<- PRESET.list=wm210v,mini_7x14,engine_1440\n
+
+-> SETTINGS.preset.get=wm210v\n
+<- {"profile_id":"wm210v","model_name":"WM210V 8x16",...}\n
+
+-> SETTINGS.preset.apply=mini_7x14\n
+<- OK:SETTINGS.preset.apply=mini_7x14\n
+
+-> SETTINGS.preset.save=custom_shop_lathe\n
+<- OK:SETTINGS.preset.save=custom_shop_lathe\n
+
+-> SETTINGS.preset.delete=old_test_preset\n
+<- OK:SETTINGS.preset.delete=old_test_preset\n
+```
+
+### 7.6 Dynamic Schema Introspection (`SETTINGS.schema=*`)
+Clients dynamically inspect configuration schemas to auto-generate forms and handle conditional validation:
+```text
+-> SETTINGS.schema=lathe-profile\n
+<- {"$schema":"http://json-schema.org/draft-07/schema#","title":"LatheMachineProfile",...}\n
+```
+*(Also accessible via HTTP endpoint `GET /api/schema/lathe-profile`)*
+
 ---
 
 ## 8. Summary of Architectural Guarantees
@@ -385,3 +439,6 @@ Stateless clients persist their UI presentation preferences on the controller br
 3. **Decoupled Responsibilities:** Machine physical dimensions never collide with network credentials or client themes.
 4. **Instant Reset Assurance:** An operator can always safely revert a customized axis or machine back to factory defaults with a single command.
 5. **Rock-Solid Motion Safety:** Core 1 motion control reads validated physical settings from fast RAM with zero FreeRTOS lock contention.
+6. **Zero ROM Bloat for Machine Presets:** Storing presets in LittleFS as `.json` files keeps C++ firmware ROM slim and enables easy community sharing.
+7. **Future-Proof Schema Decoupling:** Dynamic JSON Schema (draft-07 / 2020-12) introspection allows adding new machine properties without requiring client code changes.
+

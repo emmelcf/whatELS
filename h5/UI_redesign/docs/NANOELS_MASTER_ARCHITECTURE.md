@@ -1,0 +1,227 @@
+# NanoELS H5 — Master System Architecture & Subsystem Specification
+
+> **Status:** Authoritative "Ground Floor" Master Architecture Blueprint  
+> **Target Platform:** NanoELS H5 Electronic Leadscrew & Multi-Client Suite (ESP32-S3)  
+> **Author:** Antigravity & Emil  
+> **Date:** October 8, 2026  
+> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/NANOELS_MASTER_ARCHITECTURE.md`  
+> **Supersedes:** `ELS_DESIGN_NOTEBOOK.md` (as the root architectural index)
+
+---
+
+## 1. Executive System Vision & Core Tenets
+
+The **NanoELS H5 Architecture** modernizes an open-source embedded lathe controller into an industrial-grade, multi-client electronic leadscrew (ELS) and digital readout (DRO) platform.
+
+### 1.1 The Evolutionary Leap
+* **From:** A monolithic Arduino sketch (`h5.ino`, ~370 KB) with 200+ unencapsulated procedural globals, hardwired Nextion LCD packets, and high-frequency stepper timer ISRs interleaved with serial communication.
+* **To:** A clean, decoupled **6-subsystem architecture** built on strict hardware abstraction, deterministic dual-core concurrency, domain-driven telemetry, and a client-agnostic wire protocol.
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        PHYSICAL MACHINE TOOL (LATHE IRON)                              │
+│ • Carriage (Z), Cross-Slide (X), Auxiliary (Y) Leadscrews & Motors                     │
+│ • Spindle Quadrature Encoder & VFD / Servo Spindle Drive                               │
+│ • Linear Glass Scales (DRO), Physical Limit Switches, Apron Handwheels (MPG)          │
+└───────────────────────────────────────────▲────────────────────────────────────────────┘
+                                            │ Hardware Pins & ISRs
+┌───────────────────────────────────────────┴────────────────────────────────────────────┐
+│ CORE 1: DETERMINISTIC REAL-TIME MOTION                                                 │
+│ [Subsystem 1: HAL & Hardware Timing] ──► [Subsystem 2: Kinematic Kernel & Motion]     │
+│                                      ▲                                                 │
+│                                      │ Motion Primitives                               │
+│                      [Subsystem 3: Operational Modes Engine]                           │
+└───────────────────────────────────────────▲────────────────────────────────────────────┘
+                                            │ Atomic Point-in-Time Telemetry / CMDs
+┌───────────────────────────────────────────┴────────────────────────────────────────────┐
+│ CORE 0: ASYNCHRONOUS SUPERVISORY & COMMUNICATIONS                                     │
+│ [Subsystem 4: State Model & Settings] ◄──► [Subsystem 5: Command Dispatcher & Transport]│
+│                                                           │                            │
+│                                                           ▼                            │
+│                                            [Subsystem 6: HMI & Client Adapters]        │
+└───────────────────────────────────────────────────────────┬────────────────────────────┘
+                                                            │
+    ┌───────────────────────────────┬───────────────────────┴───────┬────────────────────┐
+    ▼                               ▼                               ▼                    ▼
+┌───────────────────────┐ ┌───────────────────┐ ┌────────────────────────┐ ┌─────────────────┐
+│ Modern Web UI (Tablet)│ │ Native LVGL 9 HMI │ │ Physical Inputs & MPG  │ │ Transitional    │
+│ (800×480 Capacitive)  │ │ (ESP32-S3 Display)│ │ (Keypad, Joystick)     │ │ Nextion Display │
+└───────────────────────┘ └───────────────────┘ └────────────────────────┘ └─────────────────┘
+```
+
+---
+
+### 1.2 Dual-Core Concurrency Architecture
+
+The ESP32-S3 dual-core processor enforces strict hardware isolation:
+
+| Core | Primary Role | Execution Paradigm | Safety & Timing Invariants |
+| :--- | :--- | :--- | :--- |
+| **Core 1** | **Real-Time Motion Control** | High-frequency hardware timer ISRs, pulse counters, deterministic control loops. | **Zero Heap Allocation, Zero Blocking Mutexes, Zero Network I/O.** Must execute in nanoseconds without latency jitter. |
+| **Core 0** | **Supervisory & Comms** | FreeRTOS tasks handling WebSockets, HTTP server, UART line parsing, NVS flash writes. | May perform JSON parsing, network transfers, and flash I/O. Communicates with Core 1 strictly via atomic state snapshots and thread-safe queues. |
+
+---
+
+### 1.3 Governing Architectural Invariants
+
+1. **The Controller is the Sole Authority:** Mode execution, boundary collision enforcement, electronic gearing ratios, and multi-pass canned cycles run deterministically on the controller MCU. Connected screens (Web, tablet, LVGL, Nextion) are reactive observers transmitting *operator intent*.
+2. **Radical Hardware Fidelity & Transparency:** The motion core operates on a strict binary state: `STOPPED` (`isOn == false`) or `RUNNING` (`isOn == true`). There are no software "ghost limits", no simulated mid-pass pauses, and no synthetic machine state that does not map directly to controller registers.
+3. **Running Safety Lockout & Permanent STOP:** When lathe motion is engaged (`isOn == true`), modal dialogs that occlude live DRO readouts are locked out, and mode switching is prohibited. The red **`STOP`** button is permanently anchored and universally unoccluded across all client views.
+4. **Zero-WiFi Control Plane Mandate:** Wireless networks in a machine shop are subject to severe EMI from VFDs and motor brushes. Automated threading cycles, electronic gearing, and emergency stops execute strictly via on-chip memory or wired serial UART. Wi-Fi and WebSockets are dedicated to supervisory telemetric observation and setup.
+
+---
+
+## 2. The 6 Subsystems: Responsibilities & Invariants
+
+To eliminate cross-file coupling and provide clear architectural homes for all code, the system is partitioned into **6 distinct subsystems**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   THE 6 ARCHITECTURAL SUBSYSTEMS                                │
+├─────────────────────┬────────────────────────────────┬──────────────────────────────────────────┤
+│ Subsystem           │ Core Responsibility            │ Strict Boundaries & Invariants           │
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 1. Hardware Timing  │ Stepper pulse timer ISRs, pin  │ • Core 1 only.                           │
+│    & HAL (`hal/`)   │ drivers, quadrature spindle    │ • NEVER include WiFi, WebSockets, or UI. │
+│                     │ interrupts, optical DRO scales.│ • Lock-free hardware register access.    │
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 2. Kinematic Kernel │ Atomic motion primitives       │ • Core 1 only.                           │
+│    & Motion         │ (`MoveTo`, `FollowSpindle`),   │ • Operates in integer deci-microns (du). │
+│    (`motion/`)      │ gearing math, backlash inject, │ • Zero floating-point roundtrip drift.   │
+│                     │ acceleration profiling.        │ • Pure math & pulse coordination.        │
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 3. Operational Mode │ Mode lifecycle state machines  │ • Implements `IELSMode` (enter/loop/exit)│
+│    Engine (`modes/`)| (`GearboxMode`, `TurnMode`,    │ • Prunes unavailable modes via `caps`.   │
+│                     │ `ThreadMode`, `TaperMode`).    │ • Orchestrates primitives from Subsystem 2│
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 4. State Model &    │ Single source of truth. 4-tier │ • Atomic point-in-time snapshots (K,I,C,P│
+│    Persistence      │ properties (`machine`, `sys`,  │ • Sparse NVS overrides (pristine flash). │
+│    (`model/`,       │ `prefs`, `client`), LittleFS   │ • 3-tier preset fallback hierarchy:      │
+│    `settings/`)     │ JSON catalog & schema streaming│   Active (NVS) ──► Default ──► ROM Failsafe│
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 5. Command          │ Line protocol decoder, client  │ • Canonical ASCII wire strings (`CMD.*`, │
+│    Dispatcher &     │ multiplexing, routing incoming │   `SETTINGS.*`).                         │
+│    Transport        │ commands, broadcasting deltas. │ • Transports (WebSocket, UART) are dumb  │
+│    (`transport/`)   │                                │   pipes feeding the Dispatcher.          │
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 6. Human-Machine    │ Hardware inputs (keypad, MPG,  │ • "Input is just an internal client."    │
+│    Interface (HMI)  │ joystick), Nextion display,    │ • Translates buttons/ticks into CMD.*    │
+│    Adapters (`hmi/`)| native LVGL display, Web UI.   │ • Displays observe telemetry; never run  │
+│                     │                                │   motion logic directly.                 │
+└─────────────────────┴────────────────────────────────┴──────────────────────────────────────────┘
+```
+
+---
+
+## 3. Transitional Adapters & Verification Bridges
+
+During this architectural transition, two specific legacy components require careful isolation to avoid polluting the core:
+
+### 3.1 Nextion Display: The Transitional "Oracle" & Isolation Boundary
+* **Why It Remains Today:**  
+  The physical Nextion LCD screen running over UART (`Serial1`) serves as a physical **verification oracle**. During bench testing and refactoring, having a known-working hardware display lets the developer glance at physical DRO coordinates, confirm spindle encoder pulse counts, and verify motor motion without relying on the network stack.
+* **Strict Isolation Boundary:**  
+  1. The Nextion code ([`Display.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Display.cpp) / [`DisplayModel.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/DisplayModel.cpp)) is strictly an **external client adapter**.
+  2. It receives read-only state updates from `MachineModel` / `DisplayModel` and transmits key codes or command strings.
+  3. **It is strictly forbidden from holding core motion logic, calculating gearing math, or directly mutating axis structs.**
+* **Deprecation Path:**  
+  Once the modern Web UI and native LVGL display clients are fully commissioned and bench-tested, the Nextion module will be cleanly retired by deleting `Display.cpp` and `Display.h` with zero impact on the rest of the controller.
+
+---
+
+### 3.2 Current LittleFS Web UI: Standardizing Touch Points
+* **Current State:**  
+  The controller currently serves a legacy HTML/JS interface from LittleFS flash via [`WebServerModule.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/WebServerModule.cpp). While functional for toggling settings, it historically used ad-hoc REST endpoints and raw variable mutations.
+* **Migration Strategy:**  
+  1. **Dumb Pipe Transport:** `WebServerModule.cpp` is strictly a network transport pipe implementing `ClientEndpoint`.
+  2. **Canonical Line Protocol:** All inbound messages from the web client MUST flow as standard ASCII line commands (`CMD.*`, `SETTINGS.*`) into `CommandDispatcher`.
+  3. **Canonical Domain Telemetry:** All outbound updates MUST flow as standard domain snapshots (`K`, `I`, `C`, `P`) emitted by `RichClientAdapter` / `MachineModel`.
+  4. **Drop-In Modern Replacement:** When the redesigned Alpine.js Web UI (`UI_redesign/prototype/`) is deployed to LittleFS to replace the legacy web assets, it will connect to the exact same WebSocket endpoint with **zero backend firmware modifications**.
+
+---
+
+## 4. Current Codebase File Audit & Target Subsystem Mapping
+
+Below is the complete audit of all 16 implementation files in `src/` (and their headers in `include/`), detailing their current role, target subsystem, and migration path:
+
+| File (`src/` & `include/`) | Current Role in Codebase | Target Subsystem | Architectural Disposition & Migration Task |
+| :--- | :--- | :--- | :--- |
+| [`main.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/main.cpp) | Boot orchestrator, task creator, procedural `loop()` mode ladder. | **System Bootstrap** | Refactor `loop()` to delegate to `IELSModeRegistry::getActiveMode()->update()`. Remove procedural mode `if-else` ladder. |
+| [`Axis.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Axis.cpp)<br>[`Axis.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Axis.h) | `Axis` struct, hardware stepping pins, backlash, motor step math. | **Subsystem 1 (HAL)** | Extract hardware pin stepping and pulse generation into clean HAL classes. Remove coupling to legacy global variables. |
+| [`Motion.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp)<br>[`Motion.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h) | Mixed: Timer ISRs, spindle pulse tracking, legacy mode loops (`modeTurn`, etc.). | **Subsystem 2 (Kinematics)** | Separate real-time timer ISRs & spindle math from mode logic. Move canned cycles (`modeTurn`, `modeCone`) into Subsystem 3 `IELSMode` classes. |
+| [`Config.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Config.cpp)<br>[`Config.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Config.h) | Legacy globals (`z`, `x`, `dupr`, `starts`), NVS loader, hardware pin `#define`s. | **Subsystem 4 (Persistence)** | Systematically retire raw globals. Hardware pins move to HAL; configuration persistence moves entirely to `SettingsService`. |
+| [`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp)<br>[`Input.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Input.h) | Keypad matrix, button debounce, joystick ADC, Nextion input parser. Directly mutates state. | **Subsystem 6 (HMI Adapters)** | Refactor so input routines NEVER mutate motion state directly. They must emit canonical `CMD.*` strings into `CommandDispatcher`. |
+| [`Display.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Display.cpp)<br>[`Display.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Display.h) | Nextion LCD serial protocol, page flipping, text drawing. | **Subsystem 6 (HMI Adapters)** | Maintain as transitional verification oracle. Isolate as read-only subscriber to `DisplayModel`. |
+| [`DisplayModel.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/DisplayModel.cpp)<br>[`DisplayModel.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/DisplayModel.h) | Bridge between raw variables and display formatting. | **Subsystem 6 (HMI Adapters)** | Refactor to consume clean `MachineModel` domain snapshots (`K`, `I`) rather than raw globals. |
+| [`WebServerModule.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/WebServerModule.cpp)<br>[`WebServerModule.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/WebServerModule.h) | HTTP file server (LittleFS), WebSocket server, network routing. | **Subsystem 5 (Transport)** | Strip all legacy direct-state mutation routes. Restrict strictly to serving static web files and piping WebSocket frames to `ClientEndpoint`. |
+| [`DRO_Scale.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/DRO_Scale.cpp)<br>[`DRO_Scale.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/DRO_Scale.h) | ESP32 PCNT hardware pulse counter for optical linear scales. | **Subsystem 1 (HAL)** | Clean HAL component. Keep and integrate with `QuadratureEncoderConfig`. |
+| [`UsbKeyboard.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/UsbKeyboard.cpp)<br>[`UsbKeyboard.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/UsbKeyboard.h) | USB Host keyboard driver. | **Subsystem 6 (HMI Adapters)** | Clean input driver. Maps USB key scancodes to canonical `CMD.*` strings. |
+| [`LatheProfile.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/LatheProfile.cpp)<br>[`LatheProfile.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/LatheProfile.h) | Typed `LatheConfiguration`, capabilities bitmask, baseline profiles. | **Subsystem 4 (Persistence)** | Modern foundation. Simplify to single ROM baseline `getDefaultProfile()`; presets migrate to LittleFS `/presets/profiles.json`. |
+| [`SettingsService.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp)<br>[`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h) | 4-tier parameter registry, sparse NVS overrides, in-memory RAM cache. | **Subsystem 4 (Persistence)** | Modern foundation. Add LittleFS profile catalog file I/O and dynamic schema streaming (`SETTINGS.schema=*`). |
+| [`MachineModel.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/MachineModel.cpp)<br>[`MachineModel.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h) | Atomic state capture across 4 domains (`K`, `I`, `C`, `P`), delta detection. | **Subsystem 4 (State Model)** | Modern foundation. Authoritative state bridge between Core 1 and Core 0. |
+| [`CommandDispatcher.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp)<br>[`CommandDispatcher.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/CommandDispatcher.h) | Line protocol command router (`CMD.*`, `SETTINGS.*`). | **Subsystem 5 (Transport)** | Modern foundation. The single entry point for all commands across all clients (Web, physical keys, serial). |
+| [`ClientEndpoint.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/ClientEndpoint.cpp)<br>[`ClientEndpoint.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/ClientEndpoint.h) | Client session manager and broadcast distributor. | **Subsystem 5 (Transport)** | Modern foundation. Multiplexes connected clients, tracks subscription flags, handles unicast replies. |
+| [`RichClientAdapter.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp)<br>[`RichClientAdapter.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/RichClientAdapter.h) | Domain state serializer (`K.*`, `I.*`, `C.*`, `P.*`). | **Subsystem 5 (Transport)** | Modern foundation. Serializes atomic `MachineModel` snapshots into compact wire strings. |
+
+---
+
+## 5. Authoritative Specification Hierarchy & Deep-Dive Documents
+
+To prevent architectural drift and maintain single-topic depth, all detailed implementation rules are partitioned into dedicated standalone specifications:
+
+```
+NANOELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
+│
+├── 1. Core State & Concurrency Model
+│    └── ELS_CORE_STATE_MODEL.md
+│        (The 4 Domains: K Kinematic, I Intent, C Configuration, P Profile;
+│         Point-in-time atomic snapshots; Core 1 vs. Core 0 FreeRTOS concurrency)
+│
+├── 2. Machine Profile, Presets & Schema Introspection
+│    └── LATHE_MACHINE_PROFILE.md
+│        (Physical geometry, capability bitmasks, decoupled spindle ratio,
+│         LittleFS catalog /presets/profiles.json, 3-tier fallback hierarchy,
+│         standard JSON Schema draft-07 introspection)
+│
+├── 3. Operational Mode Engine & Kinematics
+│    └── ELS_MODE_ARCHITECTURE.md & modes/README.md
+│        (IELSMode lifecycle interface, mode registry, atomic motion primitives,
+│         unified gearbox, and canned cycle manifests)
+│
+├── 4. Client Transport, Protocol & Multi-Client Safety
+│    └── ELS_CLIENT_ARCHITECTURE.md
+│        (3-tier transport pipeline, multi-channel WebSockets, wire line protocol,
+│         and the Zero-WiFi safety control plane mandate)
+│
+├── 5. Properties, Settings & Persistence
+│    └── ELS_PROPERTIES_AND_SETTINGS.md
+│        (4-tier properties taxonomy, dynamic defaults vs. sparse NVS overrides,
+│         lock-free RAM cache, universal reset mechanics, legacy migration audit)
+│
+└── 6. HMI Ergonomics & Client Implementations
+     ├── hmi/HMI_DESIGN_GUIDELINES.md (Universal ergonomics, Cartesian viewpoints)
+     ├── hmi/RICH_TOUCH_800X480.md (800×480 screen layout, hitboxes, keypad)
+     ├── clients/web_ui/OVERVIEW.md (Modern Alpine.js/Vanilla web client architecture)
+     └── clients/web_ui/INTERACTION_LEDGER.md (40-row UI gesture to wire command ledger)
+```
+
+---
+
+## 6. Rules of Engagement for Human Developers & AI Agents
+
+All contributors and AI pair-programming agents working in this repository MUST adhere to the following rules:
+
+1. **Verify Against the 6 Subsystems Before Modifying Code:**
+   * Before adding or editing code, identify which subsystem the file belongs to.
+   * If a file bridges multiple subsystems (e.g. `Input.cpp` calling motion math), **refactor the boundary** rather than deepening the coupling.
+2. **Never Treat Legacy Globals in `Config.h` as Sacred:**
+   * Raw globals (`dupr`, `starts`, `z`, `x`, `isOn`) are legacy migration baggage.
+   * When touching a feature, migrate access to `MachineModel` (for state) or `SettingsService` (for configuration).
+3. **Strict Adherence to Core 1 Motion Safety:**
+   * Never introduce blocking calls (`delay()`, flash writes, mutex locks, JSON serialization) into Core 1 motion loops.
+   * Motion timing must remain deterministic under all cutting conditions.
+4. **"Input and Display are Just Clients":**
+   * Physical keypads, joysticks, MPG handwheels, and Nextion screens must interact with the motion engine exclusively through `CommandDispatcher` (`CMD.*`) and `MachineModel`.
+5. **Clean Milestone Verification:**
+   * Build the firmware via PlatformIO (`pio run`) after every change.
+   * Ensure zero warnings and zero regressions in existing lathe motion.

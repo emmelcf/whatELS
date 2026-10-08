@@ -62,7 +62,7 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
      - [`SpindleHardwareConfig`](./LATHE_MACHINE_PROFILE.md#33-spindle-hardware-configuration-spindlehardwareconfig) (encoder PPR, max safe RPM, min sync RPM, VFD parameters).
      - [`LatheDimensions`](./LATHE_MACHINE_PROFILE.md#34-physical-envelope--geometry-lathedimensions) (bed length, max swing, cross-slide clearance, chuck dimensions).
      - [`LatheConfiguration`](./LATHE_MACHINE_PROFILE.md#35-the-complete-lathe-profile-latheconfiguration) aggregating all parameters.
-  3. Declare standard preset library factory functions (e.g., `getPresetMini7x14()`, `getPresetWM210V()`, `getPresetEngine1440()`).
+  3. Declare standard baseline fallback profile (`getDefaultProfile()`, WM210V 8×16 baseline). Avoid multi-preset ROM bloat in favor of LittleFS JSON storage.
 * **Verification:** Run PlatformIO build to ensure header compiles cleanly with zero warnings and no runtime changes.
 
 ---
@@ -89,16 +89,19 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 
 ---
 
-### Session 1.4: Command Dispatcher Wire Protocol (`CMD.machine.*`)
-* **Goal:** Allow client interfaces to query machine geometry, modify calibration, and select presets over canonical wire commands.
+### Session 1.4: Command Dispatcher Wire Protocol & LittleFS Preset Management
+* **Goal:** Allow client interfaces to manage presets (`/presets/*.json`), inspect JSON Schema, modify calibration, and select presets over canonical wire commands.
 * **Firmware Scope:**
   1. Extend [`CommandDispatcher.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp):
-     - `CMD.machine.get`: Returns active profile ID, model name, capability bitmask, and dimensions.
-     - `CMD.machine.preset=<slug>`: Loads preset (e.g., `mini_7x14`, `bench_1022`) and persists to NVS.
-     - `CMD.machine.cap=<flag>,<0|1>`: Dynamically toggles individual capability flags (e.g., enabling linear scale on X).
-     - `CMD.machine.screwPitch=<axis>,<pitchDu>`: Updates physical screw pitch calibration.
-  2. Enforce safety checks: Disallow profile changes while lathe motion is active (`isOn == true`).
-* **Verification:** Dispatch commands from WebSocket terminal / test harness and verify round-trip persistence in NVS.
+     - `SETTINGS.preset.list`: Returns list of available `.json` preset slugs in LittleFS `/presets/`.
+     - `SETTINGS.preset.get=<slug>`: Streams JSON preset file payload.
+     - `SETTINGS.preset.apply=<slug>`: Parses JSON preset from LittleFS and activates in RAM.
+     - `SETTINGS.preset.save=<slug>`: Serializes active profile and writes to `/presets/<slug>.json`.
+     - `SETTINGS.preset.delete=<slug>`: Deletes preset file from LittleFS.
+     - `SETTINGS.schema=<name>`: Streams static JSON Schema (e.g. `/schemas/lathe-profile.schema.json`).
+     - `SETTINGS.set=machine.<key>,<val>`: Updates physical calibration with sparse NVS override.
+  2. Enforce safety checks: Disallow preset changes while lathe motion is active (`isOn == true`).
+* **Verification:** Dispatch commands from WebSocket terminal / test harness and verify round-trip persistence and LittleFS file operations.
 
 ---
 
