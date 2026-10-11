@@ -4,7 +4,7 @@
 > **Target System:** NanoELS H5 Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/ELS_CORE_STATE_MODEL.md`  
+> **Location:** `docs/ELS_CORE_STATE_MODEL.md`  
 > **Referenced By:** `LATHE_MACHINE_PROFILE.md`, `ELS_MODE_ARCHITECTURE.md`, `ELS_CLIENT_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`
 
 ---
@@ -412,7 +412,7 @@ The controller captures `MachineModel::captureAll()` at instant $t_0$ and stream
 
 ## 8. Client-Side Reactive Model (`Alpine.store('machine')`)
 
-In the browser and Web UI, [`nanoels-state.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-state.js) implements an isomorphic reactive representation of `MachineModel`:
+In the browser and Web UI, [`nanoels-state.js`](../clients/web_ui/nanoels-state.js) implements an isomorphic reactive representation of `MachineModel`:
 
 ```javascript
 Alpine.store('machine', {

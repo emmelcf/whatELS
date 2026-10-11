@@ -113,7 +113,7 @@ Static and machine-level hardware properties.
 
 ## 3. Composable Client Endpoint Pipeline & Multi-Client Architecture
 
-To allow any hardware transport and multiple concurrent displays to communicate with the core controller, communication is modeled as a composable pipeline ([`ClientEndpoint.h`](file:///home/emil/code/nanoels/src/web/ClientEndpoint.h)):
+To allow any hardware transport and multiple concurrent displays to communicate with the core controller, communication is modeled as a composable pipeline ([`ClientEndpoint.h`](../src/web/ClientEndpoint.h)):
 
 $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$$
 
@@ -180,7 +180,7 @@ The ESP32-S3 runs a dual-core FreeRTOS architecture where hard real-time stepper
   - When `publishMachineStatus()` is called from `taskDisplay`, it acquires `wsMutex` with a non-blocking timeout, serializing telemetry and pushing frames cleanly without memory corruption or socket race conditions.
 
 ### 3.7 Dedicated Settings Service & Parameter Ledger
-Configuration reads and writes are managed by [`SettingsService.h`](file:///home/emil/code/nanoels/src/core/SettingsService.h) and [`SettingsService.cpp`](file:///home/emil/code/nanoels/src/core/SettingsService.cpp), isolating NVS persistence and validation from command routing:
+Configuration reads and writes are managed by [`SettingsService.h`](../src/core/SettingsService.h) and [`SettingsService.cpp`](../src/core/SettingsService.cpp), isolating NVS persistence and validation from command routing:
 
 | Setting Key | Type | Min | Max | NVS Key | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |

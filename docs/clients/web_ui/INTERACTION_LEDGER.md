@@ -4,7 +4,7 @@
 > **Client:** NanoELS Web UI / Touch DRO Interface  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/clients/web_ui/INTERACTION_LEDGER.md`  
+> **Location:** `docs/clients/web_ui/INTERACTION_LEDGER.md`  
 > **Companion Document:** [`OVERVIEW.md`](./OVERVIEW.md)  
 > **Parent Specifications:** [`ELS_CLIENT_ARCHITECTURE.md`](../../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md)
 
@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary & Safety Policy
 
-This document provides the exhaustive, 1-to-1 mapping of every interactive element on the NanoELS Web UI prototype ([`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html)) to its JavaScript handler, emitted wire command, and motion controller kinematic effect.
+This document provides the exhaustive, 1-to-1 mapping of every interactive element on the NanoELS Web UI prototype ([`lathe_dro_nanoels_controller.html`](../../../clients/web_ui/lathe_dro_nanoels_controller.html)) to its JavaScript handler, emitted wire command, and motion controller kinematic effect.
 
 ### Universal Safety Invariants:
 1. **Running Motion Lockout (`state.runState === 'running'`):**  

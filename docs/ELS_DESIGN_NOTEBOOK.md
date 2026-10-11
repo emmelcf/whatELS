@@ -5,7 +5,7 @@
 > **Status:** Living Historical Ledger  
 > **Target Platform:** NanoELS H5 Core Motion Controller & Multi-Client Suite  
 > **Date:** October 8, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/ELS_DESIGN_NOTEBOOK.md`
+> **Location:** `docs/ELS_DESIGN_NOTEBOOK.md`
 
 ---
 
@@ -33,12 +33,12 @@ The project began as an open-source Russian electronic leadscrew (ELS) controlle
 ### Phase 1: The UI Ambition & In-Flight Modularization
 The primary goal was to bring a modern, high-resolution touch UI / tablet DRO (and eventually WebSocket streaming) to the lathe controller so operators would no longer be restricted to the clunky, low-resolution Nextion interface.
 * **The Refactoring Effort:** The user and team extracted the 370KB monolith into separate C++ classes and compilation units under `src/`:
-  - [`Axis.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Axis.cpp) / [`Axis.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Axis.h) — Stepper pulse generation and DRO scale reading.
-  - [`Motion.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp) / [`Motion.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Motion.h) — Spindle synchronization, electronic gearing, and threading.
-  - [`Config.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Config.cpp) / [`Config.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Config.h) — NVS storage and global machine configuration.
-  - [`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp) / [`Input.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Input.h) — Hardware keypads, MPG handwheel, and joystick.
-  - [`Display.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Display.cpp) / [`Display.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Display.h) — Nextion display communication.
-  - [`SettingsService.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/SettingsService.cpp) / [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h) — Early settings abstraction.
+  - [`Axis.cpp`](../src/motion/Axis.cpp) / [`Axis.h`](../src/motion/Axis.h) — Stepper pulse generation and DRO scale reading.
+  - [`Motion.cpp`](../src/motion/Motion.cpp) / [`Motion.h`](../src/motion/Motion.h) — Spindle synchronization, electronic gearing, and threading.
+  - [`Config.cpp`](../src/core/Config.cpp) / [`Config.h`](../src/core/Config.h) — NVS storage and global machine configuration.
+  - [`Input.cpp`](../src/input/Input.cpp) / [`Input.h`](../src/input/Input.h) — Hardware keypads, MPG handwheel, and joystick.
+  - [`Display.cpp`](../src/display/Display.cpp) / [`Display.h`](../src/display/Display.h) — Nextion display communication.
+  - [`SettingsService.cpp`](../src/core/SettingsService.cpp) / [`SettingsService.h`](../src/core/SettingsService.h) — Early settings abstraction.
 * **The Lingering Hybrid Problem:** While the code was physically separated into `.cpp` and `.h` files, it was **not yet architecturally redesigned**. It remained a direct 1:1 translation of the legacy `.ino`. It still relied on raw globals (`SCREW_Z_DU`, `MOTOR_STEPS_Z`, `ENCODER_PPR`), legacy naming units (deci-microns `du`), legacy Nextion state machines, and legacy configuration schemas.
 
 ### Phase 2: The Breakthrough — True Architectural Modernization

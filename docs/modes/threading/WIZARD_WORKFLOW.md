@@ -37,7 +37,7 @@ The **Conversational Threading Wizard** integrates this domain knowledge directl
 
 ## 2. Standard Fastener Presets & Dataset Structure
 
-The wizard integrates standard engineering thread tables ([`nanoels-presets.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-presets.js)) covering 4 primary standards:
+The wizard integrates standard engineering thread tables ([`nanoels-presets.js`](../../../clients/web_ui/nanoels-presets.js)) covering 4 primary standards:
 
 ### 1. ISO Metric (`THREAD_FAMILIES.METRIC`)
 * Organized into diameter ranges: $\le \text{M6}$, $\text{M7–M12}$, $\text{M14–M24}$, $\text{M27–M42}$.

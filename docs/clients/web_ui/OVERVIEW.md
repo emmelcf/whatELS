@@ -4,8 +4,8 @@
 > **Client Type:** Modern Browser / Touchscreen DRO Interface (HTML5 / ES Modules / Alpine.js)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/clients/web_ui/OVERVIEW.md`  
-> **Primary Prototype File:** [`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html)  
+> **Location:** `docs/clients/web_ui/OVERVIEW.md`  
+> **Primary Prototype File:** [`lathe_dro_nanoels_controller.html`](../../../clients/web_ui/lathe_dro_nanoels_controller.html)  
 > **Companion Document:** [`INTERACTION_LEDGER.md`](./INTERACTION_LEDGER.md)  
 > **Core Architecture References:** [`ELS_CLIENT_ARCHITECTURE.md`](../../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md)
 

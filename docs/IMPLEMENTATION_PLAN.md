@@ -3,7 +3,7 @@
 > **Status:** Approved for Phased Execution  
 > **Target Version:** NanoELS H5 Modular Architecture  
 > **Source Documents:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/IMPLEMENTATION_PLAN.md`
+> **Location:** `docs/IMPLEMENTATION_PLAN.md`
 
 ---
 
@@ -50,7 +50,7 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ---
 
 ### Session 1.1: Core Data Structures & Capability Bitmask Definition
-* **Goal:** Create a standalone, self-contained header [`include/LatheProfile.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/LatheProfile.h) declaring the typed profile structs and bitmasks without modifying existing motion logic.
+* **Goal:** Create a standalone, self-contained header [`src/motion/LatheProfile.h`](../src/motion/LatheProfile.h) declaring the typed profile structs and bitmasks without modifying existing motion logic.
 * **Firmware Scope:**
   1. Define `LatheCapabilityFlags` bitmask (`uint32_t`):
      - Spindle: `CAP_SPINDLE_ENCODER`, `CAP_SPINDLE_INDEX`, `CAP_SPINDLE_VFD`.
@@ -68,12 +68,12 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ---
 
 ### Session 1.2: Machine Configuration Storage & NVS Persistence
-* **Goal:** Integrate `LatheConfiguration` into [`Config.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/Config.h) / [`Config.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Config.cpp) and enable persistent storage.
+* **Goal:** Integrate `LatheConfiguration` into [`Config.h`](../src/core/Config.h) / [`Config.cpp`](../src/core/Config.cpp) and enable persistent storage.
 * **Firmware Scope:**
   1. Add an active `LatheConfiguration activeMachineProfile` instance.
   2. Implement `loadMachineProfile()` and `saveMachineProfile()` using ESP32 `Preferences` under namespace `"machine"`.
   3. **Zero-Regression Invariant:** If NVS namespace `"machine"` is uninitialized, automatically populate `activeMachineProfile` using the existing compile-time defaults (`DEFAULT_SCREW_Z_DU`, `MOTOR_STEPS_Z`, `HAS_DRO_Z`, etc.).
-  4. Expose getters/setters in [`SettingsService.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/SettingsService.h).
+  4. Expose getters/setters in [`SettingsService.h`](../src/core/SettingsService.h).
 * **Verification:** Verify ESP32 boot log outputs active machine capabilities and loads stored overrides cleanly.
 
 ---
@@ -81,9 +81,9 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ### Session 1.3: Telemetry Stream & State Model Integration
 * **Goal:** Extend the 4-Domain State Model to publish hardware capabilities and machine geometry to connected clients.
 * **Firmware Scope:**
-  1. Add `uint32_t capabilities` to [`MachineProperties`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h#L56-L71) in [`MachineModel.h`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/include/MachineModel.h).
-  2. Update [`MachineModel::captureProperties()`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/MachineModel.cpp#L73-L90) to sample `activeMachineProfile.capabilities`.
-  3. In [`RichClientAdapter.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/RichClientAdapter.cpp), serialize `P.caps=0x<HEX>` into the Properties domain stream.
+  1. Add `uint32_t capabilities` to [`MachineProperties`](../src/core/MachineModel.h#L56-L71) in [`MachineModel.h`](../src/core/MachineModel.h).
+  2. Update [`MachineModel::captureProperties()`](../src/core/MachineModel.cpp#L73-L90) to sample `activeMachineProfile.capabilities`.
+  3. In [`RichClientAdapter.cpp`](../src/display/RichClientAdapter.cpp), serialize `P.caps=0x<HEX>` into the Properties domain stream.
   4. Ensure `hasChanged()` triggers a push update when machine capabilities or profile properties are modified.
 * **Verification:** Connect to WebSocket endpoint and verify telemetry emits `P.caps` in response to `CMD.get=P`.
 
@@ -92,7 +92,7 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ### Session 1.4: Command Dispatcher Wire Protocol & LittleFS Preset Management
 * **Goal:** Allow client interfaces to manage presets (`/presets/*.json`), inspect JSON Schema, modify calibration, and select presets over canonical wire commands.
 * **Firmware Scope:**
-  1. Extend [`CommandDispatcher.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp):
+  1. Extend [`CommandDispatcher.cpp`](../src/web/CommandDispatcher.cpp):
      - `SETTINGS.preset.list`: Returns list of available `.json` preset slugs in LittleFS `/presets/`.
      - `SETTINGS.preset.get=<slug>`: Streams JSON preset file payload.
      - `SETTINGS.preset.apply=<slug>`: Parses JSON preset from LittleFS and activates in RAM.
@@ -108,22 +108,22 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ### Session 1.5: Client-Side Capability Hydration & UI Gating (Web UI & Simulator)
 * **Goal:** Update the Web UI client and emulator to dynamically adapt layout and controls based on reported `P.caps`.
 * **Frontend Scope:**
-  1. **Store Extension ([`nanoels-state.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-state.js)):**
+  1. **Store Extension ([`nanoels-state.js`](../clients/web_ui/nanoels-state.js)):**
      - Parse `P.caps` into a reactive capability object (`$store.machine.capabilities`).
      - Provide helper method `$store.machine.hasCap(flagName)`.
-  2. **Simulator Parity ([`nanoels-emulator.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/nanoels-emulator.js)):**
+  2. **Simulator Parity ([`nanoels-emulator.js`](../clients/web_ui/nanoels-emulator.js)):**
      - Emulate `P.caps` and wire `CMD.machine.*` responses for offline browser testing.
-  3. **Adaptive UI Controls ([`lathe_dro_nanoels_controller.html`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/lathe_dro_nanoels_controller.html)):**
+  3. **Adaptive UI Controls ([`lathe_dro_nanoels_controller.html`](../clients/web_ui/lathe_dro_nanoels_controller.html)):**
      - Visually gate cross-slide power feed / facing buttons if `!hasCap('CAP_MOTOR_X')`.
      - Toggle DRO indicator badges (`DRO X`, `DRO Z`) based on `CAP_DRO_*`.
-     - Link machine profile dimensions directly to the Digital Twin visualizer ([`lathe-viz.js`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype/dev/lathe-viz.js)).
+     - Link machine profile dimensions directly to the Digital Twin visualizer ([`lathe-viz.js`](../clients/web_ui/dev/lathe-viz.js)).
 * **Verification:** Verify in browser with simulator and live controller; switching profiles dynamically updates UI controls and canvas dimensions.
 
 ---
 
 ## 3. Phase 2: Operational Mode Architecture (`IELSMode`) (High-Level Architecture)
 
-> **Objective:** Transition the motion engine from procedural functions in [`Motion.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Motion.cpp) into polymorphic, modular classes adhering to [`IELSMode`](./ELS_MODE_ARCHITECTURE.md#32-the-mode-interface-contract-ielsmode).
+> **Objective:** Transition the motion engine from procedural functions in [`Motion.cpp`](../src/motion/Motion.cpp) into polymorphic, modular classes adhering to [`IELSMode`](./ELS_MODE_ARCHITECTURE.md#32-the-mode-interface-contract-ielsmode).
 
 ### Planned Conversations:
 * **Session 2.1: `IELSMode` Base Interface & `ModeRegistry` Framework**
@@ -136,7 +136,7 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 * **Session 2.4: Multi-Pass Machining Cycles (Turning, Facing, Threading)**
   - Implement `TurnCycleMode`, `FaceCycleMode`, and `ThreadCycleMode` as clean state machines using the primitives, eliminating duplicated pass sequencing.
 * **Session 2.5: Supervisor & Legacy Input Adapter Refactoring**
-  - Route all mode activations from Nextion serial ([`Input.cpp`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/Input.cpp)) and Web UI through `ModeRegistry` and [`CommandDispatcher`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/src/CommandDispatcher.cpp).
+  - Route all mode activations from Nextion serial ([`Input.cpp`](../src/input/Input.cpp)) and Web UI through `ModeRegistry` and [`CommandDispatcher`](../src/web/CommandDispatcher.cpp).
 
 ---
 
@@ -146,7 +146,7 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 
 ### Planned Conversations:
 * **Session 3.1: Production Asset Packaging for LittleFS (`data/www`)**
-  - Package [`UI_redesign/prototype`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/prototype) assets (HTML, CSS, JS, Alpine runtime) into [`data/www`](file:///c:/Users/Emil/Documents/Code/nanoels/h5/data/www).
+  - Package [`clients/web_ui`](../clients/web_ui) assets (HTML, CSS, JS, Alpine runtime) into [`data/www`](../data/www).
   - Configure LittleFS build flags and gzip asset compression to minimize flash footprint and load times.
 * **Session 3.2: Wired Bus / High-EMI Serial Control Plane Validation**
   - Enforce the Zero-WiFi Control Plane Mandate: verify that motion commands and safety interlocks operate with 100% determinism over physical UART (`Serial1`), while Wi-Fi remains dedicated to supervisory DRO telemetry.

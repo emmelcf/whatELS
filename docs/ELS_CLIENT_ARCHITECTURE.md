@@ -4,7 +4,7 @@
 > **Target Version:** NanoELS H5 Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/ELS_CLIENT_ARCHITECTURE.md`  
+> **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
 > **Referenced By:** `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`
 
 ---

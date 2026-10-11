@@ -4,7 +4,7 @@
 > **Target Version:** NanoELS H5 Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `c:/Users/Emil/Documents/Code/nanoels/h5/UI_redesign/docs/LATHE_MACHINE_PROFILE.md`  
+> **Location:** `docs/LATHE_MACHINE_PROFILE.md`  
 > **Referenced By:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md), `lathe-viz-profiles.js`, `MachineModel.h`
 
 ---
