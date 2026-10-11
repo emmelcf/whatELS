@@ -7,7 +7,7 @@ Currently, `DisplayModel` centralizes unit conversions (Metric vs Imperial) and 
 
 | Consumer | Primary Use Case | Target Display Profile |
 | :--- | :--- | :--- |
-| **Physical DRO (Nextion)** | Machinist standing at the lathe. | Fixed 3 decimal places (`0.000`), diameter mode for X, tracks machine hardware buttons. |
+| **Physical DRO (Nextion / LVGL)** | Machinist standing at the lathe. | Fixed 3 decimal places (`0.000`), diameter mode for X, tracks machine hardware buttons. |
 | **GRBL / CNC G-Code Sender** | Automated CAM/CNC senders (Candle, UGS, CNCjs). | Higher precision (e.g. 4 decimals in mm, 5 in inch), radius mode for X (standard G-code), no trailing zero padding. |
 | **Web UI Dashboard** | Remote monitor or tablet. | Can follow client-specific preferences (e.g. Imperial readout on phone while operator runs Metric at machine). |
 
@@ -57,6 +57,12 @@ private:
 3. **`webDisplay` / Client Profiles**:
    - Can track per-client WebSocket preferences or machine defaults.
    - Pushed via `publishMachineStatus()` in `WebServerModule.cpp`.
+
+4. **`lvglDisplay`**:
+   - `positionDecimals = 3`
+   - `diameterMode = isDiameterMode`
+   - `fixedPadding = true`
+   - Bound to native embedded LVGL touch display client.
 
 ## 2. Dynamic Hardware Pulse Counter Assignment & Linear Scale Settings
 
