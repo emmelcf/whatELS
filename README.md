@@ -4,7 +4,7 @@ CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting 
 
 - **Electronic Gearing & Multi-Start Threading** with real-time spindle encoder synchronization
 - **Multi-Pass Canned Cycles** (Turning, Facing, Cones/Tapers, Cutoff, Spheres, Slotting)
-- **Modular Multi-Client Architecture**: Embedded Web UI, Modern Touch DRO, Native LVGL 9 Display, USB/PS2 keyboard, and MPG pendants
+- **Modular Multi-Client Architecture**: Embedded Web UI, Modern Touch DRO, USB/PS2 keyboard, and MPG pendants
 - **Hardware Scale & DRO Support**: Direct integration with optical rotary encoders and linear glass DRO scales
 - **Dual-Core Concurrency**: Real-time deterministic motion timing on Core 1; asynchronous web, telemetry, and supervisory services on Core 0
 
@@ -31,8 +31,6 @@ nanoels/
 │
 ├── clients/                 # Operator client applications
 │   └── web_ui/              # Modern 800×480 Touch DRO Web UI (Alpine.js, HTML5/CSS3)
-│
-├── screen_lvgl/             # Native embedded LVGL 9 display companion project
 │
 ├── docs/                    # Authoritative system & architectural documentation
 │   ├── CONTROLLER_ARCHITECTURE.md   # Firmware pipeline, domains (K, I, C, P), and wire protocol
