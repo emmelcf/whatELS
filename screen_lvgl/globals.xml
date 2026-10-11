@@ -1,0 +1,91 @@
+<globals>
+	<!-- DESIGN SYSTEM — single source of truth for spacing, colors, fonts,
+	     the light/dark styles and the observable subjects.
+	     Reference consts as #name, styles by <style name="...">, fonts by name. -->
+
+	<api>
+		<!-- Project-wide enums go here. Add <enumdef> when a component needs one. -->
+	</api>
+
+	<!-- Design tokens. Reference as #name so one edit re-tunes the whole UI.
+	     Per-target blocks scale spacing/shape to the display size. -->
+	<!-- Spacing scale: use these instead of raw pixel paddings/gaps -->
+	<consts>
+		<int name="space_xs" value="2" help="Smallest spacing/padding unit" />
+		<int name="space_sm" value="4" help="Small spacing/padding unit" />
+		<int name="space_md" value="8" help="Default spacing/padding unit" />
+		<int name="space_lg" value="16" help="Large spacing/padding unit" />
+		<int name="space_xl" value="32" help="Extra-large spacing/padding unit" />
+
+		<!-- Shape -->
+		<int name="radius_default" value="12" help="Default corner radius" />
+		<int name="border_width" value="1" help="Default border width" />
+
+		<int name="icon_size" value="16" help="Default icon size" />
+		<opa name="opa_muted" value="35%" help="Used to dim down contant" />
+
+		<!-- Light palette -->
+		<color name="color_light_bg" value="0xEEF1F6" help="Light theme screen background" />
+		<color name="color_light_panel" value="0xFFFFFF" help="Light theme panel/card background" />
+		<color name="color_light_text" value="0x1B1F27" help="Light theme primary text" />
+
+		<!-- Dark palette -->
+		<color name="color_dark_bg" value="0x12151C" help="Dark theme screen background" />
+		<color name="color_dark_panel" value="0x1E232E" help="Dark theme panel/card background" />
+		<color name="color_dark_text" value="0xE6E9F0" help="Dark theme primary text" />
+
+		<!-- Accent + semantic colors (same in both themes) -->
+		<color name="color_accent" value="0x9429FF" help="Accent / active control color" />
+		<color name="color_accent_text" value="0xFFFFFF" help="Text/icon drawn on top of the accent color" />
+		<color name="color_danger" value="0xE5484D" help="Destructive / warning color" />
+		<color name="color_track" value="0x9AA3B2" help="Neutral track behind sliders/arcs/bars" />
+	</consts>
+
+	<!-- Montserrat, compiled in (as_file="false"). Latin range + a few symbols;
+	     bump range/symbols if you need more glyphs.
+	     font_body is the inherited default (see style_screen_*). -->
+	<fonts />
+
+	<!-- Observable model the UI binds to. Add your own and bind widgets with
+	     bind_value / bind_checked / bind_text. -->
+	<subjects>
+		<int name="subject_theme_dark" value="0" min_value="0" max_value="1" help="0 = light theme, 1 = dark theme" />
+		<int
+			name="subject_brightness"
+			value="60"
+			min_value="0"
+			max_value="100"
+			help="Example value (0..100) driven by the demo controls"
+		/>
+		<int name="subject_show_keyboard" value="0" help="Wether to show a keyboard " />
+	</subjects>
+
+	<images />
+
+	<!-- Reusable styles. Light/dark variants are swapped at runtime with
+	     <bind_style subject="subject_theme_dark">. -->
+	<styles>
+		<style
+			name="style_screen_light"
+			bg_color="#color_light_bg"
+			bg_opa="100%"
+			text_color="#color_light_text"
+			text_font="font_body"
+		/>
+		<style
+			name="style_screen_dark"
+			bg_color="#color_dark_bg"
+			bg_opa="100%"
+			text_color="#color_dark_text"
+			text_font="font_body"
+		/>
+		<style
+			name="style_scrollbar"
+			width="#space_sm"
+			radius="#space_sm"
+			bg_color="#color_track"
+			bg_opa="80%"
+			pad_all="#space_sm"
+		/>
+	</styles>
+</globals>

@@ -1,60 +1,101 @@
-This software and instructions are [provided as is](LICENSE), without warranty of any kind. [🇷🇺 Перевод на русский](https://translate.google.com/translate?hl=en&sl=en&tl=ru&u=https%3A%2F%2Fgithub.com%2Fkachurovskiy%2Fnanoels%2Fblob%2Fmain%2FREADME.md), [🇩🇪 deutsche Übersetzung](https://translate.google.com/translate?hl=en&sl=en&tl=de&u=https%3A%2F%2Fgithub.com%2Fkachurovskiy%2Fnanoels%2Fblob%2Fmain%2FREADME.md)
+# NanoELS H5 — Electronic Lead Screw & Multi-Client Suite
 
-**Design lathe parts in the browser with [LatheCode](https://kachurovskiy.com/lathecode/):** start from sample shapes, dimensions, drawings, saved profiles, or STL meshes; preview the result in 2D/3D; then export STL or G-code for machining. It fits naturally with NanoELS and Modulathe workflows: design the turned profile, inspect the generated toolpath, and run or save G-code for your controller, with drafts and settings kept locally in your browser.
+CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting up to 3 axes for metal lathes.
 
-# NanoEls H5
+- **Electronic Gearing & Multi-Start Threading** with real-time spindle encoder synchronization
+- **Multi-Pass Canned Cycles** (Turning, Facing, Cones/Tapers, Cutoff, Spheres, Slotting)
+- **Modular Multi-Client Architecture**: Embedded Web UI, Modern Touch DRO, Native LVGL 9 Display, USB/PS2 keyboard, and MPG pendants
+- **Hardware Scale & DRO Support**: Direct integration with optical rotary encoders and linear glass DRO scales
+- **Dual-Core Concurrency**: Real-time deterministic motion timing on Core 1; asynchronous web, telemetry, and supervisory services on Core 0
 
-CNC and electronic lead screw controller based on ESP32-S3 that supports up to 3 axes:
+---
 
-- All the features of H4
-- Cheaper and much easier to make than H4
-- External PS2 keyboard
-- High resolution touch screen
-- More ports: joystick, MPGs, scales
+## Project Structure
 
-![image](https://github.com/user-attachments/assets/de30c2ee-14d5-483a-b23d-0edc43125bd0)
+```text
+nanoels/
+├── platformio.ini           # PlatformIO build configuration (ESP32-S3, LittleFS)
+├── README.md                # Project overview & build guide
+├── TODO.md                  # Development roadmap & architecture backlog
+│
+├── src/                     # Core controller firmware (headers & implementations)
+│   ├── main.cpp             # System setup & cooperative executive loops
+│   ├── core/                # MachineModel, Config, SettingsService, Debug
+│   ├── motion/              # Motion engine, Axis control, LatheProfile, DRO scales
+│   ├── input/               # Keyboard, MPG, and operator input controls
+│   ├── web/                 # WebServer, WebSockets (:81), CommandDispatcher, ClientEndpoint
+│   └── display/             # DisplayModel, RichClientAdapter, Display hardware drivers
+│
+├── data/                    # LittleFS flash filesystem assets
+│   └── www/                 # Default embedded web UI (index.html, app.js, style.css)
+│
+├── clients/                 # Operator client applications
+│   └── web_ui/              # Modern 800×480 Touch DRO Web UI (Alpine.js, HTML5/CSS3)
+│
+├── screen_lvgl/             # Native embedded LVGL 9 display companion project
+│
+├── docs/                    # Authoritative system & architectural documentation
+│   ├── CONTROLLER_ARCHITECTURE.md   # Firmware pipeline, domains (K, I, C, P), and wire protocol
+│   ├── NANOELS_MASTER_ARCHITECTURE.md # Master 6-subsystem architecture blueprint
+│   ├── ELS_CLIENT_ARCHITECTURE.md    # Multi-client pipeline & WebSocket specification
+│   ├── ELS_CORE_STATE_MODEL.md       # Canonical deci-micron state invariants
+│   ├── LATHE_MACHINE_PROFILE.md      # Physical lathe geometry & axis definitions
+│   ├── ELS_MODE_ARCHITECTURE.md      # Operational mode state machine specifications
+│   ├── ELS_PROPERTIES_AND_SETTINGS.md# Persistent parameter & NVS settings ledger
+│   ├── TIER2_STATE_MAPPING.md        # State mapping across subsystems
+│   ├── modes/                        # Detailed mode specifications (turning, threading, etc.)
+│   ├── hmi/                          # Touch targets & 800×480 screen guidelines
+│   └── clients/                      # Web UI interaction ledger & documentation
+│
+└── reference/               # Preserved historical reference files
+    ├── h5_monolithic.ino             # Original monolithic firmware
+    ├── H5_DRO_V104personal.ino       # Historical DRO variant
+    └── NANOELS_H5_README.md          # Legacy H5 documentation
+```
 
-See [h5 folder for hardware files, software and assembly](https://github.com/kachurovskiy/nanoels/tree/main/h5).
+---
 
-# NanoEls H4
+## Getting Started
 
-CNC and electronic lead screw controller based on ESP32-S3 that supports up to 4 axes:
+### Prerequisites
+* [VS Code](https://code.visualstudio.com/) with the **PlatformIO IDE** extension, or the **PlatformIO Core (CLI)** (`pio`).
 
-- Automatic threads including multi-start
-- Multi-pass turning, facing and cones
-- Precise movements, soft limits and much more
+### Building Firmware
+Compile the project from the repository root:
+```bash
+pio run
+```
+Build outputs are generated in `.pio/build/esp32s3/`:
+* `firmware.bin`
+* `firmware.factory.bin` (flashable at offset `0x0000`)
 
-![h4-600px](https://github.com/kachurovskiy/nanoels/assets/517919/4090779c-ef88-4402-aeef-644f7a086ff2)
+### Uploading to Device
+Connect the ESP32-S3 via USB and run:
+```bash
+# Upload firmware
+pio run -t upload
 
-See [h4 folder for hardware files, software, assembly and usage manual](https://github.com/kachurovskiy/nanoels/tree/main/h4).
+# Upload LittleFS Web UI filesystem assets (data/www)
+pio run -t uploadfs
+```
 
-## Build examples
+### Serial Monitor
+```bash
+pio device monitor -b 115200
+```
 
-- [fmw626](https://github.com/kachurovskiy/nanoels/discussions/123)
-- [Kissys](https://github.com/kachurovskiy/nanoels/discussions/121)
+---
 
-# NanoEls H2
+## Architectural Guidelines & Safety Invariants
 
-Cheap DIY Electronic Lead Screw (ELS) based on Arduino Nano for metal lathes. No more greasy gear swapping! Control your metal lathe lead screw with a few clicks.
+* **Canonical Units**: All physical positions, pitches, and travels are represented internally in **integer deci-microns** ($1\,\text{du} = 0.1\,\mu\text{m} = 0.0001\,\text{mm}$).
+* **Cross-Slide Radius**: The controller tracks cross-slide position strictly in canonical radius (`xDu`). Diameter display ($\varnothing$) is a client-local presentation concern.
+* **Lossless Intent**: Operator authoring setpoints (e.g., integer TPI or custom taper ratios) are preserved alongside calculated steps to eliminate floating-point round-trip drift.
+* **Controller Authority**: The MCU is the sole authority for machine state and limit checking. Clients are reactive observers transmitting operator intent.
+* **Shop Safety Rules**: Detailed machinist safety, 800×480 touch target constraints, and operator frame-of-reference rules are maintained in [`.agents/rules/lathe_hmi_and_safety.md`](.agents/rules/lathe_hmi_and_safety.md).
 
-- Set leadscrew pitch for feed or thread
-- Soft limits for the carriage
-- Multi-start threads in 1 start of the spindle
+---
 
-![image](https://github.com/user-attachments/assets/0741438d-b3d3-4c8a-a816-9806e0ca6487)
+## License & Attribution
 
-See [h2 folder for parts list, software, assembly and usage manual](https://github.com/kachurovskiy/nanoels/blob/main/h2/). Controller can be built from [generally available components](https://github.com/kachurovskiy/nanoels/tree/main/h2#components).
-
-It's suggested to use STEPPERONLINE CL57T closed-loop driver with NEMA 23 3NM motor or stronger with 200 step resolution mode (full step) and a 600 PPR optical rotary encoder. [See hardware.md for more info.](hardware.md)
-
-## Build examples
-
-- [EdFleta](https://github.com/kachurovskiy/nanoels/discussions/87)
-- [fmw626](https://github.com/kachurovskiy/nanoels/discussions/118)
-- [Johannmupa](https://github.com/kachurovskiy/nanoels/discussions/89)
-- [kachurovskiy](https://youtu.be/jR4tBBHSl3c?t=62)
-
-# Contributing to the project
-
-- Questions, problems and improvements: please start [a new GitHub Discussion](https://github.com/kachurovskiy/nanoels/discussions/new) or a new Issue
-- Successful builds: please start a new GitHub Discussion with photos and comments
+This project is licensed under the terms described in [LICENSE](LICENSE). Historical notes and notices are documented in `reference/` and `docs/`.
