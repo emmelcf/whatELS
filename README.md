@@ -97,4 +97,6 @@ pio device monitor -b 115200
 
 ## License & Attribution
 
-This project is licensed under the terms described in [LICENSE](LICENSE). Historical notes and notices are documented in `reference/` and `docs/`.
+* **Primary Firmware, Web UI & Architecture**: Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Free for personal, hobbyist, educational, and non-commercial research use. Commercial distribution, commercial services, or bundling into commercial hardware products is prohibited without explicit permission.
+* **Upstream Attribution**: Portions derived or ported from the original upstream [NanoELS project](https://github.com/kachurovskiy/nanoels) by Maxim Kachurovskiy remain subject to their original [MIT License](LICENSE). Preserved historical artifacts in [`reference/`](reference/) are governed by their original licenses.
+
