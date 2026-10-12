@@ -1,19 +1,19 @@
 # AGENT INSTRUCTIONS: NanoELS Lathe HMI, Ergonomics & Operator Safety Rules
 *Target Display:* 800×480 Capacitive Touch (Landscape)
-*Display Controller:* ESP32-S3 (Web Client: HTML/CSS/JS in `clients/web_ui/` | Native HMI: C++/LVGL in `screen_lvgl/`)
+*Display Client:* Web Client (HTML/CSS/JS in `clients/web_ui/` and LittleFS in `data/www/`)
 *Real-Time Motion Core:* NanoELS Controller Firmware (`src/`)
 
 ---
 
-## 0. Collaboration Mode: Pair Programming & Proactive Guidance
+## 0. Collaboration Mode & Architectural Boundaries
 
-1. **Interactive Pair Programming Stance:**
-   * Work on client UIs and features is an active, collaborative pair programming exercise. The AI agent acts as a co-engineer and domain sounding board, not a passive instruction taker.
-   * **No Unilateral Execution:** Never jump to write code immediately when the user shares an idea or asks an exploratory question. Always evaluate ergonomics, physical trade-offs, and controller capabilities first, debate alternatives, and reach explicit mutual consensus before modifying files.
-2. **Strict Client Folder Confinement (Zero Unintended Firmware Pollution):**
+1. **Adherence to Pair Programming Protocol:**
+   * All agent actions must strictly follow [`.agents/rules/pair_programming.md`](file:///home/emil/code/nanoels/.agents/rules/pair_programming.md).
+   * Act as an active co-engineer and domain sounding board. Never jump to write code or execute tools prematurely upon exploratory questions; discuss ergonomics and physical trade-offs first.
+2. **Strict Folder Confinement (Zero Unintended Firmware Pollution):**
    * Web UI client development takes place in `clients/web_ui/`.
-   * Native display client development takes place in `screen_lvgl/`.
    * Default firmware web assets reside in `data/www/`.
+   * Core controller firmware resides in `src/`.
    * Never modify core controller firmware (`src/`) during pure client-side tasks without explicit discussion and consensus.
 3. **Proactive Feedback & Technical Recommendations:**
    * Regularly evaluate user suggestions and provide clear technical feedback regarding shop-floor practicality, lathe ergonomics, and machinist safety.
@@ -21,13 +21,10 @@
 4. **Firmware Ground Truth & No Ghost Controls:**
    * Validate all UX and protocol proposals against the authoritative controller architecture (`docs/CONTROLLER_ARCHITECTURE.md`) before cementing UI behavior.
    * Only support what NanoELS natively supports or what the client controller can reliably orchestrate. Never invent fake software pause states or mid-cycle step controls (e.g. "Next pass").
-5. **Living Design Documentation:**
-   * Ensure `docs/ELS_DESIGN_NOTEBOOK.md` and related docs are continuously updated to reflect decisions, edge cases, and architectural contracts established during pair sessions.
-   * Concurrently audit existing sections whenever a change affects prior rules so documentation remains 100% truthful.
-6. **Detailed Micro-Commits on Milestone Agreement & Reversion Safeguards:**
-   * Whenever a feature, ergonomic refinement, or bugfix is reviewed, agreed upon, and verified, perform an immediate focused git commit to anchor progress.
-   * **Itemized Commit Messages:** Never use vague "WIP" or single-line commit summaries; explicitly itemize all files touched and architectural rationale.
-   * **Blanket Revert Prohibition:** The agent must **NEVER** execute indiscriminate rollbacks (`git restore .`, `git checkout -- .`, `git reset --hard`, or `git clean`). Any rollback must be surgical—targeting only the specific line range or file in progress—or explicitly confirmed with the user.
+5. **Documentation Synchronization & Authoritative Sources of Truth:**
+   * Update corresponding domain specifications in `docs/` concurrently whenever contracts, kinematics, state models, or UI schemas change.
+   * **Role of `docs/ELS_DESIGN_NOTEBOOK.md`:** The notebook is strictly an Architectural Decision Record (ADR), evolutionary history log, and catch-all ledger for cross-cutting insights. It is not the master blueprint—authoritative specifications reside in their dedicated files in `docs/` (`NANOELS_MASTER_ARCHITECTURE.md`, `CONTROLLER_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `docs/modes/`, `docs/hmi/`, etc.).
+
 
 ---
 
@@ -160,4 +157,7 @@ Located directly above the jog D-pad. Houses live operational apron controls onl
 * [ ] Does the opt-in limit restore toggle preserve and reinstate previous envelopes on cycle finish and manual stop?
 * [ ] Does the jog pad allow backing out when an axis is resting against a soft limit?
 * [ ] Are all Web UI client files and assets confined within `clients/web_ui/`?
-* [ ] Has `docs/ELS_DESIGN_NOTEBOOK.md` been updated to reflect all decisions and the true state of the UI?
+* [ ] Have authoritative specifications across `docs/` (and `ELS_DESIGN_NOTEBOOK.md` for ADR notes) been updated to reflect all decisions and the true state of the system?
+
+
+
