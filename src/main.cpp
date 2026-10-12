@@ -31,15 +31,15 @@ void setup() {
   DEBUG_PRINTLN("Loading keyboard config...");
   loadKeyboardConfig();
 
-#if HAS_DRO_X
-  DEBUG_PRINTLN("xScale.attach()...");
-  Serial.flush();
-  xScale.attach();
-#endif
-#if HAS_DRO_Z
-  DEBUG_PRINTLN("zScale.attach()...");
-  zScale.attach();
-#endif
+  if (activeMachineProfile.xAxis.hasDroScale) {
+    DEBUG_PRINTLN("xScale.attach()...");
+    Serial.flush();
+    xScale.attach();
+  }
+  if (activeMachineProfile.zAxis.hasDroScale) {
+    DEBUG_PRINTLN("zScale.attach()...");
+    zScale.attach();
+  }
 
   DEBUG_PRINTLN("pinMode setup...");
   pinMode(ENC_A, INPUT_PULLUP);
@@ -127,8 +127,8 @@ void setup() {
   coneRatio = pref.getFloat(PREF_CONE_RATIO, coneRatio);
   turnPasses = pref.getInt(PREF_TURN_PASSES, turnPasses);
   auxForward = pref.getBool(PREF_AUX_FORWARD, true);
-  zDisplayModeDRO = pref.getBool(PREF_Z_DRO_MODE, false);
-  xDisplayModeDRO = pref.getBool(PREF_X_DRO_MODE, false);
+  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale && pref.getBool(PREF_Z_DRO_MODE, false);
+  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale && pref.getBool(PREF_X_DRO_MODE, false);
   isDiameterMode = pref.getBool(PREF_DIAMETER_MODE, true);
   isAbsoluteMode = pref.getBool(PREF_ABSOLUTE_MODE, true);
   DEBUG_PRINTLN("pref.end()...");

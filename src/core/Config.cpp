@@ -521,15 +521,36 @@ void loadMachineProfile() {
       activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
     }
 
+    // Clean up any stale DRO flags from NVS; DROs are disabled by default
+    bool nvsCleaned = false;
     if (pref.isKey("has_dro_z")) {
-      activeMachineProfile.zAxis.hasDroScale = pref.getBool("has_dro_z");
+      pref.remove("has_dro_z");
+      nvsCleaned = true;
     }
-
     if (pref.isKey("has_dro_x")) {
-      activeMachineProfile.xAxis.hasDroScale = pref.getBool("has_dro_x");
+      pref.remove("has_dro_x");
+      nvsCleaned = true;
     }
+    activeMachineProfile.zAxis.hasDroScale = false;
+    activeMachineProfile.xAxis.hasDroScale = false;
 
     pref.end();
+
+    if (nvsCleaned) {
+      saveMachineProfile();
+    }
+  }
+
+  // Ensure capabilities bitmask stays strictly synchronized with physical hardware
+  if (activeMachineProfile.zAxis.hasDroScale) {
+    activeMachineProfile.capabilities |= CAP_DRO_Z;
+  } else {
+    activeMachineProfile.capabilities &= ~CAP_DRO_Z;
+  }
+  if (activeMachineProfile.xAxis.hasDroScale) {
+    activeMachineProfile.capabilities |= CAP_DRO_X;
+  } else {
+    activeMachineProfile.capabilities &= ~CAP_DRO_X;
   }
 
   // Synchronize legacy globals for Core 1 compatibility
@@ -552,8 +573,8 @@ void loadMachineProfile() {
   ENCODER_STEPS_FLOAT = (float)(ENCODER_PPR * 2);
   RPM_BULK = (long)ENCODER_PPR * 2L;
 
-  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale;
-  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale;
+  zDisplayModeDRO = false;
+  xDisplayModeDRO = false;
 
   printMachineProfileBanner();
 }
@@ -570,8 +591,16 @@ void saveMachineProfile() {
   pref.putFloat("mot_steps_z", activeMachineProfile.zAxis.stepsPerMm);
   pref.putUShort("enc_ppr", activeMachineProfile.spindle.encoder.ppr);
   pref.putFloat("spindle_ratio", activeMachineProfile.spindle.pulleyRatio);
-  pref.putBool("has_dro_z", activeMachineProfile.zAxis.hasDroScale);
-  pref.putBool("has_dro_x", activeMachineProfile.xAxis.hasDroScale);
+  if (activeMachineProfile.zAxis.hasDroScale) {
+    pref.putBool("has_dro_z", true);
+  } else if (pref.isKey("has_dro_z")) {
+    pref.remove("has_dro_z");
+  }
+  if (activeMachineProfile.xAxis.hasDroScale) {
+    pref.putBool("has_dro_x", true);
+  } else if (pref.isKey("has_dro_x")) {
+    pref.remove("has_dro_x");
+  }
 
   pref.end();
 }

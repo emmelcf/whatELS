@@ -5,7 +5,7 @@ LatheConfiguration getDefaultProfile() {
   LatheConfiguration p = {};
   strncpy(p.profileId, "wm210v_8x16", sizeof(p.profileId) - 1);
   strncpy(p.modelName, "WM210V 8x16 Bench Lathe", sizeof(p.modelName) - 1);
-  p.capabilities = CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_MOTOR_X | CAP_DRO_Z | CAP_DRO_X;
+  p.capabilities = CAP_SPINDLE_ENCODER | CAP_MOTOR_Z | CAP_MOTOR_X;
 
   // Z Axis (Carriage Leadscrew Motorized)
   p.zAxis.hasMotor = true;
@@ -15,7 +15,7 @@ LatheConfiguration getDefaultProfile() {
   p.zAxis.backlashMm = 0.0f;
   p.zAxis.maxVelocityMmMin = 1500.0f;
   p.zAxis.maxAccelMmSec2 = 250.0f;
-  p.zAxis.hasDroScale = true;
+  p.zAxis.hasDroScale = false;
   p.zAxis.droScale = { 200, 9, 12, false, false, -1 };
   p.zAxis.hasMpg = false;
   p.zAxis.limits = { 0.0f, 350.0f, -1, -1, false };
@@ -28,7 +28,7 @@ LatheConfiguration getDefaultProfile() {
   p.xAxis.backlashMm = 0.0f;
   p.xAxis.maxVelocityMmMin = 800.0f;
   p.xAxis.maxAccelMmSec2 = 200.0f;
-  p.xAxis.hasDroScale = true;
+  p.xAxis.hasDroScale = false;
   p.xAxis.droScale = { 200, 40, 39, false, false, -1 };
   p.xAxis.hasMpg = false;
   p.xAxis.limits = { 0.0f, 100.0f, -1, -1, false };
