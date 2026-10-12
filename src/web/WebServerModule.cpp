@@ -906,6 +906,11 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       }
     }
 
+    IPAddress ip = webSocket.remoteIP(num);
+    const char* chName = (ch == CHANNEL_GRBL) ? "GRBL" : ((ch == CHANNEL_DRO) ? "DRO" : "CANONICAL");
+    Serial.printf("[WS] Client [%u] connected from %s (Channel: %s, Total: %d, Free Heap: %u bytes)\n",
+                  num, ip.toString().c_str(), chName, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
+
     // Unicast initial hydration frame strictly to the connecting client 'num'
     MachineModel hydrationModel = MachineModel::captureAll();
     if (ch == CHANNEL_CANONICAL) {
@@ -931,7 +936,12 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
         webSocketClientCount++;
       }
     }
+    Serial.printf("[WS] Client [%u] disconnected (Remaining: %d, Free Heap: %u bytes)\n",
+                  num, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
     requestWebUiMoveRelease();
+  } else if (type == WStype_ERROR) {
+    Serial.printf("[WS] Client [%u] error! (Payload len: %u, Free Heap: %u bytes)\n",
+                  num, (unsigned int)length, (unsigned int)ESP.getFreeHeap());
   } else if (type == WStype_TEXT) {
     String cmdStr = "";
     for (size_t i = 0; i < length; i++) {
@@ -1759,6 +1769,15 @@ void taskWiFi(void *param) {
     } else if (!wsMutex) {
       webSocket.loop();
       dispatchTelemetry();
+    }
+
+    static unsigned long lastHealthLog = 0;
+    if (millis() - lastHealthLog >= 10000) {
+      lastHealthLog = millis();
+      if (webSocketClientCount > 0) {
+        Serial.printf("[HEALTH] WiFi IP: %s, WS clients: %d, Free Heap: %u bytes\n",
+                      wifiIpAddress.c_str(), webSocketClientCount, (unsigned int)ESP.getFreeHeap());
+      }
     }
     // WiFi connection watchdog & exponential backoff retry strategy
     const unsigned long WIFI_DISCONNECT_DEBOUNCE_MS = 2500;

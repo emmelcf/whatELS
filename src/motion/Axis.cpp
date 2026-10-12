@@ -711,6 +711,10 @@ void taskMoveZ(void *param) {
         } else if (posCopy + delta < z.rightStop) {
           delta = z.rightStop - posCopy;
         }
+        if (!pulseMove) {
+          DEBUG_PRINTF("[JOG Z] moveStep: %ld du, screwPitch: %.1f du, motorSteps: %.1f, delta: %d steps\n",
+                       moveStep, z.screwPitch, z.motorSteps, delta);
+        }
         z.speedMax = getManualMoveSpeedMax(&z, pulseMove);
         stepToContinuous(&z, posCopy + delta);
         waitForManualMoveStep(&z, pulseMove);
@@ -799,6 +803,10 @@ void taskMoveX(void *param) {
           delta = x.leftStop - posCopy;
         } else if (posCopy + delta < x.rightStop) {
           delta = x.rightStop - posCopy;
+        }
+        if (!pulseMove) {
+          DEBUG_PRINTF("[JOG X] moveStep: %ld du, screwPitch: %.1f du, motorSteps: %.1f, delta: %d steps\n",
+                       moveStep, x.screwPitch, x.motorSteps, delta);
         }
         x.speedMax = getManualMoveSpeedMax(&x, pulseMove);
         stepToContinuous(&x, posCopy + delta);
