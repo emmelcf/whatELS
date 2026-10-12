@@ -323,16 +323,16 @@ extern NumpadMode numpadEntryMode;
 #define B_Y_ENA 89
 
 struct KeyboardBinding {
-  const char* id;
-  const char* label;
-  byte actionCode;
-  byte defaultCode;
-  byte code;
+  const char* id = nullptr;
+  const char* label = nullptr;
+  byte actionCode = 0;
+  byte defaultCode = 0;
+  byte code = 0;
 };
 
 struct WebUiEvent {
-  byte actionCode;
-  bool isPress;
+  byte actionCode = 0;
+  bool isPress = false;
 };
 
 #define KEY_BINDING(id, label, code) { id, label, code, code, code }

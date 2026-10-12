@@ -550,7 +550,7 @@ void loadMachineProfile() {
   ENCODER_PPR = (int)round(activeMachineProfile.spindle.effectivePpr());
   ENCODER_STEPS_INT = ENCODER_PPR * 2;
   ENCODER_STEPS_FLOAT = (float)(ENCODER_PPR * 2);
-  RPM_BULK = ENCODER_PPR * 2;
+  RPM_BULK = (long)ENCODER_PPR * 2L;
 
   zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale;
   xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale;

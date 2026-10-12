@@ -89,7 +89,7 @@ struct DisplaySnapshot {
   String step;
 
   // 4. Spindle Readouts
-  int rpm;
+  int rpm = 0;
   String rpmText;
   String turnsText;
   String angleText;
@@ -100,11 +100,11 @@ struct DisplaySnapshot {
   String message;
 
   // 6. UI Indicators / Visual State Flags
-  bool xIsDroActive;
-  bool zIsDroActive;
-  bool isDiameterMode;
-  bool isAbsoluteMode;
-  bool spindleValColorGreen;
+  bool xIsDroActive = false;
+  bool zIsDroActive = false;
+  bool isDiameterMode = false;
+  bool isAbsoluteMode = false;
+  bool spindleValColorGreen = false;
 };
 
 // Generates a complete snapshot of all displayable information

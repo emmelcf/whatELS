@@ -13,13 +13,13 @@ bool IRAM_ATTR DRO_Scale::pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watc
     return false;
 }
 
-DRO_Scale::DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, int unit, float scale, int filterValue) {
-    aPinNumber = pinA;
-    bPinNumber = pinB;
-    scaleFactor = scale;
-    filter = filterValue;
-    puType = up;
-    overflowCount = 0;
+DRO_Scale::DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, int unit, float scale, int filterValue)
+    : aPinNumber(pinA),
+      bPinNumber(pinB),
+      puType(up),
+      filter(filterValue),
+      scaleFactor(scale),
+      overflowCount(0) {
 }
 
 void DRO_Scale::attach() {

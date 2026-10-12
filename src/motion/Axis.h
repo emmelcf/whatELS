@@ -14,69 +14,69 @@ enum PulseCounter {
 };
 
 struct Axis {
-  SemaphoreHandle_t mutex;
+  SemaphoreHandle_t mutex = nullptr;
 
-  char name;
-  bool active;
-  bool rotational;
-  float motorSteps;
-  float screwPitch;
-  float pulsePerRevolution;
+  char name = '\0';
+  bool active = false;
+  bool rotational = false;
+  float motorSteps = 0.0f;
+  float screwPitch = 0.0f;
+  float pulsePerRevolution = 0.0f;
 
-  long pos;
-  long savedPos;
-  float fractionalPos;
-  long originPos;
-  long savedOriginPos;
-  long posGlobal;
-  long savedPosGlobal;
-  int pendingPos;
-  long motorPos;
-  long savedMotorPos;
-  bool continuous;
+  long pos = 0;
+  long savedPos = 0;
+  float fractionalPos = 0.0f;
+  long originPos = 0;
+  long savedOriginPos = 0;
+  long posGlobal = 0;
+  long savedPosGlobal = 0;
+  int pendingPos = 0;
+  long motorPos = 0;
+  long savedMotorPos = 0;
+  bool continuous = false;
 
-  long leftStop;
-  long savedLeftStop;
-  long nextLeftStop;
-  bool nextLeftStopFlag;
+  long leftStop = 0;
+  long savedLeftStop = 0;
+  long nextLeftStop = 0;
+  bool nextLeftStopFlag = false;
 
-  long rightStop;
-  long savedRightStop;
-  long nextRightStop;
-  bool nextRightStopFlag;
+  long rightStop = 0;
+  long savedRightStop = 0;
+  long nextRightStop = 0;
+  bool nextRightStopFlag = false;
 
-  long speed;
-  long speedStart;
-  long speedMax;
-  long speedManualMove;
-  long acceleration;
-  long decelerateSteps;
+  long speed = 0;
+  long speedStart = 0;
+  long speedMax = 0;
+  long speedManualMove = 0;
+  long acceleration = 0;
+  long decelerateSteps = 0;
 
-  bool direction;
-  bool directionInitialized;
-  unsigned long stepStartUs;
-  int stepperEnableCounter;
-  bool disabled;
-  bool savedDisabled;
+  bool direction = false;
+  bool directionInitialized = false;
+  unsigned long stepStartUs = 0;
+  int stepperEnableCounter = 0;
+  bool disabled = false;
+  bool savedDisabled = false;
 
-  bool invertStepper;
-  bool invertEnable;
-  bool needsRest;
-  bool movingManually;
-  long estopSteps;
-  long backlashSteps;
-  long gcodeRelativePos;
+  bool invertStepper = false;
+  bool invertEnable = false;
+  bool needsRest = false;
+  bool movingManually = false;
+  long estopSteps = 0;
+  long backlashSteps = 0;
+  long gcodeRelativePos = 0;
 
-  int ena;
-  int dir;
-  int step;
+  int ena = 0;
+  int dir = 0;
+  int step = 0;
 
-  int pulseA;
-  int pulseB;
-  int pulseCount;
-  long pulsePos;
-  long pulsePosAvg;
-  PulseCounter pulseCounter;
+  int pulseA = 0;
+  int pulseB = 0;
+  int pulseCount = 0;
+  long pulsePos = 0;
+  long pulsePosAvg = 0;
+  PulseCounter pulseCounter = PULSE_COUNTER_SPINDLE;
 };
 
 // Global Axes

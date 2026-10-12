@@ -774,7 +774,6 @@ void taskMoveX(void *param) {
     bool stepperOn = true;
     prepareJoystickLatheManualMove();
 
-    int delta = 0;
     bool positiveMove = pulseDelta == 0 ? up : pulseDelta > 0;
     int sign = positiveMove ? 1 : -1;
     if (isOn && dupr != 0 && isGearboxManualMove(&x)) {

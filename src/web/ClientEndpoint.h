@@ -71,7 +71,7 @@ class CanonicalCommandTranslator : public ICommandTranslator {
 private:
   uint8_t _clientId;
 public:
-  CanonicalCommandTranslator(uint8_t clientId = 0) : _clientId(clientId) {}
+  explicit CanonicalCommandTranslator(uint8_t clientId = 0) : _clientId(clientId) {}
   void setClientId(uint8_t clientId) { _clientId = clientId; }
   bool translateAndDispatch(const char* payload, size_t length, String* reply) override;
 };
