@@ -1350,15 +1350,15 @@ void processKeypadEvent() {
   } else if (keyCode == B_MODE_THREAD) {
     setModeFromUi(MODE_THREAD, eventFromNextion);
   } else if (keyCode == B_X_TOGGLE_DRO) {
-#if HAS_DRO_X
-    SettingsService::setXDroMode(!SettingsService::isXDroMode());
+    if (SettingsService::getActiveProfile().xAxis.hasDroScale) {
+      SettingsService::setXDroMode(!SettingsService::isXDroMode());
+    }
     beep();
-#endif
   } else if (keyCode == B_Z_TOGGLE_DRO) {
-#if HAS_DRO_Z
-    SettingsService::setZDroMode(!SettingsService::isZDroMode());
+    if (SettingsService::getActiveProfile().zAxis.hasDroScale) {
+      SettingsService::setZDroMode(!SettingsService::isZDroMode());
+    }
     beep();
-#endif
   } else if (keyCode == B_DIA_RAD) {
     SettingsService::setDiameterMode(!SettingsService::isDiameterMode());
     beep();

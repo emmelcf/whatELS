@@ -81,8 +81,8 @@ MachineProperties MachineModel::captureProperties() {
   p.isAbsoluteMode = isAbsoluteMode;
   p.zDroActive = zDisplayModeDRO;
   p.xDroActive = xDisplayModeDRO;
-  p.screwZDu = (long)round(z.screwPitch * 10000.0f);
-  p.screwXDu = (long)round(x.screwPitch * 10000.0f);
+  p.screwZDu = (long)round(z.screwPitch);
+  p.screwXDu = (long)round(x.screwPitch);
   p.motorStepsZ = (long)round(z.motorSteps);
   p.motorStepsX = (long)round(x.motorSteps);
   p.encoderPpr = ENCODER_PPR;

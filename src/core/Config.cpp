@@ -534,14 +534,14 @@ void loadMachineProfile() {
 
   // Synchronize legacy globals for Core 1 compatibility
   SCREW_Z_DU = activeMachineProfile.zAxis.leadscrewPitchDu();
-  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchMm;
+  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
   if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
     MOTOR_STEPS_Z = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
     z.motorSteps = MOTOR_STEPS_Z;
   }
 
   SCREW_X_DU = activeMachineProfile.xAxis.leadscrewPitchDu();
-  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchMm;
+  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
   if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
     MOTOR_STEPS_X = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
     x.motorSteps = MOTOR_STEPS_X;

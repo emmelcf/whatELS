@@ -68,8 +68,8 @@ const char* SettingsService::getActivePresetSlug() {
 void SettingsService::syncLegacyGlobals() {
   SCREW_Z_DU = activeMachineProfile.zAxis.leadscrewPitchDu();
   SCREW_X_DU = activeMachineProfile.xAxis.leadscrewPitchDu();
-  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchMm;
-  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchMm;
+  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
+  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
 
   if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
     MOTOR_STEPS_Z = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
@@ -537,7 +537,7 @@ int SettingsService::getStarts() {
 
 bool SettingsService::setTurnPasses(int passes) {
   if (passes < 1 || passes > 99) return false;
-  if (isOn) {
+  if (isOn()) {
     beep();
     return false;
   }
@@ -672,6 +672,9 @@ bool SettingsService::isAbsoluteMode() {
 }
 
 bool SettingsService::setZDroMode(bool zdro) {
+  if (zdro && !activeMachineProfile.zAxis.hasDroScale) {
+    zdro = false;
+  }
   zDisplayModeDRO = zdro;
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
@@ -686,6 +689,9 @@ bool SettingsService::isZDroMode() {
 }
 
 bool SettingsService::setXDroMode(bool xdro) {
+  if (xdro && !activeMachineProfile.xAxis.hasDroScale) {
+    xdro = false;
+  }
   xDisplayModeDRO = xdro;
   Preferences pref;
   pref.begin(PREF_NAMESPACE, false);
@@ -913,11 +919,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "dia") == 0 || strcasecmp(key, "isDiameterMode") == 0) {
-    appendSetting("dia", isDiameterMode ? "1" : "0");
+    appendSetting("dia", isDiameterMode() ? "1" : "0");
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "abs") == 0 || strcasecmp(key, "isAbsoluteMode") == 0) {
-    appendSetting("abs", isAbsoluteMode ? "1" : "0");
+    appendSetting("abs", isAbsoluteMode() ? "1" : "0");
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "zDro") == 0 || strcasecmp(key, "zDroActive") == 0) {
@@ -1070,14 +1076,14 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   if (strcasecmp(keyBuf, "dia") == 0 || strcasecmp(keyBuf, "isDiameterMode") == 0) {
     int val = atoi(valStr);
     setDiameterMode(val != 0);
-    reportOk(keyBuf, isDiameterMode ? "1" : "0");
+    reportOk(keyBuf, isDiameterMode() ? "1" : "0");
     return true;
   }
 
   if (strcasecmp(keyBuf, "abs") == 0 || strcasecmp(keyBuf, "isAbsoluteMode") == 0) {
     int val = atoi(valStr);
     setAbsoluteMode(val != 0);
-    reportOk(keyBuf, isAbsoluteMode ? "1" : "0");
+    reportOk(keyBuf, isAbsoluteMode() ? "1" : "0");
     return true;
   }
 
