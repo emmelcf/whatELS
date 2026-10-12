@@ -112,7 +112,7 @@ $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translato
 ### C++ Interface Definitions
 
 ```cpp
-// include/ClientEndpoint.h
+// src/web/ClientEndpoint.h
 
 class ITransport {
 public:
@@ -176,7 +176,7 @@ On dual-core ESP32 systems, high-priority real-time motion control (stepper puls
 The Core captures an immutable `StatusSnapshot` struct (~64 bytes) frozen in time, paired with a 32-bit `changedFields` bitmask:
 
 ```cpp
-// include/StatusSnapshot.h
+// src/core/StatusSnapshot.h
 
 enum StatusField : uint32_t {
     FIELD_NONE        = 0,

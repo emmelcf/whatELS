@@ -814,7 +814,7 @@ stateDiagram-v2
 - [ ] Test multi-client simulation (two browser tabs interacting with the same emulator session).
 
 ### Phase 3: ESP32 Firmware C++ Refactoring
-- [ ] Implement `IELSMode.h`, `ModeRegistry.h`, `ModeManifest.h`, and `LatheConfiguration.h` in `h5/src/`.
+- [ ] Implement `IELSMode.h`, `ModeRegistry.h`, `ModeManifest.h`, and `LatheProfile.h` in `src/motion/` and `src/core/`.
 - [ ] Refactor `Motion.cpp` kinematic routines into `GearZPrimitive`, `GearXPrimitive`, `AsyncPrimitive`, and `ConePrimitive`.
 - [ ] Create the C++ composite modes for Gearbox, Turning, Facing, and Threading.
 - [ ] Implement `ModeRegistry::resolveDefaultModeForFamily()`.

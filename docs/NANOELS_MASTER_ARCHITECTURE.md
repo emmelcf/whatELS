@@ -136,15 +136,15 @@ During this architectural transition, two specific legacy components require car
   1. **Dumb Pipe Transport:** `WebServerModule.cpp` is strictly a network transport pipe implementing `ClientEndpoint`.
   2. **Canonical Line Protocol:** All inbound messages from the web client MUST flow as standard ASCII line commands (`CMD.*`, `SETTINGS.*`) into `CommandDispatcher`.
   3. **Canonical Domain Telemetry:** All outbound updates MUST flow as standard domain snapshots (`K`, `I`, `C`, `P`) emitted by `RichClientAdapter` / `MachineModel`.
-  4. **Drop-In Modern Replacement:** When the redesigned Alpine.js Web UI (`UI_redesign/prototype/`) is deployed to LittleFS to replace the legacy web assets, it will connect to the exact same WebSocket endpoint with **zero backend firmware modifications**.
+  4. **Drop-In Modern Replacement:** When the redesigned Alpine.js Web UI (`clients/web_ui/`) is deployed to LittleFS to replace the legacy web assets, it will connect to the exact same WebSocket endpoint with **zero backend firmware modifications**.
 
 ---
 
 ## 4. Current Codebase File Audit & Target Subsystem Mapping
 
-Below is the complete audit of all 16 implementation files in `src/` (and their headers in `include/`), detailing their current role, target subsystem, and migration path:
+Below is the complete audit of all implementation and header files across `src/`, detailing their current role, target subsystem, and migration path:
 
-| File (`src/` & `include/`) | Current Role in Codebase | Target Subsystem | Architectural Disposition & Migration Task |
+| File (in `src/`) | Current Role in Codebase | Target Subsystem | Architectural Disposition & Migration Task |
 | :--- | :--- | :--- | :--- |
 | [`main.cpp`](../src/main.cpp) | Boot orchestrator, task creator, procedural `loop()` mode ladder. | **System Bootstrap** | Refactor `loop()` to delegate to `IELSModeRegistry::getActiveMode()->update()`. Remove procedural mode `if-else` ladder. |
 | [`Axis.cpp`](../src/motion/Axis.cpp)<br>[`Axis.h`](../src/motion/Axis.h) | `Axis` struct, hardware stepping pins, backlash, motor step math. | **Subsystem 1 (HAL)** | Extract hardware pin stepping and pulse generation into clean HAL classes. Remove coupling to legacy global variables. |

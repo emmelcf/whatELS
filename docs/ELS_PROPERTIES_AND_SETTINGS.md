@@ -309,7 +309,7 @@ prefs.dbTurns           FLOAT   turns   0.0     1.0       (Auto-derived)     Spi
 `SettingsService` is a static service class with high-speed in-memory cached state, FreeRTOS thread safety, and write-through NVS persistence:
 
 ```cpp
-// include/SettingsService.h
+// src/core/SettingsService.h
 
 class SettingsService {
 public:

@@ -9,7 +9,7 @@
 
 ## 1. Overview & Phased Roadmap Strategy
 
-To transform the NanoELS firmware and client ecosystem from its legacy monolithic structure into the modular architecture defined in `UI_redesign/docs`, the implementation is partitioned into three progressive phases.
+To transform the NanoELS firmware and client ecosystem from its legacy monolithic structure into the modular architecture defined in `docs/`, the implementation is partitioned into three progressive phases.
 
 Because this represents a significant engineering effort across firmware C++ (ESP32-S3), wire protocols, and frontend JavaScript, **each phase is structured into discrete, single-conversation milestones**. Each conversation milestone produces compilable, testable code without breaking existing lathe operation.
 

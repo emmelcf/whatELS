@@ -32,7 +32,7 @@ The **NanoELS Web UI** is the primary rich client interface for the NanoELS elec
 The client codebase is structured into cohesive, decoupled ES modules:
 
 ```
-UI_redesign/prototype/
+clients/web_ui/
 ├── lathe_dro_nanoels_controller.html  # Declarative HTML5 markup & Alpine bindings (~530 lines)
 ├── alpine.min.js                      # Alpine.js v3.17.4 local offline runtime (~43 KB)
 ├── lathe-controller.css               # Design system tokens, styles, and touch targets (~1,250 lines)

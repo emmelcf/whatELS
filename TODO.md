@@ -118,7 +118,7 @@ Currently, scales are conditionally compiled out via `#define HAS_DRO_Z false` a
 ## 4. Angled / Flank Infeed for Automatic Threading (`MODE_THREAD`)
 
 ### Motivation
-In `h5.ino` (`modeTurn()`), automatic threading currently executes **straight radial plunge infeed ($90^\circ$)**:
+In `Motion.cpp` (`modeTurn()`), automatic threading currently executes **straight radial plunge infeed ($90^\circ$)**:
 - While NanoELS applies a quadratic de-gressing pass calculation (`fraction * fraction`) to reduce cut depth as thread depth increases, plunging straight down cuts simultaneously on both the leading and trailing edges of the tool insert.
 - On medium and coarse pitch threads, radial plunge creates excessive cutting pressure, chatter, poor surface finish, and premature insert tip chipping.
 - Standard lathe machining practice utilizes **modified flank infeed** (typically $29^\circ$ or $29.5^\circ$ for $60^\circ$ ISO Metric / UN threads, or $27^\circ$ for $55^\circ$ BSW/Whitworth), cutting primarily on the leading edge while lightly shaving the trailing flank.

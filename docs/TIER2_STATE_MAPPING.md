@@ -56,7 +56,7 @@ Every audited Tier 2 variable must map deterministically into one of the four ca
 
 ## 2. Comprehensive Tier 2 Inventory & Codebase Mapping Table
 
-The following table documents every Tier 2 variable audited across [`include/Config.h`](../src/core/Config.h), [`include/Axis.h`](../src/motion/Axis.h), [`include/Motion.h`](../src/motion/Motion.h), and all implementation files in `src/`.
+The following table documents every Tier 2 variable audited across [`src/core/Config.h`](../src/core/Config.h), [`src/motion/Axis.h`](../src/motion/Axis.h), [`src/motion/Motion.h`](../src/motion/Motion.h), and all implementation files in `src/`.
 
 | Variable Group & Legacy Name | Legacy Location | Type & Semantics | Target Domain | Canonical Target Accessor / Container | Read Locations (`src/*.cpp`) | Write / Mutation Locations (`src/*.cpp`) |
 | :--- | :--- | :--- | :---: | :--- | :--- | :--- |
