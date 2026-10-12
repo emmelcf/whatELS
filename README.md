@@ -16,7 +16,8 @@ CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting 
 nanoels/
 ├── platformio.ini           # PlatformIO build configuration (ESP32-S3, LittleFS)
 ├── README.md                # Project overview & build guide
-├── TODO.md                  # Development roadmap & architecture backlog
+├── todo/                    # Development roadmap, architecture backlog & specs
+│   └── TODO.md              # Master roadmap & topic index
 │
 ├── src/                     # Core controller firmware (headers & implementations)
 │   ├── main.cpp             # System setup & cooperative executive loops
@@ -44,11 +45,11 @@ nanoels/
 │   ├── modes/                        # Detailed mode specifications (turning, threading, etc.)
 │   ├── hmi/                          # Touch targets & 800×480 screen guidelines
 │   └── clients/                      # Web UI interaction ledger & documentation
-│
-└── reference/               # Preserved historical reference files
-    ├── h5_monolithic.ino             # Original monolithic firmware
-    ├── H5_DRO_V104personal.ino       # Historical DRO variant
-    └── NANOELS_H5_README.md          # Legacy H5 documentation
+└── reference/               # Preserved historical reference files (read-only)
+    ├── README.md                     # Context & mapping guide to modular src/
+    ├── h5_monolithic.ino             # Original upstream monolithic sketch (~7k LOC)
+    ├── H5_DRO_V104personal.ino       # Historical DRO development variant
+    └── NANOELS_H5_README.md          # Legacy H5 documentation, BOM & schematics
 ```
 
 ---

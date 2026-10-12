@@ -1,5 +1,21 @@
 # NanoELS H5 - Project TODOs & Architecture Roadmap
 
+This folder contains the master TODO list for NanoELS, along with dedicated subfolders containing in-depth design documents and specifications for complex roadmap items.
+
+---
+
+## Index of Roadmap Items
+
+| Item | Title | Supporting Docs | Status |
+| :---: | :--- | :---: | :---: |
+| **1** | [Instantiable & Extendable DisplayModel Architecture](#1-instantiable--extendable-displaymodel-architecture) | — | Planned |
+| **2** | [Dynamic Hardware Pulse Counter Assignment & Linear Scale Settings](#2-dynamic-hardware-pulse-counter-assignment--linear-scale-settings) | — | Planned |
+| **3** | [Motion Timing & User Interface Settings](#3-motion-timing--user-interface-settings) | — | Planned |
+| **4** | [Angled / Flank Infeed for Automatic Threading (`MODE_THREAD`)](#4-angled--flank-infeed-for-automatic-threading-mode_thread) | — | Planned |
+| **5** | [Hardware-in-the-Loop (HIL) Test Rig & Step Interception](#5-hardware-in-the-loop-hil-test-rig--step-interception) | [`todo/hil_rig/README.md`](hil_rig/README.md) | Backlog / Documented |
+
+---
+
 ## 1. Instantiable & Extendable DisplayModel Architecture
 
 ### Motivation
@@ -64,6 +80,8 @@ private:
    - `fixedPadding = true`
    - Bound to native embedded LVGL touch display client.
 
+---
+
 ## 2. Dynamic Hardware Pulse Counter Assignment & Linear Scale Settings
 
 ### Motivation
@@ -99,7 +117,6 @@ Currently, scales are conditionally compiled out via `#define HAS_DRO_Z false` a
      - 0.5 µm scale $\rightarrow$ 2,000 pulses/mm
      - Custom float input for fine calibration.
 
-
 3. **In-UI Calibration Routine:**
    - Provide a calibration wizard in the Web UI:
      1. Operator touches off with gauge block or indicator and zeroes scale.
@@ -108,12 +125,16 @@ Currently, scales are conditionally compiled out via `#define HAS_DRO_Z false` a
         $$\text{PulsesPerMm} = \frac{\Delta \text{RawPulses}}{\text{KnownDistanceMm}}$$
      4. Saves the calibrated factor directly to NVS preferences.
 
+---
+
 ## 3. Motion Timing & User Interface Settings
 
 1. **Configurable Jog Hold Delay (`jogHoldDelayMs`):**
    - Current default is `1000 ms` in `Config.h` (`DEFAULT_JOG_HOLD_DELAY_MS`).
    - Expose `jogHoldDelayMs` in the Web UI Settings tab and store in Preferences (NVS).
    - Allows machinists to customize the threshold between single-step taps and continuous jogging (e.g. 500ms for capacitive vs 1000ms for resistive).
+
+---
 
 ## 4. Angled / Flank Infeed for Automatic Threading (`MODE_THREAD`)
 
@@ -137,5 +158,16 @@ In `Motion.cpp` (`modeTurn()`), automatic threading currently executes **straigh
 3. **Spring Passes:**
    - Support 1 or 2 final "spring passes" (repeated passes at final full depth without incremental infeed) to eliminate tool deflection and produce clean, burr-free flanks.
 
+---
 
+## 5. Hardware-in-the-Loop (HIL) Test Rig & Step Interception
 
+### Summary
+A testing architecture utilizing a secondary ESP32-S3 as a dedicated hardware stimulus generator and step pulse analyzer. This closes the verification gap by validating that physical `STEP` and `DIR` pulses match the mathematical toolpath without altering production firmware or telemetry protocols.
+
+* **Full Architecture & Specification:** See [`todo/hil_rig/README.md`](hil_rig/README.md).
+* **Key Components:**
+  * **Secondary ESP32-S3 Hardware Quadrature Generator:** Injects high-speed quadrature A/B signals (10–3,000 RPM spindle, MPG clicks) into primary controller inputs.
+  * **Secondary ESP32-S3 Hardware Pulse Analyzer:** Counts physical `Z_STEP`, `Z_DIR`, `X_STEP`, `X_DIR` pins via PCNT hardware counters.
+  * **WebSerial Browser Connection:** Streams physical step counts directly to the digital twin visualizer (`lathe-viz.js`).
+* **Design Principle:** Zero changes to primary controller state messaging to avoid the observer effect.
