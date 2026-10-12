@@ -13,7 +13,11 @@
 #include "SettingsService.h"
 
 void setup() {
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+  Serial.begin(DEBUG_UART_BAUD);
+#else
   Serial.begin(DEBUG_UART_BAUD, SERIAL_8N1, DEBUG_UART_RX_PIN, DEBUG_UART_TX_PIN);
+#endif
   delay(100);
   async_timer = timerBegin(TIMER_FREQ);
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
