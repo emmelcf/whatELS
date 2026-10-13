@@ -156,12 +156,18 @@ struct CachedProperty {
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
 3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
 
-### 3.3 LittleFS Preset Catalog & Minimal ROM Baseline
+### 3.3 LittleFS Preset Catalog: System Templates vs. User Presets
 
 To prevent C++ ROM bloat and avoid recompiling firmware whenever a new lathe model is introduced:
 1. **Single Compiled-In Baseline (ROM):** Only **one** uncorruptible baseline profile is hardcoded into firmware ROM (`getDefaultProfile()`, WM210V 8×16). If LittleFS flash is corrupted or unformatted, the controller boots reliably into this baseline.
-2. **Flash Filesystem Catalog (`/presets/*.json`):** All standard stock and user-customized lathe presets live as standalone `.json` documents in LittleFS.
-3. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via the canonical `SETTINGS.preset.*` wire commands.
+2. **Flash Filesystem Catalog (`/presets/profiles.json`):** Presets in the LittleFS catalog are strictly partitioned into two categories:
+   - **System Templates (`"system": true`):** Factory-supplied machine configurations (e.g. `wm210v_stock`, `mini_7x14`). These serve as read-only templates. They cannot be overwritten or deleted, ensuring the factory baseline is always recoverable.
+   - **User Presets (`"system": false`):** Created by the workshop operator (e.g. `my_wm210v`, `shop_mini_lathe`). They can be saved, updated in-place, or deleted.
+3. **Deletion & Default Safety Guards:**
+   - **System Templates Protected:** `SETTINGS.preset.delete` unconditionally rejects removing templates tagged `"system": true`.
+   - **Active Preset Protected:** The preset currently loaded and in use (`activeMachineProfile.profileId`) cannot be deleted while active.
+   - **Catalog Default Protected:** The preset designated as the catalog default (`default_profile_id`) cannot be deleted.
+4. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via canonical `SETTINGS.preset.*` wire commands.
 
 ### 3.4 Dynamic Schema Introspection (JSON Schema Standard)
 
@@ -407,17 +413,47 @@ Stateless clients persist their UI presentation preferences on the controller br
 Clients discover, inspect, apply, and save machine profiles on LittleFS without touching compiled firmware:
 ```text
 -> SETTINGS.preset.list\n
-<- PRESET.list=wm210v,mini_7x14,engine_1440\n
+<- PRESET.list=wm210v_stock:sys,mini_7x14:sys,my_lathe:user;active=wm210v_stock;default=wm210v_stock\n
 
--> SETTINGS.preset.get=wm210v\n
-<- {"profile_id":"wm210v","model_name":"WM210V 8x16",...}\n
+-> SETTINGS.preset.get=wm210v_stock\n
+<- {"identity":{"profile_id":"wm210v_stock","system":true,...},...}\n
 
--> SETTINGS.preset.apply=mini_7x14\n
-<- OK:SETTINGS.preset.apply=mini_7x14\n
+-> SETTINGS.preset.apply=wm210v_stock\n
+<- OK:SETTINGS.preset.apply=wm210v_stock\n
 
--> SETTINGS.preset.save=custom_shop_lathe\n
-<- OK:SETTINGS.preset.save=custom_shop_lathe\n
+-- Setting a new catalog default profile:
+-> SETTINGS.preset.setDefault=my_lathe\n
+<- OK:SETTINGS.preset.setDefault=my_lathe\n
 
+-- Reverting to the catalog default profile:
+-> SETTINGS.preset.resetToDefault\n
+<- OK:SETTINGS.preset.resetToDefault=wm210v_stock\n
+
+-- Attempting to overwrite a system template:
+-> SETTINGS.preset.save\n
+<- ERR:SETTINGS.preset.save=cannot overwrite system template: wm210v_stock (use save=<new_name>)\n
+
+-- Saving customizations as a new user preset:
+-> SETTINGS.preset.save=my_lathe\n
+<- OK:SETTINGS.preset.save=my_lathe\n
+
+-- Updating an active user preset in-place:
+-> SETTINGS.preset.save\n
+<- OK:SETTINGS.preset.save=my_lathe\n
+
+-- Attempting to delete a system template (rejected):
+-> SETTINGS.preset.delete=wm210v_stock\n
+<- ERR:SETTINGS.preset.delete=cannot delete system template: wm210v_stock\n
+
+-- Attempting to delete the currently active preset (rejected):
+-> SETTINGS.preset.delete=my_lathe\n
+<- ERR:SETTINGS.preset.delete=cannot delete active preset: my_lathe\n
+
+-- Attempting to delete the catalog default preset (rejected):
+-> SETTINGS.preset.delete=my_default_lathe\n
+<- ERR:SETTINGS.preset.delete=cannot delete default preset: my_default_lathe\n
+
+-- Deleting an inactive user preset:
 -> SETTINGS.preset.delete=old_test_preset\n
 <- OK:SETTINGS.preset.delete=old_test_preset\n
 ```

@@ -6,7 +6,8 @@
       "identity": {
         "profile_id": "wm210v_stock",
         "model_name": "WM210V 8x16 Bench Lathe",
-        "capabilities": 25
+        "capabilities": 25,
+        "system": true
       },
       "envelope": {
         "bed": {
@@ -101,7 +102,8 @@
       "identity": {
         "profile_id": "mini_7x14",
         "model_name": "Mini Lathe 7x14 (16 TPI Z)",
-        "capabilities": 25
+        "capabilities": 25,
+        "system": true
       },
       "envelope": {
         "bed": {

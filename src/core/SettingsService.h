@@ -28,15 +28,23 @@ public:
   // and synchronizes physical parameters to legacy globals for Core 1 compatibility.
   static void init();
 
-  // --- Tier 1: Active Lathe Machine Profile ---
+  // --- Tier 1: Active Lathe Machine Profile & Presets ---
   static const LatheConfiguration& getActiveProfile();
   static bool hasCapability(LatheCapabilityFlags flag);
   static const char* getActivePresetSlug();
   static bool setPreset(const char* slug, String* reply = nullptr);
+  static bool listPresets(String* reply);
+  static bool getPresetJson(const char* slug, String* reply);
+  static bool applyPreset(const char* slug, String* reply = nullptr);
+  static bool saveCurrentAsPreset(const char* slug, String* reply = nullptr);
+  static bool deletePreset(const char* slug, String* reply = nullptr);
+  static bool setDefaultPreset(const char* slug, String* reply = nullptr);
+  static bool resetToDefaultPreset(String* reply = nullptr);
 
   // --- Universal Wire Protocol Handlers ---
   // Handles SETTINGS.get or SETTINGS.get=<key>
   static bool get(const char* key, String* reply);
+  static bool getGroup(const char* groupName, String* reply);
 
   // Handles SETTINGS.set=<key>,<val> or SETTINGS.set=<key>=<val>
   static bool set(const char* keyVal, String* reply);

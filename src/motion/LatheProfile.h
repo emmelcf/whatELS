@@ -176,6 +176,7 @@ struct LatheConfiguration {
   char                  profileId[24];   // Machine slug, e.g. "wm210v_8x16"
   char                  modelName[48];   // Human readable label, e.g. "WM210V 8x16 Bench Lathe"
   uint32_t              capabilities;    // Bitmask of LatheCapabilityFlags
+  bool                  isSystemProfile; // True if read-only factory template
 
   AxisHardwareConfig    zAxis;           // Carriage (Z)
   AxisHardwareConfig    xAxis;           // Cross-Slide (X)
@@ -197,6 +198,11 @@ struct LatheConfiguration {
 LatheConfiguration getDefaultProfile();
 const LatheConfiguration* findPresetBySlug(const char* slug);
 bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile);
+bool isSystemCatalogProfile(const char* slug);
+bool getProfileJsonFromLittleFS(const char* slug, String* outJson);
+bool saveProfileToLittleFS(const LatheConfiguration& profile);
+bool deleteProfileFromLittleFS(const char* slug);
 bool getDefaultCatalogProfileId(char* outSlug, size_t maxLen);
+bool setDefaultCatalogProfileId(const char* slug);
 bool listCatalogProfiles(String* outList);
 const char* getCapabilityName(LatheCapabilityFlags flag);

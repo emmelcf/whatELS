@@ -49,19 +49,39 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     return true;
   }
 
-  // 2. Settings Namespace (SETTINGS.get / SETTINGS.set / SETTINGS.reset / SETTINGS.preset)
+  // 2. Settings Namespace (SETTINGS.get / SETTINGS.set / SETTINGS.reset / SETTINGS.preset / SETTINGS.getGroup / SETTINGS.resetGroup)
   if (length >= 8 && strncasecmp(payload, "SETTINGS", 8) == 0) {
     const char* sub = payload + 8;
     if (*sub == '.') sub++;
-    if (strncasecmp(sub, "get", 3) == 0) {
+    if (strncasecmp(sub, "getGroup=", 9) == 0) {
+      return SettingsService::getGroup(sub + 9, reply);
+    } else if (strncasecmp(sub, "resetGroup=", 11) == 0) {
+      return SettingsService::resetGroup(sub + 11, reply);
+    } else if (strcasecmp(sub, "preset.list") == 0) {
+      return SettingsService::listPresets(reply);
+    } else if (strncasecmp(sub, "preset.get=", 11) == 0) {
+      return SettingsService::getPresetJson(sub + 11, reply);
+    } else if (strncasecmp(sub, "preset.apply=", 13) == 0) {
+      return SettingsService::applyPreset(sub + 13, reply);
+    } else if (strcasecmp(sub, "preset.save") == 0) {
+      return SettingsService::saveCurrentAsPreset(nullptr, reply);
+    } else if (strncasecmp(sub, "preset.save=", 12) == 0) {
+      return SettingsService::saveCurrentAsPreset(sub + 12, reply);
+    } else if (strncasecmp(sub, "preset.delete=", 14) == 0) {
+      return SettingsService::deletePreset(sub + 14, reply);
+    } else if (strncasecmp(sub, "preset.setDefault=", 18) == 0) {
+      return SettingsService::setDefaultPreset(sub + 18, reply);
+    } else if (strcasecmp(sub, "preset.resetToDefault") == 0) {
+      return SettingsService::resetToDefaultPreset(reply);
+    } else if (strncasecmp(sub, "preset=", 7) == 0) {
+      return SettingsService::setPreset(sub + 7, reply);
+    } else if (strncasecmp(sub, "get", 3) == 0) {
       const char* key = (sub[3] == '=') ? sub + 4 : nullptr;
       return SettingsService::get(key, reply);
     } else if (strncasecmp(sub, "set=", 4) == 0) {
       return SettingsService::set(sub + 4, reply);
     } else if (strncasecmp(sub, "reset=", 6) == 0) {
       return SettingsService::reset(sub + 6, reply);
-    } else if (strncasecmp(sub, "preset=", 7) == 0) {
-      return SettingsService::setPreset(sub + 7, reply);
     }
   }
 

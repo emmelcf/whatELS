@@ -60,6 +60,7 @@ LatheConfiguration getDefaultProfile() {
   p.dimensions.zZeroFromChuckFaceMm = 10.0f;
   p.dimensions.xZeroFromCenterlineMm = 0.0f;
 
+  p.isSystemProfile = true;
   return p;
 }
 
@@ -82,6 +83,38 @@ bool getDefaultCatalogProfileId(char* outSlug, size_t maxLen) {
   const char* defId = doc["default_profile_id"] | "wm210v_stock";
   strncpy(outSlug, defId, maxLen - 1);
   outSlug[maxLen - 1] = '\0';
+  return true;
+}
+
+bool setDefaultCatalogProfileId(const char* slug) {
+  if (!slug || *slug == '\0') return false;
+  if (!LittleFS.exists("/presets/profiles.json")) return false;
+
+  File file = LittleFS.open("/presets/profiles.json", "r");
+  if (!file) return false;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return false;
+
+  bool exists = false;
+  JsonArray profiles = doc["profiles"].as<JsonArray>();
+  for (JsonObject p : profiles) {
+    const char* id = p["identity"]["profile_id"];
+    if (id && strcasecmp(id, slug) == 0) {
+      exists = true;
+      break;
+    }
+  }
+  if (!exists) return false;
+
+  doc["default_profile_id"] = slug;
+
+  file = LittleFS.open("/presets/profiles.json", "w");
+  if (!file) return false;
+  serializeJson(doc, file);
+  file.close();
   return true;
 }
 
@@ -131,6 +164,7 @@ bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile) {
   if (target["identity"]["capabilities"].is<uint32_t>()) {
     outProfile->capabilities = target["identity"]["capabilities"].as<uint32_t>();
   }
+  outProfile->isSystemProfile = target["identity"]["system"] | false;
 
   // Dimensions / Envelope
   JsonObject env = target["envelope"];
@@ -210,12 +244,175 @@ bool listCatalogProfiles(String* outList) {
   String list = "";
   for (size_t i = 0; i < profiles.size(); i++) {
     const char* id = profiles[i]["identity"]["profile_id"];
+    bool isSys = profiles[i]["identity"]["system"] | false;
     if (id) {
       if (list.length() > 0) list += ",";
       list += id;
+      list += isSys ? ":sys" : ":user";
     }
   }
   *outList = list;
+  return true;
+}
+
+bool isSystemCatalogProfile(const char* slug) {
+  if (!slug || *slug == '\0') return false;
+  if (strcasecmp(slug, "wm210v_8x16") == 0 ||
+      strcasecmp(slug, "wm210v_stock") == 0 ||
+      strcasecmp(slug, "wm210v_dual") == 0 ||
+      strcasecmp(slug, "mini_7x14") == 0 ||
+      strcasecmp(slug, "default") == 0) {
+    return true;
+  }
+  if (!LittleFS.exists("/presets/profiles.json")) return false;
+  File file = LittleFS.open("/presets/profiles.json", "r");
+  if (!file) return false;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return false;
+
+  JsonArray profiles = doc["profiles"].as<JsonArray>();
+  for (JsonObject p : profiles) {
+    const char* id = p["identity"]["profile_id"];
+    if (id && strcasecmp(id, slug) == 0) {
+      return p["identity"]["system"] | false;
+    }
+  }
+  return false;
+}
+
+bool getProfileJsonFromLittleFS(const char* slug, String* outJson) {
+  if (!slug || !outJson) return false;
+  if (!LittleFS.exists("/presets/profiles.json")) return false;
+  File file = LittleFS.open("/presets/profiles.json", "r");
+  if (!file) return false;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return false;
+
+  JsonArray profiles = doc["profiles"].as<JsonArray>();
+  for (JsonObject p : profiles) {
+    const char* id = p["identity"]["profile_id"];
+    if (id && strcasecmp(id, slug) == 0) {
+      serializeJson(p, *outJson);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool saveProfileToLittleFS(const LatheConfiguration& profile) {
+  if (profile.profileId[0] == '\0') return false;
+  // Guard: Never allow overwriting a system template!
+  if (isSystemCatalogProfile(profile.profileId)) return false;
+
+  JsonDocument doc;
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      deserializeJson(doc, file);
+      file.close();
+    }
+  }
+
+  if (!doc["version"].is<int>()) doc["version"] = 1;
+  if (!doc["profiles"].is<JsonArray>()) doc["profiles"].to<JsonArray>();
+
+  JsonArray profiles = doc["profiles"].as<JsonArray>();
+  JsonObject target;
+  for (JsonObject p : profiles) {
+    const char* id = p["identity"]["profile_id"];
+    if (id && strcasecmp(id, profile.profileId) == 0) {
+      target = p;
+      break;
+    }
+  }
+  if (target.isNull()) {
+    target = profiles.add<JsonObject>();
+  }
+
+  JsonObject ident = target["identity"].to<JsonObject>();
+  ident["profile_id"] = profile.profileId;
+  ident["model_name"] = profile.modelName;
+  ident["capabilities"] = profile.capabilities;
+  ident["system"] = false;
+
+  JsonObject env = target["envelope"].to<JsonObject>();
+  env["bed"]["total_length_mm"] = profile.dimensions.bedLengthMm;
+  env["swing"]["over_bed_dia_mm"] = profile.dimensions.maxSwingDiameterMm;
+  env["swing"]["over_cross_slide_dia_mm"] = profile.dimensions.swingOverCrossSlideMm;
+  env["headstock"]["spindle_bore_dia_mm"] = profile.dimensions.spindleBoreDiameterMm;
+  env["headstock"]["chuck"]["diameter_mm"] = profile.dimensions.chuckDiameterMm;
+  env["headstock"]["chuck"]["body_length_mm"] = profile.dimensions.chuckLengthMm;
+  env["headstock"]["datums"]["z_zero_from_chuck_face_mm"] = profile.dimensions.zZeroFromChuckFaceMm;
+  env["headstock"]["datums"]["x_zero_from_centerline_mm"] = profile.dimensions.xZeroFromCenterlineMm;
+
+  JsonObject sp = target["spindle"].to<JsonObject>();
+  sp["kinematics"]["max_safe_rpm"] = profile.spindle.maxSafeRpm;
+  sp["kinematics"]["min_sync_rpm"] = profile.spindle.minSyncRpm;
+  sp["feedback"]["encoder"]["ppr"] = profile.spindle.encoder.ppr;
+  sp["feedback"]["encoder"]["has_index"] = profile.spindle.encoder.hasIndex;
+  sp["feedback"]["pulley_ratio"] = profile.spindle.pulleyRatio;
+
+  JsonObject zA = target["axes"]["z"].to<JsonObject>();
+  zA["kinematics"]["leadscrew_pitch_mm"] = profile.zAxis.leadscrewPitchMm;
+  zA["kinematics"]["backlash_mm"] = profile.zAxis.backlashMm;
+  zA["kinematics"]["max_velocity_mm_min"] = profile.zAxis.maxVelocityMmMin;
+  zA["kinematics"]["max_accel_mm_sec2"] = profile.zAxis.maxAccelMmSec2;
+  zA["drive"]["steps_per_mm"] = profile.zAxis.stepsPerMm;
+  zA["feedback"]["has_dro"] = profile.zAxis.hasDroScale;
+
+  JsonObject xA = target["axes"]["x"].to<JsonObject>();
+  xA["kinematics"]["leadscrew_pitch_mm"] = profile.xAxis.leadscrewPitchMm;
+  xA["kinematics"]["backlash_mm"] = profile.xAxis.backlashMm;
+  xA["kinematics"]["max_velocity_mm_min"] = profile.xAxis.maxVelocityMmMin;
+  xA["kinematics"]["max_accel_mm_sec2"] = profile.xAxis.maxAccelMmSec2;
+  xA["drive"]["steps_per_mm"] = profile.xAxis.stepsPerMm;
+  xA["feedback"]["has_dro"] = profile.xAxis.hasDroScale;
+
+  File file = LittleFS.open("/presets/profiles.json", "w");
+  if (!file) return false;
+  serializeJson(doc, file);
+  file.close();
+  return true;
+}
+
+bool deleteProfileFromLittleFS(const char* slug) {
+  if (!slug || *slug == '\0') return false;
+  // Guard: Never allow deleting a system template!
+  if (isSystemCatalogProfile(slug)) return false;
+  // Guard: Never allow deleting the catalog default profile!
+  char defaultSlug[32] = {0};
+  if (getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug))) {
+    if (strcasecmp(defaultSlug, slug) == 0) return false;
+  }
+  if (!LittleFS.exists("/presets/profiles.json")) return false;
+
+  File file = LittleFS.open("/presets/profiles.json", "r");
+  if (!file) return false;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return false;
+
+  JsonArray profiles = doc["profiles"].as<JsonArray>();
+  bool found = false;
+  for (size_t i = 0; i < profiles.size(); i++) {
+    const char* id = profiles[i]["identity"]["profile_id"];
+    if (id && strcasecmp(id, slug) == 0) {
+      profiles.remove(i);
+      found = true;
+      break;
+    }
+  }
+  if (!found) return false;
+
+  file = LittleFS.open("/presets/profiles.json", "w");
+  if (!file) return false;
+  serializeJson(doc, file);
+  file.close();
   return true;
 }
 

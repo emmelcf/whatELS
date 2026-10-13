@@ -86,6 +86,15 @@ void SettingsService::syncLegacyGlobals() {
   RPM_BULK = ENCODER_PPR * 2;
 }
 
+static const LatheConfiguration* getActiveBaseline() {
+  const LatheConfiguration* pBaseline = findPresetBySlug(activeMachineProfile.profileId);
+  if (!pBaseline) {
+    static LatheConfiguration def = getDefaultProfile();
+    pBaseline = &def;
+  }
+  return pBaseline;
+}
+
 bool SettingsService::setPreset(const char* slug, String* reply) {
   if (!slug || *slug == '\0') {
     if (reply) *reply = "ERR:SETTINGS.preset=missing slug\n";
@@ -108,11 +117,126 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
 
   activeMachineProfile = *pPreset;
   syncLegacyGlobals();
-  saveMachineConfig();
   machineStatusForcePublish = true;
 
   if (reply) *reply = "OK:SETTINGS.preset=" + String(activeMachineProfile.profileId) + "\n";
   return true;
+}
+
+bool SettingsService::listPresets(String* reply) {
+  if (!reply) return false;
+  String list;
+  listCatalogProfiles(&list);
+  char defaultSlug[32] = "wm210v_stock";
+  getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
+  *reply = "PRESET.list=" + list + ";active=" + String(activeMachineProfile.profileId) + ";default=" + String(defaultSlug) + "\n";
+  return true;
+}
+
+bool SettingsService::getPresetJson(const char* slug, String* reply) {
+  if (!reply) return false;
+  if (!slug || *slug == '\0') {
+    *reply = "ERR:SETTINGS.preset.get=missing slug\n";
+    return false;
+  }
+  String json;
+  if (getProfileJsonFromLittleFS(slug, &json)) {
+    *reply = json + "\n";
+    return true;
+  }
+  *reply = "ERR:SETTINGS.preset.get=unknown preset slug: " + String(slug) + "\n";
+  return false;
+}
+
+bool SettingsService::applyPreset(const char* slug, String* reply) {
+  bool ok = setPreset(slug, reply);
+  if (ok && reply) {
+    *reply = "OK:SETTINGS.preset.apply=" + String(slug) + "\n";
+  }
+  return ok;
+}
+
+bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
+  // If slug is omitted or "current", save in-place to the active profile slug
+  const char* targetSlug = (slug && *slug != '\0' && strcasecmp(slug, "current") != 0) ? slug : activeMachineProfile.profileId;
+
+  // Guard: Never allow overwriting a system template!
+  if (isSystemCatalogProfile(targetSlug)) {
+    if (reply) {
+      *reply = "ERR:SETTINGS.preset.save=cannot overwrite system template: " + String(targetSlug) + " (use save=<new_name>)\n";
+    }
+    return false;
+  }
+
+  strncpy(activeMachineProfile.profileId, targetSlug, sizeof(activeMachineProfile.profileId) - 1);
+  activeMachineProfile.profileId[sizeof(activeMachineProfile.profileId) - 1] = '\0';
+  activeMachineProfile.isSystemProfile = false;
+
+  if (saveProfileToLittleFS(activeMachineProfile)) {
+    // Persist new preset identity to NVS
+    Preferences pref;
+    pref.begin("machine", false);
+    pref.putString("preset", activeMachineProfile.profileId);
+    pref.putString("prof_id", activeMachineProfile.profileId);
+    pref.end();
+
+    if (reply) *reply = "OK:SETTINGS.preset.save=" + String(targetSlug) + "\n";
+    machineStatusForcePublish = true;
+    return true;
+  }
+  if (reply) *reply = "ERR:SETTINGS.preset.save=failed to save preset to LittleFS\n";
+  return false;
+}
+
+bool SettingsService::deletePreset(const char* slug, String* reply) {
+  if (!slug || *slug == '\0') {
+    if (reply) *reply = "ERR:SETTINGS.preset.delete=missing slug\n";
+    return false;
+  }
+  if (isSystemCatalogProfile(slug)) {
+    if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete system template: " + String(slug) + "\n";
+    return false;
+  }
+  if (strcasecmp(activeMachineProfile.profileId, slug) == 0) {
+    if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete active preset: " + String(slug) + "\n";
+    return false;
+  }
+  char defaultSlug[32] = {0};
+  if (getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug))) {
+    if (strcasecmp(defaultSlug, slug) == 0) {
+      if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete default preset: " + String(slug) + "\n";
+      return false;
+    }
+  }
+  if (deleteProfileFromLittleFS(slug)) {
+    if (reply) *reply = "OK:SETTINGS.preset.delete=" + String(slug) + "\n";
+    return true;
+  }
+  if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete preset: " + String(slug) + "\n";
+  return false;
+}
+
+bool SettingsService::setDefaultPreset(const char* slug, String* reply) {
+  if (!slug || *slug == '\0') {
+    if (reply) *reply = "ERR:SETTINGS.preset.setDefault=missing slug\n";
+    return false;
+  }
+  if (setDefaultCatalogProfileId(slug)) {
+    if (reply) *reply = "OK:SETTINGS.preset.setDefault=" + String(slug) + "\n";
+    return true;
+  }
+  if (reply) *reply = "ERR:SETTINGS.preset.setDefault=failed to set default preset: " + String(slug) + "\n";
+  return false;
+}
+
+bool SettingsService::resetToDefaultPreset(String* reply) {
+  char defaultSlug[32] = "wm210v_stock";
+  getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
+  bool ok = applyPreset(defaultSlug, reply);
+  if (ok && reply) {
+    *reply = "OK:SETTINGS.preset.resetToDefault=" + String(defaultSlug) + "\n";
+  }
+  return ok;
 }
 
 bool SettingsService::reset(const char* key, String* reply) {
@@ -123,60 +247,62 @@ bool SettingsService::reset(const char* key, String* reply) {
     machineStatusForcePublish = true;
   };
 
-  const LatheConfiguration* pBaseline = findPresetBySlug(activeMachineProfile.profileId);
-  if (!pBaseline) {
-    static LatheConfiguration def = getDefaultProfile();
-    pBaseline = &def;
-  }
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+
+  Preferences pref;
+  pref.begin("machine", false);
 
   if (strcasecmp(key, "machine.z.pitchDu") == 0 || strcasecmp(key, "screwZDu") == 0) {
     activeMachineProfile.zAxis.leadscrewPitchMm = pBaseline->zAxis.leadscrewPitchMm;
-    saveMachineProfile();
+    pref.remove("screw_z_du");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.x.pitchDu") == 0 || strcasecmp(key, "screwXDu") == 0) {
     activeMachineProfile.xAxis.leadscrewPitchMm = pBaseline->xAxis.leadscrewPitchMm;
-    saveMachineProfile();
+    pref.remove("screw_x_du");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.z.motorSteps") == 0 || strcasecmp(key, "motorStepsZ") == 0) {
     activeMachineProfile.zAxis.stepsPerMm = pBaseline->zAxis.stepsPerMm;
-    saveMachineProfile();
+    pref.remove("mot_steps_z");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.x.motorSteps") == 0 || strcasecmp(key, "motorStepsX") == 0) {
     activeMachineProfile.xAxis.stepsPerMm = pBaseline->xAxis.stepsPerMm;
-    saveMachineProfile();
+    pref.remove("mot_steps_x");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.spindle.ppr") == 0 || strcasecmp(key, "encoderPpr") == 0) {
     activeMachineProfile.spindle.encoder.ppr = pBaseline->spindle.encoder.ppr;
-    saveMachineProfile();
+    pref.remove("enc_ppr");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
+    applyDerivedMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.spindle.ratio") == 0) {
     activeMachineProfile.spindle.pulleyRatio = pBaseline->spindle.pulleyRatio;
-    saveMachineProfile();
+    pref.remove("spindle_ratio");
+    pref.end();
     syncLegacyGlobals();
-    saveMachineConfig();
+    applyDerivedMachineConfig();
     reportOk(key);
     return true;
   }
+  pref.end();
   if (strcasecmp(key, "deadbandAngle") == 0) {
     setDeadbandAngle("auto");
     reportOk(key);
@@ -197,6 +323,21 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
 
   if (strcasecmp(group, "machine") == 0) {
     return setPreset(activeMachineProfile.profileId, reply);
+  }
+
+  if (strcasecmp(group, "prefs") == 0) {
+    setDeadbandAngle("auto");
+    setDeadbandTurns("auto");
+    setJogStepDu(1000);
+    setMeasure(0);
+    setDiameterMode(true);
+    setAbsoluteMode(true);
+    setZDroMode(false);
+    setXDroMode(false);
+    feedStepDu = 100;
+    if (reply) *reply = "OK:SETTINGS.resetGroup=prefs\n";
+    machineStatusForcePublish = true;
+    return true;
   }
 
   if (reply) *reply = "ERR:SETTINGS.resetGroup=unknown group: " + String(group) + "\n";
@@ -225,9 +366,18 @@ bool SettingsService::setScrewZDu(long du) {
   if (du < 100 || du > 10000000) return false;
   float pitchMm = (float)du / 10000.0f;
   activeMachineProfile.zAxis.leadscrewPitchMm = pitchMm;
-  saveMachineProfile();
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  if (pBaseline && pBaseline->zAxis.leadscrewPitchDu() == du) {
+    pref.remove("screw_z_du");
+  } else {
+    pref.putInt("screw_z_du", (int32_t)du);
+  }
+  pref.end();
+
   syncLegacyGlobals();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -236,9 +386,18 @@ bool SettingsService::setScrewXDu(long du) {
   if (du < 100 || du > 10000000) return false;
   float pitchMm = (float)du / 10000.0f;
   activeMachineProfile.xAxis.leadscrewPitchMm = pitchMm;
-  saveMachineProfile();
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  if (pBaseline && pBaseline->xAxis.leadscrewPitchDu() == du) {
+    pref.remove("screw_x_du");
+  } else {
+    pref.putInt("screw_x_du", (int32_t)du);
+  }
+  pref.end();
+
   syncLegacyGlobals();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -246,12 +405,22 @@ bool SettingsService::setScrewXDu(long du) {
 bool SettingsService::setMotorStepsZ(long steps) {
   if (steps < 10 || steps > 1000000) return false;
   float pitchMm = activeMachineProfile.zAxis.leadscrewPitchMm;
-  if (pitchMm > 0) {
-    activeMachineProfile.zAxis.stepsPerMm = (float)steps / pitchMm;
+  if (pitchMm <= 0.0f) return false;
+  float stepsPerMm = (float)steps / pitchMm;
+  activeMachineProfile.zAxis.stepsPerMm = stepsPerMm;
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  float baseSteps = (pBaseline && pBaseline->zAxis.leadscrewPitchMm > 0) ? (pBaseline->zAxis.stepsPerMm * pBaseline->zAxis.leadscrewPitchMm) : -1.0f;
+  if (fabsf(baseSteps - (float)steps) < 0.5f) {
+    pref.remove("mot_steps_z");
+  } else {
+    pref.putFloat("mot_steps_z", stepsPerMm);
   }
-  saveMachineProfile();
+  pref.end();
+
   syncLegacyGlobals();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -259,12 +428,22 @@ bool SettingsService::setMotorStepsZ(long steps) {
 bool SettingsService::setMotorStepsX(long steps) {
   if (steps < 10 || steps > 1000000) return false;
   float pitchMm = activeMachineProfile.xAxis.leadscrewPitchMm;
-  if (pitchMm > 0) {
-    activeMachineProfile.xAxis.stepsPerMm = (float)steps / pitchMm;
+  if (pitchMm <= 0.0f) return false;
+  float stepsPerMm = (float)steps / pitchMm;
+  activeMachineProfile.xAxis.stepsPerMm = stepsPerMm;
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  float baseSteps = (pBaseline && pBaseline->xAxis.leadscrewPitchMm > 0) ? (pBaseline->xAxis.stepsPerMm * pBaseline->xAxis.leadscrewPitchMm) : -1.0f;
+  if (fabsf(baseSteps - (float)steps) < 0.5f) {
+    pref.remove("mot_steps_x");
+  } else {
+    pref.putFloat("mot_steps_x", stepsPerMm);
   }
-  saveMachineProfile();
+  pref.end();
+
   syncLegacyGlobals();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -272,10 +451,19 @@ bool SettingsService::setMotorStepsX(long steps) {
 bool SettingsService::setEncoderPpr(int ppr) {
   if (ppr < 10 || ppr > 30000) return false;
   activeMachineProfile.spindle.encoder.ppr = (uint16_t)ppr;
-  saveMachineProfile();
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  if (pBaseline && pBaseline->spindle.encoder.ppr == (uint16_t)ppr) {
+    pref.remove("enc_ppr");
+  } else {
+    pref.putUShort("enc_ppr", (uint16_t)ppr);
+  }
+  pref.end();
+
   syncLegacyGlobals();
   applyDerivedMachineConfig();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -283,10 +471,19 @@ bool SettingsService::setEncoderPpr(int ppr) {
 bool SettingsService::setSpindleRatio(float ratio) {
   if (ratio < 0.01f || ratio > 50.0f) return false;
   activeMachineProfile.spindle.pulleyRatio = ratio;
-  saveMachineProfile();
+
+  const LatheConfiguration* pBaseline = getActiveBaseline();
+  Preferences pref;
+  pref.begin("machine", false);
+  if (pBaseline && fabsf(pBaseline->spindle.pulleyRatio - ratio) < 0.0001f) {
+    pref.remove("spindle_ratio");
+  } else {
+    pref.putFloat("spindle_ratio", ratio);
+  }
+  pref.end();
+
   syncLegacyGlobals();
   applyDerivedMachineConfig();
-  saveMachineConfig();
   machineStatusForcePublish = true;
   return true;
 }
@@ -851,6 +1048,19 @@ bool SettingsService::get(const char* key, String* reply) {
     *reply += "SETTING." + String(name) + "=" + val + "\n";
   };
 
+  // Check if requesting a group via get
+  if (!getAll && key) {
+    if (strcasecmp(key, "machine") == 0 || strcasecmp(key, "machine.*") == 0) {
+      return getGroup("machine", reply);
+    }
+    if (strcasecmp(key, "sys") == 0 || strcasecmp(key, "sys.*") == 0) {
+      return getGroup("sys", reply);
+    }
+    if (strcasecmp(key, "prefs") == 0 || strcasecmp(key, "prefs.*") == 0) {
+      return getGroup("prefs", reply);
+    }
+  }
+
   // --- Tier 1: Machine Profile ---
   if (getAll || strcasecmp(key, "machine.preset") == 0 || strcasecmp(key, "preset") == 0) {
     appendSetting("machine.preset", String(activeMachineProfile.profileId));
@@ -912,6 +1122,34 @@ bool SettingsService::get(const char* key, String* reply) {
   }
 
   // --- Tier 2: Controller Infrastructure ---
+  if (getAll || strcasecmp(key, "sys.wifi.enabled") == 0) {
+    appendSetting("sys.wifi.enabled", WIFI_ENABLED ? "1" : "0");
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.wifi.ssid") == 0) {
+    appendSetting("sys.wifi.ssid", WIFI_SSID);
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.wifi.hostname") == 0) {
+    appendSetting("sys.wifi.hostname", WIFI_HOSTNAME);
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.dro.zPulsesPerMm") == 0) {
+    appendSetting("sys.dro.zPulsesPerMm", String(activeMachineProfile.zAxis.droScale.ppr));
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.dro.xPulsesPerMm") == 0) {
+    appendSetting("sys.dro.xPulsesPerMm", String(activeMachineProfile.xAxis.droScale.ppr));
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevZ") == 0) {
+    appendSetting("sys.mpg.zPulsesPerRev", String(PULSE_PER_REVOLUTION_Z, 2));
+    if (!getAll) return true;
+  }
+  if (getAll || strcasecmp(key, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevX") == 0) {
+    appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
+    if (!getAll) return true;
+  }
   if (getAll || strcasecmp(key, "screwYDu") == 0) {
     appendSetting("screwYDu", String(SCREW_Y_DU));
     if (!getAll) return true;
@@ -922,50 +1160,50 @@ bool SettingsService::get(const char* key, String* reply) {
   }
 
   // --- Tier 3: Operator Preferences ---
-  if (getAll || strcasecmp(key, "measure") == 0) {
-    appendSetting("measure", String(measure));
+  if (getAll || strcasecmp(key, "prefs.startupMeasure") == 0 || strcasecmp(key, "prefs.measure") == 0 || strcasecmp(key, "measure") == 0) {
+    appendSetting("prefs.startupMeasure", String(measure));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "dia") == 0 || strcasecmp(key, "isDiameterMode") == 0) {
-    appendSetting("dia", isDiameterMode() ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.diaRad") == 0 || strcasecmp(key, "prefs.dia") == 0 || strcasecmp(key, "dia") == 0 || strcasecmp(key, "isDiameterMode") == 0) {
+    appendSetting("prefs.diaRad", isDiameterMode() ? "1" : "0");
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "abs") == 0 || strcasecmp(key, "isAbsoluteMode") == 0) {
-    appendSetting("abs", isAbsoluteMode() ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.absInc") == 0 || strcasecmp(key, "prefs.abs") == 0 || strcasecmp(key, "abs") == 0 || strcasecmp(key, "isAbsoluteMode") == 0) {
+    appendSetting("prefs.absInc", isAbsoluteMode() ? "1" : "0");
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "zDro") == 0 || strcasecmp(key, "zDroActive") == 0) {
-    appendSetting("zDro", zDisplayModeDRO ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.zDroActive") == 0 || strcasecmp(key, "prefs.zDro") == 0 || strcasecmp(key, "zDro") == 0 || strcasecmp(key, "zDroActive") == 0) {
+    appendSetting("prefs.zDroActive", zDisplayModeDRO ? "1" : "0");
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "xDro") == 0 || strcasecmp(key, "xDroActive") == 0) {
-    appendSetting("xDro", xDisplayModeDRO ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.xDroActive") == 0 || strcasecmp(key, "prefs.xDro") == 0 || strcasecmp(key, "xDro") == 0 || strcasecmp(key, "xDroActive") == 0) {
+    appendSetting("prefs.xDroActive", xDisplayModeDRO ? "1" : "0");
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "feedStepDu") == 0) {
-    appendSetting("feedStepDu", String(feedStepDu));
+  if (getAll || strcasecmp(key, "prefs.feedStepDu") == 0 || strcasecmp(key, "feedStepDu") == 0) {
+    appendSetting("prefs.feedStepDu", String(feedStepDu));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "jogStepDu") == 0) {
-    appendSetting("jogStepDu", String(moveStep));
+  if (getAll || strcasecmp(key, "prefs.jogStepDu") == 0 || strcasecmp(key, "jogStepDu") == 0) {
+    appendSetting("prefs.jogStepDu", String(moveStep));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "backlashZDu") == 0) {
-    appendSetting("backlashZDu", String(BACKLASH_DU_Z));
+  if (getAll || strcasecmp(key, "prefs.backlashZDu") == 0 || strcasecmp(key, "backlashZDu") == 0) {
+    appendSetting("prefs.backlashZDu", String(BACKLASH_DU_Z));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "backlashXDu") == 0) {
-    appendSetting("backlashXDu", String(BACKLASH_DU_X));
+  if (getAll || strcasecmp(key, "prefs.backlashXDu") == 0 || strcasecmp(key, "backlashXDu") == 0) {
+    appendSetting("prefs.backlashXDu", String(BACKLASH_DU_X));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "deadbandAngle") == 0) {
-    appendSetting("deadbandAngle", String(getDeadbandAngle(), 3));
-    appendSetting("deadbandAngle.isAuto", isDeadbandAngleAuto() ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.dbAngle") == 0 || strcasecmp(key, "prefs.deadbandAngle") == 0 || strcasecmp(key, "deadbandAngle") == 0) {
+    appendSetting("prefs.dbAngle", String(getDeadbandAngle(), 3));
+    appendSetting("prefs.dbAngle.isAuto", isDeadbandAngleAuto() ? "1" : "0");
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "deadbandTurns") == 0) {
-    appendSetting("deadbandTurns", String(getDeadbandTurns(), 4));
-    appendSetting("deadbandTurns.isAuto", isDeadbandTurnsAuto() ? "1" : "0");
+  if (getAll || strcasecmp(key, "prefs.dbTurns") == 0 || strcasecmp(key, "prefs.deadbandTurns") == 0 || strcasecmp(key, "deadbandTurns") == 0) {
+    appendSetting("prefs.dbTurns", String(getDeadbandTurns(), 4));
+    appendSetting("prefs.dbTurns.isAuto", isDeadbandTurnsAuto() ? "1" : "0");
     if (!getAll) return true;
   }
 
@@ -975,6 +1213,67 @@ bool SettingsService::get(const char* key, String* reply) {
 
   *reply = "ERR:SETTINGS." + String(key) + "=unknown key\n";
   return true;
+}
+
+bool SettingsService::getGroup(const char* groupName, String* reply) {
+  if (!groupName || *groupName == '\0' || !reply) return false;
+
+  auto appendSetting = [&](const char* name, const String& val) {
+    *reply += "SETTING." + String(name) + "=" + val + "\n";
+  };
+
+  if (strcasecmp(groupName, "machine") == 0) {
+    appendSetting("machine.preset", String(activeMachineProfile.profileId));
+    appendSetting("machine.name", String(activeMachineProfile.modelName));
+    char buf[16];
+    snprintf(buf, sizeof(buf), "0x%08X", (unsigned int)activeMachineProfile.capabilities);
+    appendSetting("machine.caps", String(buf));
+    appendSetting("machine.dim.bedLength", String(activeMachineProfile.dimensions.bedLengthMm, 1));
+    appendSetting("machine.dim.swingDia", String(activeMachineProfile.dimensions.maxSwingDiameterMm, 1));
+    appendSetting("machine.dim.chuckDia", String(activeMachineProfile.dimensions.chuckDiameterMm, 1));
+    appendSetting("machine.dim.spindleBore", String(activeMachineProfile.dimensions.spindleBoreDiameterMm, 1));
+    appendSetting("machine.z.pitchDu", String(activeMachineProfile.zAxis.leadscrewPitchDu()));
+    appendSetting("machine.x.pitchDu", String(activeMachineProfile.xAxis.leadscrewPitchDu()));
+    appendSetting("machine.z.motorSteps", String(MOTOR_STEPS_Z));
+    appendSetting("machine.x.motorSteps", String(MOTOR_STEPS_X));
+    appendSetting("machine.spindle.ppr", String(activeMachineProfile.spindle.encoder.ppr));
+    appendSetting("machine.spindle.ratio", String(activeMachineProfile.spindle.pulleyRatio, 3));
+    appendSetting("machine.spindle.effectivePpr", String(activeMachineProfile.spindle.effectivePpr(), 1));
+    return true;
+  }
+
+  if (strcasecmp(groupName, "sys") == 0) {
+    appendSetting("sys.wifi.enabled", WIFI_ENABLED ? "1" : "0");
+    appendSetting("sys.wifi.ssid", WIFI_SSID);
+    appendSetting("sys.wifi.hostname", WIFI_HOSTNAME);
+    appendSetting("sys.dro.zPulsesPerMm", String(activeMachineProfile.zAxis.droScale.ppr));
+    appendSetting("sys.dro.xPulsesPerMm", String(activeMachineProfile.xAxis.droScale.ppr));
+    appendSetting("sys.mpg.zPulsesPerRev", String(PULSE_PER_REVOLUTION_Z, 2));
+    appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
+    appendSetting("screwYDu", String(SCREW_Y_DU));
+    appendSetting("motorStepsY", String(MOTOR_STEPS_Y));
+    return true;
+  }
+
+  if (strcasecmp(groupName, "prefs") == 0) {
+    appendSetting("prefs.startupMeasure", String(measure));
+    appendSetting("prefs.jogStepDu", String(moveStep));
+    appendSetting("prefs.feedStepDu", String(feedStepDu));
+    appendSetting("prefs.diaRad", isDiameterMode() ? "1" : "0");
+    appendSetting("prefs.absInc", isAbsoluteMode() ? "1" : "0");
+    appendSetting("prefs.zDroActive", zDisplayModeDRO ? "1" : "0");
+    appendSetting("prefs.xDroActive", xDisplayModeDRO ? "1" : "0");
+    appendSetting("prefs.backlashZDu", String(BACKLASH_DU_Z));
+    appendSetting("prefs.backlashXDu", String(BACKLASH_DU_X));
+    appendSetting("prefs.dbAngle", String(getDeadbandAngle(), 3));
+    appendSetting("prefs.dbAngle.isAuto", isDeadbandAngleAuto() ? "1" : "0");
+    appendSetting("prefs.dbTurns", String(getDeadbandTurns(), 4));
+    appendSetting("prefs.dbTurns.isAuto", isDeadbandTurnsAuto() ? "1" : "0");
+    return true;
+  }
+
+  *reply = "ERR:SETTINGS.getGroup=unknown group: " + String(groupName) + "\n";
+  return false;
 }
 
 bool SettingsService::set(const char* keyVal, String* reply) {
@@ -1052,7 +1351,60 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     return true;
   }
 
-  // --- Legacy Y axis ---
+  // --- Tier 2: Controller Infrastructure ---
+  if (strcasecmp(keyBuf, "sys.wifi.enabled") == 0) {
+    WIFI_ENABLED = (atoi(valStr) != 0);
+    saveWifiConfig();
+    reportOk(keyBuf, WIFI_ENABLED ? "1" : "0");
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.wifi.ssid") == 0) {
+    WIFI_SSID = valStr;
+    saveWifiConfig();
+    reportOk(keyBuf, WIFI_SSID);
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.wifi.hostname") == 0) {
+    WIFI_HOSTNAME = valStr;
+    saveWifiConfig();
+    reportOk(keyBuf, WIFI_HOSTNAME);
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.dro.zPulsesPerMm") == 0) {
+    int val = atoi(valStr);
+    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
+    activeMachineProfile.zAxis.droScale.ppr = (uint16_t)val;
+    reportOk(keyBuf, String(val));
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.dro.xPulsesPerMm") == 0) {
+    int val = atoi(valStr);
+    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
+    activeMachineProfile.xAxis.droScale.ppr = (uint16_t)val;
+    reportOk(keyBuf, String(val));
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevZ") == 0) {
+    float val = atof(valStr);
+    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
+    PULSE_PER_REVOLUTION_Z = val;
+    reportOk(keyBuf, String(val, 2));
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevX") == 0) {
+    float val = atof(valStr);
+    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
+    PULSE_PER_REVOLUTION_X = val;
+    reportOk(keyBuf, String(val, 2));
+    return true;
+  }
+
   if (strcasecmp(keyBuf, "screwYDu") == 0) {
     long val = atol(valStr);
     if (val < 1 || val > 10000000) { reportErr(keyBuf, "out of bounds (1..10000000)"); return true; }
@@ -1074,55 +1426,63 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   }
 
   // --- Tier 3: Operator Preferences ---
-  if (strcasecmp(keyBuf, "measure") == 0) {
+  if (strcasecmp(keyBuf, "prefs.startupMeasure") == 0 || strcasecmp(keyBuf, "prefs.measure") == 0 || strcasecmp(keyBuf, "measure") == 0) {
     int val = atoi(valStr);
     if (!setMeasure(val)) { reportErr(keyBuf, "must be 0 (MM), 1 (TPI), or 2 (IN)"); return true; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
-  if (strcasecmp(keyBuf, "dia") == 0 || strcasecmp(keyBuf, "isDiameterMode") == 0) {
+  if (strcasecmp(keyBuf, "prefs.diaRad") == 0 || strcasecmp(keyBuf, "prefs.dia") == 0 || strcasecmp(keyBuf, "dia") == 0 || strcasecmp(keyBuf, "isDiameterMode") == 0) {
     int val = atoi(valStr);
     setDiameterMode(val != 0);
     reportOk(keyBuf, isDiameterMode() ? "1" : "0");
     return true;
   }
 
-  if (strcasecmp(keyBuf, "abs") == 0 || strcasecmp(keyBuf, "isAbsoluteMode") == 0) {
+  if (strcasecmp(keyBuf, "prefs.absInc") == 0 || strcasecmp(keyBuf, "prefs.abs") == 0 || strcasecmp(keyBuf, "abs") == 0 || strcasecmp(keyBuf, "isAbsoluteMode") == 0) {
     int val = atoi(valStr);
     setAbsoluteMode(val != 0);
     reportOk(keyBuf, isAbsoluteMode() ? "1" : "0");
     return true;
   }
 
-  if (strcasecmp(keyBuf, "zDro") == 0 || strcasecmp(keyBuf, "zDroActive") == 0) {
+  if (strcasecmp(keyBuf, "prefs.zDroActive") == 0 || strcasecmp(keyBuf, "prefs.zDro") == 0 || strcasecmp(keyBuf, "zDro") == 0 || strcasecmp(keyBuf, "zDroActive") == 0) {
     int val = atoi(valStr);
     setZDroMode(val != 0);
     reportOk(keyBuf, zDisplayModeDRO ? "1" : "0");
     return true;
   }
 
-  if (strcasecmp(keyBuf, "xDro") == 0 || strcasecmp(keyBuf, "xDroActive") == 0) {
+  if (strcasecmp(keyBuf, "prefs.xDroActive") == 0 || strcasecmp(keyBuf, "prefs.xDro") == 0 || strcasecmp(keyBuf, "xDro") == 0 || strcasecmp(keyBuf, "xDroActive") == 0) {
     int val = atoi(valStr);
     setXDroMode(val != 0);
     reportOk(keyBuf, xDisplayModeDRO ? "1" : "0");
     return true;
   }
 
-  if (strcasecmp(keyBuf, "jogStepDu") == 0) {
+  if (strcasecmp(keyBuf, "prefs.feedStepDu") == 0 || strcasecmp(keyBuf, "feedStepDu") == 0) {
+    long val = atol(valStr);
+    if (val < 1 || val > 1000000) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
+    feedStepDu = val;
+    reportOk(keyBuf, String(val));
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "prefs.jogStepDu") == 0 || strcasecmp(keyBuf, "jogStepDu") == 0) {
     long val = atol(valStr);
     if (!setJogStepDu(val)) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
-  if (strcasecmp(keyBuf, "deadbandAngle") == 0) {
+  if (strcasecmp(keyBuf, "prefs.dbAngle") == 0 || strcasecmp(keyBuf, "prefs.deadbandAngle") == 0 || strcasecmp(keyBuf, "deadbandAngle") == 0) {
     if (!setDeadbandAngle(valStr)) { reportErr(keyBuf, "invalid angle (0..360 or auto)"); return true; }
     reportOk(keyBuf, isDeadbandAngleAuto() ? "auto" : String(getDeadbandAngle(), 3));
     return true;
   }
 
-  if (strcasecmp(keyBuf, "deadbandTurns") == 0) {
+  if (strcasecmp(keyBuf, "prefs.dbTurns") == 0 || strcasecmp(keyBuf, "prefs.deadbandTurns") == 0 || strcasecmp(keyBuf, "deadbandTurns") == 0) {
     if (!setDeadbandTurns(valStr)) { reportErr(keyBuf, "invalid turns (0..100 or auto)"); return true; }
     reportOk(keyBuf, isDeadbandTurnsAuto() ? "auto" : String(getDeadbandTurns(), 4));
     return true;

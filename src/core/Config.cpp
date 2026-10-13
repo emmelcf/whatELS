@@ -511,8 +511,17 @@ void loadMachineProfile() {
     activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
   }
 
+  if (pref.isKey("screw_x_du")) {
+    int32_t screwXDu = pref.getInt("screw_x_du");
+    activeMachineProfile.xAxis.leadscrewPitchMm = (float)screwXDu / 10000.0f;
+  }
+
   if (pref.isKey("mot_steps_z")) {
     activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
+  }
+
+  if (pref.isKey("mot_steps_x")) {
+    activeMachineProfile.xAxis.stepsPerMm = pref.getFloat("mot_steps_x");
   }
 
   if (pref.isKey("enc_ppr")) {
