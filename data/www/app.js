@@ -188,30 +188,11 @@ const defaultSection = 'control';
         ]
       },
       {
-        title: 'Y axis',
-        fields: [
-          { key: 'activeY', label: 'Y axis connected', type: 'checkbox', help: 'Enable only when the optional Y or dividing-head axis is wired and configured.' },
-          { key: 'rotaryY', label: 'Rotary axis', type: 'checkbox', help: 'On means Y values are degrees. Off means Y values are linear distance.' },
-          { key: 'yMotorSteps', label: 'Motor steps per rev', unit: 'steps/rev', min: 1, max: 1000000, step: 1, help: 'Full motor steps * driver microsteps * motor-to-axis ratio.' },
-          { key: 'yPulsePerRevolution', label: 'Handwheel PPR', unit: 'pulses/rev', min: 1, max: 100000, step: 0.01, help: 'Physical pulses per revolution of the optional Y handwheel encoder. Use the handwheel specification.' },
-          { key: 'yScrewDu', label: 'Travel per screw rev', unit: 'mm or deg/rev', min: 0.0001, max: 1000, step: 0.0001, firmwareScale: 10000, help: 'For rotary Y, degrees moved per worm screw revolution. For linear Y, mm moved per lead screw revolution.' },
-          { key: 'ySpeedStart', label: 'Start speed', unit: 'steps/s', min: 1, max: 1000000, step: 1, help: 'Initial step pulse rate when Y motion starts. Use a value the motor can start from reliably.' },
-          { key: 'yAcceleration', label: 'Acceleration', unit: 'steps/s^2', min: 1, max: 100000000, step: 1, help: 'Ramp rate for speeding up and slowing down Y motion.' },
-          { key: 'ySpeedManualMove', label: 'Manual speed', unit: 'steps/s', min: 1, max: 1000000, step: 1, help: 'Top speed for manual and GCode Y moves.' },
-          { key: 'yMaxTravelMm', label: 'Max travel', unit: 'mm or deg', min: 1, max: 10000, step: 1, help: 'Maximum single Y move the controller will allow. For rotary Y this is degrees.' },
-          { key: 'yBacklashDu', label: 'Backlash', unit: 'mm or deg', min: 0, max: 1000, step: 0.0001, firmwareScale: 10000, help: 'Lost Y motion when reversing direction. For rotary Y enter degrees; for linear Y enter mm.' },
-          { key: 'yInvert', label: 'Invert direction', type: 'checkbox', help: 'Toggle if Y moves opposite to the expected direction.' },
-          { key: 'yInvertEnable', label: 'Invert enable', type: 'checkbox', help: 'Toggle only when the Y stepper driver enable input works backwards.' },
-          { key: 'yNeedsRest', label: 'Needs rest', type: 'checkbox', help: 'Enable if the Y driver should be powered only during movement. Leave off when it must hold position while idle.' }
-        ]
-      },
-      {
         title: 'Joystick',
         fields: [
           { key: 'joystickEnabled', label: 'Joystick enabled', type: 'checkbox', help: 'Enable only after the optional analog joystick is wired. Joystick axes must feed ESP32-safe 3.3V ADC inputs.' },
           { key: 'joystickZEnabled', label: 'Z input enabled', type: 'checkbox', help: 'Enable when the joystick has a wired Z potentiometer on JZ. Disable for joysticks without this axis.' },
           { key: 'joystickXEnabled', label: 'X input enabled', type: 'checkbox', help: 'Enable when the joystick has a wired X potentiometer on JY. Disable for joysticks without this axis.' },
-          { key: 'joystickYEnabled', label: 'Y input enabled', type: 'checkbox', help: 'Enable when the joystick has a wired Y potentiometer on JY. Disable for joysticks without this axis.' },
           { key: 'joystickButtonTogglesOnOff', label: 'Button toggles ON/OFF', type: 'checkbox', help: 'In JOY mode, a short button click while Z and X are neutral toggles feed ON/OFF. Holding the button with Z or X deflected still performs rapid movement.' },
           { key: 'joystickCenterSamples', label: 'Center samples', unit: 'samples', min: 1, max: 1024, step: 1, help: 'Number of ADC readings averaged at startup to learn the joystick center position.' },
           { key: 'joystickOversamples', label: 'Oversamples', unit: 'samples', min: 1, max: 1024, step: 1, help: 'ADC readings averaged for each joystick update. Higher values smooth noise but add latency.' },
@@ -1201,11 +1182,10 @@ const defaultSection = 'control';
     }
 
     function applyControlConfigValues(values) {
-      const showY = values.activeY === '1';
       controlYElements.forEach(element => {
-        element.hidden = !showY;
+        element.hidden = true;
       });
-      if (controlStatusPanel) controlStatusPanel.classList.toggle('control-y-active', showY);
+      if (controlStatusPanel) controlStatusPanel.classList.remove('control-y-active');
     }
 
     function parseStatusValue(data, key) {

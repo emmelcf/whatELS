@@ -85,21 +85,21 @@ private:
 ## 2. Dynamic Hardware Pulse Counter Assignment & Linear Scale Settings
 
 ### Motivation
-The ESP32-S3 contains **4 independent hardware pulse counter (PCNT) units** (`driver/pulse_cnt.h`). In a complete lathe setup with spindle encoder, X/Z handwheels, Y rotary axis, and X/Z optical glass or magnetic scales, the number of quadrature devices (up to 6) exceeds the 4 available hardware counters:
+The ESP32-S3 contains **4 independent hardware pulse counter (PCNT) units** (`driver/pulse_cnt.h`). In a complete lathe setup with spindle encoder, X/Z handwheels, and X/Z optical glass or magnetic scales, the 4 available hardware counters are allocated as follows:
 
 | Channel / Unit | Default Allocation | Alternative / DRO Allocation |
 | :--- | :--- | :--- |
 | **Unit 0** | Spindle Optical Encoder (`ENC_A` 14, `ENC_B` 13) | Fixed / Mandatory for electronic leadscrew (ELS) |
 | **Unit 1** | Z-Axis Handwheel MPG (`Z_PULSE_A` 18, `Z_PULSE_B` 8) | Z-Axis Linear DRO Scale (`Z_SCALE_PIN_A` 9, `Z_SCALE_PIN_B` 12) |
 | **Unit 2** | X-Axis Handwheel MPG (`X_PULSE_A` 47, `X_PULSE_B` 21) | Reserved for X Handwheel |
-| **Unit 3** | Y-Axis Handwheel MPG (`Y_PULSE_A` 45, `Y_PULSE_B` 48) | X-Axis Linear DRO Scale (`X_SCALE_PIN_A` 40, `X_SCALE_PIN_B` 39) |
+| **Unit 3** | Unallocated / Reserved | X-Axis Linear DRO Scale (`X_SCALE_PIN_A` 40, `X_SCALE_PIN_B` 39) |
 
 Currently, scales are conditionally compiled out via `#define HAS_DRO_Z false` and `#define HAS_DRO_X false` to prioritize physical handwheels for Z and X.
 
 ### Tasks to Implement
 
 1. **Web UI / Preferences PCNT Mapping:**
-   - Add preferences (`cfg.droZ`, `cfg.droX`, `cfg.hasY`) to configure channel assignment at runtime.
+   - Add preferences (`cfg.droZ`, `cfg.droX`) to configure channel assignment at runtime.
    - Dynamically attach the appropriate peripheral during startup (`taskAttachInterrupts`):
      - If `droZ` is enabled $\rightarrow$ allocate Unit 1 to `zScale`.
      - If `droZ` is disabled $\rightarrow$ allocate Unit 1 to `PULSE_COUNTER_Z` handwheel.

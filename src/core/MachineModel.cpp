@@ -35,14 +35,12 @@ void publishMotionSnapshot() {
   snap.timestamp = millis();
   snap.zDu = getAxisCanonicalPosDu(&z);
   snap.xDu = getAxisCanonicalPosDu(&x);
-  snap.yDu = 0;
   snap.zLeftDu = getAxisCanonicalStopDu(&z, true);
   snap.zRightDu = getAxisCanonicalStopDu(&z, false);
   snap.xUpDu = getAxisCanonicalStopDu(&x, true);
   snap.xDownDu = getAxisCanonicalStopDu(&x, false);
   snap.zDisabled = z.disabled;
   snap.xDisabled = x.disabled;
-  snap.yDisabled = false;
   snap.rpm = getApproxRpm();
   snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
@@ -60,14 +58,12 @@ KinematicsState MachineModel::captureKinematics() {
   if (motionSnapshotQueue && xQueuePeek(motionSnapshotQueue, &snap, 0) == pdTRUE) {
     k.zDu = snap.zDu;
     k.xDu = snap.xDu;
-    k.yDu = snap.yDu;
     k.zLeftDu = snap.zLeftDu;
     k.zRightDu = snap.zRightDu;
     k.xUpDu = snap.xUpDu;
     k.xDownDu = snap.xDownDu;
     k.zDisabled = snap.zDisabled;
     k.xDisabled = snap.xDisabled;
-    k.yDisabled = snap.yDisabled;
     k.rpm = snap.rpm;
     k.turns = snap.turns;
     k.angle = snap.angle;
@@ -82,14 +78,12 @@ KinematicsState MachineModel::captureKinematics() {
   // Fallback to direct read if queue not yet populated
   k.zDu = getAxisCanonicalPosDu(&z);
   k.xDu = getAxisCanonicalPosDu(&x);
-  k.yDu = 0;
   k.zLeftDu = getAxisCanonicalStopDu(&z, true);
   k.zRightDu = getAxisCanonicalStopDu(&z, false);
   k.xUpDu = getAxisCanonicalStopDu(&x, true);
   k.xDownDu = getAxisCanonicalStopDu(&x, false);
   k.zDisabled = z.disabled;
   k.xDisabled = x.disabled;
-  k.yDisabled = false;
   k.rpm = getApproxRpm();
   k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;

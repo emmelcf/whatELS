@@ -93,12 +93,10 @@ enum LatheCapabilityFlags : uint32_t {
     // Axis Motion Drivers
     CAP_MOTOR_Z         = 1 << 3, // Z carriage leadscrew drive installed
     CAP_MOTOR_X         = 1 << 4, // X cross-slide leadscrew drive installed
-    CAP_MOTOR_Y         = 1 << 5, // Y milling/spindle auxiliary axis installed
     
     // Physical Linear DRO Scales (Glass / Magnetic)
     CAP_DRO_Z           = 1 << 6, // Optical linear scale attached to Z carriage
     CAP_DRO_X           = 1 << 7, // Optical linear scale attached to X cross-slide
-    CAP_DRO_Y           = 1 << 8, // Optical linear scale attached to Y axis
     
     // Physical & Sensorless Travel Limits
     CAP_LIMIT_SWITCH_Z  = 1 << 9, // Physical microswitches / inductive limits on Z

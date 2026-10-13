@@ -117,12 +117,12 @@ The Core State Model partitions machine state into four independent, cohesive do
 |   (Domain 'K')    |   (Domain 'I')    |  (Domain 'C')  |  (Domain 'P')  |
 |     Bit: 0x01     |     Bit: 0x02     |   Bit: 0x04    |   Bit: 0x08    |
 +-------------------+-------------------+----------------+----------------+
-| zDu, xDu, yDu     | thFmt, thPitch    | passes         | measure        |
+| zDu, xDu           | thFmt, thPitch    | passes         | measure        |
 | zLeftDu, zRightDu | dupr              | opIdx (curr)   | dia, abs       |
 | xUpDu, xDownDu    | tpMode, tpVal     | setupIdx       | zDro, xDro     |
 | rpm, turns, angle | coneRatio         | starts         | screwZDu       |
 | mode, on, estop   | feedStepDu        |                | screwXDu       |
-| zDis, xDis, yDis  | jogStepDu         |                | motorStepsZ/X  |
+| zDis, xDis        | jogStepDu         |                | motorStepsZ/X  |
 | dupr, nextDupr    | feedRev           |                | encoderPpr     |
 |                   |                   |                | capabilities   |
 |                   |                   |                | presetId       |
@@ -162,14 +162,12 @@ enum DomainFlags : uint8_t {
 struct KinematicsState {
   long    zDu;          // Carriage longitudinal position in deci-microns
   long    xDu;          // Cross-slide transverse position in canonical radius deci-microns
-  long    yDu;          // Reserved wire transport placeholder (constant 0; Y axis software retired)
   long    zLeftDu;      // Chuck-side soft limit coordinate (LONG_MAX if unset)
   long    zRightDu;     // Tailstock-side soft limit coordinate (LONG_MIN if unset)
   long    xUpDu;        // Centerline-infeed soft limit coordinate (LONG_MAX if unset)
   long    xDownDu;      // Retract soft limit coordinate (LONG_MIN if unset)
   bool    zDisabled;    // True if Z axis stepper driver is powered down / disengaged
   bool    xDisabled;    // True if X axis stepper driver is powered down / disengaged
-  bool    yDisabled;    // Reserved wire transport placeholder (constant false)
   int     rpm;          // Spindle speed in revolutions per minute
   float   turns;        // Cumulative continuous spindle revolutions (signed)
   float   angle;        // Spindle angular position in degrees [0.0°, 360.0°)
@@ -306,7 +304,6 @@ struct StatusSnapshot {
   // Canonical Kinematics frozen at instant t0
   int32_t  zDu;
   int32_t  xDu;
-  int32_t  yDu;
   int32_t  zLeftDu;
   int32_t  zRightDu;
   int32_t  xUpDu;

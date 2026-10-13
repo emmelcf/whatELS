@@ -61,14 +61,12 @@ class NanoelsService extends EventTarget {
       measure: 0,
       zDu: 0,
       xDu: 0,
-      yDu: 0,
       zLeftDu: 2147483647,
       zRightDu: -2147483648,
       xUpDu: 2147483647,
       xDownDu: -2147483648,
       zDis: false,
       xDis: false,
-      yDis: false,
       abs: true,
       zDro: false,
       xDro: false,
@@ -101,15 +99,12 @@ class NanoelsService extends EventTarget {
       B_STOPR: 68,       // Z Right stop
       B_STOPU: 87,       // X Forward stop
       B_STOPD: 83,       // X Rear stop
-      B_STOPF: 73,       // Y Forward stop
-      B_STOPB: 75,       // Y Back stop
       B_MEASURE: 77,     // Units cycle (MM/IN/TPI)
       B_DIAMETER: 79,    // Diameter set
       B_REVERSE: 82,     // Pitch reverse
       B_MULTISTART: 84,  // Multi-start thread
       B_X: 88,           // Zero X
       B_Z: 90,           // Zero Z
-      B_Y: 72,           // Zero Y
       B_PLUS: 95,        // Plus adjustment
       B_MINUS: 60,       // Minus adjustment
       B_MODE_GEARS: 97,  // Gearbox mode
@@ -121,7 +116,6 @@ class NanoelsService extends EventTarget {
       B_MODE_ASYNC: 103, // Async mode
       B_MODE_ELLIPSE: 104,// Ellipse mode
       B_MODE_GCODE: 105, // G-code mode
-      B_MODE_Y: 106,     // Y mode
       B_MODE: 107,       // Cycle mode menu
       B_MODE_JOYSTICK: 108,// Joystick mode
       B_MODE_XGEAR: 109, // X-gearbox mode

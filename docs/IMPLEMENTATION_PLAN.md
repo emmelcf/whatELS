@@ -54,8 +54,8 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 * **Firmware Scope:**
   1. Define `LatheCapabilityFlags` bitmask (`uint32_t`):
      - Spindle: `CAP_SPINDLE_ENCODER`, `CAP_SPINDLE_INDEX`, `CAP_SPINDLE_VFD`.
-     - Axes: `CAP_MOTOR_Z`, `CAP_MOTOR_X`, `CAP_MOTOR_Y`.
-     - Scales: `CAP_DRO_Z`, `CAP_DRO_X`, `CAP_DRO_Y`.
+     - Axes: `CAP_MOTOR_Z`, `CAP_MOTOR_X`.
+     - Scales: `CAP_DRO_Z`, `CAP_DRO_X`.
      - Limits & Inputs: `CAP_LIMIT_SWITCH_Z`, `CAP_LIMIT_SWITCH_X`, `CAP_MPG_Z`, `CAP_MPG_X`, `CAP_JOYSTICK`.
   2. Define component structs:
      - [`AxisHardwareConfig`](./LATHE_MACHINE_PROFILE.md#32-axis-hardware-configuration-axishardwareconfig) (pitch, steps/mm, backlash, travel limits, rapid ceilings).

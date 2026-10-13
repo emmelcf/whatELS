@@ -95,13 +95,12 @@ const char NAME_X = 'X';
 // Handwheels
 const float DEFAULT_PULSE_PER_REVOLUTION_Z = 600;
 const float DEFAULT_PULSE_PER_REVOLUTION_X = 600;
-const float DEFAULT_PULSE_PER_REVOLUTION_Y = 600;
 const unsigned long HANDWHEEL_PULSE_WAIT_MS = 20;
 
 // Joystick
 #define JOY_Z 4
 #define JOY_X 5
-#define JOY_Y 6
+#define JOY_Y 6 // Unpopulated H5 PCB silkscreen pin header
 #define JOY_BUTTON 38
 
 const bool DEFAULT_JOYSTICK_ENABLED = false;
@@ -299,10 +298,8 @@ extern NumpadMode numpadEntryMode;
 #define B_MODE_XGEAR 109
 #define B_X 88
 #define B_Z 90
-#define B_Y 72
 #define B_X_ENA 67
 #define B_Z_ENA 81
-#define B_Y_ENA 89
 
 struct KeyboardBinding {
   const char* id = nullptr;
@@ -349,13 +346,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define PREF_POS_GLOBAL_X "xpg"
 #define PREF_MOTOR_POS_X "xpm"
 #define PREF_DISABLED_X "xd"
-#define PREF_POS_Y "y1p"
-#define PREF_LEFT_STOP_Y "y1ls"
-#define PREF_RIGHT_STOP_Y "y1rs"
-#define PREF_ORIGIN_POS_Y "y1po"
-#define PREF_POS_GLOBAL_Y "y1pg"
-#define PREF_MOTOR_POS_Y "y1pm"
-#define PREF_DISABLED_Y "y1d"
 #define PREF_SPINDLE_POS "sp"
 #define PREF_SPINDLE_POS_AVG "spa"
 #define PREF_OUT_OF_SYNC "oos"

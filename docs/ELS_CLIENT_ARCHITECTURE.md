@@ -236,7 +236,6 @@ struct StatusSnapshot {
     // Authoritative Canonical Kinematics at the instant of trigger
     int32_t  zDu;
     int32_t  xDu;
-    int32_t  yDu;
     int32_t  zLeftDu;
     int32_t  zRightDu;
     int32_t  xUpDu;
@@ -336,12 +335,12 @@ State synchronization between controller and clients is partitioned into four in
 |   (Domain 'K')    |   (Domain 'I')    |  (Domain 'C')  |  (Domain 'P')  |
 |     Bit: 0x01     |     Bit: 0x02     |   Bit: 0x04    |   Bit: 0x08    |
 +-------------------+-------------------+----------------+----------------+
-| zDu, xDu, yDu     | thFmt, thPitch    | passes         | measure        |
+| zDu, xDu           | thFmt, thPitch    | passes         | measure        |
 | zLeftDu, zRightDu | dupr              | opIdx (curr)   | dia, abs       |
 | xUpDu, xDownDu    | tpMode, tpVal     | setupIdx       | zDro, xDro     |
 | rpm, turns, angle | coneRatio         | starts         | screwZDu       |
 | mode, on, estop   | feedStepDu        |                | screwXDu       |
-| zDis, xDis, yDis  | jogStepDu         |                | motorStepsZ/X  |
+| zDis, xDis        | jogStepDu         |                | motorStepsZ/X  |
 | dupr, nextDupr    | feedRev           |                | encoderPpr     |
 +-------------------+-------------------+----------------+----------------+
 ```

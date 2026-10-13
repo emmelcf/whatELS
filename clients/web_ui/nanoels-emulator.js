@@ -536,7 +536,6 @@ class NanoelsEmulator {
       `M.measure=${this.measure === 'MM' ? 0 : (this.measure === 'IN' ? 1 : 2)}\n` +
       `M.zDu=${Math.round(this.z)}\n` +
       `M.xDu=${Math.round(this.x)}\n` +
-      `M.yDu=0\n` +
       `M.zLeftDu=${zLeftVal}\n` +
       `M.zRightDu=${zRightVal}\n` +
       `M.xUpDu=${xUpVal}\n` +
@@ -570,14 +569,12 @@ class NanoelsEmulator {
     if (domainMask & 0x01) { // Kinematics (K)
       out += `K.zDu=${Math.round(this.z)}\n` +
              `K.xDu=${Math.round(this.x)}\n` +
-             `K.yDu=0\n` +
              `K.zLeftDu=${zLeftVal}\n` +
              `K.zRightDu=${zRightVal}\n` +
              `K.xUpDu=${xUpVal}\n` +
              `K.xDownDu=${xDownVal}\n` +
              `K.zDis=0\n` +
              `K.xDis=0\n` +
-             `K.yDis=0\n` +
              `K.rpm=${Math.round(this.rpm)}\n` +
              `K.turns=${this.turns.toFixed(2)}\n` +
              `K.angle=${(this.angle % 360).toFixed(2)}\n` +
@@ -663,10 +660,8 @@ class NanoelsEmulator {
     const props = {
       screwZDu: 40000,
       screwXDu: 40000,
-      screwYDu: 20000,
       motorStepsZ: 800,
       motorStepsX: 800,
-      motorStepsY: 300,
       encoderPpr: 1200,
       measure: this.measure === 'IN' ? 2 : (this.measure === 'TPI' ? 1 : 0),
       abs: 1,

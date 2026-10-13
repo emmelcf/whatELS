@@ -20,15 +20,13 @@ enum LatheCapabilityFlags : uint32_t {
   CAP_SPINDLE_INDEX    = 1 << 1,  // Single-pulse-per-revolution index sensor (Z-channel / optical)
   CAP_SPINDLE_VFD      = 1 << 2,  // Spindle VFD / servo speed & direction control (Modbus / 0-10V)
 
-  // Axis Stepper/Servo Drivers (Bits 3-5)
+  // Axis Stepper/Servo Drivers (Bits 3-4)
   CAP_MOTOR_Z          = 1 << 3,  // Z carriage leadscrew drive installed
   CAP_MOTOR_X          = 1 << 4,  // X cross-slide leadscrew drive installed
-  CAP_MOTOR_Y          = 1 << 5,  // Y auxiliary/milling spindle axis installed
 
-  // Physical Linear DRO Scales (Bits 6-8)
+  // Physical Linear DRO Scales (Bits 6-7)
   CAP_DRO_Z            = 1 << 6,  // Optical linear scale attached to Z carriage
   CAP_DRO_X            = 1 << 7,  // Optical linear scale attached to X cross-slide
-  CAP_DRO_Y            = 1 << 8,  // Optical linear scale attached to Y axis
 
   // Hardware Endstops & Limits (Bits 9-11)
   CAP_LIMIT_SWITCH_Z   = 1 << 9,  // Physical microswitches / inductive limits on Z

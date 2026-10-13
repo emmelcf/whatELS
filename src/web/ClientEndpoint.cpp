@@ -6,9 +6,7 @@ String GrblSerializer::buildStatus(const MachineModel& model) {
   out += model.kinematics.isOn ? "Run" : "Idle";
   out += "|WPos:";
   out += String(model.kinematics.xDu / 10000.0f, 3);
-  out += ",";
-  out += String(model.kinematics.yDu / 10000.0f, 3);
-  out += ",";
+  out += ",0.000,";
   out += String(model.kinematics.zDu / 10000.0f, 3);
   out += "|FS:0,";
   out += String(model.kinematics.rpm);

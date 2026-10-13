@@ -512,10 +512,8 @@ const char* getCapabilityName(LatheCapabilityFlags flag) {
     case CAP_SPINDLE_VFD:      return "SPINDLE_VFD";
     case CAP_MOTOR_Z:          return "MOTOR_Z";
     case CAP_MOTOR_X:          return "MOTOR_X";
-    case CAP_MOTOR_Y:          return "MOTOR_Y";
     case CAP_DRO_Z:            return "DRO_Z";
     case CAP_DRO_X:            return "DRO_X";
-    case CAP_DRO_Y:            return "DRO_Y";
     case CAP_LIMIT_SWITCH_Z:   return "LIMIT_SWITCH_Z";
     case CAP_LIMIT_SWITCH_X:   return "LIMIT_SWITCH_X";
     case CAP_LIMIT_SENSORLESS: return "LIMIT_SENSORLESS";
