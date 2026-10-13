@@ -136,5 +136,5 @@ Below is the record of major architectural decisions, the problems they solved, 
   2. Reserve LittleFS exclusively for **operator-owned runtime data**: user custom presets (`/presets/`), tool tables, and uploaded lathecode/G-code files.
   3. Firmware updates (via USB or Web OTA) write strictly to the application partition (`firmware.bin`), guaranteeing that the LittleFS partition is never wiped or formatted during upgrades.
   4. Provide a developer hot-reload override: if `/www/index.html` exists on LittleFS, the server serves the loose file instead of ROM, enabling rapid UI styling without recompiling firmware.
-* **Documented in:** [`CONTROLLER_ARCHITECTURE.md`](./CONTROLLER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md).
+* **Documented in:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md).
 

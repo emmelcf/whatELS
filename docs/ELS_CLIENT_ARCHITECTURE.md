@@ -1,17 +1,20 @@
 # NanoELS Client Architecture & Protocol Specification
 
-> **Status:** Authoritative Specification  
+> **Status:** Authoritative Specification (Subsystems 5 & 6)  
+> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md)  
 > **Target Version:** NanoELS H5 Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
-> **Date:** October 7, 2026  
+> **Date:** October 13, 2026  
 > **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
-> **Referenced By:** `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`
+> **Referenced By:** `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`
 
 ---
 
-## 1. Executive Summary & Design Principles
+## 1. Executive Summary & Core Role
 
-The **NanoELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the NanoELS motion controller.
+The **NanoELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the NanoELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
+
+For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).
 
 ### Governing Architectural Tenets
 1. **The Controller is the Sole Authority:**  
@@ -161,6 +164,38 @@ private:
 };
 ```
 
+### 3.1 Heterogeneous Channels & URL-Path Routing
+When multiple clients connect via WebSockets, they may require different data formats. Routing is negotiated cleanly during HTTP upgrade via the request path:
+
+| URL Path | Channel Type | Serializer Used | Target Client |
+| :--- | :--- | :--- | :--- |
+| `ws://<ip>:81/` or `/canonical` | `CHANNEL_CANONICAL` | `RichClientAdapter` (`K.*`, `I.*`, `C.*`, `P.*`) | Rich Web UI / Multi-Axis HMI |
+| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | CNC Senders (UGS, CNCjs, OpenBuilds) |
+| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | Minimal Wireless DRO Readouts |
+
+- **Zero Runtime Overhead**: The channel is assigned **once** during the HTTP upgrade handshake. Runtime packets require no subscription parsing.
+- **Active Channel Bitmask (`activeChannelMask`)**: The controller tracks which channels have active listeners. Formats with zero connected listeners are **never serialized**, burning zero CPU cycles.
+
+### 3.2 Unicast Request-Response vs. Channel Broadcast Separation
+1. **Unicast Request-Response (1-to-1)**:
+   - Queries (`?get=...`, `?sysinfo`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
+   - Prevents network amplification ($O(N^2)$ traffic) when multiple displays are active.
+   - New connections receive an immediate unicast hydration frame without disturbing existing screens.
+2. **Channel Broadcast (1-to-Many)**:
+   - When machine state changes, telemetry is serialized once per active channel and pushed to matching sockets.
+
+### 3.3 Smart Clients vs. Dumb Displays (Stateful Presenters)
+The client model accommodates both intelligent and protocol-constrained clients:
+* **Smart Clients (Web UI / Alpine Reactive Store)**:
+  - The client runs its own reactive state engine on its local CPU (browser).
+  - The controller's serializer is thin and stateless: it emits raw canonical data (`K.*`, `I.*`). The client formats units, diameters, and DOM elements locally.
+* **Dumb Displays (Physical Nextion LCD / Serial Pendants)**:
+  - Nextion hardware has no domain logic; it only receives widget text strings (`t0.txt="-18.42"`) and emits component touch IDs (Page 1, Component 4).
+  - Its `ClientEndpoint` acts as a **Stateful Presenter / Transformer**:
+    1. **Diff Cache**: Stores previously rendered strings, active page ID, and widget colors to eliminate redundant UART transmissions and screen flicker.
+    2. **Component Mapping**: Maps raw touch events into canonical `CommandDispatcher` actions.
+    3. **Quirk Isolation**: Nextion-specific hashing and delta-rendering reside strictly inside the Nextion adapter, keeping core firmware clean.
+
 ---
 
 ## 4. Change-Driven Status Dispatch & Immutable `StatusSnapshot`
@@ -270,6 +305,20 @@ Every client implementation (Web UI, tablet DRO, physical serial pendant, or emb
   - `client.global.<key>`: Preferences shared across all operator terminals (e.g. default startup units).
   - `client.<clientId>.<key>`: Private client preferences (e.g. theme, brightness, screen layout).
 * The controller treats these keys as opaque byte storage in NVS flash and never consumes them for motion kinematics.
+
+### 5.6 Industrial Shop-Floor EMI & Transient Network Hardening
+Machine shop environments feature high electrical interference (VFD spindle drives, contactor arcing, servo switching), leading to occasional 2.4 GHz packet drops or beacon timeouts:
+
+1. **Transient Disconnect Debounce (2.5 seconds)**:
+   - When `WiFi.status() != WL_CONNECTED`, the controller does not immediately tear down connections or trigger a reconnection storm.
+   - It debounces for 2,500 ms. If the AP beacon recovers during this window, normal streaming resumes without dropping TCP sockets or disrupting operator UI views.
+2. **Exponential Backoff Reconnect Loop (3s $\rightarrow$ 30s)**:
+   - If AP connectivity is genuinely lost, the controller initiates a background reconnection sequence.
+   - Initial retry occurs after 3 seconds, doubling on subsequent failures (6s $\rightarrow$ 12s $\rightarrow$ 24s $\rightarrow$ 30s maximum cap) to prevent radio bus saturation and excessive CPU consumption.
+3. **Physical Display Status Integration (Nextion LCD)**:
+   - During reconnection, the controller publishes countdown telemetry to physical displays (`t3.txt="WiFi retry (Xs)"`).
+   - Hardware operators at the lathe are immediately informed that remote web clients are in reconnect state.
+   - Once reconnected, `t3.txt` is updated with `"See <ip>"`, and remote Web UIs reconnect and receive a fresh hydration frame automatically.
 
 ---
 

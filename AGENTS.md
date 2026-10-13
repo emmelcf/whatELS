@@ -16,7 +16,7 @@
   - Do NOT use bash commands (`cat`, `ls`, `find`, `grep`, `sed`) when native tools exist.
   - Reserve `run_command` strictly for operations that genuinely require shell execution (e.g., `git`, `pio run`).
 - **Grounding in Documentation**:
-  - Always consult authoritative documents in `docs/` (e.g., `ELS_CLIENT_ARCHITECTURE.md`, `CONTROLLER_ARCHITECTURE.md`) before suggesting designs or changes.
+  - Always consult authoritative documents in `docs/` (e.g., `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_CLIENT_ARCHITECTURE.md`) before suggesting designs or changes.
 
 ## 3. Domain Rules & Specialized Runbooks
 - **Web UI & 800×480 Ergonomics**: Follow [`.agents/rules/lathe_hmi_and_safety.md`](file:///home/emil/code/nanoels/.agents/rules/lathe_hmi_and_safety.md)

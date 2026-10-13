@@ -34,7 +34,6 @@ nanoels/
 │   └── web_ui/              # Modern 800×480 Touch DRO Web UI (Alpine.js, HTML5/CSS3)
 │
 ├── docs/                    # Authoritative system & architectural documentation
-│   ├── CONTROLLER_ARCHITECTURE.md   # Firmware pipeline, domains (K, I, C, P), and wire protocol
 │   ├── NANOELS_MASTER_ARCHITECTURE.md # Master 6-subsystem architecture blueprint
 │   ├── ELS_CLIENT_ARCHITECTURE.md    # Multi-client pipeline & WebSocket specification
 │   ├── ELS_CORE_STATE_MODEL.md       # Canonical deci-micron state invariants

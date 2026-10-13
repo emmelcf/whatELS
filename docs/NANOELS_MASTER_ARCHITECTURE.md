@@ -51,14 +51,20 @@ The **NanoELS H5 Architecture** modernizes an open-source embedded lathe control
 
 ---
 
-### 1.2 Dual-Core Concurrency Architecture
+### 1.2 Dual-Core Concurrency & FreeRTOS Architecture
 
-The ESP32-S3 dual-core processor enforces strict hardware isolation:
+The ESP32-S3 dual-core processor enforces strict hardware isolation between deterministic motion timing and asynchronous communication:
 
 | Core | Primary Role | Execution Paradigm | Safety & Timing Invariants |
 | :--- | :--- | :--- | :--- |
-| **Core 1** | **Real-Time Motion Control** | High-frequency hardware timer ISRs, pulse counters, deterministic control loops. | **Zero Heap Allocation, Zero Blocking Mutexes, Zero Network I/O.** Must execute in nanoseconds without latency jitter. |
-| **Core 0** | **Supervisory & Comms** | FreeRTOS tasks handling WebSockets, HTTP server, UART line parsing, NVS flash writes. | May perform JSON parsing, network transfers, and flash I/O. Communicates with Core 1 strictly via atomic state snapshots and thread-safe queues. |
+| **Core 1** | **Real-Time Motion Control** | High-frequency hardware timer ISRs, pulse counters (`PCNT`), deterministic DDA stepping (`taskMoveZ`, `taskMoveX`). | **Zero Heap Allocation, Zero Blocking Mutexes, Zero Network I/O.** Must execute in nanoseconds without latency jitter. |
+| **Core 0** | **Supervisory & Comms** | FreeRTOS tasks (`taskWiFi`, `taskDisplay`) handling WebSockets, HTTP server, UART line parsing, NVS flash writes. | May perform JSON parsing, network transfers, and flash I/O. Communicates with Core 1 strictly via atomic state snapshots and thread-safe queues. |
+
+#### Recursive Mutex & Task Protection (`wsMutex`)
+To prevent race conditions between asynchronous network events and telemetry broadcasts on Core 0:
+- **`taskWiFi`**: Runs `webSocket.loop()`, client handshakes, and command parsing. When a client sends a command, `handleWebUiEventCommand()` synchronously dispatches replies.
+- **`taskDisplay`**: Periodically publishes changed machine telemetry (`publishMachineStatus()`) across active transports.
+- **`wsMutex`**: Shared WebSocket access is protected by a recursive FreeRTOS mutex (`xSemaphoreCreateRecursiveMutex`). This allows re-entrant calls when command handlers synchronously emit response frames without self-deadlock, while ensuring Core 1 stepper pulses remain 100% untouched and unblocked.
 
 ---
 
@@ -129,15 +135,34 @@ During this architectural transition, two specific legacy components require car
 
 ---
 
-### 3.2 Web UI Delivery: Embedded ROM Production & LittleFS Development Overlay
-* **Current State & Production Architecture:**  
-  The controller embeds the production Web UI (`clients/web_ui/`) directly into firmware Flash ROM as gzipped `PROGMEM` byte arrays. HTTP clients are served directly from flash memory with zero filesystem access overhead.
-* **Developer Hot-Reload Mode:**  
-  During web UI development, if `/www/index.html` exists on LittleFS, `WebServerModule.cpp` serves that loose file instead, allowing rapid iteration without recompiling firmware.
-* **Preservation of User Files:**  
-  Because Web UI assets and factory templates reside in firmware ROM, firmware updates (via USB or Web OTA) flash only the application partition. The LittleFS partition is never wiped, preserving user presets, tool tables, and uploaded lathecode/G-code files.
-* **Drop-In Protocol Alignment:**  
-  The web client connects to the controller WebSocket endpoint and exchanges canonical ASCII line commands (`CMD.*`, `SETTINGS.*`) and domain telemetry frames (`K`, `I`, `C`, `P`).
+### 3.2 Flash Partition Topology & Web Delivery
+
+To guarantee that firmware upgrades never destroy user calibrations, custom machine profiles, or uploaded part programs (lathecode / G-code), the ESP32 storage architecture strictly separates system code from operator runtime data:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       NANOELS FLASH PARTITION ROLES                         │
+├────────────────────────────────┬────────────────────────────────────────────┤
+│ 1. APPLICATION FLASH (`app0`)  │ • C++ Motion Core & Hard Real-Time Loops   │
+│    Firmware Binary (.bin)      │ • Embedded Gzipped Web UI (`PROGMEM`)      │
+│    Over-The-Air (OTA) Target   │ • Factory System Templates (WM210V, etc.)  │
+│                                │ • Authoritative JSON Configuration Schemas │
+├────────────────────────────────┼────────────────────────────────────────────┤
+│ 2. NON-VOLATILE STORAGE (`nvs`)│ • Sparse Machine Overrides (`screw_z_du`)  │
+│    Fast Key-Value Flash        │ • Active Profile Identifier (`preset`)     │
+│                                │ • Wi-Fi Credentials & Hardware Diagnostics │
+├────────────────────────────────┼────────────────────────────────────────────┤
+│ 3. USER FILESYSTEM (LittleFS)  │ • User Custom Lathe Profiles (`/presets/`) │
+│    Dedicated Operator Storage  │ • User Lathecode & G-Code Programs (`/`)   │
+│    NEVER WIPED BY FIRMWARE     │ • User Tool Libraries & Wear Offsets       │
+│                                │ • (Optional Dev Mode: `/www/` live assets) │
+└────────────────────────────────┴────────────────────────────────────────────┘
+```
+
+* **Single-Binary OTA Deployment:** All firmware logic, the complete responsive Web UI (`clients/web_ui/`), and built-in factory lathe templates are compiled directly into `firmware.bin`. Updating via USB or Web OTA (`/update`) flashes only the application partition, guaranteeing that backend kinematics and frontend UI update atomically with zero version desynchronization.
+* **Preservation of User Files:** The LittleFS filesystem partition is **never formatted, wiped, or overwritten during firmware updates**. Custom user presets and uploaded machining files remain 100% persistent across firmware releases.
+* **Developer Hot-Reload Mode:** During Web UI development, if `/www/index.html` exists on LittleFS, `WebServerModule.cpp` serves that loose file instead, allowing rapid iteration without recompiling firmware. If absent (production), assets are served directly from flash ROM via `send_P` with `Content-Encoding: gzip`.
+* **Drop-In Protocol Alignment:** The web client connects to the controller WebSocket endpoint and exchanges canonical ASCII line commands (`CMD.*`, `SETTINGS.*`) and domain telemetry frames (`K`, `I`, `C`, `P`).
 
 ---
 
