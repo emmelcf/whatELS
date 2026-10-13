@@ -11,7 +11,6 @@ long lcdHashLine0 = 0;
 long lcdHashLine1 = 0;
 long lcdHashLine2 = 0;
 long lcdHashLine3 = 0;
-bool splashScreen = false;
 
 unsigned long saveTime = 0;
 const int COLOR_NUMPAD_DEFAULT = 65535;

@@ -92,7 +92,7 @@ void resetGcodeState() {
   gcodeAbsolutePositioning = true;
   gcodeInBrace = false;
   gcodeInSemicolon = false;
-  setMeasure(MEASURE_METRIC);
+  SettingsService::setMeasure(MEASURE_METRIC);
 }
 
 static unsigned int getTimerLimit() {
@@ -158,48 +158,6 @@ void applyConeRatio() {
   }
   coneRatio = nextConeRatio;
   markOrigin();
-}
-
-void reset() {
-  z.leftStop = LONG_MAX;
-  z.nextLeftStopFlag = false;
-  z.rightStop = LONG_MIN;
-  z.nextRightStopFlag = false;
-  z.originPos = 0;
-  z.posGlobal = 0;
-  z.motorPos = 0;
-  z.pendingPos = 0;
-  z.disabled = false;
-  x.leftStop = LONG_MAX;
-  x.nextLeftStopFlag = false;
-  x.rightStop = LONG_MIN;
-  x.nextRightStopFlag = false;
-  x.originPos = 0;
-  x.posGlobal = 0;
-  x.motorPos = 0;
-  x.pendingPos = 0;
-  x.disabled = false;
-  y.leftStop = LONG_MAX;
-  y.nextLeftStopFlag = false;
-  y.rightStop = LONG_MIN;
-  y.nextRightStopFlag = false;
-  y.originPos = 0;
-  y.posGlobal = 0;
-  y.motorPos = 0;
-  y.pendingPos = 0;
-  y.disabled = false;
-  setDupr(0);
-  setStarts(1);
-  moveStep = MOVE_STEP_1;
-  feedStepDu = FEED_STEP_2;
-  setModeFromTask(MODE_NORMAL);
-  measure = MEASURE_METRIC;
-  showTacho = false;
-  showAngle = false;
-  setConeRatio(1);
-  currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
-  currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
-  auxForward = true;
 }
 
 long normalizePitch(long pitch) {
@@ -1135,7 +1093,7 @@ static bool handleGcode(const String& command) {
   } else if (op == 32) {
     return G32(command);
   } else if (op == 20 || op == 21) {
-    setMeasure(op == 20 ? MEASURE_INCH : MEASURE_METRIC);
+    SettingsService::setMeasure(op == 20 ? MEASURE_INCH : MEASURE_METRIC);
   } else if (op == 90 || op == 91) {
     gcodeAbsolutePositioning = op == 90;
   } else if (op == 94) {

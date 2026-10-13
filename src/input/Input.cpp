@@ -1022,17 +1022,7 @@ void buttonPlusMinusPress(bool plus) {
   }
 }
 
-static unsigned long resetMillis = 0;
-
-static void buttonOffRelease() {
-  if (millis() - resetMillis > 3000) {
-    reset();
-    splashScreen = true;
-  }
-}
-
 void buttonOnOffPress(bool on) {
-  resetMillis = millis();
   bool missingZStops = needZStops() && (z.leftStop == LONG_MAX || z.rightStop == LONG_MIN);
   if (on && isPassMode() && (missingZStops || x.leftStop == LONG_MAX || x.rightStop == LONG_MIN)) {
     beep();
@@ -1196,7 +1186,7 @@ void processKeypadEvent() {
   // Off button always gets handled.
   if (keyCode == B_OFF) {
     buttonOffPressed = isPress;
-    isPress ? buttonOnOffPress(false) : buttonOffRelease();
+    if (isPress) buttonOnOffPress(false);
   }
 
   if (mode == MODE_GCODE && isOn) {

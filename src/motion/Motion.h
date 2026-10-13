@@ -46,7 +46,6 @@ void setDupr(long value);
 void setStarts(int value);
 void setTurnPasses(int value);
 void setConeRatio(float value);
-void reset();
 long normalizePitch(long pitch);
 void applyDuprSignReverse();
 void applyDupr();

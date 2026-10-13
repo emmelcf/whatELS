@@ -10,7 +10,6 @@ extern long lcdHashLine0;
 extern long lcdHashLine1;
 extern long lcdHashLine2;
 extern long lcdHashLine3;
-extern bool splashScreen;
 extern unsigned long saveTime;
 
 void writeNextionCommandRaw(const String &command);
