@@ -8,6 +8,8 @@
 #include "SettingsService.h"
 #include <limits.h>
 
+QueueHandle_t motionSnapshotQueue = NULL;
+
 static long getAxisCanonicalPosDu(Axis* a) {
   if (a == &x && xDisplayModeDRO) {
     return (long)round(xScale.getPosition() * 10000.0f);
@@ -27,8 +29,57 @@ static long getAxisCanonicalStopDu(Axis* a, bool isLeft) {
   }
 }
 
+void publishMotionSnapshot() {
+  if (!motionSnapshotQueue) return;
+  StatusSnapshot snap;
+  snap.timestamp = millis();
+  snap.zDu = getAxisCanonicalPosDu(&z);
+  snap.xDu = getAxisCanonicalPosDu(&x);
+  snap.yDu = getAxisCanonicalPosDu(&y);
+  snap.zLeftDu = getAxisCanonicalStopDu(&z, true);
+  snap.zRightDu = getAxisCanonicalStopDu(&z, false);
+  snap.xUpDu = getAxisCanonicalStopDu(&x, true);
+  snap.xDownDu = getAxisCanonicalStopDu(&x, false);
+  snap.zDisabled = z.disabled;
+  snap.xDisabled = x.disabled;
+  snap.yDisabled = y.disabled;
+  snap.rpm = getApproxRpm();
+  snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
+  snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
+  snap.mode = mode;
+  snap.isOn = isOn;
+  snap.estop = emergencyStop;
+  snap.dupr = dupr;
+  snap.nextDupr = nextDuprFlag ? nextDupr : dupr;
+  xQueueOverwrite(motionSnapshotQueue, &snap);
+}
+
 KinematicsState MachineModel::captureKinematics() {
   KinematicsState k = {};
+  StatusSnapshot snap;
+  if (motionSnapshotQueue && xQueuePeek(motionSnapshotQueue, &snap, 0) == pdTRUE) {
+    k.zDu = snap.zDu;
+    k.xDu = snap.xDu;
+    k.yDu = snap.yDu;
+    k.zLeftDu = snap.zLeftDu;
+    k.zRightDu = snap.zRightDu;
+    k.xUpDu = snap.xUpDu;
+    k.xDownDu = snap.xDownDu;
+    k.zDisabled = snap.zDisabled;
+    k.xDisabled = snap.xDisabled;
+    k.yDisabled = snap.yDisabled;
+    k.rpm = snap.rpm;
+    k.turns = snap.turns;
+    k.angle = snap.angle;
+    k.mode = snap.mode;
+    k.isOn = snap.isOn;
+    k.estop = snap.estop;
+    k.dupr = snap.dupr;
+    k.nextDupr = snap.nextDupr;
+    return k;
+  }
+
+  // Fallback to direct read if queue not yet populated
   k.zDu = getAxisCanonicalPosDu(&z);
   k.xDu = getAxisCanonicalPosDu(&x);
   k.yDu = getAxisCanonicalPosDu(&y);

@@ -11,6 +11,7 @@
 #include "Debug.h"
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
+#include "MachineModel.h"
 
 void setup() {
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
@@ -150,6 +151,9 @@ void setup() {
   DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
 
+  motionSnapshotQueue = xQueueCreate(1, sizeof(StatusSnapshot));
+  publishMotionSnapshot();
+
   if (WIFI_ENABLED) {
     webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
   }
@@ -240,4 +244,11 @@ void loop() {
   moveAxis(&x);
   if (ACTIVE_Y) moveAxis(&y);
   xSemaphoreGive(motionMutex);
+
+  static unsigned long lastSnapshotPublish = 0;
+  unsigned long now = millis();
+  if (now - lastSnapshotPublish >= 20) { // 50 Hz inter-core snapshot cadence
+    lastSnapshotPublish = now;
+    publishMotionSnapshot();
+  }
 }

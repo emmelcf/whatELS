@@ -1,8 +1,38 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include "Config.h"
 #include "Motion.h"
+
+// -----------------------------------------------------------------------------
+// Inter-Core Motion Snapshot (~64 Bytes Value-Semantic Transport)
+// -----------------------------------------------------------------------------
+struct StatusSnapshot {
+  uint32_t timestamp;
+  int32_t  zDu;
+  int32_t  xDu;
+  int32_t  yDu;
+  int32_t  zLeftDu;
+  int32_t  zRightDu;
+  int32_t  xUpDu;
+  int32_t  xDownDu;
+  bool     zDisabled;
+  bool     xDisabled;
+  bool     yDisabled;
+  uint16_t rpm;
+  float    turns;
+  float    angle;
+  uint8_t  mode;
+  bool     isOn;
+  bool     estop;
+  int32_t  dupr;
+  int32_t  nextDupr;
+};
+
+extern QueueHandle_t motionSnapshotQueue;
+void publishMotionSnapshot();
 
 // Domain Bitmasks for Machine Model
 enum DomainFlags : uint8_t {
