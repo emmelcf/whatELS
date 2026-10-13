@@ -156,18 +156,19 @@ struct CachedProperty {
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
 3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
 
-### 3.3 LittleFS Preset Catalog: System Templates vs. User Presets
+### 3.3 Preset Architecture: ROM System Templates & User-Dedicated LittleFS
 
-To prevent C++ ROM bloat and avoid recompiling firmware whenever a new lathe model is introduced:
-1. **Single Compiled-In Baseline (ROM):** Only **one** uncorruptible baseline profile is hardcoded into firmware ROM (`getDefaultProfile()`, WM210V 8×16). If LittleFS flash is corrupted or unformatted, the controller boots reliably into this baseline.
-2. **Flash Filesystem Catalog (`/presets/profiles.json`):** Presets in the LittleFS catalog are strictly partitioned into two categories:
-   - **System Templates (`"system": true`):** Factory-supplied machine configurations (e.g. `wm210v_stock`, `mini_7x14`). These serve as read-only templates. They cannot be overwritten or deleted, ensuring the factory baseline is always recoverable.
-   - **User Presets (`"system": false`):** Created by the workshop operator (e.g. `my_wm210v`, `shop_mini_lathe`). They can be saved, updated in-place, or deleted.
+To ensure that firmware upgrades never erase user data or require flashing raw filesystem images:
+1. **Compiled-In System Templates (ROM):** Factory machine templates (`wm210v_stock`, `mini_7x14`) are compiled directly into firmware Flash ROM. Even if LittleFS is completely blank or unformatted, the controller boots reliably into a working lathe profile and offers the full suite of factory templates.
+2. **Dedicated User Filesystem (`/presets/profiles.json`):** LittleFS is reserved strictly for operator-created presets, tool libraries, and user part programs (lathecode / G-code).
+   - **System Templates (`"system": true`):** Sourced from ROM or marked read-only. Cannot be overwritten or deleted.
+   - **User Presets (`"system": false`):** Created by the workshop operator. Can be edited in-place, saved, or deleted.
 3. **Deletion & Default Safety Guards:**
    - **System Templates Protected:** `SETTINGS.preset.delete` unconditionally rejects removing templates tagged `"system": true`.
    - **Active Preset Protected:** The preset currently loaded and in use (`activeMachineProfile.profileId`) cannot be deleted while active.
    - **Catalog Default Protected:** The preset designated as the catalog default (`default_profile_id`) cannot be deleted.
-4. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via canonical `SETTINGS.preset.*` wire commands.
+4. **Zero LittleFS Overwrite on Update:** Upgrading firmware via USB or Web OTA writes only to the application partition (`firmware.bin`). User presets on LittleFS are never wiped.
+5. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via canonical `SETTINGS.preset.*` wire commands.
 
 ### 3.4 Dynamic Schema Introspection (JSON Schema Standard)
 
@@ -475,6 +476,6 @@ Clients dynamically inspect configuration schemas to auto-generate forms and han
 3. **Decoupled Responsibilities:** Machine physical dimensions never collide with network credentials or client themes.
 4. **Instant Reset Assurance:** An operator can always safely revert a customized axis or machine back to factory defaults with a single command.
 5. **Rock-Solid Motion Safety:** Core 1 motion control reads validated physical settings from fast RAM with zero FreeRTOS lock contention.
-6. **Zero ROM Bloat for Machine Presets:** Storing presets in LittleFS as `.json` files keeps C++ firmware ROM slim and enables easy community sharing.
+6. **Zero FileSystem-Flash Dependency & Preserved User Data:** Compiling the Web UI and factory system templates into `firmware.bin` ensures that firmware updates require only flashing the application partition. User-created presets, custom tool tables, and uploaded lathecode/G-code files in LittleFS are never wiped during updates.
 7. **Future-Proof Schema Decoupling:** Dynamic JSON Schema (draft-07 / 2020-12) introspection allows adding new machine properties without requiring client code changes.
 

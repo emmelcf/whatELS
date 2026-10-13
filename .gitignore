@@ -20,3 +20,8 @@ compile_commands.json
 screen_lvgl/
 lvgl_ui_project/
 tutorials/
+
+# Auto-generated build assets
+src/motion/SystemProfilesJson.h
+src/web/ControllerWebAssets.h
+

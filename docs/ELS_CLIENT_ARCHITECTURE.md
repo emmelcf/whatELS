@@ -22,8 +22,8 @@ The **NanoELS Client Architecture** defines the structure, communication protoco
    The controller stores exact operator intent (e.g. `20 TPI`, `1:3.5 taper`, `1.5 mm pitch`) alongside canonical deci-micron values (`du`, `dupr`). This guarantees zero round-trip display drift (entering `20 TPI` will never return as `19.9998`).
 4. **Presentation is Client-Local:**  
    Units (`mm`/`in`) and cross-slide display representation (`Ø Diameter`/`R Radius`) are entirely client-local presentation settings. Toggling units never transmits network packets to the MCU and never affects other connected clients.
-5. **Zero-Build, 100% Offline Runtime:**  
-   The Web UI operates with zero npm build step or bundler dependencies. It can be served from ESP32 LittleFS, an external companion server, or loaded directly via `file:///`.
+5. **Zero-Build, 100% Offline Runtime & ROM Asset Embedding:**  
+   The Web UI operates with zero npm build step or bundler dependencies. In production, assets are gzipped and embedded into firmware Flash ROM (`PROGMEM`) so firmware updates deliver UI updates simultaneously without touching the user's LittleFS filesystem. For rapid development, the controller supports serving hot-reloaded assets from LittleFS `/www/` or loaded directly via `file:///`.
 6. **Zero-WiFi Control Plane Mandate (Wired Physical Bus for Motion):**  
    Executing real-time cutting cycles or emergency stops over wireless Wi-Fi in an industrial machine shop with heavy motor and VFD EMI noise introduces hazardous failure modes (packet drops, latency jitter, stalled cuts). The primary machine control plane between the operator console and the NanoELS core is strictly wired over physical UART serial (`Serial1`) or on-chip memory. Wi-Fi/WebSocket transports are dedicated to supervisory observation, parameter configuration, and DRO telemetry.
 

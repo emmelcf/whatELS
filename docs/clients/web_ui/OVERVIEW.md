@@ -16,8 +16,8 @@
 The **NanoELS Web UI** is the primary rich client interface for the NanoELS electronic leadscrew platform. Designed for modern touch displays ($800 \times 480$ landscape up to full $1080\text{p}$ shop tablets), it delivers a responsive digital readout (DRO), conversational machining wizards, electronic gearbox control, and a real-time digital twin visualizer.
 
 ### Governing Tenets
-1. **Zero-Build, 100% Offline Runtime:**  
-   The application requires no bundler, npm scripts, or node build pipeline. It runs directly in any modern browser via local files (`file:///`), HTTP from an ESP32 LittleFS server, or an external companion server.
+1. **Zero-Build, 100% Offline Runtime & ROM Asset Embedding:**  
+   The application requires no external bundler, npm scripts, or node build pipeline. It runs directly in any modern browser via local files (`file:///`), HTTP from ESP32 firmware Flash ROM (gzipped `PROGMEM`), or an external companion server. During development, loose assets can also be served from LittleFS `/www/` for live iteration.
 2. **Deterministic Vanilla / Reactive Boundary:**  
    Complex modal wizards, numeric keypad input, and sub-300ms hardware touch gestures are managed imperatively in Vanilla JS (`lathe-controller.js`), while the high-frequency DRO column and status badges update reactively via Alpine.js (`$store.machine`).
 3. **Strict Client-Local Presentation Independence:**  
@@ -217,3 +217,19 @@ The complete mapping of every button, touch gesture, keypad entry, and modal tri
 * Subscribes to `window.nanoelsClient`'s `'telemetry'` event.
 * Ingests canonical deci-micron positions (`zDu`, `xDu`) and draws the lathe bed casting, chuck, workpiece, toolpost, and soft limit envelopes to true physical millimetric scale.
 * Operates strictly on canonical millimeters ($z\text{Du}/10000$, $x\text{Du}/10000$), completely immune to client-side display preferences ($\varnothing/R$, $\text{mm/in}$).
+
+---
+
+## 9. Firmware Asset Bundling & Deployment
+
+### 9.1 Production Embedded Flash ROM Delivery
+To eliminate user data loss when upgrading firmware:
+1. **Pre-Build Compression:** A lightweight PlatformIO script gzips `lathe_dro_nanoels_controller.html`, `lathe-controller.css`, `lathe-controller.js`, `alpine.min.js`, etc. and outputs C++ byte arrays in `PROGMEM`.
+2. **Direct ROM Streaming:** The ESP32 web server serves these arrays directly out of flash memory using `server.send_P(200, contentType, data, len)` with `Content-Encoding: gzip`.
+3. **No LittleFS Overwrites:** Firmware upgrades require only flashing `firmware.bin`. User presets and uploaded machining programs in LittleFS are completely preserved.
+
+### 9.2 Developer Hot-Reload Mode
+For rapid web UI styling and layout work:
+* If `/www/index.html` exists on the LittleFS partition, the server serves the uncompressed loose file from LittleFS instead of ROM.
+* Developers can upload new web files via HTTP or `pio run -t uploadfs` during development without re-flashing C++ firmware.
+

@@ -9,6 +9,7 @@
 #include "RichClientAdapter.h"
 #include "ClientEndpoint.h"
 #include "SettingsService.h"
+#include "ControllerWebAssets.h"
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
@@ -966,17 +967,51 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
   }
 }
 
-static void handleClientRequests() {
-  File file = LittleFS.open("/www/index.html", "r");
-  if (!file) {
-    server.send(404, "text/plain", "Web UI not found on LittleFS");
-    return;
+static void handleClientIndex() {
+  if (LittleFS.exists("/www/index.html")) {
+    File file = LittleFS.open("/www/index.html", "r");
+    if (file) {
+      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      server.sendHeader("Pragma", "no-cache");
+      server.sendHeader("Expires", "0");
+      server.streamFile(file, "text/html");
+      file.close();
+      return;
+    }
   }
+  server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.sendHeader("Pragma", "no-cache");
-  server.sendHeader("Expires", "0");
-  server.streamFile(file, "text/html");
-  file.close();
+  server.send_P(200, "text/html", (const char*)WWW_INDEX_HTML_GZ, WWW_INDEX_HTML_GZ_LEN);
+}
+
+static void handleClientStyle() {
+  if (LittleFS.exists("/www/style.css")) {
+    File file = LittleFS.open("/www/style.css", "r");
+    if (file) {
+      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      server.streamFile(file, "text/css");
+      file.close();
+      return;
+    }
+  }
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send_P(200, "text/css", (const char*)WWW_STYLE_CSS_GZ, WWW_STYLE_CSS_GZ_LEN);
+}
+
+static void handleClientAppJs() {
+  if (LittleFS.exists("/www/app.js")) {
+    File file = LittleFS.open("/www/app.js", "r");
+    if (file) {
+      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      server.streamFile(file, "application/javascript");
+      file.close();
+      return;
+    }
+  }
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send_P(200, "application/javascript", (const char*)WWW_APP_JS_GZ, WWW_APP_JS_GZ_LEN);
 }
 
 int getGcodeProgramCount() {
@@ -1622,7 +1657,10 @@ static void setWiFiStatus(const String& status) {
 }
 
 static void registerWebRoutes() {
-  server.on("/", handleClientRequests);
+  server.on("/", handleClientIndex);
+  server.on("/index.html", handleClientIndex);
+  server.on("/style.css", handleClientStyle);
+  server.on("/app.js", handleClientAppJs);
   server.on("/gcode/add", HTTP_POST, handleGcodeAdd);
   server.on("/gcode/list", HTTP_GET, handleGcodeList);
   server.on("/gcode/get", HTTP_GET, handleGcodeGet);

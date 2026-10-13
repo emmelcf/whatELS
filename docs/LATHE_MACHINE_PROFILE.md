@@ -310,11 +310,9 @@ struct LatheConfiguration {
 
 ---
 
-## 4. Lathe Profile Catalog Architecture & LittleFS Storage
+## 4. Lathe Profile Catalog Architecture & Storage Hierarchy
 
-Because lathe physical iron rarely changes after commissioning, baking an extensive, growing library of commercial lathe models into C++ firmware ROM is an anti-pattern that leads to firmware bloat and unnecessary recompilation.
-
-Instead, NanoELS adopts a **LittleFS-backed JSON Profile Catalog (`/presets/profiles.json`)**:
+To guarantee that firmware upgrades never destroy user calibrations or custom lathe configurations, NanoELS employs a decoupled storage hierarchy combining **compiled-in ROM System Templates** with **User-Dedicated LittleFS Storage**:
 
 ### 4.1 The Three-Tier Fallback Hierarchy
 
@@ -331,26 +329,28 @@ The system establishes an unambiguous, fail-safe hierarchy of machine profile au
                                     │  deleted, or reset commanded)
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│ TIER B: SYSTEM DEFAULT PROFILE (`default_profile_id` in LittleFS)      │
+│ TIER B: LITTLEFS USER PRESETS & COMMISSIONING DEFAULT                  │
+│ • Custom user lathes and modified templates stored on LittleFS         │
 │ • Pointed to by `default_profile_id` in `/presets/profiles.json`       │
-│ • The designated commissioning baseline for this physical workshop     │
 │ • Reverted to when operator commands `SETTINGS.preset.resetToDefault`  │
 │   or `SETTINGS.resetGroup=machine`                                     │
+│ • NEVER WIPED OR OVERWRITTEN BY FIRMWARE UPGRADES                      │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ (if LittleFS unformatted, flash
                                     │  corrupted, or catalog missing)
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│ TIER C: COMPILED-IN ROM FAILSAFE (`getDefaultProfile()`)               │
-│ • Hardcoded in C++ flash (WM210V 8×16 baseline)                        │
-│ • Zero SPI flash dependency; guarantees MCU boots safely even with     │
-│   a blank or corrupted filesystem                                      │
+│ TIER C: COMPILED-IN ROM FACTORY TEMPLATES (`getDefaultProfile()`, etc.)│
+│ • Hardcoded in firmware Flash ROM (`wm210v_stock`, `mini_7x14`)        │
+│ • Always accessible with zero LittleFS dependency                      │
+│ • Automatically updated with each firmware `.bin` release              │
+│ • Read-only system templates cannot be deleted or overwritten          │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Active Precedence (NVS):** On boot, the controller reads `machine.preset` from NVS. If valid in the catalog, it is loaded into RAM with any sparse NVS overrides.
+1. **Active Precedence (NVS):** On boot, the controller reads `machine.preset` from NVS. If valid in the LittleFS user catalog or ROM templates, it is loaded into RAM with any sparse NVS overrides.
 2. **Default Profile Fallback:** If `machine.preset` is unset, missing, or the operator commands a reset (`SETTINGS.preset.resetToDefault`), the controller cleanly falls back to `default_profile_id` declared in the catalog.
-3. **Compiled-In Failsafe (ROM):** If LittleFS is unformatted or the catalog file is missing, the firmware boots safely to `getDefaultProfile()`.
+3. **Compiled-In Failsafe (ROM):** If LittleFS is unformatted, blank, or the catalog file is missing, the firmware boots safely to `getDefaultProfile()` and serves all factory templates directly from ROM. User files are preserved independently.
 
 ### 4.2 Single File Catalog vs. Modular Flexibility
 

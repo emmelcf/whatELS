@@ -282,3 +282,41 @@ The client UI incorporates pure render-time formatters (`nanoels-formatters.js`)
 - **Taper Multi-Format Companions**: Converting canonical slope $C = \Delta \text{Dia}/\Delta Z$ simultaneously to Ratio ($1:K$), Angle ($\theta, 2\theta$), Taper Per Foot (`in/ft`), and Metric Taper (`mm/m`).
 - **Ergonomic Jog Steps**: Unit toggle immediately snaps to the nearest native preset (`0.010 mm` $\leftrightarrow$ `0.0010 in`) rather than fractional conversions.
 
+---
+
+## 6. Flash Partition Topology & User Storage Invariants
+
+To guarantee that firmware upgrades never destroy user calibrations, custom machine profiles, or uploaded part programs (lathecode / G-code), the ESP32 storage architecture strictly separates system code from operator runtime data:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       NANOELS FLASH PARTITION ROLES                         │
+├────────────────────────────────┬────────────────────────────────────────────┤
+│ 1. APPLICATION FLASH (`app0`)  │ • C++ Motion Core & Hard Real-Time Loops   │
+│    Firmware Binary (.bin)      │ • Embedded Gzipped Web UI (`PROGMEM`)      │
+│    Over-The-Air (OTA) Target   │ • Factory System Templates (WM210V, etc.)  │
+│                                │ • Authoritative JSON Configuration Schemas │
+├────────────────────────────────┼────────────────────────────────────────────┤
+│ 2. NON-VOLATILE STORAGE (`nvs`)│ • Sparse Machine Overrides (`screw_z_du`)  │
+│    Fast Key-Value Flash        │ • Active Profile Identifier (`preset`)     │
+│                                │ • Wi-Fi Credentials & Hardware Diagnostics │
+├────────────────────────────────┼────────────────────────────────────────────┤
+│ 3. USER FILESYSTEM (LittleFS)  │ • User Custom Lathe Profiles (`/presets/`) │
+│    Dedicated Operator Storage  │ • User Lathecode & G-Code Programs (`/`)   │
+│    NEVER WIPED BY FIRMWARE     │ • User Tool Libraries & Wear Offsets       │
+│                                │ • (Optional Dev Mode: `/www/` live assets) │
+└────────────────────────────────┴────────────────────────────────────────────┘
+```
+
+### 6.1 Single-File OTA Updates & Zero Version Desynchronization
+1. **Single Binary Deployment:** All firmware logic, the complete responsive Web UI (`clients/web_ui/`), and built-in factory lathe templates are compiled directly into `firmware.bin`.
+2. **Atomic Upgrades:** Updating the controller via USB or the Web OTA endpoint (`/update`) flashes only the `app0`/`app1` partition. The browser UI, C++ kinematics, and WebSocket wire protocols update together atomically in a single reboot, completely preventing version mismatches between frontend code and backend APIs.
+3. **LittleFS Invariant:** The LittleFS filesystem partition is **never formatted, wiped, or overwritten during firmware updates**. Custom user presets and uploaded machining files remain 100% persistent across firmware releases.
+
+### 6.2 Developer Live-Asset Override Fallback
+For rapid iteration during web development without recompiling C++ firmware:
+* When an HTTP request arrives for `/index.html`, the embedded server first checks if `/www/index.html` exists on the LittleFS partition.
+* If present, the controller serves the loose file from LittleFS (allowing hot-reloading web edits).
+* If absent (standard production state), the controller serves the gzipped bundle directly from Flash ROM via `send_P` with `Content-Encoding: gzip`.
+
+

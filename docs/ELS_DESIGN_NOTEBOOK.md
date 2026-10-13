@@ -128,3 +128,13 @@ Below is the record of major architectural decisions, the problems they solved, 
   * Eliminates recursive resolution overhead on the ESP32 microcontroller stack.
   * Runtime tuning deltas are cleanly isolated in NVS (`machine.preset`), while profiles in the catalog remain 100% self-contained and portable.
 * **Documented in:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
+
+### ADR 11: Embedded Flash ROM Web Assets & Factory Presets with User-Dedicated LittleFS
+* **Context:** Requiring a filesystem image flash (`pio run -t uploadfs`) to update the Web UI or add factory presets formats the entire LittleFS partition. This wipes user-saved presets, tool offsets, and uploaded part programs (lathecode / G-code). Furthermore, requiring both a firmware flash and a filesystem flash complicates Web OTA updates and risks frontend/backend version desynchronization.
+* **Decision:**
+  1. Compile the production Web UI (`clients/web_ui/`) and factory system machine templates (`wm210v_stock`, `mini_7x14`) directly into firmware Flash ROM as gzipped `PROGMEM` byte arrays.
+  2. Reserve LittleFS exclusively for **operator-owned runtime data**: user custom presets (`/presets/`), tool tables, and uploaded lathecode/G-code files.
+  3. Firmware updates (via USB or Web OTA) write strictly to the application partition (`firmware.bin`), guaranteeing that the LittleFS partition is never wiped or formatted during upgrades.
+  4. Provide a developer hot-reload override: if `/www/index.html` exists on LittleFS, the server serves the loose file instead of ROM, enabling rapid UI styling without recompiling firmware.
+* **Documented in:** [`CONTROLLER_ARCHITECTURE.md`](./CONTROLLER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md).
+

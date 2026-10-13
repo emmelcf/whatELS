@@ -129,14 +129,15 @@ During this architectural transition, two specific legacy components require car
 
 ---
 
-### 3.2 Current LittleFS Web UI: Standardizing Touch Points
-* **Current State:**  
-  The controller currently serves a legacy HTML/JS interface from LittleFS flash via [`WebServerModule.cpp`](../src/web/WebServerModule.cpp). While functional for toggling settings, it historically used ad-hoc REST endpoints and raw variable mutations.
-* **Migration Strategy:**  
-  1. **Dumb Pipe Transport:** `WebServerModule.cpp` is strictly a network transport pipe implementing `ClientEndpoint`.
-  2. **Canonical Line Protocol:** All inbound messages from the web client MUST flow as standard ASCII line commands (`CMD.*`, `SETTINGS.*`) into `CommandDispatcher`.
-  3. **Canonical Domain Telemetry:** All outbound updates MUST flow as standard domain snapshots (`K`, `I`, `C`, `P`) emitted by `RichClientAdapter` / `MachineModel`.
-  4. **Drop-In Modern Replacement:** When the redesigned Alpine.js Web UI (`clients/web_ui/`) is deployed to LittleFS to replace the legacy web assets, it will connect to the exact same WebSocket endpoint with **zero backend firmware modifications**.
+### 3.2 Web UI Delivery: Embedded ROM Production & LittleFS Development Overlay
+* **Current State & Production Architecture:**  
+  The controller embeds the production Web UI (`clients/web_ui/`) directly into firmware Flash ROM as gzipped `PROGMEM` byte arrays. HTTP clients are served directly from flash memory with zero filesystem access overhead.
+* **Developer Hot-Reload Mode:**  
+  During web UI development, if `/www/index.html` exists on LittleFS, `WebServerModule.cpp` serves that loose file instead, allowing rapid iteration without recompiling firmware.
+* **Preservation of User Files:**  
+  Because Web UI assets and factory templates reside in firmware ROM, firmware updates (via USB or Web OTA) flash only the application partition. The LittleFS partition is never wiped, preserving user presets, tool tables, and uploaded lathecode/G-code files.
+* **Drop-In Protocol Alignment:**  
+  The web client connects to the controller WebSocket endpoint and exchanges canonical ASCII line commands (`CMD.*`, `SETTINGS.*`) and domain telemetry frames (`K`, `I`, `C`, `P`).
 
 ---
 

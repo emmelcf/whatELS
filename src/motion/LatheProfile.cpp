@@ -1,4 +1,5 @@
 #include "LatheProfile.h"
+#include "SystemProfilesJson.h"
 #include <string.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
@@ -64,90 +65,8 @@ LatheConfiguration getDefaultProfile() {
   return p;
 }
 
-bool getDefaultCatalogProfileId(char* outSlug, size_t maxLen) {
-  if (!outSlug || maxLen == 0) return false;
-  if (!LittleFS.exists("/presets/profiles.json")) {
-    strncpy(outSlug, "wm210v_stock", maxLen - 1);
-    outSlug[maxLen - 1] = '\0';
-    return false;
-  }
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) return false;
-
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) {
-    return false;
-  }
-  const char* defId = doc["default_profile_id"] | "wm210v_stock";
-  strncpy(outSlug, defId, maxLen - 1);
-  outSlug[maxLen - 1] = '\0';
-  return true;
-}
-
-bool setDefaultCatalogProfileId(const char* slug) {
-  if (!slug || *slug == '\0') return false;
-  if (!LittleFS.exists("/presets/profiles.json")) return false;
-
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) return false;
-
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) return false;
-
-  bool exists = false;
-  JsonArray profiles = doc["profiles"].as<JsonArray>();
-  for (JsonObject p : profiles) {
-    const char* id = p["identity"]["profile_id"];
-    if (id && strcasecmp(id, slug) == 0) {
-      exists = true;
-      break;
-    }
-  }
-  if (!exists) return false;
-
-  doc["default_profile_id"] = slug;
-
-  file = LittleFS.open("/presets/profiles.json", "w");
-  if (!file) return false;
-  serializeJson(doc, file);
-  file.close();
-  return true;
-}
-
-bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile) {
-  if (!slug || !outProfile) return false;
-  if (!LittleFS.exists("/presets/profiles.json")) {
-    return false;
-  }
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) return false;
-
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) {
-    return false;
-  }
-
-  JsonArray profiles = doc["profiles"].as<JsonArray>();
-  JsonObject target;
-  bool found = false;
-  for (JsonObject p : profiles) {
-    const char* id = p["identity"]["profile_id"];
-    if (id && strcasecmp(id, slug) == 0) {
-      target = p;
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
-    return false;
-  }
+static bool parseProfileObject(JsonObject target, const char* slug, LatheConfiguration* outProfile) {
+  if (target.isNull() || !outProfile) return false;
 
   // Baseline from ROM to ensure all fields have valid defaults
   *outProfile = getDefaultProfile();
@@ -220,36 +139,173 @@ bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile) {
   return true;
 }
 
-bool listCatalogProfiles(String* outList) {
-  if (!outList) return false;
-  if (!LittleFS.exists("/presets/profiles.json")) {
-    *outList = "wm210v_stock";
+bool getDefaultCatalogProfileId(char* outSlug, size_t maxLen) {
+  if (!outSlug || maxLen == 0) return false;
+
+  // 1. Check LittleFS catalog first (operator customization)
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, file)) {
+        const char* defId = doc["default_profile_id"];
+        if (defId && *defId != '\0') {
+          strncpy(outSlug, defId, maxLen - 1);
+          outSlug[maxLen - 1] = '\0';
+          file.close();
+          return true;
+        }
+      }
+      file.close();
+    }
+  }
+
+  // 2. Fallback to compiled-in ROM system profiles
+  JsonDocument romDoc;
+  if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+    const char* defId = romDoc["default_profile_id"] | "wm210v_stock";
+    strncpy(outSlug, defId, maxLen - 1);
+    outSlug[maxLen - 1] = '\0';
     return true;
   }
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) {
-    *outList = "wm210v_stock";
-    return false;
-  }
+
+  strncpy(outSlug, "wm210v_stock", maxLen - 1);
+  outSlug[maxLen - 1] = '\0';
+  return true;
+}
+
+bool setDefaultCatalogProfileId(const char* slug) {
+  if (!slug || *slug == '\0') return false;
 
   JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) {
-    *outList = "wm210v_stock";
-    return false;
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      deserializeJson(doc, file);
+      file.close();
+    }
+  } else {
+    // Seed doc from ROM system profiles
+    deserializeJson(doc, SYSTEM_PROFILES_JSON);
   }
 
+  // Validate that slug exists in either LittleFS or ROM
+  bool exists = false;
   JsonArray profiles = doc["profiles"].as<JsonArray>();
-  String list = "";
-  for (size_t i = 0; i < profiles.size(); i++) {
-    const char* id = profiles[i]["identity"]["profile_id"];
-    bool isSys = profiles[i]["identity"]["system"] | false;
-    if (id) {
-      if (list.length() > 0) list += ",";
-      list += id;
-      list += isSys ? ":sys" : ":user";
+  for (JsonObject p : profiles) {
+    const char* id = p["identity"]["profile_id"];
+    if (id && strcasecmp(id, slug) == 0) {
+      exists = true;
+      break;
     }
+  }
+  if (!exists) {
+    // Also check ROM catalog
+    JsonDocument romDoc;
+    if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+      JsonArray romProfiles = romDoc["profiles"].as<JsonArray>();
+      for (JsonObject p : romProfiles) {
+        const char* id = p["identity"]["profile_id"];
+        if (id && strcasecmp(id, slug) == 0) {
+          exists = true;
+          break;
+        }
+      }
+    }
+  }
+  if (!exists) return false;
+
+  doc["default_profile_id"] = slug;
+
+  File file = LittleFS.open("/presets/profiles.json", "w");
+  if (!file) return false;
+  serializeJson(doc, file);
+  file.close();
+  return true;
+}
+
+bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile) {
+  if (!slug || !outProfile) return false;
+
+  // 1. Check LittleFS user catalog first
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, file)) {
+        JsonArray profiles = doc["profiles"].as<JsonArray>();
+        for (JsonObject p : profiles) {
+          const char* id = p["identity"]["profile_id"];
+          if (id && strcasecmp(id, slug) == 0) {
+            file.close();
+            return parseProfileObject(p, slug, outProfile);
+          }
+        }
+      }
+      file.close();
+    }
+  }
+
+  // 2. Check compiled-in ROM system profiles
+  JsonDocument romDoc;
+  if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+    JsonArray profiles = romDoc["profiles"].as<JsonArray>();
+    for (JsonObject p : profiles) {
+      const char* id = p["identity"]["profile_id"];
+      if (id && strcasecmp(id, slug) == 0) {
+        return parseProfileObject(p, slug, outProfile);
+      }
+    }
+  }
+
+  return false;
+}
+
+bool listCatalogProfiles(String* outList) {
+  if (!outList) return false;
+  String list = "";
+
+  // 1. Always enumerate compiled-in ROM system templates first
+  JsonDocument romDoc;
+  if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+    JsonArray romProfiles = romDoc["profiles"].as<JsonArray>();
+    for (JsonObject p : romProfiles) {
+      const char* id = p["identity"]["profile_id"];
+      if (id) {
+        if (list.length() > 0) list += ",";
+        list += id;
+        list += ":sys";
+      }
+    }
+  }
+
+  // 2. Enumerate user presets from LittleFS (skipping any that duplicate system names)
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, file)) {
+        JsonArray profiles = doc["profiles"].as<JsonArray>();
+        for (JsonObject p : profiles) {
+          const char* id = p["identity"]["profile_id"];
+          bool isSys = p["identity"]["system"] | false;
+          if (id && !isSys) {
+            // Check if already in list
+            String token = String(id) + ":";
+            if (list.indexOf(token) < 0) {
+              if (list.length() > 0) list += ",";
+              list += id;
+              list += ":user";
+            }
+          }
+        }
+      }
+      file.close();
+    }
+  }
+
+  if (list.length() == 0) {
+    list = "wm210v_stock:sys";
   }
   *outList = list;
   return true;
@@ -257,6 +313,8 @@ bool listCatalogProfiles(String* outList) {
 
 bool isSystemCatalogProfile(const char* slug) {
   if (!slug || *slug == '\0') return false;
+
+  // Well-known fallback aliases
   if (strcasecmp(slug, "wm210v_8x16") == 0 ||
       strcasecmp(slug, "wm210v_stock") == 0 ||
       strcasecmp(slug, "wm210v_dual") == 0 ||
@@ -264,42 +322,58 @@ bool isSystemCatalogProfile(const char* slug) {
       strcasecmp(slug, "default") == 0) {
     return true;
   }
-  if (!LittleFS.exists("/presets/profiles.json")) return false;
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) return false;
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) return false;
 
-  JsonArray profiles = doc["profiles"].as<JsonArray>();
-  for (JsonObject p : profiles) {
-    const char* id = p["identity"]["profile_id"];
-    if (id && strcasecmp(id, slug) == 0) {
-      return p["identity"]["system"] | false;
+  // Check compiled-in ROM catalog
+  JsonDocument romDoc;
+  if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+    JsonArray profiles = romDoc["profiles"].as<JsonArray>();
+    for (JsonObject p : profiles) {
+      const char* id = p["identity"]["profile_id"];
+      if (id && strcasecmp(id, slug) == 0) {
+        return p["identity"]["system"] | true;
+      }
     }
   }
+
   return false;
 }
 
 bool getProfileJsonFromLittleFS(const char* slug, String* outJson) {
   if (!slug || !outJson) return false;
-  if (!LittleFS.exists("/presets/profiles.json")) return false;
-  File file = LittleFS.open("/presets/profiles.json", "r");
-  if (!file) return false;
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) return false;
 
-  JsonArray profiles = doc["profiles"].as<JsonArray>();
-  for (JsonObject p : profiles) {
-    const char* id = p["identity"]["profile_id"];
-    if (id && strcasecmp(id, slug) == 0) {
-      serializeJson(p, *outJson);
-      return true;
+  // 1. Check LittleFS user catalog first
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File file = LittleFS.open("/presets/profiles.json", "r");
+    if (file) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, file)) {
+        JsonArray profiles = doc["profiles"].as<JsonArray>();
+        for (JsonObject p : profiles) {
+          const char* id = p["identity"]["profile_id"];
+          if (id && strcasecmp(id, slug) == 0) {
+            serializeJson(p, *outJson);
+            file.close();
+            return true;
+          }
+        }
+      }
+      file.close();
     }
   }
+
+  // 2. Check compiled-in ROM system profiles
+  JsonDocument romDoc;
+  if (!deserializeJson(romDoc, SYSTEM_PROFILES_JSON)) {
+    JsonArray profiles = romDoc["profiles"].as<JsonArray>();
+    for (JsonObject p : profiles) {
+      const char* id = p["identity"]["profile_id"];
+      if (id && strcasecmp(id, slug) == 0) {
+        serializeJson(p, *outJson);
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
