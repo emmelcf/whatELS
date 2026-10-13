@@ -11,9 +11,9 @@
 QueueHandle_t motionSnapshotQueue = NULL;
 
 static long getAxisCanonicalPosDu(Axis* a) {
-  if (a == &x && xDisplayModeDRO) {
+  if (a == &x && SettingsService::isXDroMode()) {
     return (long)round(xScale.getPosition() * 10000.0f);
-  } else if (a == &z && zDisplayModeDRO) {
+  } else if (a == &z && SettingsService::isZDroMode()) {
     return (long)round(zScale.getPosition() * 10000.0f);
   }
   return getAxisPosDu(a);
@@ -128,15 +128,15 @@ MachineProperties MachineModel::captureProperties() {
   strncpy(p.presetId, profile.profileId, sizeof(p.presetId) - 1);
   p.presetId[sizeof(p.presetId) - 1] = '\0';
   p.measure = measure;
-  p.isDiameterMode = isDiameterMode;
-  p.isAbsoluteMode = isAbsoluteMode;
-  p.zDroActive = zDisplayModeDRO;
-  p.xDroActive = xDisplayModeDRO;
+  p.isDiameterMode = SettingsService::isDiameterMode();
+  p.isAbsoluteMode = SettingsService::isAbsoluteMode();
+  p.zDroActive = SettingsService::isZDroMode();
+  p.xDroActive = SettingsService::isXDroMode();
   p.screwZDu = (long)round(z.screwPitch);
   p.screwXDu = (long)round(x.screwPitch);
   p.motorStepsZ = (long)round(z.motorSteps);
   p.motorStepsX = (long)round(x.motorSteps);
-  p.encoderPpr = ENCODER_PPR;
+  p.encoderPpr = (long)round(profile.spindle.effectivePpr());
   p.deadbandAngle = SettingsService::getDeadbandAngle();
   p.deadbandAngleAuto = SettingsService::isDeadbandAngleAuto();
   p.deadbandTurns = SettingsService::getDeadbandTurns();

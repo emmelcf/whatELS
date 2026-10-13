@@ -78,8 +78,12 @@ void setup() {
 
   DEBUG_PRINTLN("initAxis Z/X...");
   Serial.flush();
-  initAxis(&z, NAME_Z, true, false, MOTOR_STEPS_Z, SCREW_Z_DU, PULSE_PER_REVOLUTION_Z, SPEED_START_Z, SPEED_MANUAL_MOVE_Z, ACCELERATION_Z, INVERT_Z, INVERT_Z_ENABLE, NEEDS_REST_Z, MAX_TRAVEL_MM_Z, BACKLASH_DU_Z, Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z);
-  initAxis(&x, NAME_X, true, false, MOTOR_STEPS_X, SCREW_X_DU, PULSE_PER_REVOLUTION_X, SPEED_START_X, SPEED_MANUAL_MOVE_X, ACCELERATION_X, INVERT_X, INVERT_X_ENABLE, NEEDS_REST_X, MAX_TRAVEL_MM_X, BACKLASH_DU_X, X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X);
+  long zMotorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
+  long zTravelMax = (long)round(activeMachineProfile.zAxis.limits.travelMaxMm);
+  long xMotorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
+  long xTravelMax = (long)round(activeMachineProfile.xAxis.limits.travelMaxMm);
+  initAxis(&z, NAME_Z, true, false, zMotorSteps, activeMachineProfile.zAxis.leadscrewPitchDu(), PULSE_PER_REVOLUTION_Z, SPEED_START_Z, SPEED_MANUAL_MOVE_Z, ACCELERATION_Z, INVERT_Z, INVERT_Z_ENABLE, NEEDS_REST_Z, zTravelMax, activeMachineProfile.zAxis.backlashDu(), Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z);
+  initAxis(&x, NAME_X, true, false, xMotorSteps, activeMachineProfile.xAxis.leadscrewPitchDu(), PULSE_PER_REVOLUTION_X, SPEED_START_X, SPEED_MANUAL_MOVE_X, ACCELERATION_X, INVERT_X, INVERT_X_ENABLE, NEEDS_REST_X, xTravelMax, activeMachineProfile.xAxis.backlashDu(), X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X);
   DEBUG_PRINTLN("initAxis done.");
   Serial.flush();
 

@@ -425,31 +425,22 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define KCFG_SHOW_KEY_PRESSES "showKeys"
 
 // Global Variables (extern declarations)
-extern int ENCODER_PPR;
 extern int ENCODER_BACKLASH;
 extern int AXIS_ENCODER_BACKLASH;
 
-extern long SCREW_Z_DU;
-extern long MOTOR_STEPS_Z;
 extern long SPEED_START_Z;
 extern long ACCELERATION_Z;
 extern long SPEED_MANUAL_MOVE_Z;
 extern bool INVERT_Z;
 extern bool INVERT_Z_ENABLE;
 extern bool NEEDS_REST_Z;
-extern long MAX_TRAVEL_MM_Z;
-extern long BACKLASH_DU_Z;
 
-extern long SCREW_X_DU;
-extern long MOTOR_STEPS_X;
 extern long SPEED_START_X;
 extern long ACCELERATION_X;
 extern long SPEED_MANUAL_MOVE_X;
 extern bool INVERT_X;
 extern bool INVERT_X_ENABLE;
 extern bool NEEDS_REST_X;
-extern long MAX_TRAVEL_MM_X;
-extern long BACKLASH_DU_X;
 
 extern long STEP_TIME_MS;
 extern long DELAY_BETWEEN_STEPS_MS;
@@ -464,39 +455,12 @@ extern String WIFI_HOSTNAME;
 extern float PULSE_PER_REVOLUTION_Z;
 extern float PULSE_PER_REVOLUTION_X;
 
-extern bool JOYSTICK_ENABLED;
-extern bool JOYSTICK_Z_ENABLED;
-extern bool JOYSTICK_X_ENABLED;
-extern bool JOYSTICK_BUTTON_TOGGLES_ON_OFF;
-extern int JOYSTICK_CENTER_SAMPLES;
-extern int JOYSTICK_OVERSAMPLES;
-extern int JOYSTICK_SAMPLE_INTERVAL_MS;
-extern int JOYSTICK_ADC_MAX;
-extern int JOYSTICK_DEADBAND;
-extern int JOYSTICK_PULSE_QUEUE_LIMIT;
-extern float JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
-extern float JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
-extern bool INVERT_JOYSTICK_Z;
-extern bool INVERT_JOYSTICK_X;
-extern bool INVERT_JOYSTICK_BUTTON;
-
 extern int ENCODER_STEPS_INT;
 extern float ENCODER_STEPS_FLOAT;
-extern long RPM_BULK;
 extern long SAFE_DISTANCE_DU;
 extern long SLOT_LEFT_REDUCTION_DU;
 
 extern bool SHOW_KEY_PRESSES;
-
-// DRO Scale state
-extern bool zDisplayModeDRO;
-extern bool xDisplayModeDRO;
-extern bool isDiameterMode;
-extern bool isAbsoluteMode;
-extern int spindleDisplayMode;
-extern bool spindleValColorGreen;
-extern float xScaleIncrementalOffset;
-extern float zScaleIncrementalOffset;
 
 // Helpers
 long clampLongValue(long value, long minValue, long maxValue);

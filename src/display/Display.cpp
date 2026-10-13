@@ -5,6 +5,7 @@
 #include "Motion.h"
 #include "WebServerModule.h"
 #include <Preferences.h>
+#include "SettingsService.h"
 
 // LCD Hash Tracking
 long lcdHashLine0 = 0;
@@ -66,7 +67,7 @@ void updateDisplay() {
     setText("bMeasure", snapshot.measure);
   }
 
-  long newHashLine1 = moveStep + rpm + spindlePos + measure + spindleDisplayMode * 17 + (spindleValColorGreen ? 300 : 0);
+  long newHashLine1 = moveStep + rpm + spindlePos + measure + SettingsService::getSpindleDisplayMode() * 17 + (snapshot.spindleValColorGreen ? 300 : 0);
   bool updateLine1 = lcdHashLine1 != newHashLine1;
   if (updateLine1) {
     lcdHashLine1 = newHashLine1;
@@ -88,9 +89,9 @@ void updateDisplay() {
   long newHashLine2 =
     x.pos + x.originPos + x.disabled + x.leftStop - x.rightStop +
     z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop + measure + x.pos % 100 +
-    (xDisplayModeDRO ? (long)(xScale.getRawPosition() * 1000) : 0) +
-    (zDisplayModeDRO ? (long)(zScale.getRawPosition() * 1000) : 0) +
-    isDiameterMode + isAbsoluteMode + xDisplayModeDRO + zDisplayModeDRO;
+    (snapshot.xIsDroActive ? (long)(xScale.getRawPosition() * 1000) : 0) +
+    (snapshot.zIsDroActive ? (long)(zScale.getRawPosition() * 1000) : 0) +
+    snapshot.isDiameterMode + snapshot.isAbsoluteMode + snapshot.xIsDroActive + snapshot.zIsDroActive;
   bool updateLine2 = lcdHashLine2 != newHashLine2;
   if (updateLine2) {
     lcdHashLine2 = newHashLine2;
@@ -159,7 +160,7 @@ void updateDisplay() {
       (z.leftStop == LONG_MAX ? 123 : z.leftStop) + (z.rightStop == LONG_MIN ? 1234 : z.rightStop) +
       (x.leftStop == LONG_MAX ? 1235 : x.leftStop) + (x.rightStop == LONG_MIN ? 123456 : x.rightStop) + gcodeCommandHash +
       pitchStatusDirection * 149 +
-      (mode == MODE_JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + JOYSTICK_ENABLED * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
+      (mode == MODE_JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + joystickConfig.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
   bool updateLine3 = lcdHashLine3 != newHashLine3;
   if (updateLine3) {
     lcdHashLine3 = newHashLine3;

@@ -143,3 +143,12 @@ Below is the record of major architectural decisions, the problems they solved, 
   2. Implemented `PersistentSetting<T>` observable property template for operator preferences (Tiers 3 & 4): reads once on boot into RAM, strictly suppresses redundant flash writes (`if (value == newVal) return;`), and dispatches an `onChanged` event hook.
 * **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
 
+### ADR 13: Elimination of Shadow Machine Iron Globals & Encapsulation of Subsystem Config
+* **Context:** Following the introduction of `activeMachineProfile` (Tier 1) and `SettingsService` (Tier 4), `Config.h` and `Config.cpp` retained duplicate shadow globals (`SCREW_Z_DU`, `MOTOR_STEPS_Z`, `ENCODER_PPR`, `BACKLASH_DU_*`, `MAX_TRAVEL_MM_*`), uncoordinated presentation flags (`isDiameterMode`, `isAbsoluteMode`, `zDisplayModeDRO`, `xDisplayModeDRO`, `spindleDisplayMode`), dead variables (`xScaleIncrementalOffset`, `zScaleIncrementalOffset`, `RPM_BULK`), and 15 loose joystick variables. These duplicate paths caused divergent state updates and maintenance hazards.
+* **Decision:**
+  1. Retired the 9 machine iron shadow globals from `Config.h` / `Config.cpp`: axis parameters and spindle properties are now sourced strictly from `activeMachineProfile` and `Axis` instances `z` and `x`.
+  2. Purged dead globals (`xScaleIncrementalOffset`, `zScaleIncrementalOffset`, `RPM_BULK`).
+  3. Migrated all presentation state to `SettingsService` and `DisplaySnapshot`, removing raw externs and eliminating direct global mutation hazards from physical key handlers in `Input.cpp`.
+  4. Encapsulated all 15 loose joystick parameters into a typed domain struct `struct JoystickConfig joystickConfig` in `src/input/Input.h`.
+* **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
+

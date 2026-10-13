@@ -178,11 +178,13 @@ long duToSteps(Axis* a, long du) {
   return round(du * a->motorSteps / a->screwPitch);
 }
 
+#include "SettingsService.h"
+
 long getAxisPosDu(Axis* a) {
-  if (a == &x && xDisplayModeDRO) {
+  if (a == &x && SettingsService::isXDroMode()) {
     return round(xScale.getPosition() * 10000.0f);
   }
-  if (a == &z && zDisplayModeDRO) {
+  if (a == &z && SettingsService::isZDroMode()) {
     return round(zScale.getPosition() * 10000.0f);
   }
   return stepsToDu(a, a->pos + a->originPos);
@@ -466,7 +468,7 @@ int waitForNextHandwheelPulseDelta(Axis* a) {
 int waitForNextJoystickPulseDelta(Axis* a, int sign) {
   if (!(isJoystickManualMove(a) && getJoystickManualDirection(a) == sign)) return 0;
   unsigned long start = millis();
-  unsigned long timeoutMs = min(100, max(10, JOYSTICK_SAMPLE_INTERVAL_MS * 3));
+  unsigned long timeoutMs = min(100, max(10, joystickConfig.sampleIntervalMs * 3));
   while (emergencyStop == ESTOP_NONE && (isJoystickManualMove(a) && getJoystickManualDirection(a) == sign) && millis() - start < timeoutMs) {
     int pulseDelta = getAndResetPulses(a);
     if (pulseDelta == 0) {

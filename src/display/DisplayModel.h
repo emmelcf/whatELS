@@ -107,5 +107,7 @@ struct DisplaySnapshot {
   bool spindleValColorGreen = false;
 };
 
+extern bool spindleValColorGreen;
+
 // Generates a complete snapshot of all displayable information
 DisplaySnapshot getDisplaySnapshot(int rpm, long numpadResult, bool spindleStopped, int pitchStatusDirection);

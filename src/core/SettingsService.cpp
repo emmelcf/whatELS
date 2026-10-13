@@ -12,23 +12,19 @@
 static std::optional<float> _deadbandAngle;
 static std::optional<float> _deadbandTurns;
 
-static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& val) {
-  ::isDiameterMode = val;
+static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& /*val*/) {
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& val) {
-  ::isAbsoluteMode = val;
+static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& /*val*/) {
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& val) {
-  zDisplayModeDRO = val;
+static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& /*val*/) {
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& val) {
-  xDisplayModeDRO = val;
+static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& /*val*/) {
   machineStatusForcePublish = true;
 });
 
@@ -37,8 +33,7 @@ static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, MEASURE_ME
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](const int& val) {
-  spindleDisplayMode = val;
+static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](const int& /*val*/) {
   machineStatusForcePublish = true;
 });
 
@@ -79,22 +74,12 @@ void SettingsService::init() {
 
   // Load observable operator & display preferences
   s_diameterMode.init();
-  ::isDiameterMode = s_diameterMode.get();
-
   s_absoluteMode.init();
-  ::isAbsoluteMode = s_absoluteMode.get();
-
   s_zDroMode.init();
-  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale && s_zDroMode.get();
-
   s_xDroMode.init();
-  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale && s_xDroMode.get();
-
   s_measure.init();
   measure = s_measure.get();
-
   s_spindleDisplayMode.init();
-  spindleDisplayMode = s_spindleDisplayMode.get();
 
   s_jogStepDu.init();
   moveStep = s_jogStepDu.get();
@@ -142,24 +127,18 @@ const char* SettingsService::getActivePresetSlug() {
 }
 
 void SettingsService::syncLegacyGlobals() {
-  SCREW_Z_DU = activeMachineProfile.zAxis.leadscrewPitchDu();
-  SCREW_X_DU = activeMachineProfile.xAxis.leadscrewPitchDu();
   z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
   x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
 
   if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
-    MOTOR_STEPS_Z = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
-    z.motorSteps = MOTOR_STEPS_Z;
+    z.motorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
   }
   if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
-    MOTOR_STEPS_X = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
-    x.motorSteps = MOTOR_STEPS_X;
+    x.motorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
   }
 
-  ENCODER_PPR = (int)round(activeMachineProfile.spindle.effectivePpr());
-  ENCODER_STEPS_INT = ENCODER_PPR * 2;
-  ENCODER_STEPS_FLOAT = (float)(ENCODER_PPR * 2);
-  RPM_BULK = ENCODER_PPR * 2;
+  ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
+  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 }
 
 static const LatheConfiguration* getActiveBaseline() {
@@ -1100,11 +1079,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.z.motorSteps") == 0 || strcasecmp(key, "motorStepsZ") == 0) {
-    appendSetting("machine.z.motorSteps", String(MOTOR_STEPS_Z));
+    appendSetting("machine.z.motorSteps", String((long)round(z.motorSteps)));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.x.motorSteps") == 0 || strcasecmp(key, "motorStepsX") == 0) {
-    appendSetting("machine.x.motorSteps", String(MOTOR_STEPS_X));
+    appendSetting("machine.x.motorSteps", String((long)round(x.motorSteps)));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.spindle.ppr") == 0 || strcasecmp(key, "encoderPpr") == 0) {
@@ -1164,11 +1143,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.zDroActive") == 0 || strcasecmp(key, "prefs.zDro") == 0 || strcasecmp(key, "zDro") == 0 || strcasecmp(key, "zDroActive") == 0) {
-    appendSetting("prefs.zDroActive", zDisplayModeDRO ? "1" : "0");
+    appendSetting("prefs.zDroActive", isZDroMode() ? "1" : "0");
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.xDroActive") == 0 || strcasecmp(key, "prefs.xDro") == 0 || strcasecmp(key, "xDro") == 0 || strcasecmp(key, "xDroActive") == 0) {
-    appendSetting("prefs.xDroActive", xDisplayModeDRO ? "1" : "0");
+    appendSetting("prefs.xDroActive", isXDroMode() ? "1" : "0");
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.feedStepDu") == 0 || strcasecmp(key, "feedStepDu") == 0) {
@@ -1180,11 +1159,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.backlashZDu") == 0 || strcasecmp(key, "backlashZDu") == 0) {
-    appendSetting("prefs.backlashZDu", String(BACKLASH_DU_Z));
+    appendSetting("prefs.backlashZDu", String(activeMachineProfile.zAxis.backlashDu()));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.backlashXDu") == 0 || strcasecmp(key, "backlashXDu") == 0) {
-    appendSetting("prefs.backlashXDu", String(BACKLASH_DU_X));
+    appendSetting("prefs.backlashXDu", String(activeMachineProfile.xAxis.backlashDu()));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.dbAngle") == 0 || strcasecmp(key, "prefs.deadbandAngle") == 0 || strcasecmp(key, "deadbandAngle") == 0) {
@@ -1225,8 +1204,8 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     appendSetting("machine.dim.spindleBore", String(activeMachineProfile.dimensions.spindleBoreDiameterMm, 1));
     appendSetting("machine.z.pitchDu", String(activeMachineProfile.zAxis.leadscrewPitchDu()));
     appendSetting("machine.x.pitchDu", String(activeMachineProfile.xAxis.leadscrewPitchDu()));
-    appendSetting("machine.z.motorSteps", String(MOTOR_STEPS_Z));
-    appendSetting("machine.x.motorSteps", String(MOTOR_STEPS_X));
+    appendSetting("machine.z.motorSteps", String((long)round(z.motorSteps)));
+    appendSetting("machine.x.motorSteps", String((long)round(x.motorSteps)));
     appendSetting("machine.spindle.ppr", String(activeMachineProfile.spindle.encoder.ppr));
     appendSetting("machine.spindle.ratio", String(activeMachineProfile.spindle.pulleyRatio, 3));
     appendSetting("machine.spindle.effectivePpr", String(activeMachineProfile.spindle.effectivePpr(), 1));
@@ -1250,10 +1229,10 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     appendSetting("prefs.feedStepDu", String(feedStepDu));
     appendSetting("prefs.diaRad", isDiameterMode() ? "1" : "0");
     appendSetting("prefs.absInc", isAbsoluteMode() ? "1" : "0");
-    appendSetting("prefs.zDroActive", zDisplayModeDRO ? "1" : "0");
-    appendSetting("prefs.xDroActive", xDisplayModeDRO ? "1" : "0");
-    appendSetting("prefs.backlashZDu", String(BACKLASH_DU_Z));
-    appendSetting("prefs.backlashXDu", String(BACKLASH_DU_X));
+    appendSetting("prefs.zDroActive", isZDroMode() ? "1" : "0");
+    appendSetting("prefs.xDroActive", isXDroMode() ? "1" : "0");
+    appendSetting("prefs.backlashZDu", String(activeMachineProfile.zAxis.backlashDu()));
+    appendSetting("prefs.backlashXDu", String(activeMachineProfile.xAxis.backlashDu()));
     appendSetting("prefs.dbAngle", String(getDeadbandAngle(), 3));
     appendSetting("prefs.dbAngle.isAuto", isDeadbandAngleAuto() ? "1" : "0");
     appendSetting("prefs.dbTurns", String(getDeadbandTurns(), 4));
@@ -1419,14 +1398,14 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   if (strcasecmp(keyBuf, "prefs.zDroActive") == 0 || strcasecmp(keyBuf, "prefs.zDro") == 0 || strcasecmp(keyBuf, "zDro") == 0 || strcasecmp(keyBuf, "zDroActive") == 0) {
     int val = atoi(valStr);
     setZDroMode(val != 0);
-    reportOk(keyBuf, zDisplayModeDRO ? "1" : "0");
+    reportOk(keyBuf, isZDroMode() ? "1" : "0");
     return true;
   }
 
   if (strcasecmp(keyBuf, "prefs.xDroActive") == 0 || strcasecmp(keyBuf, "prefs.xDro") == 0 || strcasecmp(keyBuf, "xDro") == 0 || strcasecmp(keyBuf, "xDroActive") == 0) {
     int val = atoi(valStr);
     setXDroMode(val != 0);
-    reportOk(keyBuf, xDisplayModeDRO ? "1" : "0");
+    reportOk(keyBuf, isXDroMode() ? "1" : "0");
     return true;
   }
 

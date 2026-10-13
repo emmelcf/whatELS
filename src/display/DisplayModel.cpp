@@ -4,19 +4,22 @@
 #include "Input.h"
 #include "Motion.h"
 #include "WebServerModule.h"
+#include "SettingsService.h"
+
+bool spindleValColorGreen = false;
 
 // --- Position & Stop Distance Resolution in Millimeters ---
 float getAxisPositionMm(Axis* a) {
   float mm = 0.0f;
-  if (a == &x && xDisplayModeDRO) {
+  if (a == &x && SettingsService::isXDroMode()) {
     mm = xScale.getPosition();
-  } else if (a == &z && zDisplayModeDRO) {
+  } else if (a == &z && SettingsService::isZDroMode()) {
     mm = zScale.getPosition();
   } else {
     mm = getAxisPosDu(a) / 10000.0f;
   }
 
-  if (a == &x && isDiameterMode) {
+  if (a == &x && SettingsService::isDiameterMode()) {
     mm *= 2.0f;
   }
   return mm;
@@ -216,7 +219,7 @@ String getDisplayAngleText() {
 }
 
 String getDisplaySpindleValue(int rpm) {
-  switch (spindleDisplayMode) {
+  switch (SettingsService::getSpindleDisplayMode()) {
     case 0: return String(rpm);
     case 1: {
       float turns = (float) abs(spindlePos) / ENCODER_STEPS_INT;
@@ -303,7 +306,7 @@ String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int 
     else if (isOn && numpadResult == 0) result = "Cone ratio " + printNoTrailing0(coneRatio);
   } else if (mode == MODE_JOYSTICK && !inNumpad) {
     String directionText = joystickLatheDirectionText(joystickLatheDirectionZ, joystickLatheDirectionX);
-    if (!JOYSTICK_ENABLED) result = "Joystick disabled";
+    if (!joystickConfig.enabled) result = "Joystick disabled";
     else if (!joystickAvailable) result = joystickStartupWarning.length() > 0 ? joystickStartupWarning : "Joystick not connected";
     else if (joystickLatheRapid && directionText != "") {
       result = "Rapid ";
@@ -331,7 +334,7 @@ String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int 
   if (result == "" && x.active && !x.disabled) {
     float xPosMm = abs(getAxisPositionMm(&x));
     // If not in diameter mode, double it for diameter display
-    if (!isDiameterMode) xPosMm *= 2.0f;
+    if (!SettingsService::isDiameterMode()) xPosMm *= 2.0f;
     result = "Diameter " + formatPosition(xPosMm, POSITION_DECIMAL_PLACES);
   }
 
@@ -368,7 +371,7 @@ DisplaySnapshot getDisplaySnapshot(int rpm, long numpadResult, bool spindleStopp
   s.rpmText = getDisplayRpmText(rpm);
   s.turnsText = getDisplayTurnsText();
   s.angleText = getDisplayAngleText();
-  switch (spindleDisplayMode) {
+  switch (SettingsService::getSpindleDisplayMode()) {
     case 0: s.spindleLabel = "RPM"; break;
     case 1: s.spindleLabel = "Turns"; break;
     case 2: s.spindleLabel = "Angle"; break;
@@ -380,10 +383,10 @@ DisplaySnapshot getDisplaySnapshot(int rpm, long numpadResult, bool spindleStopp
   s.message = buildDisplayMessage(rpm, numpadResult, spindleStopped, pitchStatusDirection);
 
   // UI Indicators
-  s.xIsDroActive = xDisplayModeDRO;
-  s.zIsDroActive = zDisplayModeDRO;
-  s.isDiameterMode = isDiameterMode;
-  s.isAbsoluteMode = isAbsoluteMode;
+  s.xIsDroActive = SettingsService::isXDroMode();
+  s.zIsDroActive = SettingsService::isZDroMode();
+  s.isDiameterMode = SettingsService::isDiameterMode();
+  s.isAbsoluteMode = SettingsService::isAbsoluteMode();
   s.spindleValColorGreen = spindleValColorGreen;
 
   return s;

@@ -31,10 +31,29 @@ unsigned long spindleEncTimeDiffBulk = 0;
 unsigned long spindleEncTimeAtIndex0 = 0;
 int spindleEncTimeIndex = 0;
 
+// Joystick Configuration
+JoystickConfig joystickConfig = {
+  DEFAULT_JOYSTICK_ENABLED,
+  DEFAULT_JOYSTICK_Z_ENABLED,
+  DEFAULT_JOYSTICK_X_ENABLED,
+  DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF,
+  DEFAULT_JOYSTICK_CENTER_SAMPLES,
+  DEFAULT_JOYSTICK_OVERSAMPLES,
+  DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS,
+  DEFAULT_JOYSTICK_ADC_MAX,
+  DEFAULT_JOYSTICK_DEADBAND,
+  DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT,
+  DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND,
+  DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND,
+  DEFAULT_INVERT_JOYSTICK_Z,
+  DEFAULT_INVERT_JOYSTICK_X,
+  DEFAULT_INVERT_JOYSTICK_BUTTON
+};
+
 // Joystick State
 JoystickAxisState joystickAxes[] = {
-  {&z, JOY_Z, &JOYSTICK_Z_ENABLED, &INVERT_JOYSTICK_Z, 0, 0, 0, 2048, 2048, 0, 0, 0},
-  {&x, JOY_X, &JOYSTICK_X_ENABLED, &INVERT_JOYSTICK_X, 0, 0, 0, 2048, 2048, 0, 0, 0},
+  {&z, JOY_Z, &joystickConfig.zEnabled, &joystickConfig.invertZ, 0, 0, 0, 2048, 2048, 0, 0, 0},
+  {&x, JOY_X, &joystickConfig.xEnabled, &joystickConfig.invertX, 0, 0, 0, 2048, 2048, 0, 0, 0},
 };
 const int JOYSTICK_AXIS_COUNT = sizeof(joystickAxes) / sizeof(joystickAxes[0]);
 
@@ -180,7 +199,7 @@ bool processNumpadResult(int keyCode) {
       float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
       float desiredValue = numpadResult / divisor;
 
-      if (xDisplayModeDRO) {
+      if (SettingsService::isXDroMode()) {
         desiredValue /= 2.0f;
         if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
         xScale.setPosition(desiredValue);
@@ -203,7 +222,7 @@ bool processNumpadResult(int keyCode) {
       float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
       float desiredValue = numpadResult / divisor;
 
-      if (zDisplayModeDRO) {
+      if (SettingsService::isZDroMode()) {
         if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
         zScale.setPosition(desiredValue);
       } else {
@@ -463,7 +482,7 @@ void processSpindleCounter() {
   }
 
   unsigned long microsNow = micros();
-  if (spindleEncTimeIndex >= RPM_BULK) {
+  if (spindleEncTimeIndex >= ENCODER_STEPS_INT) {
     spindleEncTimeDiffBulk = microsNow - spindleEncTimeAtIndex0;
     spindleEncTimeAtIndex0 = microsNow;
     spindleEncTimeIndex = 0;
@@ -531,7 +550,7 @@ void cancelJoystickLatheSync() {
 }
 
 bool joystickUsable() {
-  return JOYSTICK_ENABLED && joystickAvailable;
+  return joystickConfig.enabled && joystickAvailable;
 }
 
 void prepareJoystickLatheManualMove() {
@@ -586,10 +605,10 @@ void addJoystickPulses(Axis* a, int delta) {
   if (pulseQueue == nullptr) return;
   portENTER_CRITICAL(&joystickPulseMux);
   int queued = *pulseQueue + delta;
-  if (queued > JOYSTICK_PULSE_QUEUE_LIMIT) {
-    queued = JOYSTICK_PULSE_QUEUE_LIMIT;
-  } else if (queued < -JOYSTICK_PULSE_QUEUE_LIMIT) {
-    queued = -JOYSTICK_PULSE_QUEUE_LIMIT;
+  if (queued > joystickConfig.pulseQueueLimit) {
+    queued = joystickConfig.pulseQueueLimit;
+  } else if (queued < -joystickConfig.pulseQueueLimit) {
+    queued = -joystickConfig.pulseQueueLimit;
   }
   *pulseQueue = queued;
   portEXIT_CRITICAL(&joystickPulseMux);
@@ -630,19 +649,19 @@ int getAndResetJoystickPulses(Axis* a) {
 
 static int readJoystickPin(int pin) {
   long total = 0;
-  for (int i = 0; i < JOYSTICK_OVERSAMPLES; i++) {
+  for (int i = 0; i < joystickConfig.oversamples; i++) {
     total += analogRead(pin);
   }
-  return total / JOYSTICK_OVERSAMPLES;
+  return total / joystickConfig.oversamples;
 }
 
 static int calibrateJoystickCenter(int pin) {
   long total = 0;
-  for (int i = 0; i < JOYSTICK_CENTER_SAMPLES; i++) {
+  for (int i = 0; i < joystickConfig.centerSamples; i++) {
     total += readJoystickPin(pin);
     DELAY(2);
   }
-  return total / JOYSTICK_CENTER_SAMPLES;
+  return total / joystickConfig.centerSamples;
 }
 
 static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
@@ -654,8 +673,8 @@ static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
     filteredDelta = -filteredDelta;
   }
 
-  bool rawNeutral = abs(rawDelta) <= JOYSTICK_DEADBAND;
-  bool filteredNeutral = abs(filteredDelta) <= JOYSTICK_DEADBAND;
+  bool rawNeutral = abs(rawDelta) <= joystickConfig.deadband;
+  bool filteredNeutral = abs(filteredDelta) <= joystickConfig.deadband;
   bool rawReversed = !rawNeutral && !filteredNeutral && ((rawDelta > 0) != (filteredDelta > 0));
   if (rawNeutral) {
     joystickAxis->filtered = joystickAxis->center;
@@ -668,18 +687,18 @@ static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
   int delta = joystickAxis->filtered - joystickAxis->center;
   if (*joystickAxis->invert) delta = -delta;
   int absDelta = abs(delta);
-  if (absDelta <= JOYSTICK_DEADBAND) return 0;
+  if (absDelta <= joystickConfig.deadband) return 0;
 
-  int range = delta > 0 ? JOYSTICK_ADC_MAX - joystickAxis->center : joystickAxis->center;
-  range = max(1, range - JOYSTICK_DEADBAND);
-  float normalized = (absDelta - JOYSTICK_DEADBAND) / float(range);
+  int range = delta > 0 ? joystickConfig.adcMax - joystickAxis->center : joystickAxis->center;
+  range = max(1, range - joystickConfig.deadband);
+  float normalized = (absDelta - joystickConfig.deadband) / float(range);
   if (normalized > 1.0) normalized = 1.0;
   float curved = normalized * normalized;
   return delta > 0 ? curved : -curved;
 }
 
 static int getJoystickPulseDelta(JoystickAxisState* joystickAxis, unsigned long elapsedUs) {
-  float revolutionsPerSecond = joystickRapidPressed ? JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND : JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
+  float revolutionsPerSecond = joystickRapidPressed ? joystickConfig.rapidRps : joystickConfig.normalRps;
   joystickAxis->pulseFraction += joystickAxis->deflection * joystickAxis->axis->pulsePerRevolution * revolutionsPerSecond * elapsedUs / 1000000.0;
   int delta = int(joystickAxis->pulseFraction);
   joystickAxis->pulseFraction -= delta;
@@ -688,7 +707,7 @@ static int getJoystickPulseDelta(JoystickAxisState* joystickAxis, unsigned long 
 
 static long getJoystickSpeedFromDeflection(JoystickAxisState* joystickAxis) {
   if (joystickAxis->deflection == 0) return 0;
-  float revolutionsPerSecond = joystickRapidPressed ? JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND : JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
+  float revolutionsPerSecond = joystickRapidPressed ? joystickConfig.rapidRps : joystickConfig.normalRps;
   long speed = round(abs(joystickAxis->deflection) * revolutionsPerSecond * joystickAxis->axis->motorSteps);
   if (speed < 1) speed = 1;
   return min((long)joystickAxis->axis->speedManualMove, speed);
@@ -728,8 +747,8 @@ static void resetJoystickAxisMotion(JoystickAxisState* joystickAxis) {
 }
 
 static bool joystickStartupCenterLooksNeutral(int center) {
-  int midpoint = JOYSTICK_ADC_MAX / 2;
-  int tolerance = max(JOYSTICK_DEADBAND, JOYSTICK_STARTUP_CENTER_TOLERANCE_MIN);
+  int midpoint = joystickConfig.adcMax / 2;
+  int tolerance = max(joystickConfig.deadband, JOYSTICK_STARTUP_CENTER_TOLERANCE_MIN);
   return abs(center - midpoint) <= tolerance;
 }
 
@@ -747,7 +766,7 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
       joystickButtonToggleBlocked = mode != MODE_JOYSTICK || !moveNeutral;
     } else {
       bool shortClick = now - joystickButtonPressMillis <= JOYSTICK_BUTTON_TOGGLE_MAX_MS;
-      if (JOYSTICK_BUTTON_TOGGLES_ON_OFF && mode == MODE_JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
+      if (joystickConfig.buttonTogglesOnOff && mode == MODE_JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
         buttonOnOffPress(!isOn);
       }
       joystickButtonToggleBlocked = false;
@@ -764,7 +783,7 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
 void initJoystick() {
   joystickAvailable = false;
   joystickStartupWarning = "";
-  if (!JOYSTICK_ENABLED) return;
+  if (!joystickConfig.enabled) return;
   if (!anyJoystickAxisEnabled()) return;
   analogReadResolution(12);
   for (int i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
@@ -777,12 +796,12 @@ void initJoystick() {
     if (!joystickAxisEnabled(&joystickAxes[i])) continue;
     joystickAxes[i].center = calibrateJoystickCenter(joystickAxes[i].pin);
     if (!joystickStartupCenterLooksNeutral(joystickAxes[i].center)) {
-      int offset = joystickAxes[i].center - JOYSTICK_ADC_MAX / 2;
+      int offset = joystickAxes[i].center - joystickConfig.adcMax / 2;
       char axisName = i == JOYSTICK_AXIS_Z ? NAME_Z : NAME_X;
       joystickStartupWarning = "Joy ";
       joystickStartupWarning += axisName;
       joystickStartupWarning += (offset >= 0 ? " +" : " -");
-      joystickStartupWarning += String(max(0, abs(offset) - JOYSTICK_DEADBAND));
+      joystickStartupWarning += String(max(0, abs(offset) - joystickConfig.deadband));
       joystickStartupWarning += " past deadband";
       return;
     }
@@ -790,7 +809,7 @@ void initJoystick() {
 
   for (int i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
     if (!joystickAxisEnabled(&joystickAxes[i])) {
-      joystickAxes[i].center = JOYSTICK_ADC_MAX / 2;
+      joystickAxes[i].center = joystickConfig.adcMax / 2;
       joystickAxes[i].filtered = joystickAxes[i].center;
       joystickAxes[i].deflection = 0;
       joystickAxes[i].direction = 0;
@@ -1063,7 +1082,7 @@ static void buttonRightStopPress(Axis* a) {
 }
 
 static void buttonDisplayPress() {
-  int next = spindleDisplayMode + 1;
+  int next = SettingsService::getSpindleDisplayMode() + 1;
   if (next > 2) next = 0;
   SettingsService::setSpindleDisplayMode(next);
 }
@@ -1349,7 +1368,7 @@ void taskJoystick(void *param) {
   JoystickAxisState* joystickZ = &joystickAxes[JOYSTICK_AXIS_Z];
   JoystickAxisState* joystickX = &joystickAxes[JOYSTICK_AXIS_X];
   while (emergencyStop == ESTOP_NONE && joystickUsable()) {
-    bool rawButtonPressed = digitalRead(JOY_BUTTON) == (INVERT_JOYSTICK_BUTTON ? HIGH : LOW);
+    bool rawButtonPressed = digitalRead(JOY_BUTTON) == (joystickConfig.invertButton ? HIGH : LOW);
     unsigned long now = micros();
     unsigned long elapsedUs = now - joystickSampleTimeUs;
     joystickSampleTimeUs = now;
@@ -1376,7 +1395,7 @@ void taskJoystick(void *param) {
       updateJoystickManualAxis(joystickX, true, true, elapsedUs);
     }
 
-    DELAY(JOYSTICK_SAMPLE_INTERVAL_MS);
+    DELAY(joystickConfig.sampleIntervalMs);
   }
   vTaskDelete(NULL);
 }

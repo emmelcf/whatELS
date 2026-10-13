@@ -1,5 +1,6 @@
 #include "Config.h"
 #include "Axis.h"
+#include "Input.h"
 #include <LittleFS.h>
 #include "Debug.h"
 #include "PersistentSetting.h"
@@ -7,31 +8,22 @@
 LatheConfiguration activeMachineProfile = {};
 
 // Variable Definitions
-int ENCODER_PPR = DEFAULT_ENCODER_PPR;
 int ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
 int AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
 
-long SCREW_Z_DU = DEFAULT_SCREW_Z_DU;
-long MOTOR_STEPS_Z = DEFAULT_MOTOR_STEPS_Z;
 long SPEED_START_Z = DEFAULT_SPEED_START_Z;
 long ACCELERATION_Z = DEFAULT_ACCELERATION_Z;
 long SPEED_MANUAL_MOVE_Z = DEFAULT_SPEED_MANUAL_MOVE_Z;
 bool INVERT_Z = DEFAULT_INVERT_Z;
 bool INVERT_Z_ENABLE = DEFAULT_INVERT_Z_ENABLE;
 bool NEEDS_REST_Z = DEFAULT_NEEDS_REST_Z;
-long MAX_TRAVEL_MM_Z = DEFAULT_MAX_TRAVEL_MM_Z;
-long BACKLASH_DU_Z = DEFAULT_BACKLASH_DU_Z;
 
-long SCREW_X_DU = DEFAULT_SCREW_X_DU;
-long MOTOR_STEPS_X = DEFAULT_MOTOR_STEPS_X;
 long SPEED_START_X = DEFAULT_SPEED_START_X;
 long ACCELERATION_X = DEFAULT_ACCELERATION_X;
 long SPEED_MANUAL_MOVE_X = DEFAULT_SPEED_MANUAL_MOVE_X;
 bool INVERT_X = DEFAULT_INVERT_X;
 bool INVERT_X_ENABLE = DEFAULT_INVERT_X_ENABLE;
 bool NEEDS_REST_X = DEFAULT_NEEDS_REST_X;
-long MAX_TRAVEL_MM_X = DEFAULT_MAX_TRAVEL_MM_X;
-long BACKLASH_DU_X = DEFAULT_BACKLASH_DU_X;
 
 long STEP_TIME_MS = DEFAULT_STEP_TIME_MS;
 long DELAY_BETWEEN_STEPS_MS = DEFAULT_DELAY_BETWEEN_STEPS_MS;
@@ -46,39 +38,13 @@ String WIFI_HOSTNAME = DEFAULT_WIFI_HOSTNAME;
 float PULSE_PER_REVOLUTION_Z = DEFAULT_PULSE_PER_REVOLUTION_Z;
 float PULSE_PER_REVOLUTION_X = DEFAULT_PULSE_PER_REVOLUTION_X;
 
-bool JOYSTICK_ENABLED = DEFAULT_JOYSTICK_ENABLED;
-bool JOYSTICK_Z_ENABLED = DEFAULT_JOYSTICK_Z_ENABLED;
-bool JOYSTICK_X_ENABLED = DEFAULT_JOYSTICK_X_ENABLED;
-bool JOYSTICK_BUTTON_TOGGLES_ON_OFF = DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF;
-int JOYSTICK_CENTER_SAMPLES = DEFAULT_JOYSTICK_CENTER_SAMPLES;
-int JOYSTICK_OVERSAMPLES = DEFAULT_JOYSTICK_OVERSAMPLES;
-int JOYSTICK_SAMPLE_INTERVAL_MS = DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS;
-int JOYSTICK_ADC_MAX = DEFAULT_JOYSTICK_ADC_MAX;
-int JOYSTICK_DEADBAND = DEFAULT_JOYSTICK_DEADBAND;
-int JOYSTICK_PULSE_QUEUE_LIMIT = DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT;
-float JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND = DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
-float JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND = DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
-bool INVERT_JOYSTICK_Z = DEFAULT_INVERT_JOYSTICK_Z;
-bool INVERT_JOYSTICK_X = DEFAULT_INVERT_JOYSTICK_X;
-bool INVERT_JOYSTICK_BUTTON = DEFAULT_INVERT_JOYSTICK_BUTTON;
-
 int ENCODER_STEPS_INT = DEFAULT_ENCODER_PPR * 2;
 float ENCODER_STEPS_FLOAT = DEFAULT_ENCODER_PPR * 2;
-long RPM_BULK = DEFAULT_ENCODER_PPR * 2;
 long SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
 long SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
 
 bool SHOW_KEY_PRESSES = false;
 
-// DRO variables
-bool zDisplayModeDRO = false;
-bool xDisplayModeDRO = false;
-bool isDiameterMode = true;
-bool isAbsoluteMode = true;
-int spindleDisplayMode = 0; // 0=RPM, 1=Turns, 2=Angle
-bool spindleValColorGreen = false;
-float xScaleIncrementalOffset = 0.0f;
-float zScaleIncrementalOffset = 0.0f;
 NumpadMode numpadEntryMode = PITCH;
 
 KeyboardBinding keyboardBindings[] = {
@@ -155,29 +121,20 @@ float clampFloatValue(float value, float minValue, float maxValue) {
 }
 
 void setMachineConfigDefaults() {
-  ENCODER_PPR = DEFAULT_ENCODER_PPR;
   ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
   AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
-  SCREW_Z_DU = DEFAULT_SCREW_Z_DU;
-  MOTOR_STEPS_Z = DEFAULT_MOTOR_STEPS_Z;
   SPEED_START_Z = DEFAULT_SPEED_START_Z;
   ACCELERATION_Z = DEFAULT_ACCELERATION_Z;
   SPEED_MANUAL_MOVE_Z = DEFAULT_SPEED_MANUAL_MOVE_Z;
   INVERT_Z = DEFAULT_INVERT_Z;
   INVERT_Z_ENABLE = DEFAULT_INVERT_Z_ENABLE;
   NEEDS_REST_Z = DEFAULT_NEEDS_REST_Z;
-  MAX_TRAVEL_MM_Z = DEFAULT_MAX_TRAVEL_MM_Z;
-  BACKLASH_DU_Z = DEFAULT_BACKLASH_DU_Z;
-  SCREW_X_DU = DEFAULT_SCREW_X_DU;
-  MOTOR_STEPS_X = DEFAULT_MOTOR_STEPS_X;
   SPEED_START_X = DEFAULT_SPEED_START_X;
   ACCELERATION_X = DEFAULT_ACCELERATION_X;
   SPEED_MANUAL_MOVE_X = DEFAULT_SPEED_MANUAL_MOVE_X;
   INVERT_X = DEFAULT_INVERT_X;
   INVERT_X_ENABLE = DEFAULT_INVERT_X_ENABLE;
   NEEDS_REST_X = DEFAULT_NEEDS_REST_X;
-  MAX_TRAVEL_MM_X = DEFAULT_MAX_TRAVEL_MM_X;
-  BACKLASH_DU_X = DEFAULT_BACKLASH_DU_X;
   STEP_TIME_MS = DEFAULT_STEP_TIME_MS;
   DELAY_BETWEEN_STEPS_MS = DEFAULT_DELAY_BETWEEN_STEPS_MS;
   ENABLE_CONTINUOUS_MOVE = DEFAULT_ENABLE_CONTINUOUS_MOVE;
@@ -186,60 +143,52 @@ void setMachineConfigDefaults() {
   SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
   PULSE_PER_REVOLUTION_Z = DEFAULT_PULSE_PER_REVOLUTION_Z;
   PULSE_PER_REVOLUTION_X = DEFAULT_PULSE_PER_REVOLUTION_X;
-  JOYSTICK_ENABLED = DEFAULT_JOYSTICK_ENABLED;
-  JOYSTICK_Z_ENABLED = DEFAULT_JOYSTICK_Z_ENABLED;
-  JOYSTICK_X_ENABLED = DEFAULT_JOYSTICK_X_ENABLED;
-  JOYSTICK_BUTTON_TOGGLES_ON_OFF = DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF;
-  JOYSTICK_CENTER_SAMPLES = DEFAULT_JOYSTICK_CENTER_SAMPLES;
-  JOYSTICK_OVERSAMPLES = DEFAULT_JOYSTICK_OVERSAMPLES;
-  JOYSTICK_SAMPLE_INTERVAL_MS = DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS;
-  JOYSTICK_ADC_MAX = DEFAULT_JOYSTICK_ADC_MAX;
-  JOYSTICK_DEADBAND = DEFAULT_JOYSTICK_DEADBAND;
-  JOYSTICK_PULSE_QUEUE_LIMIT = DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT;
-  JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND = DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
-  JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND = DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
-  INVERT_JOYSTICK_Z = DEFAULT_INVERT_JOYSTICK_Z;
-  INVERT_JOYSTICK_X = DEFAULT_INVERT_JOYSTICK_X;
-  INVERT_JOYSTICK_BUTTON = DEFAULT_INVERT_JOYSTICK_BUTTON;
+  joystickConfig.enabled = DEFAULT_JOYSTICK_ENABLED;
+  joystickConfig.zEnabled = DEFAULT_JOYSTICK_Z_ENABLED;
+  joystickConfig.xEnabled = DEFAULT_JOYSTICK_X_ENABLED;
+  joystickConfig.buttonTogglesOnOff = DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF;
+  joystickConfig.centerSamples = DEFAULT_JOYSTICK_CENTER_SAMPLES;
+  joystickConfig.oversamples = DEFAULT_JOYSTICK_OVERSAMPLES;
+  joystickConfig.sampleIntervalMs = DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS;
+  joystickConfig.adcMax = DEFAULT_JOYSTICK_ADC_MAX;
+  joystickConfig.deadband = DEFAULT_JOYSTICK_DEADBAND;
+  joystickConfig.pulseQueueLimit = DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT;
+  joystickConfig.normalRps = DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
+  joystickConfig.rapidRps = DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
+  joystickConfig.invertZ = DEFAULT_INVERT_JOYSTICK_Z;
+  joystickConfig.invertX = DEFAULT_INVERT_JOYSTICK_X;
+  joystickConfig.invertButton = DEFAULT_INVERT_JOYSTICK_BUTTON;
 }
 
 void applyDerivedMachineConfig() {
-  ENCODER_STEPS_INT = ENCODER_PPR * 2;
-  ENCODER_STEPS_FLOAT = ENCODER_STEPS_INT;
-  RPM_BULK = ENCODER_STEPS_INT;
+  int ppr = (int)round(activeMachineProfile.spindle.effectivePpr());
+  if (ppr <= 0) ppr = DEFAULT_ENCODER_PPR;
+  ENCODER_STEPS_INT = ppr * 2;
+  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 }
 
 void normalizeMachineConfig() {
-  ENCODER_PPR = clampIntValue(ENCODER_PPR, 1, 15000);
   ENCODER_BACKLASH = clampIntValue(ENCODER_BACKLASH, 0, 30000);
   AXIS_ENCODER_BACKLASH = clampIntValue(AXIS_ENCODER_BACKLASH, 0, 30000);
-  SCREW_Z_DU = clampLongValue(SCREW_Z_DU, 1, 10000000);
-  MOTOR_STEPS_Z = clampLongValue(MOTOR_STEPS_Z, 1, 1000000);
   SPEED_START_Z = clampLongValue(SPEED_START_Z, 1, 1000000);
   ACCELERATION_Z = clampLongValue(ACCELERATION_Z, 1, 100000000);
   SPEED_MANUAL_MOVE_Z = clampLongValue(SPEED_MANUAL_MOVE_Z, 1, 1000000);
-  MAX_TRAVEL_MM_Z = clampLongValue(MAX_TRAVEL_MM_Z, 1, 10000);
-  BACKLASH_DU_Z = clampLongValue(BACKLASH_DU_Z, 0, 10000000);
-  SCREW_X_DU = clampLongValue(SCREW_X_DU, 1, 10000000);
-  MOTOR_STEPS_X = clampLongValue(MOTOR_STEPS_X, 1, 1000000);
   SPEED_START_X = clampLongValue(SPEED_START_X, 1, 1000000);
   ACCELERATION_X = clampLongValue(ACCELERATION_X, 1, 100000000);
   SPEED_MANUAL_MOVE_X = clampLongValue(SPEED_MANUAL_MOVE_X, 1, 1000000);
-  MAX_TRAVEL_MM_X = clampLongValue(MAX_TRAVEL_MM_X, 1, 10000);
-  BACKLASH_DU_X = clampLongValue(BACKLASH_DU_X, 0, 10000000);
   STEP_TIME_MS = clampLongValue(STEP_TIME_MS, 1, 10000);
   DELAY_BETWEEN_STEPS_MS = clampLongValue(DELAY_BETWEEN_STEPS_MS, 0, 10000);
   SAFE_DISTANCE_DU = clampLongValue(SAFE_DISTANCE_DU, 0, 10000000);
   PULSE_PER_REVOLUTION_Z = clampFloatValue(PULSE_PER_REVOLUTION_Z, 1.0, 100000.0);
   PULSE_PER_REVOLUTION_X = clampFloatValue(PULSE_PER_REVOLUTION_X, 1.0, 100000.0);
-  JOYSTICK_CENTER_SAMPLES = clampIntValue(JOYSTICK_CENTER_SAMPLES, 1, 1024);
-  JOYSTICK_OVERSAMPLES = clampIntValue(JOYSTICK_OVERSAMPLES, 1, 1024);
-  JOYSTICK_SAMPLE_INTERVAL_MS = clampIntValue(JOYSTICK_SAMPLE_INTERVAL_MS, 1, 1000);
-  JOYSTICK_ADC_MAX = clampIntValue(JOYSTICK_ADC_MAX, 1, 65535);
-  JOYSTICK_DEADBAND = clampIntValue(JOYSTICK_DEADBAND, 0, JOYSTICK_ADC_MAX - 1);
-  JOYSTICK_PULSE_QUEUE_LIMIT = clampIntValue(JOYSTICK_PULSE_QUEUE_LIMIT, 1, 1000000);
-  JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND = clampFloatValue(JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND, 0.01, 1000.0);
-  JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND = clampFloatValue(JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND, 0.01, 1000.0);
+  joystickConfig.centerSamples = clampIntValue(joystickConfig.centerSamples, 1, 1024);
+  joystickConfig.oversamples = clampIntValue(joystickConfig.oversamples, 1, 1024);
+  joystickConfig.sampleIntervalMs = clampIntValue(joystickConfig.sampleIntervalMs, 1, 1000);
+  joystickConfig.adcMax = clampIntValue(joystickConfig.adcMax, 1, 65535);
+  joystickConfig.deadband = clampIntValue(joystickConfig.deadband, 0, joystickConfig.adcMax - 1);
+  joystickConfig.pulseQueueLimit = clampIntValue(joystickConfig.pulseQueueLimit, 1, 1000000);
+  joystickConfig.normalRps = clampFloatValue(joystickConfig.normalRps, 0.01, 1000.0);
+  joystickConfig.rapidRps = clampFloatValue(joystickConfig.rapidRps, 0.01, 1000.0);
   SLOT_LEFT_REDUCTION_DU = clampLongValue(SLOT_LEFT_REDUCTION_DU, 0, 10000000);
   if (SPEED_START_Z > SPEED_MANUAL_MOVE_Z) SPEED_START_Z = SPEED_MANUAL_MOVE_Z;
   if (SPEED_START_X > SPEED_MANUAL_MOVE_X) SPEED_START_X = SPEED_MANUAL_MOVE_X;
@@ -260,29 +209,20 @@ void loadMachineConfig() {
     cfg.putInt(CFG_VERSION, CONFIG_VERSION);
   }
   DEBUG_PRINTLN("loading fields...");
-  ENCODER_PPR = cfg.getInt(CFG_ENCODER_PPR, ENCODER_PPR);
   ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
   AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
-  SCREW_Z_DU = cfg.getLong(CFG_SCREW_Z_DU, SCREW_Z_DU);
-  MOTOR_STEPS_Z = cfg.getLong(CFG_MOTOR_STEPS_Z, MOTOR_STEPS_Z);
   SPEED_START_Z = cfg.getLong(CFG_SPEED_START_Z, SPEED_START_Z);
   ACCELERATION_Z = cfg.getLong(CFG_ACCELERATION_Z, ACCELERATION_Z);
   SPEED_MANUAL_MOVE_Z = cfg.getLong(CFG_SPEED_MANUAL_MOVE_Z, SPEED_MANUAL_MOVE_Z);
   INVERT_Z = cfg.getBool(CFG_INVERT_Z, INVERT_Z);
   INVERT_Z_ENABLE = cfg.getBool(CFG_INVERT_Z_ENABLE, INVERT_Z_ENABLE);
   NEEDS_REST_Z = cfg.getBool(CFG_NEEDS_REST_Z, NEEDS_REST_Z);
-  MAX_TRAVEL_MM_Z = cfg.getLong(CFG_MAX_TRAVEL_MM_Z, MAX_TRAVEL_MM_Z);
-  BACKLASH_DU_Z = cfg.getLong(CFG_BACKLASH_DU_Z, BACKLASH_DU_Z);
-  SCREW_X_DU = cfg.getLong(CFG_SCREW_X_DU, SCREW_X_DU);
-  MOTOR_STEPS_X = cfg.getLong(CFG_MOTOR_STEPS_X, MOTOR_STEPS_X);
   SPEED_START_X = cfg.getLong(CFG_SPEED_START_X, SPEED_START_X);
   ACCELERATION_X = cfg.getLong(CFG_ACCELERATION_X, ACCELERATION_X);
   SPEED_MANUAL_MOVE_X = cfg.getLong(CFG_SPEED_MANUAL_MOVE_X, SPEED_MANUAL_MOVE_X);
   INVERT_X = cfg.getBool(CFG_INVERT_X, INVERT_X);
   INVERT_X_ENABLE = cfg.getBool(CFG_INVERT_X_ENABLE, INVERT_X_ENABLE);
   NEEDS_REST_X = cfg.getBool(CFG_NEEDS_REST_X, NEEDS_REST_X);
-  MAX_TRAVEL_MM_X = cfg.getLong(CFG_MAX_TRAVEL_MM_X, MAX_TRAVEL_MM_X);
-  BACKLASH_DU_X = cfg.getLong(CFG_BACKLASH_DU_X, BACKLASH_DU_X);
   STEP_TIME_MS = cfg.getLong(CFG_STEP_TIME_MS, STEP_TIME_MS);
   DELAY_BETWEEN_STEPS_MS = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, DELAY_BETWEEN_STEPS_MS);
   ENABLE_CONTINUOUS_MOVE = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, ENABLE_CONTINUOUS_MOVE);
@@ -291,21 +231,21 @@ void loadMachineConfig() {
   float legacyPulsePerRevolution = cfg.getFloat(CFG_PULSE_PER_REVOLUTION, -1.0);
   PULSE_PER_REVOLUTION_Z = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_Z, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : PULSE_PER_REVOLUTION_Z);
   PULSE_PER_REVOLUTION_X = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_X, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : PULSE_PER_REVOLUTION_X);
-  JOYSTICK_ENABLED = cfg.getBool(CFG_JOYSTICK_ENABLED, JOYSTICK_ENABLED);
-  JOYSTICK_Z_ENABLED = cfg.getBool(CFG_JOYSTICK_Z_ENABLED, JOYSTICK_Z_ENABLED);
-  JOYSTICK_X_ENABLED = cfg.getBool(CFG_JOYSTICK_X_ENABLED, JOYSTICK_X_ENABLED);
-  JOYSTICK_BUTTON_TOGGLES_ON_OFF = cfg.getBool(CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF, JOYSTICK_BUTTON_TOGGLES_ON_OFF);
-  JOYSTICK_CENTER_SAMPLES = cfg.getInt(CFG_JOYSTICK_CENTER_SAMPLES, JOYSTICK_CENTER_SAMPLES);
-  JOYSTICK_OVERSAMPLES = cfg.getInt(CFG_JOYSTICK_OVERSAMPLES, JOYSTICK_OVERSAMPLES);
-  JOYSTICK_SAMPLE_INTERVAL_MS = cfg.getInt(CFG_JOYSTICK_SAMPLE_INTERVAL_MS, JOYSTICK_SAMPLE_INTERVAL_MS);
-  JOYSTICK_ADC_MAX = cfg.getInt(CFG_JOYSTICK_ADC_MAX, JOYSTICK_ADC_MAX);
-  JOYSTICK_DEADBAND = cfg.getInt(CFG_JOYSTICK_DEADBAND, JOYSTICK_DEADBAND);
-  JOYSTICK_PULSE_QUEUE_LIMIT = cfg.getInt(CFG_JOYSTICK_PULSE_QUEUE_LIMIT, JOYSTICK_PULSE_QUEUE_LIMIT);
-  JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND = cfg.getFloat(CFG_JOYSTICK_NORMAL_RPS, JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND);
-  JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND = cfg.getFloat(CFG_JOYSTICK_RAPID_RPS, JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND);
-  INVERT_JOYSTICK_Z = cfg.getBool(CFG_INVERT_JOYSTICK_Z, INVERT_JOYSTICK_Z);
-  INVERT_JOYSTICK_X = cfg.getBool(CFG_INVERT_JOYSTICK_X, INVERT_JOYSTICK_X);
-  INVERT_JOYSTICK_BUTTON = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, INVERT_JOYSTICK_BUTTON);
+  joystickConfig.enabled = cfg.getBool(CFG_JOYSTICK_ENABLED, joystickConfig.enabled);
+  joystickConfig.zEnabled = cfg.getBool(CFG_JOYSTICK_Z_ENABLED, joystickConfig.zEnabled);
+  joystickConfig.xEnabled = cfg.getBool(CFG_JOYSTICK_X_ENABLED, joystickConfig.xEnabled);
+  joystickConfig.buttonTogglesOnOff = cfg.getBool(CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF, joystickConfig.buttonTogglesOnOff);
+  joystickConfig.centerSamples = cfg.getInt(CFG_JOYSTICK_CENTER_SAMPLES, joystickConfig.centerSamples);
+  joystickConfig.oversamples = cfg.getInt(CFG_JOYSTICK_OVERSAMPLES, joystickConfig.oversamples);
+  joystickConfig.sampleIntervalMs = cfg.getInt(CFG_JOYSTICK_SAMPLE_INTERVAL_MS, joystickConfig.sampleIntervalMs);
+  joystickConfig.adcMax = cfg.getInt(CFG_JOYSTICK_ADC_MAX, joystickConfig.adcMax);
+  joystickConfig.deadband = cfg.getInt(CFG_JOYSTICK_DEADBAND, joystickConfig.deadband);
+  joystickConfig.pulseQueueLimit = cfg.getInt(CFG_JOYSTICK_PULSE_QUEUE_LIMIT, joystickConfig.pulseQueueLimit);
+  joystickConfig.normalRps = cfg.getFloat(CFG_JOYSTICK_NORMAL_RPS, joystickConfig.normalRps);
+  joystickConfig.rapidRps = cfg.getFloat(CFG_JOYSTICK_RAPID_RPS, joystickConfig.rapidRps);
+  joystickConfig.invertZ = cfg.getBool(CFG_INVERT_JOYSTICK_Z, joystickConfig.invertZ);
+  joystickConfig.invertX = cfg.getBool(CFG_INVERT_JOYSTICK_X, joystickConfig.invertX);
+  joystickConfig.invertButton = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, joystickConfig.invertButton);
   cfg.end();
   normalizeMachineConfig();
   loadMachineProfile();
@@ -334,12 +274,12 @@ void printMachineProfileBanner() {
                 activeMachineProfile.zAxis.leadscrewPitchMm,
                 activeMachineProfile.zAxis.leadscrewPitchDu(),
                 activeMachineProfile.zAxis.stepsPerMm,
-                MOTOR_STEPS_Z);
+                (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm));
   Serial.printf(" X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
                 activeMachineProfile.xAxis.leadscrewPitchMm,
                 activeMachineProfile.xAxis.leadscrewPitchDu(),
                 activeMachineProfile.xAxis.stepsPerMm,
-                MOTOR_STEPS_X);
+                (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm));
   Serial.println("==================================================================\n");
 }
 
@@ -425,27 +365,18 @@ void loadMachineProfile() {
   }
 
   // Synchronize legacy globals for Core 1 compatibility
-  SCREW_Z_DU = activeMachineProfile.zAxis.leadscrewPitchDu();
   z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
   if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
-    MOTOR_STEPS_Z = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
-    z.motorSteps = MOTOR_STEPS_Z;
+    z.motorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
   }
 
-  SCREW_X_DU = activeMachineProfile.xAxis.leadscrewPitchDu();
   x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
   if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
-    MOTOR_STEPS_X = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
-    x.motorSteps = MOTOR_STEPS_X;
+    x.motorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
   }
 
-  ENCODER_PPR = (int)round(activeMachineProfile.spindle.effectivePpr());
-  ENCODER_STEPS_INT = ENCODER_PPR * 2;
-  ENCODER_STEPS_FLOAT = (float)(ENCODER_PPR * 2);
-  RPM_BULK = (long)ENCODER_PPR * 2L;
-
-  zDisplayModeDRO = false;
-  xDisplayModeDRO = false;
+  ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
+  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 
   printMachineProfileBanner();
 }

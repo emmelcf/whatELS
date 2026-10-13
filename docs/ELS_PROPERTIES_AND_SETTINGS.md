@@ -202,16 +202,16 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 
 | Legacy Identifier | New Canonical Key | Unit | Architectural Action & Rationale |
 | :--- | :--- | :---: | :--- |
-| `SCREW_Z_DU` | `machine.z.pitchDu` | `du` | **KEEP & MODERNIZE:** Core leadscrew pitch ($10{,}000\text{ du} = 1\text{ mm}$). |
-| `SCREW_X_DU` | `machine.x.pitchDu` | `du` | **KEEP & MODERNIZE:** Core cross-slide pitch. |
-| `MOTOR_STEPS_Z` | `machine.z.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
-| `MOTOR_STEPS_X` | `machine.x.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
-| `ENCODER_PPR` | `machine.spindle.encoderPpr` | `ppr` | **KEEP & MODERNIZE:** Spindle quadrature encoder pulses per rev. |
+| `SCREW_Z_DU` | `machine.z.pitchDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.leadscrewPitchDu()`. |
+| `SCREW_X_DU` | `machine.x.pitchDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.leadscrewPitchDu()`. |
+| `MOTOR_STEPS_Z` | `machine.z.motorSteps` | `steps/rev` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `z.motorSteps` / `activeMachineProfile`. |
+| `MOTOR_STEPS_X` | `machine.x.motorSteps` | `steps/rev` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `x.motorSteps` / `activeMachineProfile`. |
+| `ENCODER_PPR` | `machine.spindle.encoderPpr` | `ppr` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.spindle.effectivePpr()`. |
 | `ENCODER_BACKLASH` | `machine.spindle.backlash` | `pulses` | **KEEP & MODERNIZE:** Encoder edge filter on spindle direction reverse. |
-| `BACKLASH_DU_Z` | `machine.z.backlashDu` | `du` | **KEEP & MODERNIZE:** Carriage screw backlash compensation. |
-| `BACKLASH_DU_X` | `machine.x.backlashDu` | `du` | **KEEP & MODERNIZE:** Cross-slide screw backlash compensation. |
-| `MAX_TRAVEL_MM_Z` | `machine.dimensions.maxZTravelMm` | `mm` | **MODERNIZE:** Replaced with travel envelope from chuck datum. |
-| `MAX_TRAVEL_MM_X` | `machine.dimensions.maxXTravelMm` | `mm` | **MODERNIZE:** Replaced with cross-slide travel envelope. |
+| `BACKLASH_DU_Z` | `machine.z.backlashDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.backlashDu()`. |
+| `BACKLASH_DU_X` | `machine.x.backlashDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.backlashDu()`. |
+| `MAX_TRAVEL_MM_Z` | `machine.dimensions.maxZTravelMm` | `mm` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.limits.travelMaxMm`. |
+| `MAX_TRAVEL_MM_X` | `machine.dimensions.maxXTravelMm` | `mm` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.limits.travelMaxMm`. |
 | `SPEED_START_Z/X` | `machine.z.speedStartMmSec` | `mm/s` | **MODERNIZE:** Convert raw step pulses to physical linear speed. |
 | `ACCELERATION_Z/X`| `machine.z.accelMmSec2` | `mm/s²` | **MODERNIZE:** Convert raw pulses/s² to physical acceleration. |
 | `SPEED_MANUAL_MOVE`| `machine.z.maxRapidMmMin` | `mm/min` | **MODERNIZE:** Convert raw pulses/s to industry-standard rapid feed. |
@@ -231,7 +231,7 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `Z_SCALE_PULSES_PER_MM` | `sys.dro.zPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
 | `X_SCALE_PULSES_PER_MM` | `sys.dro.xPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
 | `PULSE_PER_REV_Z/X` | `sys.mpg.zPulsesPerRev` | float | **KEEP:** Manual Pulse Generator handwheel encoder resolution. |
-| `JOYSTICK_*` (16 fields) | `sys.joystick.*` | mixed | **KEEP:** Analog joystick calibration and ADC oversampling. |
+| `JOYSTICK_*` (15 fields) | `sys.joystick.*` | mixed | **ENCAPSULATED:** Removed loose globals from `Config.h`/`Config.cpp`. Encapsulated into `struct JoystickConfig joystickConfig` in `src/input/Input.h`. |
 | `keyboardBindings[]` | `sys.keys.bindings` | table | **KEEP:** USB keyboard physical key mapping table. |
 
 ### 4.3 Relocated to Cycle / Intent Domain (NOT Machine Settings)
@@ -254,6 +254,9 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `Y_*` (All Y params) | Obsolete auxiliary Y-axis software logic | **DISCARD:** Fully retired Y-axis software motion, profiles, and settings; physical H5 PCB silkscreen GPIO defines (`Y_ENA 1`, `Y_DIR 2`, `Y_STEP 17`, `Y_PULSE_A 45`, `Y_PULSE_B 48`, `JOY_Y 6`) preserved in `Config.h` for hardware header reference. |
 | `saveMachineConfig()` | Monolithic 45-field blind flat NVS dump | **DISCARD:** Retired in favor of `PersistentSetting<T>` dirty-checked storage and JSON lathe machine profiles. |
 | `/config` & `/config/reset` | Monolithic HTTP form configuration endpoints | **DISCARD:** Retired in favor of `SETTINGS` namespace over WebSocket and REST profile schema endpoints. |
+| `xScaleIncrementalOffset`<br>`zScaleIncrementalOffset` | Unused legacy DRO incremental offsets in `Config.h` | **DISCARD:** Dead globals from legacy DRO offset tracking. Fully retired. |
+| `RPM_BULK` | Redundant spindle pulse count alias in `Config.h` | **DISCARD:** Redundant shadow alias, consolidated into `ENCODER_STEPS_INT`. |
+| `isDiameterMode`<br>`isAbsoluteMode`<br>`zDisplayModeDRO`<br>`xDisplayModeDRO`<br>`spindleDisplayMode`<br>`spindleValColorGreen` | Presentation & Nextion UI flags in `Config.h` | **DISCARD AS GLOBALS:** Removed loose globals from `Config.h`/`Config.cpp`. Presentation state is now cleanly managed by `SettingsService`, `MachineProperties`, and `DisplaySnapshot`. |
 
 ---
 
