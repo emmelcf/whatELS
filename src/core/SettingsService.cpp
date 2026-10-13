@@ -6,6 +6,7 @@
 #include "Display.h"
 #include "WebServerModule.h"
 #include "Debug.h"
+#include "SystemSchemaJson.h"
 #include <Preferences.h>
 
 static std::optional<float> _deadbandAngle;
@@ -237,6 +238,21 @@ bool SettingsService::resetToDefaultPreset(String* reply) {
     *reply = "OK:SETTINGS.preset.resetToDefault=" + String(defaultSlug) + "\n";
   }
   return ok;
+}
+
+bool SettingsService::getSchema(const char* schemaName, String* reply) {
+  if (!reply) return false;
+  if (!schemaName || *schemaName == '\0' ||
+      strcasecmp(schemaName, "profile") == 0 ||
+      strcasecmp(schemaName, "lathe-profile") == 0 ||
+      strcasecmp(schemaName, "lathe-profiles") == 0 ||
+      strcasecmp(schemaName, "profiles") == 0 ||
+      strcasecmp(schemaName, "all") == 0) {
+    *reply = String(LATHE_PROFILE_SCHEMA_JSON) + "\n";
+    return true;
+  }
+  *reply = "ERR:SETTINGS.schema=unknown schema: " + String(schemaName) + "\n";
+  return false;
 }
 
 bool SettingsService::reset(const char* key, String* reply) {

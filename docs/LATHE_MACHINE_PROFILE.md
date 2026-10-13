@@ -582,8 +582,8 @@ Lathe profiles are exported and imported as self-contained catalog documents:
 
 To eliminate the need to update client code whenever firmware introduces a new machine property (e.g. adding stepper vs. servo distinction, sensorless stall thresholds, or wireless pendants), the controller publishes a formal **JSON Schema (draft-07 / 2020-12)** document.
 
-* **Schema Location:** Stored as a static asset on LittleFS: `/schemas/lathe-profiles.schema.json`.
-* **Zero MCU Overhead:** The ESP32 streams the schema over HTTP (`GET /api/schema/profiles`) or WebSocket (`SETTINGS.schema=profiles`) without needing a C++ schema engine.
+* **Schema Location:** Embedded directly into Flash ROM (`PROGMEM`) at compile time via `scripts/embed_controller_assets.py` (authoritative source: `data/schemas/lathe-profile.schema.json`). For live developer testing without re-flashing firmware, if `/schemas/lathe-profile.schema.json` exists on LittleFS, it serves that file instead.
+* **Zero MCU Overhead:** The ESP32 streams the schema over HTTP (`GET /api/schema/profile` or `GET /schemas/lathe-profile.schema.json`) or WebSocket (`SETTINGS.schema=lathe-profile`) without needing a runtime C++ schema engine.
 * **Client Dynamic Form Generation:** Clients consume the schema to dynamically render settings forms, evaluate validation bounds, and handle conditional field visibility.
 
 #### Schema Excerpt with Reusable Definitions & Polymorphic Drive Types:

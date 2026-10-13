@@ -175,8 +175,8 @@ To ensure that firmware upgrades never erase user data or require flashing raw f
 Firmware evolution frequently adds new machine properties (e.g. distinguishing stepper vs. servo, adding electronic spindle brakes, or optical scale configurations). If client UIs hardcode settings structures, every firmware update requires updating all client apps.
 
 To provide clean, zero-coupling introspection:
-1. **Standard JSON Schema (draft-07 / 2020-12):** The controller hosts an authoritative schema document at `/schemas/lathe-profile.schema.json` in LittleFS.
-2. **Zero MCU Computation:** The ESP32 simply serves or streams the static JSON schema file over HTTP (`GET /api/schema/profile`) or WebSocket (`SETTINGS.schema=profile`).
+1. **Standard JSON Schema (draft-07 / 2020-12):** The controller embeds an authoritative schema document (`/schemas/lathe-profile.schema.json`) into Flash ROM (`PROGMEM`) at build time via `scripts/embed_controller_assets.py` (with LittleFS file override fallback for live development).
+2. **Zero MCU Computation:** The ESP32 simply serves or streams the static JSON schema file over HTTP (`GET /api/schema/profile` or `GET /schemas/lathe-profile.schema.json`) or WebSocket (`SETTINGS.schema=lathe-profile`).
 3. **Dynamic Client UI & Validation:** Clients parse the JSON Schema to dynamically generate input fields, enforce validation ranges (`minimum`, `maximum`), and handle conditional visibility (`if/then` blocks, such as requiring `motor_type` and `steps_per_mm` only when `has_motor: true`).
 
 ---
@@ -465,7 +465,7 @@ Clients dynamically inspect configuration schemas to auto-generate forms and han
 -> SETTINGS.schema=lathe-profile\n
 <- {"$schema":"http://json-schema.org/draft-07/schema#","title":"LatheMachineProfile",...}\n
 ```
-*(Also accessible via HTTP endpoint `GET /api/schema/lathe-profile`)*
+*(Also accessible via HTTP endpoint `GET /api/schema/profile` or `GET /schemas/lathe-profile.schema.json`)*
 
 ---
 

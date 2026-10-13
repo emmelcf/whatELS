@@ -23,5 +23,7 @@ tutorials/
 
 # Auto-generated build assets
 src/motion/SystemProfilesJson.h
+src/motion/SystemSchemaJson.h
 src/web/ControllerWebAssets.h
+
 

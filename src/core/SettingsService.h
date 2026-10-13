@@ -53,6 +53,9 @@ public:
   static bool reset(const char* key, String* reply = nullptr);
   static bool resetGroup(const char* group, String* reply = nullptr);
 
+  // Schema Introspection: SETTINGS.schema or SETTINGS.schema=<name>
+  static bool getSchema(const char* schemaName, String* reply);
+
   // --- Tier 2 / Category 1: Travel Stops & Boundaries ---
   static bool setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu);
   static bool clearAxisLimit(AxisId axis, LimitDirection dir);

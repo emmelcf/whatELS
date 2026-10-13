@@ -82,6 +82,9 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       return SettingsService::set(sub + 4, reply);
     } else if (strncasecmp(sub, "reset=", 6) == 0) {
       return SettingsService::reset(sub + 6, reply);
+    } else if (strncasecmp(sub, "schema", 6) == 0) {
+      const char* name = (sub[6] == '=') ? sub + 7 : nullptr;
+      return SettingsService::getSchema(name, reply);
     }
   }
 

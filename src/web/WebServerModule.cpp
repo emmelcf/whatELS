@@ -10,6 +10,7 @@
 #include "ClientEndpoint.h"
 #include "SettingsService.h"
 #include "ControllerWebAssets.h"
+#include "SystemSchemaJson.h"
 #include <LittleFS.h>
 #include <Update.h>
 #include <Preferences.h>
@@ -1014,6 +1015,19 @@ static void handleClientAppJs() {
   server.send_P(200, "application/javascript", (const char*)WWW_APP_JS_GZ, WWW_APP_JS_GZ_LEN);
 }
 
+static void handleSchemaGet() {
+  server.sendHeader("Cache-Control", "public, max-age=86400");
+  if (LittleFS.exists("/schemas/lathe-profile.schema.json")) {
+    File file = LittleFS.open("/schemas/lathe-profile.schema.json", "r");
+    if (file) {
+      server.streamFile(file, "application/json");
+      file.close();
+      return;
+    }
+  }
+  server.send(200, "application/json", LATHE_PROFILE_SCHEMA_JSON);
+}
+
 int getGcodeProgramCount() {
   File root = LittleFS.open("/");
   if (!root || !root.isDirectory()) {
@@ -1661,6 +1675,8 @@ static void registerWebRoutes() {
   server.on("/index.html", handleClientIndex);
   server.on("/style.css", handleClientStyle);
   server.on("/app.js", handleClientAppJs);
+  server.on("/api/schema/profile", HTTP_GET, handleSchemaGet);
+  server.on("/schemas/lathe-profile.schema.json", HTTP_GET, handleSchemaGet);
   server.on("/gcode/add", HTTP_POST, handleGcodeAdd);
   server.on("/gcode/list", HTTP_GET, handleGcodeList);
   server.on("/gcode/get", HTTP_GET, handleGcodeGet);

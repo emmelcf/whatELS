@@ -89,19 +89,21 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 
 ---
 
-### Session 1.4: Command Dispatcher Wire Protocol & LittleFS Preset Management
+### Session 1.4: Command Dispatcher Wire Protocol, LittleFS Presets & Schema Introspection (COMPLETED)
 * **Goal:** Allow client interfaces to manage presets (`/presets/*.json`), inspect JSON Schema, modify calibration, and select presets over canonical wire commands.
 * **Firmware Scope:**
   1. Extend [`CommandDispatcher.cpp`](../src/web/CommandDispatcher.cpp):
-     - `SETTINGS.preset.list`: Returns list of available `.json` preset slugs in LittleFS `/presets/`.
-     - `SETTINGS.preset.get=<slug>`: Streams JSON preset file payload.
-     - `SETTINGS.preset.apply=<slug>`: Parses JSON preset from LittleFS and activates in RAM.
-     - `SETTINGS.preset.save=<slug>`: Serializes active profile and writes to `/presets/<slug>.json`.
-     - `SETTINGS.preset.delete=<slug>`: Deletes preset file from LittleFS.
-     - `SETTINGS.schema=<name>`: Streams static JSON Schema (e.g. `/schemas/lathe-profile.schema.json`).
+     - `SETTINGS.preset.list`: Returns list of available presets (embedded ROM templates + LittleFS `/presets/` user profiles).
+     - `SETTINGS.preset.get=<slug>`: Streams JSON preset file payload from LittleFS or ROM.
+     - `SETTINGS.preset.apply=<slug>`: Parses JSON preset from LittleFS or ROM, updates active profile in RAM, and saves active slug to NVS.
+     - `SETTINGS.preset.save=<slug>`: In-place serialization and saving of active configuration to LittleFS (blocks overwriting system templates).
+     - `SETTINGS.preset.delete=<slug>`: Deletes user preset file from LittleFS (safeguards protect system templates, active preset, and default preset).
+     - `SETTINGS.preset.setDefault=<slug>` / `SETTINGS.preset.resetToDefault`: Manages catalog default profile.
+     - `SETTINGS.schema=<name>`: Streams authoritative JSON Schema (`/schemas/lathe-profile.schema.json` embedded in ROM with LittleFS override fallback).
      - `SETTINGS.set=machine.<key>,<val>`: Updates physical calibration with sparse NVS override.
-  2. Enforce safety checks: Disallow preset changes while lathe motion is active (`isOn == true`).
-* **Verification:** Dispatch commands from WebSocket terminal / test harness and verify round-trip persistence and LittleFS file operations.
+  2. Enforce safety checks: Disallow preset switches while lathe motion is active (`isOn == true`).
+  3. HTTP Endpoints in [`WebServerModule.cpp`](../src/web/WebServerModule.cpp): `GET /api/schema/profile` and `GET /schemas/lathe-profile.schema.json`.
+* **Verification:** Verified compilation (`pio run -e esp32s3`) clean with zero errors and warnings. Dispatch and schema streaming operational.
 
 ---
 

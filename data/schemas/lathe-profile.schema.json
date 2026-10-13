@@ -1,0 +1,256 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LatheProfileCatalog",
+  "type": "object",
+  "required": ["version", "default_profile_id", "profiles"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "default": 1
+    },
+    "default_profile_id": {
+      "type": "string",
+      "title": "System Baseline Default Profile ID",
+      "description": "Baseline fallback profile if NVS machine.preset is unset or reset"
+    },
+    "profiles": {
+      "type": "array",
+      "title": "Lathe Machine Profiles Catalog",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/LatheMachineProfile"
+      }
+    }
+  },
+  "definitions": {
+    "LatheMachineProfile": {
+      "type": "object",
+      "required": ["identity", "envelope", "spindle", "axes"],
+      "properties": {
+        "identity": {
+          "type": "object",
+          "required": ["profile_id", "model_name"],
+          "properties": {
+            "profile_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{3,24}$",
+              "title": "Machine Preset Slug"
+            },
+            "model_name": {
+              "type": "string",
+              "title": "Human Readable Model Name"
+            },
+            "capabilities": {
+              "type": "integer",
+              "title": "Hardware Capabilities Bitmask"
+            },
+            "system": {
+              "type": "boolean",
+              "title": "System Factory Template Flag",
+              "default": false
+            }
+          }
+        },
+        "envelope": {
+          "type": "object",
+          "title": "Machine Physical Envelope",
+          "properties": {
+            "bed": {
+              "type": "object",
+              "properties": {
+                "total_length_mm": { "type": "number", "minimum": 50 },
+                "bed_width_mm": { "type": "number", "minimum": 20 }
+              }
+            },
+            "swing": {
+              "type": "object",
+              "properties": {
+                "over_bed_dia_mm": { "type": "number", "minimum": 50 },
+                "over_cross_slide_dia_mm": { "type": "number", "minimum": 20 }
+              }
+            },
+            "headstock": {
+              "type": "object",
+              "properties": {
+                "spindle_bore_dia_mm": { "type": "number", "minimum": 5 },
+                "chuck": {
+                  "type": "object",
+                  "properties": {
+                    "diameter_mm": { "type": "number", "minimum": 20 },
+                    "body_length_mm": { "type": "number", "minimum": 10 }
+                  }
+                },
+                "datums": {
+                  "type": "object",
+                  "properties": {
+                    "z_zero_from_chuck_face_mm": { "type": "number" },
+                    "x_zero_from_centerline_mm": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "spindle": {
+          "type": "object",
+          "title": "Spindle Hardware & Feedback",
+          "properties": {
+            "kinematics": {
+              "type": "object",
+              "properties": {
+                "max_safe_rpm": { "type": "number", "minimum": 100, "maximum": 20000 },
+                "min_sync_rpm": { "type": "number", "minimum": 1, "maximum": 500 },
+                "direction_inverted": { "type": "boolean", "default": false }
+              }
+            },
+            "feedback": {
+              "type": "object",
+              "properties": {
+                "encoder": { "$ref": "#/definitions/QuadratureEncoder" },
+                "pulley_ratio": { "type": "number", "minimum": 0.01, "maximum": 100.0, "default": 1.0 }
+              }
+            }
+          }
+        },
+        "axes": {
+          "type": "object",
+          "title": "Axis Kinematics & Drives",
+          "required": ["z"],
+          "properties": {
+            "z": { "$ref": "#/definitions/AxisConfig" },
+            "x": { "$ref": "#/definitions/AxisConfig" },
+            "y": { "$ref": "#/definitions/AxisConfig" }
+          }
+        }
+      }
+    },
+    "QuadratureEncoder": {
+      "type": "object",
+      "title": "Quadrature Pulse Encoder",
+      "required": ["ppr"],
+      "properties": {
+        "ppr": {
+          "type": "integer",
+          "title": "Native Pulses Per Revolution / Unit",
+          "minimum": 1,
+          "maximum": 50000
+        },
+        "has_index": {
+          "type": "boolean",
+          "title": "Index Pulse (Z-Channel) Installed",
+          "default": false
+        },
+        "inverted": {
+          "type": "boolean",
+          "title": "Invert Phase (Swap A/B)",
+          "default": false
+        },
+        "filter_backlash_pulses": {
+          "type": "integer",
+          "title": "Noise / Reversal Filter Deadband (Counts)",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+    "AxisConfig": {
+      "type": "object",
+      "properties": {
+        "label": { "type": "string" },
+        "kinematics": {
+          "type": "object",
+          "required": ["leadscrew_pitch_mm"],
+          "properties": {
+            "leadscrew_pitch_mm": { "type": "number", "minimum": 0.01, "maximum": 50.0 },
+            "backlash_mm": { "type": "number", "minimum": 0.0, "maximum": 5.0, "default": 0.0 },
+            "direction_inverted": { "type": "boolean", "default": false },
+            "max_velocity_mm_min": { "type": "number", "minimum": 10.0, "maximum": 10000.0 },
+            "max_accel_mm_sec2": { "type": "number", "minimum": 1.0, "maximum": 5000.0 }
+          }
+        },
+        "drive": { "$ref": "#/definitions/AxisDrive" },
+        "limits": { "$ref": "#/definitions/AxisLimits" },
+        "feedback": {
+          "type": "object",
+          "properties": {
+            "has_dro": { "type": "boolean", "default": false },
+            "dro_encoder": { "$ref": "#/definitions/QuadratureEncoder" }
+          }
+        }
+      }
+    },
+    "AxisLimits": {
+      "type": "object",
+      "required": ["soft"],
+      "properties": {
+        "soft": {
+          "type": "object",
+          "required": ["enabled", "min_mm", "max_mm"],
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "min_mm": { "type": "number", "title": "Soft Limit Minimum (mm)" },
+            "max_mm": { "type": "number", "title": "Soft Limit Maximum (mm)" }
+          }
+        },
+        "hard": {
+          "type": "object",
+          "properties": {
+            "installed": { "type": "boolean", "default": false },
+            "method": {
+              "type": "string",
+              "enum": [
+                "LIMIT_NONE",
+                "SWITCH_NC",
+                "SWITCH_NO",
+                "INDUCTIVE",
+                "SENSORLESS_STALLGUARD",
+                "SERVO_TORQUE_LIMIT"
+              ],
+              "default": "LIMIT_NONE"
+            },
+            "stall_sensitivity": {
+              "type": "integer",
+              "title": "Stall Sensitivity Threshold",
+              "minimum": -64,
+              "maximum": 63
+            },
+            "homing_backoff_mm": {
+              "type": "number",
+              "title": "Homing Backoff Retreat (mm)",
+              "default": 2.0
+            }
+          }
+        }
+      }
+    },
+    "AxisDrive": {
+      "type": "object",
+      "required": ["type", "steps_per_mm"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "DRIVE_NONE_MANUAL",
+            "GENERIC",
+            "STEPPER_OPEN_LOOP",
+            "STEPPER_CLOSED_LOOP",
+            "AC_SERVO"
+          ],
+          "default": "GENERIC",
+          "title": "Actuator Technology"
+        },
+        "steps_per_mm": {
+          "type": "number",
+          "title": "Steps Per Millimeter",
+          "minimum": 1.0,
+          "maximum": 50000.0
+        },
+        "enable_active_low": {
+          "type": "boolean",
+          "title": "Enable Signal Active Low",
+          "default": true
+        }
+      }
+    }
+  }
+}
