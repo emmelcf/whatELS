@@ -183,13 +183,14 @@ To provide clean, zero-coupling introspection:
 
 ### 3.5 Smart Observable Properties (`PersistentSetting<T>`) & Redundant Write Suppression
 
-To eliminate repetitive manual `Preferences` operations, flash wear, and accidental redundant writes, persistent operator and presentation settings (Tiers 3 & 4) use the `PersistentSetting<T>` C++ observable property template.
+To eliminate repetitive manual `Preferences` operations, flash wear, and accidental redundant writes, all persistent settings across the firmware—including Controller Infrastructure (WiFi, keyboard bindings in Tier 2), Operator Preferences (Tier 3), and UI Presentation (Tier 4)—MUST use the `PersistentSetting<T>` C++ observable property template (`src/core/PersistentSetting.h`). Ad-hoc raw `Preferences.put*()` calls are strictly forbidden.
 
 #### Architectural Tenets of `PersistentSetting<T>`:
-1. **Single Boot Read, Zero Flash Reads Thereafter:** On initialization, `PersistentSetting` reads from NVS once into an internal in-memory cache. All subsequent queries (`get()` or implicit type conversion) read the RAM cache in a single CPU instruction without acquiring SPI bus mutexes.
-2. **Deterministic Dirty-Checking Before Flash Writes:** Every assignment (`operator=` or `set()`) evaluates `if (_value == newValue) return false;`. If the incoming value matches the existing value in memory, the operation immediately aborts, emitting a debug diagnostic (`[NVS] Suppressed redundant write for key '...'`) and generating zero flash wear.
-3. **Automatic NVS Persistence on Change:** When a value genuinely changes, `PersistentSetting` automatically opens the appropriate NVS namespace, calls the type-specific `put*()` primitive, and closes the namespace.
-4. **Observable `onChanged` Event Hook:** Each setting can attach a lightweight callback hook (`void (*onChanged)(const T&)`). When a value changes, the callback triggers domain reactions (e.g. flagging `machineStatusForcePublish = true` or recalculating dependent math) completely decoupled from caller procedural logic.
+1. **Universal Usage Across Subsystems:** Any setting that persists across reboots (whether in namespace `"prefs"`, `"wifi"`, `"keyboard"`, or sparse `"machine"`) must be encapsulated in a `PersistentSetting<T>` instance. Supported types include `bool`, `int`, `long`, `float`, `uint8_t`, and Arduino `String`.
+2. **Single Boot Read, Zero Flash Reads Thereafter:** On initialization (`init()`), `PersistentSetting` reads from NVS once into an internal in-memory cache. All subsequent queries (`get()` or implicit type conversion) read the RAM cache in a single CPU instruction without acquiring SPI bus mutexes.
+3. **Deterministic Dirty-Checking Before Flash Writes:** Every assignment (`operator=` or `set()`) evaluates `if (_value == newValue) return false;`. If the incoming value matches the existing value in memory, the operation immediately aborts, emitting a debug diagnostic (`[NVS] Suppressed redundant write for key '...'`) and generating zero flash wear.
+4. **Automatic NVS Persistence on Change:** When a value genuinely changes, `PersistentSetting` automatically opens the appropriate NVS namespace, calls the type-specific `put*()` primitive, and closes the namespace.
+5. **Observable `onChanged` Event Hook:** Each setting can attach a lightweight callback hook (`void (*onChanged)(const T&)`). When a value changes, the callback triggers domain reactions (e.g. flagging `machineStatusForcePublish = true` or recalculating dependent math) completely decoupled from caller procedural logic.
 
 ---
 

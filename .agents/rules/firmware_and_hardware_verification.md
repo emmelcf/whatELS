@@ -20,6 +20,10 @@
 3. **GPIO Pin & Hardware Definition Freezing:**
    * Pin assignments in `src/core/Config.h` map to physical PCB traces and level shifters on the machine.
    * Never reassign GPIO pins without explicit operator discussion and confirmation.
+4. **Mandatory PersistentSetting<T> for Persistent Storage (Zero Flash Wear & RAM Caching):**
+   * All persisted settings and preferences across the entire firmware (operator preferences, WiFi, keyboard bindings, hardware overrides) MUST use the `PersistentSetting<T>` observable property template (`src/core/PersistentSetting.h`).
+   * **Strictly Prohibited:** Never write raw, ad-hoc `Preferences.put*()` calls or read directly from flash on runtime getters.
+   * `PersistentSetting<T>` guarantees single-read boot caching in RAM, deterministic dirty-checking to eliminate flash wear (`if (_value == newVal) return false;`), automatic debug suppression logging, and decoupled `onChanged` event hooks.
 
 ---
 

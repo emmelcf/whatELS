@@ -2,6 +2,7 @@
 #include "Axis.h"
 #include <LittleFS.h>
 #include "Debug.h"
+#include "PersistentSetting.h"
 
 LatheConfiguration activeMachineProfile = {};
 
@@ -648,15 +649,17 @@ bool validateKeyboardConfig(String* error) {
   return true;
 }
 
+// Persistent Settings for Keyboard
+static PersistentSetting<bool> s_showKeyPresses(KEYBOARD_CONFIG_NAMESPACE, KCFG_SHOW_KEY_PRESSES, false, [](const bool& val) {
+  SHOW_KEY_PRESSES = val;
+});
+static PersistentSetting<uint8_t> s_keyBindings[KEYBOARD_BINDING_COUNT];
+
 void saveKeyboardConfig() {
-  Preferences cfg;
-  cfg.begin(KEYBOARD_CONFIG_NAMESPACE);
-  cfg.putInt(KCFG_VERSION, KEYBOARD_CONFIG_VERSION);
-  cfg.putBool(KCFG_SHOW_KEY_PRESSES, SHOW_KEY_PRESSES);
+  s_showKeyPresses.set(SHOW_KEY_PRESSES);
   for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    cfg.putUChar(keyboardBindings[i].id, keyboardBindings[i].code);
+    s_keyBindings[i].set(keyboardBindings[i].code);
   }
-  cfg.end();
 }
 
 void loadKeyboardConfig() {
@@ -667,11 +670,16 @@ void loadKeyboardConfig() {
     cfg.clear();
     cfg.putInt(KCFG_VERSION, KEYBOARD_CONFIG_VERSION);
   }
-  SHOW_KEY_PRESSES = cfg.getBool(KCFG_SHOW_KEY_PRESSES, SHOW_KEY_PRESSES);
-  for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    keyboardBindings[i].code = cfg.getUChar(keyboardBindings[i].id, keyboardBindings[i].code);
-  }
   cfg.end();
+
+  s_showKeyPresses.init();
+  SHOW_KEY_PRESSES = s_showKeyPresses.get();
+
+  for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
+    s_keyBindings[i].setup(KEYBOARD_CONFIG_NAMESPACE, keyboardBindings[i].id, keyboardBindings[i].defaultCode);
+    s_keyBindings[i].init();
+    keyboardBindings[i].code = s_keyBindings[i].get();
+  }
 
   String error = "";
   if (!validateKeyboardConfig(&error)) {
@@ -704,6 +712,20 @@ bool validateWifiConfig(String* error) {
   return true;
 }
 
+// Persistent Settings for WiFi
+static PersistentSetting<bool> s_wifiEnabled(WIFI_CONFIG_NAMESPACE, WCFG_ENABLED, DEFAULT_WIFI_ENABLED, [](const bool& val) {
+  WIFI_ENABLED = val;
+});
+static PersistentSetting<String> s_wifiSsid(WIFI_CONFIG_NAMESPACE, WCFG_SSID, DEFAULT_WIFI_SSID, [](const String& val) {
+  WIFI_SSID = val;
+});
+static PersistentSetting<String> s_wifiPassword(WIFI_CONFIG_NAMESPACE, WCFG_PASSWORD, DEFAULT_WIFI_PASSWORD, [](const String& val) {
+  WIFI_PASSWORD = val;
+});
+static PersistentSetting<String> s_wifiHostname(WIFI_CONFIG_NAMESPACE, WCFG_HOSTNAME, DEFAULT_WIFI_HOSTNAME, [](const String& val) {
+  WIFI_HOSTNAME = val;
+});
+
 void loadWifiConfig() {
   setWifiConfigDefaults();
   Preferences cfg;
@@ -712,11 +734,17 @@ void loadWifiConfig() {
     cfg.clear();
     cfg.putInt(WCFG_VERSION, WIFI_CONFIG_VERSION);
   }
-  WIFI_ENABLED = cfg.getBool(WCFG_ENABLED, WIFI_ENABLED);
-  WIFI_SSID = cfg.getString(WCFG_SSID, WIFI_SSID);
-  WIFI_PASSWORD = cfg.getString(WCFG_PASSWORD, WIFI_PASSWORD);
-  WIFI_HOSTNAME = cfg.getString(WCFG_HOSTNAME, WIFI_HOSTNAME);
   cfg.end();
+
+  s_wifiEnabled.init();
+  s_wifiSsid.init();
+  s_wifiPassword.init();
+  s_wifiHostname.init();
+
+  WIFI_ENABLED = s_wifiEnabled.get();
+  WIFI_SSID = s_wifiSsid.get();
+  WIFI_PASSWORD = s_wifiPassword.get();
+  WIFI_HOSTNAME = s_wifiHostname.get();
 
   String error = "";
   if (!validateWifiConfig(&error)) {
@@ -725,14 +753,10 @@ void loadWifiConfig() {
 }
 
 void saveWifiConfig() {
-  Preferences cfg;
-  cfg.begin(WIFI_CONFIG_NAMESPACE);
-  cfg.putInt(WCFG_VERSION, WIFI_CONFIG_VERSION);
-  cfg.putBool(WCFG_ENABLED, WIFI_ENABLED);
-  cfg.putString(WCFG_SSID, WIFI_SSID);
-  cfg.putString(WCFG_PASSWORD, WIFI_PASSWORD);
-  cfg.putString(WCFG_HOSTNAME, WIFI_HOSTNAME);
-  cfg.end();
+  s_wifiEnabled.set(WIFI_ENABLED);
+  s_wifiSsid.set(WIFI_SSID);
+  s_wifiPassword.set(WIFI_PASSWORD);
+  s_wifiHostname.set(WIFI_HOSTNAME);
 }
 
 void setMeasure(int value) {
