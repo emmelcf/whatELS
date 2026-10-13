@@ -7,10 +7,55 @@
 #include "WebServerModule.h"
 #include "Debug.h"
 #include "SystemSchemaJson.h"
-#include <Preferences.h>
+#include "PersistentSetting.h"
 
 static std::optional<float> _deadbandAngle;
 static std::optional<float> _deadbandTurns;
+
+static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& val) {
+  ::isDiameterMode = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& val) {
+  ::isAbsoluteMode = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& val) {
+  zDisplayModeDRO = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& val) {
+  xDisplayModeDRO = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, MEASURE_METRIC, [](const int& val) {
+  ::setMeasure(val);
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](const int& val) {
+  spindleDisplayMode = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<long> s_jogStepDu(PREF_NAMESPACE, PREF_MOVE_STEP, MOVE_STEP_1, [](const long& val) {
+  moveStep = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<bool> s_showAngle(PREF_NAMESPACE, PREF_SHOW_ANGLE, true, [](const bool& val) {
+  savedShowAngle = showAngle = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<bool> s_showTacho(PREF_NAMESPACE, PREF_SHOW_TACHO, true, [](const bool& val) {
+  savedShowTacho = showTacho = val;
+  machineStatusForcePublish = true;
+});
 
 void SettingsService::init() {
   DEBUG_PRINTLN("SettingsService::init...");
@@ -19,16 +64,46 @@ void SettingsService::init() {
 
   // Load deadband overrides from PREF_NAMESPACE ("h5")
   Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
+  pref.begin(PREF_NAMESPACE, true);
   if (pref.isKey("db_angle")) {
     _deadbandAngle = pref.getFloat("db_angle");
   } else {
     _deadbandAngle = std::nullopt;
   }
-  if (pref.isKey("sdm")) {
-    spindleDisplayMode = pref.getInt("sdm", 0);
+  if (pref.isKey("db_turns")) {
+    _deadbandTurns = pref.getFloat("db_turns");
+  } else {
+    _deadbandTurns = std::nullopt;
   }
   pref.end();
+
+  // Load observable operator & display preferences
+  s_diameterMode.init();
+  ::isDiameterMode = s_diameterMode.get();
+
+  s_absoluteMode.init();
+  ::isAbsoluteMode = s_absoluteMode.get();
+
+  s_zDroMode.init();
+  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale && s_zDroMode.get();
+
+  s_xDroMode.init();
+  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale && s_xDroMode.get();
+
+  s_measure.init();
+  measure = s_measure.get();
+
+  s_spindleDisplayMode.init();
+  spindleDisplayMode = s_spindleDisplayMode.get();
+
+  s_jogStepDu.init();
+  moveStep = s_jogStepDu.get();
+
+  s_showAngle.init();
+  savedShowAngle = showAngle = s_showAngle.get();
+
+  s_showTacho.init();
+  savedShowTacho = showTacho = s_showTacho.get();
 
   syncLegacyGlobals();
 
@@ -380,6 +455,10 @@ bool SettingsService::isDeadbandTurnsAuto() {
 
 bool SettingsService::setScrewZDu(long du) {
   if (du < 100 || du > 10000000) return false;
+  if (activeMachineProfile.zAxis.leadscrewPitchDu() == du) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for screw_z_du");
+    return true;
+  }
   float pitchMm = (float)du / 10000.0f;
   activeMachineProfile.zAxis.leadscrewPitchMm = pitchMm;
 
@@ -400,6 +479,10 @@ bool SettingsService::setScrewZDu(long du) {
 
 bool SettingsService::setScrewXDu(long du) {
   if (du < 100 || du > 10000000) return false;
+  if (activeMachineProfile.xAxis.leadscrewPitchDu() == du) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for screw_x_du");
+    return true;
+  }
   float pitchMm = (float)du / 10000.0f;
   activeMachineProfile.xAxis.leadscrewPitchMm = pitchMm;
 
@@ -420,6 +503,11 @@ bool SettingsService::setScrewXDu(long du) {
 
 bool SettingsService::setMotorStepsZ(long steps) {
   if (steps < 10 || steps > 1000000) return false;
+  float currentStepsZ = (activeMachineProfile.zAxis.leadscrewPitchMm > 0) ? (activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm) : -1.0f;
+  if (fabsf(currentStepsZ - (float)steps) < 0.5f) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_z");
+    return true;
+  }
   float pitchMm = activeMachineProfile.zAxis.leadscrewPitchMm;
   if (pitchMm <= 0.0f) return false;
   float stepsPerMm = (float)steps / pitchMm;
@@ -443,6 +531,11 @@ bool SettingsService::setMotorStepsZ(long steps) {
 
 bool SettingsService::setMotorStepsX(long steps) {
   if (steps < 10 || steps > 1000000) return false;
+  float currentStepsX = (activeMachineProfile.xAxis.leadscrewPitchMm > 0) ? (activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm) : -1.0f;
+  if (fabsf(currentStepsX - (float)steps) < 0.5f) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_x");
+    return true;
+  }
   float pitchMm = activeMachineProfile.xAxis.leadscrewPitchMm;
   if (pitchMm <= 0.0f) return false;
   float stepsPerMm = (float)steps / pitchMm;
@@ -466,6 +559,10 @@ bool SettingsService::setMotorStepsX(long steps) {
 
 bool SettingsService::setEncoderPpr(int ppr) {
   if (ppr < 10 || ppr > 30000) return false;
+  if (activeMachineProfile.spindle.encoder.ppr == (uint16_t)ppr) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for enc_ppr");
+    return true;
+  }
   activeMachineProfile.spindle.encoder.ppr = (uint16_t)ppr;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
@@ -486,6 +583,10 @@ bool SettingsService::setEncoderPpr(int ppr) {
 
 bool SettingsService::setSpindleRatio(float ratio) {
   if (ratio < 0.01f || ratio > 50.0f) return false;
+  if (fabsf(activeMachineProfile.spindle.pulleyRatio - ratio) < 0.0001f) {
+    DEBUG_PRINTLN("[NVS] Suppressed redundant write for spindle_ratio");
+    return true;
+  }
   activeMachineProfile.spindle.pulleyRatio = ratio;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
@@ -523,28 +624,12 @@ bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limit
   if (!a) return false;
 
   long stopSteps = duToSteps(a, limitDu) - a->originPos;
-  const char* prefKey = nullptr;
-  if (axis == AXIS_Z) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Z : PREF_RIGHT_STOP_Z;
-  } else if (axis == AXIS_X) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_X : PREF_RIGHT_STOP_X;
-  } else if (axis == AXIS_Y) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Y : PREF_RIGHT_STOP_Y;
-  }
-
   if (dir == LIMIT_LEFT_OR_UP) {
     a->nextLeftStop = stopSteps;
     a->nextLeftStopFlag = true;
   } else {
     a->nextRightStop = stopSteps;
     a->nextRightStopFlag = true;
-  }
-
-  if (prefKey) {
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.putLong(prefKey, stopSteps);
-    pref.end();
   }
 
   machineStatusForcePublish = true;
@@ -555,29 +640,12 @@ bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
   Axis* a = getAxisById(axis);
   if (!a) return false;
 
-  long stopSteps = (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
-  const char* prefKey = nullptr;
-  if (axis == AXIS_Z) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Z : PREF_RIGHT_STOP_Z;
-  } else if (axis == AXIS_X) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_X : PREF_RIGHT_STOP_X;
-  } else if (axis == AXIS_Y) {
-    prefKey = (dir == LIMIT_LEFT_OR_UP) ? PREF_LEFT_STOP_Y : PREF_RIGHT_STOP_Y;
-  }
-
   if (dir == LIMIT_LEFT_OR_UP) {
     a->nextLeftStop = LONG_MAX;
     a->nextLeftStopFlag = true;
   } else {
     a->nextRightStop = LONG_MIN;
     a->nextRightStopFlag = true;
-  }
-
-  if (prefKey) {
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.putLong(prefKey, stopSteps);
-    pref.end();
   }
 
   machineStatusForcePublish = true;
@@ -619,11 +687,6 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
   nextDupr = duprVal;
   nextDuprFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_DUPR, duprVal);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -639,11 +702,6 @@ bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
   currentThreadSetting.dupr = duVal;
   nextDupr = duVal;
   nextDuprFlag = true;
-
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_DUPR, duVal);
-  pref.end();
 
   machineStatusForcePublish = true;
   return true;
@@ -661,11 +719,6 @@ bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
   nextDupr = duVal;
   nextDuprFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_DUPR, duVal);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -682,11 +735,6 @@ bool SettingsService::setFeedrateInch(float pitchInch, bool preserveDirection) {
   nextDupr = duVal;
   nextDuprFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_DUPR, duVal);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -697,11 +745,6 @@ bool SettingsService::reverseFeedDirection() {
   currentThreadSetting.dupr = reversed;
   nextDupr = reversed;
   nextDuprFlag = true;
-
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_DUPR, reversed);
-  pref.end();
 
   machineStatusForcePublish = true;
   return true;
@@ -743,11 +786,6 @@ bool SettingsService::setStarts(int startsVal) {
   nextStarts = startsVal;
   nextStartsFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putInt(PREF_STARTS, startsVal);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -763,11 +801,6 @@ bool SettingsService::setTurnPasses(int passes) {
     return false;
   }
   turnPasses = passes;
-
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putInt(PREF_TURN_PASSES, passes);
-  pref.end();
 
   machineStatusForcePublish = true;
   return true;
@@ -787,11 +820,6 @@ bool SettingsService::setTaperRatio(float ratioK) {
   nextConeRatio = cone;
   nextConeRatioFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putFloat(PREF_CONE_RATIO, cone);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -806,11 +834,6 @@ bool SettingsService::setTaperAngle(float angleDeg) {
   currentTaperSetting.presetId = 0;
   nextConeRatio = cone;
   nextConeRatioFlag = true;
-
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putFloat(PREF_CONE_RATIO, cone);
-  pref.end();
 
   machineStatusForcePublish = true;
   return true;
@@ -834,11 +857,6 @@ bool SettingsService::setTaperPreset(int presetIdx, float angleDeg, float ratioV
   nextConeRatio = cone;
   nextConeRatioFlag = true;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putFloat(PREF_CONE_RATIO, cone);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -850,11 +868,6 @@ TaperSetting SettingsService::getTaperSetting() {
 bool SettingsService::setAuxForward(bool fwd) {
   auxForward = fwd;
 
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putBool(PREF_AUX_FORWARD, fwd);
-  pref.end();
-
   machineStatusForcePublish = true;
   return true;
 }
@@ -865,95 +878,59 @@ bool SettingsService::getAuxForward() {
 
 // --- Tier 2 / Category 4: Display & Unit Modes ---
 bool SettingsService::setDiameterMode(bool dia) {
-  ::isDiameterMode = dia;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putBool(PREF_DIAMETER_MODE, ::isDiameterMode);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_diameterMode.set(dia);
 }
 
 bool SettingsService::isDiameterMode() {
-  return ::isDiameterMode;
+  return s_diameterMode.get();
 }
 
 bool SettingsService::setAbsoluteMode(bool abs) {
-  ::isAbsoluteMode = abs;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putBool(PREF_ABSOLUTE_MODE, ::isAbsoluteMode);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_absoluteMode.set(abs);
 }
 
 bool SettingsService::isAbsoluteMode() {
-  return ::isAbsoluteMode;
+  return s_absoluteMode.get();
 }
 
 bool SettingsService::setZDroMode(bool zdro) {
   if (zdro && !activeMachineProfile.zAxis.hasDroScale) {
     zdro = false;
   }
-  zDisplayModeDRO = zdro;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putBool(PREF_Z_DRO_MODE, zDisplayModeDRO);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_zDroMode.set(zdro);
 }
 
 bool SettingsService::isZDroMode() {
-  return zDisplayModeDRO;
+  return s_zDroMode.get();
 }
 
 bool SettingsService::setXDroMode(bool xdro) {
   if (xdro && !activeMachineProfile.xAxis.hasDroScale) {
     xdro = false;
   }
-  xDisplayModeDRO = xdro;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putBool(PREF_X_DRO_MODE, xDisplayModeDRO);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_xDroMode.set(xdro);
 }
 
 bool SettingsService::isXDroMode() {
-  return xDisplayModeDRO;
+  return s_xDroMode.get();
 }
 
 bool SettingsService::setMeasure(int m) {
   if (m < 0 || m > 2) return false;
-  ::setMeasure(m);
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putInt(PREF_MEASURE, m);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_measure.set(m);
 }
 
 int SettingsService::getMeasure() {
-  return measure;
+  return s_measure.get();
 }
 
 bool SettingsService::setSpindleDisplayMode(int m) {
   if (m < 0 || m > 2) return false;
-  spindleDisplayMode = m;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putInt("sdm", m);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_spindleDisplayMode.set(m);
 }
 
 int SettingsService::getSpindleDisplayMode() {
-  return spindleDisplayMode;
+  return s_spindleDisplayMode.get();
 }
 
 // --- Tier 2 / Category 5: Operational Mode & Motion State ---
@@ -967,11 +944,6 @@ bool SettingsService::requestMode(int targetMode) {
   }
   nextMode = targetMode;
   nextModeFlag = true;
-
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putInt(PREF_MODE, targetMode);
-  pref.end();
 
   machineStatusForcePublish = true;
   return true;
@@ -1012,45 +984,61 @@ void SettingsService::applyCore1PendingLatches() {
 
 bool SettingsService::setJogStepDu(long du) {
   if (du < 1 || du > 1000000) return false;
-  moveStep = du;
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
-  pref.putLong(PREF_MOVE_STEP, du);
-  pref.end();
-  machineStatusForcePublish = true;
-  return true;
+  return s_jogStepDu.set(du);
 }
 
 bool SettingsService::setDeadbandAngle(const char* val) {
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
   if (!val || *val == '\0' || strcasecmp(val, "auto") == 0 || strcasecmp(val, "default") == 0) {
+    if (!_deadbandAngle.has_value()) {
+      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_angle (already auto)");
+      return true;
+    }
     _deadbandAngle = std::nullopt;
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
     pref.remove("db_angle");
+    pref.end();
   } else {
     float deg = atof(val);
-    if (deg < 0.0f || deg > 360.0f) { pref.end(); return false; }
+    if (deg < 0.0f || deg > 360.0f) return false;
+    if (_deadbandAngle.has_value() && fabsf(_deadbandAngle.value() - deg) < 0.0001f) {
+      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_angle");
+      return true;
+    }
     _deadbandAngle = deg;
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
     pref.putFloat("db_angle", deg);
+    pref.end();
   }
-  pref.end();
   machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::setDeadbandTurns(const char* val) {
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, false);
   if (!val || *val == '\0' || strcasecmp(val, "auto") == 0 || strcasecmp(val, "default") == 0) {
+    if (!_deadbandTurns.has_value()) {
+      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_turns (already auto)");
+      return true;
+    }
     _deadbandTurns = std::nullopt;
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
     pref.remove("db_turns");
+    pref.end();
   } else {
     float turns = atof(val);
-    if (turns < 0.0f || turns > 100.0f) { pref.end(); return false; }
+    if (turns < 0.0f || turns > 10.0f) return false;
+    if (_deadbandTurns.has_value() && fabsf(_deadbandTurns.value() - turns) < 0.0001f) {
+      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_turns");
+      return true;
+    }
     _deadbandTurns = turns;
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE, false);
     pref.putFloat("db_turns", turns);
+    pref.end();
   }
-  pref.end();
   machineStatusForcePublish = true;
   return true;
 }

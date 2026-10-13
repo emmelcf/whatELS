@@ -136,5 +136,10 @@ Below is the record of major architectural decisions, the problems they solved, 
   2. Reserve LittleFS exclusively for **operator-owned runtime data**: user custom presets (`/presets/`), tool tables, and uploaded lathecode/G-code files.
   3. Firmware updates (via USB or Web OTA) write strictly to the application partition (`firmware.bin`), guaranteeing that the LittleFS partition is never wiped or formatted during upgrades.
   4. Provide a developer hot-reload override: if `/www/index.html` exists on LittleFS, the server serves the loose file instead of ROM, enabling rapid UI styling without recompiling firmware.
-* **Documented in:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md).
+### ADR 12: Volatile Kinematics on Boot & Observable Persistent Properties (`PersistentSetting<T>`)
+* **Context:** Open-loop steppers lose holding torque when power is cut; handwheels can be nudged and carriages moved while unpowered. Preserving stale coordinates, spindle angles, or soft travel limits across boots created extreme collision hazards (e.g. carriage crashing into chuck because soft limits moved relative to workpiece). Furthermore, procedural settings writes lacked dirty-checking, burning flash endurance when UI clients re-sent unchanged settings.
+* **Decision:**
+  1. Boot sequence initializes all axis coordinates to `0.000`, spindle phase/sync to `0`, travel limits to unbound (`LONG_MAX`/`LONG_MIN`), mode to safe manual `MODE_NORMAL`, and feed transmission disengaged (`isOn = false`).
+  2. Implemented `PersistentSetting<T>` observable property template for operator preferences (Tiers 3 & 4): reads once on boot into RAM, strictly suppresses redundant flash writes (`if (value == newVal) return;`), and dispatches an `onChanged` event hook.
+* **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
 

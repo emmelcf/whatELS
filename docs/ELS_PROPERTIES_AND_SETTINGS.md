@@ -25,6 +25,8 @@ In the original legacy `h5.ino` implementation and its initial modular extractio
 3. **High-Speed In-Memory Cache (Zero ISR Contention):** Real-time stepper timers (Core 1) read physical machine parameters from an in-memory RAM cache in nanoseconds without acquiring FreeRTOS mutexes or accessing SPI flash.
 4. **Universal Default Inheritance & Reset Authority:** Every property knows its factory/preset default. Operators can query defaults and instantly reset an individual key or an entire group back to baseline.
 5. **Controller-Backed Broker for Stateless Clients:** The controller provides pass-through persistent storage for connected clients (e.g., bare-metal hardware pendants or ephemeral tablet browsers) without polluting motion kinematics.
+6. **Volatile Session Kinematics & Clean Boot Baseline:** Live axis coordinates, spindle phase tracking, and soft travel limits are strictly session-volatile in RAM. On boot, physical coordinates start clean at zero and limits start unbound to prevent collision hazards caused by manual carriage or handwheel movement while the controller is unpowered.
+7. **Smart Observable Properties (`PersistentSetting<T>`) & Zero-Overhead Dirty-Checking:** All persistent settings use an in-memory observable wrapper that dirty-checks before touching SPI flash (`if (value == newVal) return;`), completely eliminating redundant NVS flash wear and dispatching an `onChanged` event hook for telemetry and logging.
 
 ---
 
@@ -178,6 +180,16 @@ To provide clean, zero-coupling introspection:
 1. **Standard JSON Schema (draft-07 / 2020-12):** The controller embeds an authoritative schema document (`/schemas/lathe-profile.schema.json`) into Flash ROM (`PROGMEM`) at build time via `scripts/embed_controller_assets.py` (with LittleFS file override fallback for live development).
 2. **Zero MCU Computation:** The ESP32 simply serves or streams the static JSON schema file over HTTP (`GET /api/schema/profile` or `GET /schemas/lathe-profile.schema.json`) or WebSocket (`SETTINGS.schema=lathe-profile`).
 3. **Dynamic Client UI & Validation:** Clients parse the JSON Schema to dynamically generate input fields, enforce validation ranges (`minimum`, `maximum`), and handle conditional visibility (`if/then` blocks, such as requiring `motor_type` and `steps_per_mm` only when `has_motor: true`).
+
+### 3.5 Smart Observable Properties (`PersistentSetting<T>`) & Redundant Write Suppression
+
+To eliminate repetitive manual `Preferences` operations, flash wear, and accidental redundant writes, persistent operator and presentation settings (Tiers 3 & 4) use the `PersistentSetting<T>` C++ observable property template.
+
+#### Architectural Tenets of `PersistentSetting<T>`:
+1. **Single Boot Read, Zero Flash Reads Thereafter:** On initialization, `PersistentSetting` reads from NVS once into an internal in-memory cache. All subsequent queries (`get()` or implicit type conversion) read the RAM cache in a single CPU instruction without acquiring SPI bus mutexes.
+2. **Deterministic Dirty-Checking Before Flash Writes:** Every assignment (`operator=` or `set()`) evaluates `if (_value == newValue) return false;`. If the incoming value matches the existing value in memory, the operation immediately aborts, emitting a debug diagnostic (`[NVS] Suppressed redundant write for key '...'`) and generating zero flash wear.
+3. **Automatic NVS Persistence on Change:** When a value genuinely changes, `PersistentSetting` automatically opens the appropriate NVS namespace, calls the type-specific `put*()` primitive, and closes the namespace.
+4. **Observable `onChanged` Event Hook:** Each setting can attach a lightweight callback hook (`void (*onChanged)(const T&)`). When a value changes, the callback triggers domain reactions (e.g. flagging `machineStatusForcePublish = true` or recalculating dependent math) completely decoupled from caller procedural logic.
 
 ---
 

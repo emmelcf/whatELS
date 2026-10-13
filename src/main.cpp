@@ -79,7 +79,7 @@ void setup() {
     pref.clear();
     pref.putInt(PREF_VERSION, PREFERENCES_VERSION);
   }
-  DEBUG_PRINTLN("Loading main preferences...");
+  pref.end();
   Serial.flush();
 
   DEBUG_PRINTLN("initAxis Z/X/Y...");
@@ -91,55 +91,52 @@ void setup() {
   Serial.flush();
 
   isOn = false;
-  dupr = pref.getLong(PREF_DUPR);
+  dupr = 0;
   motionMutex = xSemaphoreCreateMutex();
-  starts = min((int32_t)STARTS_MAX, max(static_cast<int32_t>(1), (int32_t)pref.getInt(PREF_STARTS)));
-  z.savedPos = z.pos = pref.getLong(PREF_POS_Z);
-  z.savedPosGlobal = z.posGlobal = pref.getLong(PREF_POS_GLOBAL_Z);
-  z.savedOriginPos = z.originPos = pref.getLong(PREF_ORIGIN_POS_Z);
-  z.savedMotorPos = z.motorPos = pref.getLong(PREF_MOTOR_POS_Z);
-  z.savedLeftStop = z.leftStop = pref.getLong(PREF_LEFT_STOP_Z, LONG_MAX);
-  z.savedRightStop = z.rightStop = pref.getLong(PREF_RIGHT_STOP_Z, LONG_MIN);
-  z.savedDisabled = z.disabled = pref.getBool(PREF_DISABLED_Z, false);
-  x.savedPos = x.pos = pref.getLong(PREF_POS_X);
-  x.savedPosGlobal = x.posGlobal = pref.getLong(PREF_POS_GLOBAL_X);
-  x.savedOriginPos = x.originPos = pref.getLong(PREF_ORIGIN_POS_X);
-  x.savedMotorPos = x.motorPos = pref.getLong(PREF_MOTOR_POS_X);
-  x.savedLeftStop = x.leftStop = pref.getLong(PREF_LEFT_STOP_X, LONG_MAX);
-  x.savedRightStop = x.rightStop = pref.getLong(PREF_RIGHT_STOP_X, LONG_MIN);
-  x.savedDisabled = x.disabled = pref.getBool(PREF_DISABLED_X, false);
-  y.savedPos = y.pos = pref.getLong(PREF_POS_Y);
-  y.savedPosGlobal = y.posGlobal = pref.getLong(PREF_POS_GLOBAL_Y);
-  y.savedOriginPos = y.originPos = pref.getLong(PREF_ORIGIN_POS_Y);
-  y.savedMotorPos = y.motorPos = pref.getLong(PREF_MOTOR_POS_Y);
-  y.savedLeftStop = y.leftStop = pref.getLong(PREF_LEFT_STOP_Y, LONG_MAX);
-  y.savedRightStop = y.rightStop = pref.getLong(PREF_RIGHT_STOP_Y, LONG_MIN);
-  y.savedDisabled = y.disabled = pref.getBool(PREF_DISABLED_Y, false);
-  savedSpindlePos = spindlePos = pref.getLong(PREF_SPINDLE_POS);
-  savedSpindlePosAvg = spindlePosAvg = pref.getLong(PREF_SPINDLE_POS_AVG);
-  savedSpindlePosSync = spindlePosSync = pref.getInt(PREF_OUT_OF_SYNC);
-  savedSpindlePosGlobal = spindlePosGlobal = pref.getLong(PREF_SPINDLE_POS_GLOBAL);
-  savedShowAngle = showAngle = pref.getBool(PREF_SHOW_ANGLE);
-  savedShowTacho = showTacho = pref.getBool(PREF_SHOW_TACHO);
-  moveStep = pref.getLong(PREF_MOVE_STEP, MOVE_STEP_1);
-  int bootMode = pref.getInt(PREF_MODE);
-  if (bootMode < MODE_NORMAL || bootMode > MODE_SLOT || (bootMode == MODE_Y && !ACTIVE_Y)) bootMode = MODE_NORMAL;
-  DEBUG_PRINTLN("setModeFromLoop...");
+  starts = 1;
+  turnPasses = 1;
+  coneRatio = 0.0f;
+  auxForward = true;
+
+  // Clean, deterministic boot state for physical axes (unreferenced / zero origin, no soft limits, enabled)
+  z.savedPos = z.pos = 0;
+  z.savedPosGlobal = z.posGlobal = 0;
+  z.savedOriginPos = z.originPos = 0;
+  z.savedMotorPos = z.motorPos = 0;
+  z.savedLeftStop = z.leftStop = LONG_MAX;
+  z.savedRightStop = z.rightStop = LONG_MIN;
+  z.savedDisabled = z.disabled = false;
+
+  x.savedPos = x.pos = 0;
+  x.savedPosGlobal = x.posGlobal = 0;
+  x.savedOriginPos = x.originPos = 0;
+  x.savedMotorPos = x.motorPos = 0;
+  x.savedLeftStop = x.leftStop = LONG_MAX;
+  x.savedRightStop = x.rightStop = LONG_MIN;
+  x.savedDisabled = x.disabled = false;
+
+  y.savedPos = y.pos = 0;
+  y.savedPosGlobal = y.posGlobal = 0;
+  y.savedOriginPos = y.originPos = 0;
+  y.savedMotorPos = y.motorPos = 0;
+  y.savedLeftStop = y.leftStop = LONG_MAX;
+  y.savedRightStop = y.rightStop = LONG_MIN;
+  y.savedDisabled = y.disabled = false;
+
+  // Spindle phase & angle unreferenced until index/tick sync
+  savedSpindlePos = spindlePos = 0;
+  savedSpindlePosAvg = spindlePosAvg = 0;
+  savedSpindlePosSync = spindlePosSync = 0;
+  savedSpindlePosGlobal = spindlePosGlobal = 0;
+
+  // Always boot cleanly and safely into standard manual feed / DRO mode
+  DEBUG_PRINTLN("setModeFromLoop MODE_NORMAL...");
   Serial.flush();
-  setModeFromLoop(bootMode);
+  setModeFromLoop(MODE_NORMAL);
   DEBUG_PRINTLN("setModeFromLoop done.");
   Serial.flush();
-  measure = pref.getInt(PREF_MEASURE);
-  coneRatio = pref.getFloat(PREF_CONE_RATIO, coneRatio);
-  turnPasses = pref.getInt(PREF_TURN_PASSES, turnPasses);
-  auxForward = pref.getBool(PREF_AUX_FORWARD, true);
-  zDisplayModeDRO = activeMachineProfile.zAxis.hasDroScale && pref.getBool(PREF_Z_DRO_MODE, false);
-  xDisplayModeDRO = activeMachineProfile.xAxis.hasDroScale && pref.getBool(PREF_X_DRO_MODE, false);
-  isDiameterMode = pref.getBool(PREF_DIAMETER_MODE, true);
-  isAbsoluteMode = pref.getBool(PREF_ABSOLUTE_MODE, true);
-  DEBUG_PRINTLN("pref.end()...");
-  Serial.flush();
-  pref.end();
+
+  // Initialize settings service and load operator preferences (Tiers 3 & 4)
   SettingsService::init();
 
   DEBUG_PRINTLN("Enabling stepper pins...");

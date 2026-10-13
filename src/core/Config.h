@@ -340,8 +340,18 @@ struct WebUiEvent {
 extern KeyboardBinding keyboardBindings[];
 extern const int KEYBOARD_BINDING_COUNT;
 
-// Preference keys
+// Preference keys: Persistent Operator & UI Presentation Preferences
 #define PREF_VERSION "v"
+#define PREF_SHOW_ANGLE "ang"
+#define PREF_SHOW_TACHO "rpm"
+#define PREF_MOVE_STEP "ms"
+#define PREF_MEASURE "mea"
+#define PREF_Z_DRO_MODE "zdro"
+#define PREF_X_DRO_MODE "xdro"
+#define PREF_DIAMETER_MODE "dia"
+#define PREF_ABSOLUTE_MODE "abs"
+
+// Legacy / Deprecated volatile keys (retained for backward migration compatibility if needed)
 #define PREF_DUPR "d"
 #define PREF_POS_Z "zp"
 #define PREF_LEFT_STOP_Z "zls"
@@ -368,19 +378,11 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define PREF_SPINDLE_POS_AVG "spa"
 #define PREF_OUT_OF_SYNC "oos"
 #define PREF_SPINDLE_POS_GLOBAL "spg"
-#define PREF_SHOW_ANGLE "ang"
-#define PREF_SHOW_TACHO "rpm"
 #define PREF_STARTS "sta"
 #define PREF_MODE "mod"
-#define PREF_MEASURE "mea"
 #define PREF_CONE_RATIO "cr"
 #define PREF_TURN_PASSES "tp"
-#define PREF_MOVE_STEP "ms"
 #define PREF_AUX_FORWARD "af"
-#define PREF_Z_DRO_MODE "zdro"
-#define PREF_X_DRO_MODE "xdro"
-#define PREF_DIAMETER_MODE "dia"
-#define PREF_ABSOLUTE_MODE "abs"
 
 // Machine config keys
 #define CFG_VERSION "v"
