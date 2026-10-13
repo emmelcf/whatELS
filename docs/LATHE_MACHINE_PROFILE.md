@@ -367,12 +367,16 @@ All clients interact with machine profiles through standard ASCII line commands:
 | :--- | :--- | :--- |
 | `SETTINGS.preset.list` | Returns available profile slugs, labels, active profile (from NVS), and default (from catalog) | `PRESET.list=wm210v_stock,wm210v_hybrid;active=wm210v_hybrid;default=wm210v_stock\n` |
 | `SETTINGS.preset.get=<slug>` | Streams the specific profile JSON payload | Profile JSON document |
-| `SETTINGS.preset.apply=<slug>` | Sets active profile in NVS (`machine.preset = slug`) and activates in RAM | `OK:SETTINGS.preset.apply=wm210v_hybrid\n` |
+| `SETTINGS.preset.apply=<slug>` | Sets active profile in NVS (`machine.preset = slug`), clears prior sparse machine overrides, and activates in RAM | `OK:SETTINGS.preset.apply=wm210v_hybrid\n` |
 | `SETTINGS.preset.setDefault=<slug>` | Sets `default_profile_id = slug` in catalog | `OK:SETTINGS.preset.setDefault=wm210v_stock\n` |
 | `SETTINGS.preset.resetToDefault` | Clears active NVS overrides and reloads `default_profile_id` | `OK:SETTINGS.preset.resetToDefault\n` |
 | `SETTINGS.preset.save=<slug>` | Serializes current active profile and saves into catalog | `OK:SETTINGS.preset.save=custom_shop_1022\n` |
 | `SETTINGS.preset.delete=<slug>`| Removes a profile from the catalog | `OK:SETTINGS.preset.delete=old_test_profile\n` |
 | `SETTINGS.preset.export` | Streams complete catalog JSON document | Full catalog JSON payload |
+
+> [!IMPORTANT]
+> **Preset Application Behavior & Calibration Isolation:**  
+> When an operator applies a different preset via `SETTINGS.preset.apply=<slug>`, any sparse machine overrides stored in NVS (`screw_z_du`, `mot_steps_z`, etc.) from the previous machine are automatically cleared. Leadscrew pitch calibrations and microstep counts belong strictly to a physical machine; carrying over custom calibration offsets across different machine presets is dangerous and forbidden.
 
 ---
 

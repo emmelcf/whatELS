@@ -478,68 +478,60 @@ void loadMachineProfile() {
   Preferences pref;
   pref.begin("machine", false);
 
-  bool hasProfId = pref.isKey("prof_id");
-  bool hasCaps = pref.isKey("caps");
-
-  if (!hasProfId && !hasCaps) {
-    DEBUG_PRINTLN("loadMachineProfile: No machine profile in NVS. Loading ROM default (WM210V)...");
-    pref.end();
-    activeMachineProfile = getDefaultProfile();
-    saveMachineProfile();
-  } else {
-    DEBUG_PRINTLN("loadMachineProfile: Found profile in NVS. Loading...");
-    activeMachineProfile = getDefaultProfile(); // baseline for any unpersisted properties
-
-    String profId = pref.getString("prof_id", activeMachineProfile.profileId);
-    strncpy(activeMachineProfile.profileId, profId.c_str(), sizeof(activeMachineProfile.profileId) - 1);
-    activeMachineProfile.profileId[sizeof(activeMachineProfile.profileId) - 1] = '\0';
-
-    if (pref.isKey("model_name")) {
-      String modelName = pref.getString("model_name", activeMachineProfile.modelName);
-      strncpy(activeMachineProfile.modelName, modelName.c_str(), sizeof(activeMachineProfile.modelName) - 1);
-      activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
-    }
-
-    if (pref.isKey("caps")) {
-      activeMachineProfile.capabilities = pref.getUInt("caps");
-    }
-
-    if (pref.isKey("screw_z_du")) {
-      int32_t screwZDu = pref.getInt("screw_z_du");
-      activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
-    }
-
-    if (pref.isKey("mot_steps_z")) {
-      activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
-    }
-
-    if (pref.isKey("enc_ppr")) {
-      activeMachineProfile.spindle.encoder.ppr = pref.getUShort("enc_ppr");
-    }
-
-    if (pref.isKey("spindle_ratio")) {
-      activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
-    }
-
-    // Clean up any stale DRO flags from NVS; DROs are disabled by default
-    bool nvsCleaned = false;
-    if (pref.isKey("has_dro_z")) {
-      pref.remove("has_dro_z");
-      nvsCleaned = true;
-    }
-    if (pref.isKey("has_dro_x")) {
-      pref.remove("has_dro_x");
-      nvsCleaned = true;
-    }
-    activeMachineProfile.zAxis.hasDroScale = false;
-    activeMachineProfile.xAxis.hasDroScale = false;
-
-    pref.end();
-
-    if (nvsCleaned) {
-      saveMachineProfile();
-    }
+  String presetSlug = "";
+  if (pref.isKey("preset")) {
+    presetSlug = pref.getString("preset");
+  } else if (pref.isKey("prof_id")) {
+    presetSlug = pref.getString("prof_id");
   }
+
+  char defaultSlug[32] = "wm210v_stock";
+  getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
+
+  const char* slugToLoad = (presetSlug.length() > 0) ? presetSlug.c_str() : defaultSlug;
+
+  LatheConfiguration loadedProfile;
+  if (loadProfileFromLittleFS(slugToLoad, &loadedProfile)) {
+    DEBUG_PRINTF("loadMachineProfile: Loaded preset '%s' from LittleFS catalog\n", slugToLoad);
+    activeMachineProfile = loadedProfile;
+  } else {
+    DEBUG_PRINTF("loadMachineProfile: Preset '%s' not found on LittleFS. Using ROM failsafe (WM210V)...\n", slugToLoad);
+    activeMachineProfile = getDefaultProfile();
+  }
+
+  // Apply sparse user overrides from NVS if explicitly customized
+  if (pref.isKey("model_name")) {
+    String modelName = pref.getString("model_name", activeMachineProfile.modelName);
+    strncpy(activeMachineProfile.modelName, modelName.c_str(), sizeof(activeMachineProfile.modelName) - 1);
+    activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
+  }
+
+  if (pref.isKey("screw_z_du")) {
+    int32_t screwZDu = pref.getInt("screw_z_du");
+    activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
+  }
+
+  if (pref.isKey("mot_steps_z")) {
+    activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
+  }
+
+  if (pref.isKey("enc_ppr")) {
+    activeMachineProfile.spindle.encoder.ppr = pref.getUShort("enc_ppr");
+  }
+
+  if (pref.isKey("spindle_ratio")) {
+    activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
+  }
+
+  // Clean up any stale DRO flags from NVS; DROs are disabled by default
+  if (pref.isKey("has_dro_z")) {
+    pref.remove("has_dro_z");
+  }
+  if (pref.isKey("has_dro_x")) {
+    pref.remove("has_dro_x");
+  }
+
+  pref.end();
 
   // Ensure capabilities bitmask stays strictly synchronized with physical hardware
   if (activeMachineProfile.zAxis.hasDroScale) {
@@ -580,17 +572,14 @@ void loadMachineProfile() {
 }
 
 void saveMachineProfile() {
-  DEBUG_PRINTLN("saveMachineProfile: Persisting to NVS 'machine'...");
+  DEBUG_PRINTLN("saveMachineProfile: Persisting sparse overrides to NVS 'machine'...");
   Preferences pref;
   pref.begin("machine", false);
 
+  pref.putString("preset", activeMachineProfile.profileId);
   pref.putString("prof_id", activeMachineProfile.profileId);
   pref.putString("model_name", activeMachineProfile.modelName);
-  pref.putUInt("caps", activeMachineProfile.capabilities);
-  pref.putInt("screw_z_du", (int32_t)activeMachineProfile.zAxis.leadscrewPitchDu());
-  pref.putFloat("mot_steps_z", activeMachineProfile.zAxis.stepsPerMm);
-  pref.putUShort("enc_ppr", activeMachineProfile.spindle.encoder.ppr);
-  pref.putFloat("spindle_ratio", activeMachineProfile.spindle.pulleyRatio);
+
   if (activeMachineProfile.zAxis.hasDroScale) {
     pref.putBool("has_dro_z", true);
   } else if (pref.isKey("has_dro_z")) {

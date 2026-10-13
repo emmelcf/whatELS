@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "default_profile_id": "wm210v_stock",
+  "profiles": [
+    {
+      "identity": {
+        "profile_id": "wm210v_stock",
+        "model_name": "WM210V 8x16 Bench Lathe",
+        "capabilities": 25
+      },
+      "envelope": {
+        "bed": {
+          "total_length_mm": 600.0,
+          "bed_width_mm": 100.0
+        },
+        "swing": {
+          "over_bed_dia_mm": 210.0,
+          "over_cross_slide_dia_mm": 110.0
+        },
+        "headstock": {
+          "spindle_bore_dia_mm": 38.0,
+          "chuck": {
+            "diameter_mm": 125.0,
+            "body_length_mm": 65.0
+          },
+          "datums": {
+            "z_zero_from_chuck_face_mm": 10.0,
+            "x_zero_from_centerline_mm": 0.0
+          }
+        }
+      },
+      "spindle": {
+        "kinematics": {
+          "max_safe_rpm": 2500.0,
+          "min_sync_rpm": 15.0,
+          "direction_inverted": false
+        },
+        "feedback": {
+          "encoder": {
+            "ppr": 1200,
+            "has_index": false,
+            "inverted": false
+          },
+          "pulley_ratio": 1.0
+        }
+      },
+      "axes": {
+        "z": {
+          "label": "Carriage (Longitudinal)",
+          "kinematics": {
+            "leadscrew_pitch_mm": 2.0,
+            "backlash_mm": 0.0,
+            "direction_inverted": false,
+            "max_velocity_mm_min": 1500.0,
+            "max_accel_mm_sec2": 250.0
+          },
+          "limits": {
+            "soft": {
+              "enabled": false,
+              "min_mm": 0.0,
+              "max_mm": 350.0
+            }
+          },
+          "drive": {
+            "type": "GENERIC",
+            "steps_per_mm": 400.0,
+            "enable_active_low": true
+          },
+          "feedback": {
+            "has_dro": false
+          }
+        },
+        "x": {
+          "label": "Cross-Slide (Transverse)",
+          "kinematics": {
+            "leadscrew_pitch_mm": 2.0,
+            "backlash_mm": 0.0,
+            "direction_inverted": false,
+            "max_velocity_mm_min": 800.0,
+            "max_accel_mm_sec2": 200.0
+          },
+          "limits": {
+            "soft": {
+              "enabled": false,
+              "min_mm": 0.0,
+              "max_mm": 100.0
+            }
+          },
+          "drive": {
+            "type": "GENERIC",
+            "steps_per_mm": 400.0,
+            "enable_active_low": true
+          },
+          "feedback": {
+            "has_dro": false
+          }
+        }
+      }
+    },
+    {
+      "identity": {
+        "profile_id": "mini_7x14",
+        "model_name": "Mini Lathe 7x14 (16 TPI Z)",
+        "capabilities": 25
+      },
+      "envelope": {
+        "bed": {
+          "total_length_mm": 450.0,
+          "bed_width_mm": 80.0
+        },
+        "swing": {
+          "over_bed_dia_mm": 180.0,
+          "over_cross_slide_dia_mm": 90.0
+        },
+        "headstock": {
+          "spindle_bore_dia_mm": 20.0,
+          "chuck": {
+            "diameter_mm": 80.0,
+            "body_length_mm": 50.0
+          },
+          "datums": {
+            "z_zero_from_chuck_face_mm": 10.0,
+            "x_zero_from_centerline_mm": 0.0
+          }
+        }
+      },
+      "spindle": {
+        "kinematics": {
+          "max_safe_rpm": 2500.0,
+          "min_sync_rpm": 15.0,
+          "direction_inverted": false
+        },
+        "feedback": {
+          "encoder": {
+            "ppr": 1000,
+            "has_index": false,
+            "inverted": false
+          },
+          "pulley_ratio": 1.0
+        }
+      },
+      "axes": {
+        "z": {
+          "label": "Carriage (Longitudinal)",
+          "kinematics": {
+            "leadscrew_pitch_mm": 1.5875,
+            "backlash_mm": 0.0,
+            "direction_inverted": false,
+            "max_velocity_mm_min": 1200.0,
+            "max_accel_mm_sec2": 200.0
+          },
+          "limits": {
+            "soft": {
+              "enabled": false,
+              "min_mm": 0.0,
+              "max_mm": 250.0
+            }
+          },
+          "drive": {
+            "type": "GENERIC",
+            "steps_per_mm": 503.94,
+            "enable_active_low": true
+          },
+          "feedback": {
+            "has_dro": false
+          }
+        },
+        "x": {
+          "label": "Cross-Slide (Transverse)",
+          "kinematics": {
+            "leadscrew_pitch_mm": 1.0,
+            "backlash_mm": 0.0,
+            "direction_inverted": false,
+            "max_velocity_mm_min": 600.0,
+            "max_accel_mm_sec2": 150.0
+          },
+          "limits": {
+            "soft": {
+              "enabled": false,
+              "min_mm": 0.0,
+              "max_mm": 65.0
+            }
+          },
+          "drive": {
+            "type": "GENERIC",
+            "steps_per_mm": 800.0,
+            "enable_active_low": true
+          },
+          "feedback": {
+            "has_dro": false
+          }
+        }
+      }
+    }
+  ]
+}

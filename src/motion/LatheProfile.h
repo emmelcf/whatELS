@@ -191,9 +191,12 @@ struct LatheConfiguration {
 };
 
 // -----------------------------------------------------------------------------
-// 4. Standard Lathe Preset API
+// 4. Standard Lathe Preset API & LittleFS Catalog
 // -----------------------------------------------------------------------------
 
 LatheConfiguration getDefaultProfile();
 const LatheConfiguration* findPresetBySlug(const char* slug);
+bool loadProfileFromLittleFS(const char* slug, LatheConfiguration* outProfile);
+bool getDefaultCatalogProfileId(char* outSlug, size_t maxLen);
+bool listCatalogProfiles(String* outList);
 const char* getCapabilityName(LatheCapabilityFlags flag);

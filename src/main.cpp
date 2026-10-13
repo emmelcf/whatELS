@@ -21,6 +21,11 @@ void setup() {
   delay(100);
   async_timer = timerBegin(TIMER_FREQ);
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
+  DEBUG_PRINTLN("Mounting LittleFS...");
+  Serial.flush();
+  if (LittleFS.begin(true)) {
+    gcodeProgramCount = getGcodeProgramCount();
+  }
   DEBUG_PRINTLN("Loading configuration...");
   DEBUG_PRINTLN("Loading machine config...");
   loadMachineConfig();
@@ -142,12 +147,7 @@ void setup() {
   if (!x.needsRest && !x.disabled) digitalWrite(x.ena, x.invertEnable ? LOW : HIGH);
   if (y.active && !y.needsRest && !y.disabled) digitalWrite(y.ena, y.invertEnable ? LOW : HIGH);
 
-  DEBUG_PRINTLN("LittleFS.begin()...");
-  Serial.flush();
-  if (LittleFS.begin(true)) {
-    gcodeProgramCount = getGcodeProgramCount();
-  }
-  DEBUG_PRINTLN("LittleFS done.");
+  DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
 
   if (WIFI_ENABLED) {

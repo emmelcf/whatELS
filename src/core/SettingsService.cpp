@@ -97,8 +97,16 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
     return false;
   }
 
+  // Clear prior machine overrides from NVS to prevent calibration leakage across machines
+  Preferences pref;
+  pref.begin("machine", false);
+  pref.clear();
+  pref.putString("preset", pPreset->profileId);
+  pref.putString("prof_id", pPreset->profileId);
+  pref.putString("model_name", pPreset->modelName);
+  pref.end();
+
   activeMachineProfile = *pPreset;
-  saveMachineProfile();
   syncLegacyGlobals();
   saveMachineConfig();
   machineStatusForcePublish = true;
