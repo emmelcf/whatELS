@@ -25,18 +25,9 @@ bool INVERT_X = DEFAULT_INVERT_X;
 bool INVERT_X_ENABLE = DEFAULT_INVERT_X_ENABLE;
 bool NEEDS_REST_X = DEFAULT_NEEDS_REST_X;
 
-long STEP_TIME_MS = DEFAULT_STEP_TIME_MS;
-long DELAY_BETWEEN_STEPS_MS = DEFAULT_DELAY_BETWEEN_STEPS_MS;
-bool ENABLE_CONTINUOUS_MOVE = DEFAULT_ENABLE_CONTINUOUS_MOVE;
-long JOG_HOLD_DELAY_MS = DEFAULT_JOG_HOLD_DELAY_MS;
+ControllerConfig sysConfig = {};
+OperatorPreferences operatorPrefs = {};
 
-bool WIFI_ENABLED = DEFAULT_WIFI_ENABLED;
-String WIFI_SSID = DEFAULT_WIFI_SSID;
-String WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
-String WIFI_HOSTNAME = DEFAULT_WIFI_HOSTNAME;
-
-float PULSE_PER_REVOLUTION_Z = DEFAULT_PULSE_PER_REVOLUTION_Z;
-float PULSE_PER_REVOLUTION_X = DEFAULT_PULSE_PER_REVOLUTION_X;
 
 int ENCODER_STEPS_INT = DEFAULT_ENCODER_PPR * 2;
 float ENCODER_STEPS_FLOAT = DEFAULT_ENCODER_PPR * 2;
@@ -201,13 +192,7 @@ void loadMachineConfig() {
   Preferences cfg;
   DEBUG_PRINTLN("cfg.begin...");
   cfg.begin(CONFIG_NAMESPACE);
-  DEBUG_PRINTLN("cfg.getInt...");
-  if (cfg.getInt(CFG_VERSION) != CONFIG_VERSION) {
-    DEBUG_PRINTLN("cfg.clear()...");
-    cfg.clear();
-    DEBUG_PRINTLN("cfg.putInt...");
-    cfg.putInt(CFG_VERSION, CONFIG_VERSION);
-  }
+
   DEBUG_PRINTLN("loading fields...");
   ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
   AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
@@ -449,8 +434,8 @@ bool validateKeyboardConfig(String* error) {
   return true;
 }
 
-// Persistent Settings for Keyboard
-static PersistentSetting<bool> s_showKeyPresses(KEYBOARD_CONFIG_NAMESPACE, KCFG_SHOW_KEY_PRESSES, false, [](const bool& val) {
+// Persistent Settings for Keyboard (Stored in Tier 2 "sys")
+static PersistentSetting<bool> s_showKeyPresses("sys", "show_keys", false, [](const bool& val) {
   SHOW_KEY_PRESSES = val;
 });
 static PersistentSetting<uint8_t> s_keyBindings[KEYBOARD_BINDING_COUNT];
@@ -464,19 +449,35 @@ void saveKeyboardConfig() {
 
 void loadKeyboardConfig() {
   setKeyboardConfigDefaults();
-  Preferences cfg;
-  cfg.begin(KEYBOARD_CONFIG_NAMESPACE);
-  if (cfg.getInt(KCFG_VERSION) != KEYBOARD_CONFIG_VERSION) {
-    cfg.clear();
-    cfg.putInt(KCFG_VERSION, KEYBOARD_CONFIG_VERSION);
+
+  // Transparent migration from legacy "h5keys" namespace if present
+  Preferences oldKeys;
+  if (oldKeys.begin("h5keys", true)) {
+    Preferences sysPref;
+    if (sysPref.begin("sys", false)) {
+      if (oldKeys.isKey(KCFG_SHOW_KEY_PRESSES)) {
+        sysPref.putBool(KCFG_SHOW_KEY_PRESSES, oldKeys.getBool(KCFG_SHOW_KEY_PRESSES));
+      }
+      for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
+        if (oldKeys.isKey(keyboardBindings[i].id)) {
+          sysPref.putUChar(keyboardBindings[i].id, oldKeys.getUChar(keyboardBindings[i].id));
+        }
+      }
+      sysPref.end();
+    }
+    oldKeys.end();
+    Preferences clearOld;
+    if (clearOld.begin("h5keys", false)) {
+      clearOld.clear();
+      clearOld.end();
+    }
   }
-  cfg.end();
 
   s_showKeyPresses.init();
   SHOW_KEY_PRESSES = s_showKeyPresses.get();
 
   for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    s_keyBindings[i].setup(KEYBOARD_CONFIG_NAMESPACE, keyboardBindings[i].id, keyboardBindings[i].defaultCode);
+    s_keyBindings[i].setup("sys", keyboardBindings[i].id, keyboardBindings[i].defaultCode);
     s_keyBindings[i].init();
     keyboardBindings[i].code = s_keyBindings[i].get();
   }
@@ -512,29 +513,51 @@ bool validateWifiConfig(String* error) {
   return true;
 }
 
-// Persistent Settings for WiFi
-static PersistentSetting<bool> s_wifiEnabled(WIFI_CONFIG_NAMESPACE, WCFG_ENABLED, DEFAULT_WIFI_ENABLED, [](const bool& val) {
+// Persistent Settings for WiFi (Stored in Tier 2 "sys")
+static PersistentSetting<bool> s_wifiEnabled("sys", "wifi_en", true, [](const bool& val) {
   WIFI_ENABLED = val;
 });
-static PersistentSetting<String> s_wifiSsid(WIFI_CONFIG_NAMESPACE, WCFG_SSID, DEFAULT_WIFI_SSID, [](const String& val) {
+static PersistentSetting<String> s_wifiSsid("sys", "wifi_ssid", "", [](const String& val) {
   WIFI_SSID = val;
 });
-static PersistentSetting<String> s_wifiPassword(WIFI_CONFIG_NAMESPACE, WCFG_PASSWORD, DEFAULT_WIFI_PASSWORD, [](const String& val) {
+static PersistentSetting<String> s_wifiPassword("sys", "wifi_pwd", "", [](const String& val) {
   WIFI_PASSWORD = val;
 });
-static PersistentSetting<String> s_wifiHostname(WIFI_CONFIG_NAMESPACE, WCFG_HOSTNAME, DEFAULT_WIFI_HOSTNAME, [](const String& val) {
+static PersistentSetting<String> s_wifiHostname("sys", "wifi_host", "nanoels", [](const String& val) {
   WIFI_HOSTNAME = val;
 });
 
 void loadWifiConfig() {
   setWifiConfigDefaults();
-  Preferences cfg;
-  cfg.begin(WIFI_CONFIG_NAMESPACE);
-  if (cfg.getInt(WCFG_VERSION) != WIFI_CONFIG_VERSION) {
-    cfg.clear();
-    cfg.putInt(WCFG_VERSION, WIFI_CONFIG_VERSION);
+
+  // Transparent migration from legacy "h5wifi" namespace if present
+  Preferences oldWifi;
+  if (oldWifi.begin("h5wifi", true)) {
+    if (oldWifi.isKey("ssid")) {
+      String oldSsid = oldWifi.getString("ssid", "");
+      String oldPwd = oldWifi.getString("pwd", "");
+      String oldHn = oldWifi.getString("hn", "nanoels");
+      bool oldEn = oldWifi.getBool("en", true);
+      oldWifi.end();
+
+      Preferences sysPref;
+      if (sysPref.begin("sys", false)) {
+        sysPref.putString("wifi_ssid", oldSsid);
+        sysPref.putString("wifi_pwd", oldPwd);
+        sysPref.putString("wifi_host", oldHn);
+        sysPref.putBool("wifi_en", oldEn);
+        sysPref.end();
+      }
+
+      Preferences clearOld;
+      if (clearOld.begin("h5wifi", false)) {
+        clearOld.clear();
+        clearOld.end();
+      }
+    } else {
+      oldWifi.end();
+    }
   }
-  cfg.end();
 
   s_wifiEnabled.init();
   s_wifiSsid.init();
@@ -564,5 +587,7 @@ void setMeasure(int value) {
     return;
   }
   measure = value;
+  operatorPrefs.measure = value;
   moveStep = measure == MEASURE_METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1;
+  operatorPrefs.jogStepDu = moveStep;
 }

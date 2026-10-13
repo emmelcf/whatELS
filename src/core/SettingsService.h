@@ -108,7 +108,8 @@ public:
   // Core 1 Synchronization Hook (Called from main.cpp / motion loop)
   static void applyCore1PendingLatches();
 
-  // --- Tier 3: Telemetry Deadband Getters ---
+  // --- Tier 3: Workshop Operator Preferences ---
+  static const OperatorPreferences& getPreferences() { return operatorPrefs; }
   static float getDeadbandAngle();
   static bool isDeadbandAngleAuto();
   static float getDeadbandTurns();

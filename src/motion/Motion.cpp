@@ -1320,6 +1320,7 @@ bool setOperatingMode(int newMode) {
 bool setFeedStepDu(long stepDu) {
   if (stepDu <= 0) return false;
   feedStepDu = stepDu;
+  operatorPrefs.feedStepDu = stepDu;
   return true;
 }
 
@@ -1339,5 +1340,6 @@ void cycleFeedStep() {
     else if (feedStepDu == FEED_STEP_IMP_3) feedStepDu = FEED_STEP_IMP_4;
     else feedStepDu = FEED_STEP_IMP_1;
   }
+  operatorPrefs.feedStepDu = feedStepDu;
 }
 

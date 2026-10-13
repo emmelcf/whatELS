@@ -12,23 +12,28 @@
 static std::optional<float> _deadbandAngle;
 static std::optional<float> _deadbandTurns;
 
-static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& /*val*/) {
+static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& val) {
+  operatorPrefs.isDiameterMode = val;
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& /*val*/) {
+static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& val) {
+  operatorPrefs.isAbsoluteMode = val;
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& /*val*/) {
+static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& val) {
+  operatorPrefs.zDroActive = val;
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& /*val*/) {
+static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& val) {
+  operatorPrefs.xDroActive = val;
   machineStatusForcePublish = true;
 });
 
 static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, MEASURE_METRIC, [](const int& val) {
+  operatorPrefs.measure = val;
   ::setMeasure(val);
   machineStatusForcePublish = true;
 });
@@ -38,7 +43,14 @@ static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](
 });
 
 static PersistentSetting<long> s_jogStepDu(PREF_NAMESPACE, PREF_MOVE_STEP, MOVE_STEP_1, [](const long& val) {
+  operatorPrefs.jogStepDu = val;
   moveStep = val;
+  machineStatusForcePublish = true;
+});
+
+static PersistentSetting<long> s_feedStepDu(PREF_NAMESPACE, PREF_FEED_STEP, FEED_STEP_1, [](const long& val) {
+  operatorPrefs.feedStepDu = val;
+  feedStepDu = val;
   machineStatusForcePublish = true;
 });
 
@@ -52,37 +64,108 @@ static PersistentSetting<bool> s_showTacho(PREF_NAMESPACE, PREF_SHOW_TACHO, true
   machineStatusForcePublish = true;
 });
 
+static void migrateSettingsIfNeeded() {
+  Preferences sysPref;
+  if (!sysPref.begin("sys", false)) {
+    return;
+  }
+
+  // Migrate legacy "h5" operator preferences to "prefs" namespace if present
+  Preferences oldH5;
+  if (oldH5.begin("h5", true)) {
+    Preferences prefsPref;
+    if (prefsPref.begin("prefs", false)) {
+      if (oldH5.isKey(PREF_MEASURE)) prefsPref.putInt(PREF_MEASURE, oldH5.getInt(PREF_MEASURE));
+      if (oldH5.isKey(PREF_MOVE_STEP)) prefsPref.putLong(PREF_MOVE_STEP, oldH5.getLong(PREF_MOVE_STEP));
+      if (oldH5.isKey(PREF_DIAMETER_MODE)) prefsPref.putBool(PREF_DIAMETER_MODE, oldH5.getBool(PREF_DIAMETER_MODE));
+      if (oldH5.isKey(PREF_ABSOLUTE_MODE)) prefsPref.putBool(PREF_ABSOLUTE_MODE, oldH5.getBool(PREF_ABSOLUTE_MODE));
+      if (oldH5.isKey(PREF_Z_DRO_MODE)) prefsPref.putBool(PREF_Z_DRO_MODE, oldH5.getBool(PREF_Z_DRO_MODE));
+      if (oldH5.isKey(PREF_X_DRO_MODE)) prefsPref.putBool(PREF_X_DRO_MODE, oldH5.getBool(PREF_X_DRO_MODE));
+      if (oldH5.isKey("sdm")) prefsPref.putInt("sdm", oldH5.getInt("sdm"));
+      if (oldH5.isKey(PREF_SHOW_ANGLE)) prefsPref.putBool(PREF_SHOW_ANGLE, oldH5.getBool(PREF_SHOW_ANGLE));
+      if (oldH5.isKey(PREF_SHOW_TACHO)) prefsPref.putBool(PREF_SHOW_TACHO, oldH5.getBool(PREF_SHOW_TACHO));
+      if (oldH5.isKey("db_angle")) prefsPref.putFloat("db_angle", oldH5.getFloat("db_angle"));
+      if (oldH5.isKey("db_turns")) prefsPref.putFloat("db_turns", oldH5.getFloat("db_turns"));
+      prefsPref.end();
+    }
+    oldH5.end();
+    Preferences clearH5;
+    if (clearH5.begin("h5", false)) {
+      clearH5.clear();
+      clearH5.end();
+    }
+  }
+
+  int storedVersion = sysPref.getInt("sw_ver", 0);
+  if (SOFTWARE_VERSION > storedVersion) {
+    DEBUG_PRINTF("[SettingsService] Migrating software settings from v%d to v%d...\n", storedVersion, SOFTWARE_VERSION);
+
+    // Cascading non-destructive migration blocks for future firmware versions:
+    // if (storedVersion < 39) { ... }
+    // if (storedVersion < 40) { ... }
+
+    sysPref.putInt("sw_ver", SOFTWARE_VERSION);
+    sysConfig.swVersion = SOFTWARE_VERSION;
+    DEBUG_PRINTF("[SettingsService] Settings migration complete. Current version: v%d\n", SOFTWARE_VERSION);
+  } else {
+    sysConfig.swVersion = storedVersion;
+  }
+  sysPref.end();
+}
+
 void SettingsService::init() {
   DEBUG_PRINTLN("SettingsService::init...");
+  migrateSettingsIfNeeded();
+
   // Load active machine profile from NVS namespace "machine"
   loadMachineProfile();
 
-  // Load deadband overrides from PREF_NAMESPACE ("h5")
+  // Load deadband overrides from PREF_NAMESPACE ("prefs")
   Preferences pref;
   pref.begin(PREF_NAMESPACE, true);
   if (pref.isKey("db_angle")) {
     _deadbandAngle = pref.getFloat("db_angle");
+    operatorPrefs.deadbandAngle = _deadbandAngle.value();
+    operatorPrefs.isDeadbandAngleAuto = false;
   } else {
     _deadbandAngle = std::nullopt;
+    operatorPrefs.deadbandAngle = 0.0f;
+    operatorPrefs.isDeadbandAngleAuto = true;
   }
   if (pref.isKey("db_turns")) {
     _deadbandTurns = pref.getFloat("db_turns");
+    operatorPrefs.deadbandTurns = _deadbandTurns.value();
+    operatorPrefs.isDeadbandTurnsAuto = false;
   } else {
     _deadbandTurns = std::nullopt;
+    operatorPrefs.deadbandTurns = 0.0f;
+    operatorPrefs.isDeadbandTurnsAuto = true;
   }
   pref.end();
 
   // Load observable operator & display preferences
   s_diameterMode.init();
+  operatorPrefs.isDiameterMode = s_diameterMode.get();
+
   s_absoluteMode.init();
+  operatorPrefs.isAbsoluteMode = s_absoluteMode.get();
+
   s_zDroMode.init();
+  operatorPrefs.zDroActive = s_zDroMode.get();
+
   s_xDroMode.init();
+  operatorPrefs.xDroActive = s_xDroMode.get();
+
   s_measure.init();
-  measure = s_measure.get();
+  operatorPrefs.measure = measure = s_measure.get();
+
   s_spindleDisplayMode.init();
 
   s_jogStepDu.init();
-  moveStep = s_jogStepDu.get();
+  operatorPrefs.jogStepDu = moveStep = s_jogStepDu.get();
+
+  s_feedStepDu.init();
+  operatorPrefs.feedStepDu = feedStepDu = s_feedStepDu.get();
 
   s_showAngle.init();
   savedShowAngle = showAngle = s_showAngle.get();
@@ -856,6 +939,7 @@ bool SettingsService::getAuxForward() {
 
 // --- Tier 2 / Category 4: Display & Unit Modes ---
 bool SettingsService::setDiameterMode(bool dia) {
+  operatorPrefs.isDiameterMode = dia;
   return s_diameterMode.set(dia);
 }
 
@@ -864,6 +948,7 @@ bool SettingsService::isDiameterMode() {
 }
 
 bool SettingsService::setAbsoluteMode(bool abs) {
+  operatorPrefs.isAbsoluteMode = abs;
   return s_absoluteMode.set(abs);
 }
 
@@ -875,6 +960,7 @@ bool SettingsService::setZDroMode(bool zdro) {
   if (zdro && !activeMachineProfile.zAxis.hasDroScale) {
     zdro = false;
   }
+  operatorPrefs.zDroActive = zdro;
   return s_zDroMode.set(zdro);
 }
 
@@ -886,6 +972,7 @@ bool SettingsService::setXDroMode(bool xdro) {
   if (xdro && !activeMachineProfile.xAxis.hasDroScale) {
     xdro = false;
   }
+  operatorPrefs.xDroActive = xdro;
   return s_xDroMode.set(xdro);
 }
 
@@ -895,6 +982,7 @@ bool SettingsService::isXDroMode() {
 
 bool SettingsService::setMeasure(int m) {
   if (m < 0 || m > 2) return false;
+  operatorPrefs.measure = m;
   return s_measure.set(m);
 }
 
@@ -958,6 +1046,7 @@ void SettingsService::applyCore1PendingLatches() {
 
 bool SettingsService::setJogStepDu(long du) {
   if (du < 1 || du > 1000000) return false;
+  operatorPrefs.jogStepDu = du;
   return s_jogStepDu.set(du);
 }
 
@@ -968,6 +1057,8 @@ bool SettingsService::setDeadbandAngle(const char* val) {
       return true;
     }
     _deadbandAngle = std::nullopt;
+    operatorPrefs.deadbandAngle = 0.0f;
+    operatorPrefs.isDeadbandAngleAuto = true;
     Preferences pref;
     pref.begin(PREF_NAMESPACE, false);
     pref.remove("db_angle");
@@ -980,6 +1071,8 @@ bool SettingsService::setDeadbandAngle(const char* val) {
       return true;
     }
     _deadbandAngle = deg;
+    operatorPrefs.deadbandAngle = deg;
+    operatorPrefs.isDeadbandAngleAuto = false;
     Preferences pref;
     pref.begin(PREF_NAMESPACE, false);
     pref.putFloat("db_angle", deg);
@@ -996,6 +1089,8 @@ bool SettingsService::setDeadbandTurns(const char* val) {
       return true;
     }
     _deadbandTurns = std::nullopt;
+    operatorPrefs.deadbandTurns = 0.0f;
+    operatorPrefs.isDeadbandTurnsAuto = true;
     Preferences pref;
     pref.begin(PREF_NAMESPACE, false);
     pref.remove("db_turns");
@@ -1008,6 +1103,8 @@ bool SettingsService::setDeadbandTurns(const char* val) {
       return true;
     }
     _deadbandTurns = turns;
+    operatorPrefs.deadbandTurns = turns;
+    operatorPrefs.isDeadbandTurnsAuto = false;
     Preferences pref;
     pref.begin(PREF_NAMESPACE, false);
     pref.putFloat("db_turns", turns);
@@ -1412,7 +1509,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   if (strcasecmp(keyBuf, "prefs.feedStepDu") == 0 || strcasecmp(keyBuf, "feedStepDu") == 0) {
     long val = atol(valStr);
     if (val < 1 || val > 1000000) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
-    feedStepDu = val;
+    s_feedStepDu.set(val);
     reportOk(keyBuf, String(val));
     return true;
   }

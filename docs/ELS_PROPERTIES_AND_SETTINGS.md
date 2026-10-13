@@ -62,7 +62,7 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │ TIER 2: CONTROLLER INFRASTRUCTURE & HARDWARE (`sys.*`)                                 │
 │ Specific to the ESP32 compute host, network interfaces, and connected peripherals.   │
-│ NVS Namespace: "sys" / "wifi" / "keys" | Authority: Controller Firmware                │
+│ NVS Namespace: "sys" | Authority: Controller Firmware                                  │
 ├───────────────────────┬────────────────────────────────────────────────────────────────┤
 │ Network & WiFi        │ `wifi.enabled`, `wifi.ssid`, `wifi.password`, `wifi.hostname`, │
 │                       │ `wifi.apMode`, `wifi.channel`                                  │
@@ -71,7 +71,9 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 │ Analog Joystick ADC   │ `joystick.enabled`, `joystick.centerSamples`, `oversamples`,   │
 │                       │ `sampleIntervalMs`, `adcMax`, `deadband`, `normalRps`,         │
 │                       │ `rapidRps`, `invertAxes`, `buttonMode`                         │
+│ Manual Pulse Gen(MPG) │ `mpg.zPulsesPerRev`, `mpg.xPulsesPerRev`, `mpg.pulseWaitMs`    │
 │ Physical Key Mappings │ `keyboard.bindingTable` (USB Host / Nextion action code maps)  │
+│ Software Version Stamp│ `swVersion` (Current firmware migration checkpoint)            │
 └───────────────────────┴────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -80,6 +82,8 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 │ NVS Namespace: "prefs" | Authority: Workshop Machinist / Operator                      │
 ├───────────────────────┬────────────────────────────────────────────────────────────────┤
 │ Default System Units  │ `startupMeasure` (0 = Metric mm, 1 = Imperial in, 2 = Pitch)   │
+│ Coordinate Display    │ `diaRad` (Diameter Ø vs Radius R), `absInc` (Abs vs Inc)       │
+│ Readout Source        │ `zDroActive` (Scale vs motor steps), `xDroActive`              │
 │ Step Increment Tables │ `jogStepDu` (D-pad step: 10µm, 100µm, 1mm), `feedStepDu`       │
 │ Telemetry Deadbands   │ `deadbandAngle` (with `isAuto`), `deadbandTurns` (with `isAuto`)│
 └───────────────────────┴────────────────────────────────────────────────────────────────┘
@@ -90,11 +94,131 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 │ NVS Namespace: "clients" | Authority: Connected Terminal / Display UI                  │
 ├───────────────────────┬────────────────────────────────────────────────────────────────┤
 │ Client Session Info   │ `clientType` (web, nextion, pendant), `clientId`, `version`    │
-│ Coordinate Display    │ `diaRad` (Diameter Ø vs Radius R), `absInc` (Abs vs Inc)       │
-│ Readout Feedback      │ `zDroActive` (Leadscrew count vs Scale), `xDroActive`          │
 │ Ergonomics & Audio    │ `speechFeedback`, `announceStatus`, `speechRate`, `theme`      │
 └───────────────────────┴────────────────────────────────────────────────────────────────┘
 ```
+
+### 2.1 Strongly-Typed C++ Struct Hierarchy & In-Struct Defaults
+
+To eliminate dozens of loose `extern` globals and sprawling `DEFAULT_*` constants, configuration across all three persistent tiers is organized into cohesive C++ structs with **in-struct member initializers**. Default values are defined directly on struct fields, enabling instant, type-safe resets (e.g. `sysConfig.wifi = WifiConfig{};`).
+
+#### Unified & Extensible Encoder Hardware Abstraction
+A core insight of the NanoELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
+
+Rather than duplicating disparate encoder structs, all pulse sensors reuse the authoritative `QuadratureEncoderConfig` (defined in `src/motion/LatheProfile.h`):
+
+```cpp
+struct QuadratureEncoderConfig {
+  uint16_t ppr;         // Pulses per revolution (or pulses/mm for linear scales)
+  int8_t   aPin;        // GPIO pin for Channel A (-1 if unassigned)
+  int8_t   bPin;        // GPIO pin for Channel B (-1 if unassigned)
+  bool     invertDir;   // Swap A/B phase polarity
+  bool     hasIndex;    // Single-pulse index signal (Z-channel / zero mark)
+  int8_t   indexPin;    // GPIO pin for Index channel (-1 if unassigned)
+};
+```
+*Extensibility for Future Sensor Types:* Because encoder mechanics are decoupled from motion consumers, future encoder hardware (e.g. contactless magnetic angle sensors like AS5048 / MT6701 via SPI/I2C, or serial absolute encoders via CAN/Modbus) can be integrated by adding an encoder type driver without altering electronic leadscrew gearing, threading synchronization, or DRO display logic.
+
+```cpp
+// -----------------------------------------------------------------------------
+// Tier 2: Controller & Peripheral Structs
+// -----------------------------------------------------------------------------
+
+struct WifiConfig {
+  bool enabled = true;
+  String ssid = "";
+  String password = "";
+  String hostname = "nanoels";
+  String setupApSsid = "NanoEls-Setup";
+  String setupApPassword = "nanoels-setup";
+};
+
+struct MpgConfig {
+  QuadratureEncoderConfig zHandwheel = { 600, Z_PULSE_A, Z_PULSE_B, false, false, -1 };
+  QuadratureEncoderConfig xHandwheel = { 600, X_PULSE_A, X_PULSE_B, false, false, -1 };
+  unsigned long pulseWaitMs = 20;
+};
+
+struct MotionTimingConfig {
+  long directionSetupDelayUs = 10;   // Wait time after DIR toggle before STEP pulse
+  long steppedEnableDelayMs = 100;   // Driver power-on delay before motion
+  long jogHoldDelayMs = 1000;        // Hold duration before continuous jogging starts
+};
+
+struct GCodeConfig {
+  float linearInterpolationPrecision = 0.1f;
+  long waitEpsilonSteps = 10;
+  bool spindlePausesGcode = true;
+  int minRpm = 30;
+  long defaultFeedDuPerSec = 20000;
+  float minFeedDuPerSec = 167.0f;
+};
+
+struct KeyboardConfig {
+  bool showPresses = false;
+  KeyboardBinding bindings[43];
+};
+
+struct ControllerConfig {
+  int swVersion = 0;              // Monotonic schema migration checkpoint
+  WifiConfig wifi;
+  JoystickConfig joystick;        // Encapsulated analog/contact joystick HAL (Input.h)
+  MpgConfig mpg;
+  MotionTimingConfig timing;      // Hardware pulse timing & delay parameters
+  GCodeConfig gcode;              // G-Code execution limits & thresholds
+  KeyboardConfig keyboard;
+};
+
+extern ControllerConfig sysConfig;
+
+// -----------------------------------------------------------------------------
+// Tier 3: Workshop Operator Preferences Struct
+// -----------------------------------------------------------------------------
+
+struct OperatorPreferences {
+  int measure = 0;                // 0 = Metric, 1 = Imperial, 2 = Pitch
+  bool isDiameterMode = true;     // Diameter Ø (2x cross-slide) vs Radius R (1x)
+  bool isAbsoluteMode = true;     // Absolute (G90) vs Incremental (G91)
+  bool zDroActive = false;        // Optical linear scale vs motor step tracking
+  bool xDroActive = false;
+  long jogStepDu = 10000;         // 1.0 mm (metric) or 0.1" (imperial)
+  long feedStepDu = 100;          // 0.01 mm/rev or 0.001"/rev
+  float deadbandAngle = 0.0f;
+  bool isDeadbandAngleAuto = true;
+  float deadbandTurns = 0.0f;
+  bool isDeadbandTurnsAuto = true;
+};
+
+extern OperatorPreferences operatorPrefs;
+```
+
+### 2.2 API-to-Flash NVS Key Mapping (15-Character Constraint)
+
+ESP32 non-volatile storage (NVS) enforces a strict hardware limit: **Key names must be ≤ 15 characters**.
+NanoELS cleanly bridges hierarchical API dot-paths with compact NVS keys by using the top-level domain as the NVS namespace:
+
+| API Dot-Path | Flash Namespace | NVS Key (≤15 chars) | Type | Default Value | Description |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+| **`sys.wifi.enabled`** | `"sys"` | `"wifi_en"` | bool | `true` | Network WiFi radio state |
+| **`sys.wifi.ssid`** | `"sys"` | `"wifi_ssid"` | string | `""` | Station WiFi SSID |
+| **`sys.wifi.password`** | `"sys"` | `"wifi_pwd"` | string | `""` | Station WPA2 password |
+| **`sys.wifi.hostname`** | `"sys"` | `"wifi_host"` | string | `"nanoels"` | mDNS discovery hostname |
+| **`sys.mpg.zPulsesPerRev`** | `"sys"` | `"mpg_z_ppr"` | float | `600.0` | Z carriage handwheel PPR |
+| **`sys.mpg.xPulsesPerRev`** | `"sys"` | `"mpg_x_ppr"` | float | `600.0` | X cross-slide handwheel PPR |
+| **`sys.timing.dirSetupUs`** | `"sys"` | `"dir_setup_us"` | long | `10` | DIR pin hold before STEP |
+| **`sys.timing.stepEnableMs`** | `"sys"` | `"step_en_ms"` | long | `100` | Driver enable settling delay |
+| **`sys.timing.jogHoldMs`** | `"sys"` | `"jog_hold_ms"` | long | `1000` | Delay before continuous jog |
+| **`sys.gcode.minRpm`** | `"sys"` | `"gc_min_rpm"` | int | `30` | Minimum spindle RPM for feed |
+| **`sys.keys.showPresses`** | `"sys"` | `"show_keys"` | bool | `false` | Log scancodes to debug UART |
+| **`sys.swVersion`** | `"sys"` | `"sw_ver"` | int | `0` | Firmware schema version |
+| **`prefs.startupMeasure`** | `"prefs"` | `"measure"` | int | `0` | Default units (0=mm, 1=in) |
+| **`prefs.diaRad`** | `"prefs"` | `"dia_rad"` | bool | `true` | X DRO mode (1=Dia, 0=Rad) |
+| **`prefs.absInc`** | `"prefs"` | `"abs_inc"` | bool | `true` | Pos mode (1=Abs, 0=Inc) |
+| **`prefs.zDroActive`** | `"prefs"` | `"zdro_active"` | bool | `false` | Read physical scale on Z |
+| **`prefs.xDroActive`** | `"prefs"` | `"xdro_active"` | bool | `false` | Read physical scale on X |
+| **`prefs.jogStepDu`** | `"prefs"` | `"jog_step"` | long | `10000` | Jog step increment in du |
+| **`prefs.feedStepDu`** | `"prefs"` | `"feed_step"` | long | `100` | Feed increment in du |
+
 
 ---
 
@@ -191,6 +315,54 @@ To eliminate repetitive manual `Preferences` operations, flash wear, and acciden
 3. **Deterministic Dirty-Checking Before Flash Writes:** Every assignment (`operator=` or `set()`) evaluates `if (_value == newValue) return false;`. If the incoming value matches the existing value in memory, the operation immediately aborts, emitting a debug diagnostic (`[NVS] Suppressed redundant write for key '...'`) and generating zero flash wear.
 4. **Automatic NVS Persistence on Change:** When a value genuinely changes, `PersistentSetting` automatically opens the appropriate NVS namespace, calls the type-specific `put*()` primitive, and closes the namespace.
 5. **Observable `onChanged` Event Hook:** Each setting can attach a lightweight callback hook (`void (*onChanged)(const T&)`). When a value changes, the callback triggers domain reactions (e.g. flagging `machineStatusForcePublish = true` or recalculating dependent math) completely decoupled from caller procedural logic.
+
+### 3.6 Monotonic Software-Version Migrations (`SOFTWARE_VERSION` Engine)
+
+In early firmware revisions, schema invalidation used a destructive "nuclear wipe" (`if (storedVer != EXPECTED) pref.clear();`). This was disastrous for operators because updating firmware wiped all calibrated axis steps, leadscrew pitch error compensation, and network credentials.
+
+The modern NanoELS architecture strictly forbids blind namespace wipes. It uses a **monotonic sequential migration engine** keyed directly to `SOFTWARE_VERSION` (defined in `Config.h`):
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ MIGRATION BOOT SEQUENCE (Core 0 / Main Setup)                                          │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+                    ┌──────────────────────────────────────────────┐
+                    │ Read Stored Version from NVS: "sys.sw_ver"   │
+                    │ int storedVersion = sysPref.getInt("sw_ver") │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                                           ▼
+                             ┌───────────────────────────┐
+                             │ SOFTWARE_VERSION > stored?│
+                             └─────────────┬─────────────┘
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        │ NO (stored == current)              │ YES (firmware updated)
+                        ▼                                     ▼
+             ┌─────────────────────┐              ┌────────────────────────┐
+             │ 0ms Bypass (Boot OK)│              │ Execute Cascading Steps│
+             └─────────────────────┘              └───────────┬────────────┘
+                                                              │
+                                       ┌──────────────────────┼──────────────────────┐
+                                       ▼                      ▼                      ▼
+                             ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+                             │ if (stored < 39) │   │ if (stored < 40) │   │ if (stored < 41) │
+                             │ Migrate v38->v39 │   │ Migrate v39->v40 │   │ Migrate v40->v41 │
+                             └──────────────────┘   └──────────────────┘   └──────────────────┘
+                                                              │
+                                                              ▼
+                                            ┌───────────────────────────────────┐
+                                            │ Update Stored Version Checkpoint: │
+                                            │ sysPref.putInt("sw_ver", SW_VER)  │
+                                            └───────────────────────────────────┘
+```
+
+#### Architectural Invariants of Schema Evolution:
+1. **Single Source of Truth:** `SOFTWARE_VERSION` (e.g. `38`) is the sole migration driver. All fragmented, artificial version constants (`PREFERENCES_VERSION`, `CONFIG_VERSION`, `WIFI_CONFIG_VERSION`, `KEYBOARD_CONFIG_VERSION`) are deprecated and removed.
+2. **Version-Skipping Resilience:** If a lathe operator runs v38 and updates two years later to v42, the bootloader sequentially executes migrations for v39, v40, v41, and v42 in a single millisecond pass without losing any user configuration.
+3. **No Migration Needed for Additions:** Because `PersistentSetting` falls back to in-struct defaults when an NVS key is missing, adding new settings or changing default values requires **zero migration code**. Migrations are strictly reserved for key renames or data type conversions.
 
 ---
 

@@ -64,17 +64,7 @@ void setup() {
   DEBUG_PRINTLN("initJoystick...");
   initJoystick();
 
-  DEBUG_PRINTLN("main Preferences...");
-  Preferences pref;
-  DEBUG_PRINTLN("pref.begin...");
-  pref.begin(PREF_NAMESPACE);
-  if (pref.getInt(PREF_VERSION) != PREFERENCES_VERSION) {
-    DEBUG_PRINTLN("pref.clear()...");
-    pref.clear();
-    pref.putInt(PREF_VERSION, PREFERENCES_VERSION);
-  }
-  pref.end();
-  Serial.flush();
+
 
   DEBUG_PRINTLN("initAxis Z/X...");
   Serial.flush();

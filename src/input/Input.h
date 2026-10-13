@@ -71,25 +71,7 @@ enum JoystickAxisIndex {
   JOYSTICK_AXIS_X = 1
 };
 
-struct JoystickConfig {
-  bool enabled;
-  bool zEnabled;
-  bool xEnabled;
-  bool buttonTogglesOnOff;
-  int centerSamples;
-  int oversamples;
-  int sampleIntervalMs;
-  int adcMax;
-  int deadband;
-  int pulseQueueLimit;
-  float normalRps;
-  float rapidRps;
-  bool invertZ;
-  bool invertX;
-  bool invertButton;
-};
 
-extern JoystickConfig joystickConfig;
 extern JoystickAxisState joystickAxes[];
 extern const int JOYSTICK_AXIS_COUNT;
 
