@@ -36,9 +36,6 @@ LatheConfiguration getDefaultProfile() {
   p.xAxis.hasMpg = false;
   p.xAxis.limits = { 0.0f, 100.0f, -1, -1, false };
 
-  // Y Axis (Inactive)
-  p.yAxis = {};
-
   // Spindle (1100W BLDC motor with 38mm bore, 1200 native PPR, 1:1 pulley ratio)
   p.spindle.encoder = { 1200, 14, 13, false, false, -1 };
   p.spindle.pulleyRatio = 1.0f;

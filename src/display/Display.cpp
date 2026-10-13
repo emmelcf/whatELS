@@ -87,8 +87,7 @@ void updateDisplay() {
 
   long newHashLine2 =
     x.pos + x.originPos + x.disabled + x.leftStop - x.rightStop +
-    z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop +
-    y.pos + y.originPos + y.disabled + y.leftStop - y.rightStop + measure + x.pos % 100 +
+    z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop + measure + x.pos % 100 +
     (xDisplayModeDRO ? (long)(xScale.getRawPosition() * 1000) : 0) +
     (zDisplayModeDRO ? (long)(zScale.getRawPosition() * 1000) : 0) +
     isDiameterMode + isAbsoluteMode + xDisplayModeDRO + zDisplayModeDRO;
@@ -159,7 +158,6 @@ void updateDisplay() {
       (mode == MODE_CONE ? round(coneRatio * 10000) : 0) + turnPasses + opIndex + setupIndex + gcodeProgramIndex + gcodeProgramCount + spindleStopped * 3 + (isOn ? 139 : -117) + (inNumpad ? 10 : 0) + (auxForward ? 17 : -31) +
       (z.leftStop == LONG_MAX ? 123 : z.leftStop) + (z.rightStop == LONG_MIN ? 1234 : z.rightStop) +
       (x.leftStop == LONG_MAX ? 1235 : x.leftStop) + (x.rightStop == LONG_MIN ? 123456 : x.rightStop) + gcodeCommandHash +
-      (mode == MODE_Y ? y.pos + y.originPos + (y.leftStop == LONG_MAX ? 123 : y.leftStop) + (y.rightStop == LONG_MIN ? 1234 : y.rightStop) + y.disabled : 0) +
       pitchStatusDirection * 149 +
       (mode == MODE_JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + JOYSTICK_ENABLED * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
   bool updateLine3 = lcdHashLine3 != newHashLine3;

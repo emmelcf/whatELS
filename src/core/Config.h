@@ -68,21 +68,7 @@ const char NAME_X = 'X';
 #define X_PULSE_A 47
 #define X_PULSE_B 21
 
-// Y axis parameters
-const bool DEFAULT_ACTIVE_Y = false;
-const bool DEFAULT_ROTARY_Y = true;
-const long DEFAULT_MOTOR_STEPS_Y = 300;
-const long DEFAULT_SCREW_Y_DU = 20000;
-const long DEFAULT_SPEED_START_Y = 1600;
-const long DEFAULT_ACCELERATION_Y = 16000;
-const long DEFAULT_SPEED_MANUAL_MOVE_Y = 3200;
-const bool DEFAULT_INVERT_Y = false;
-const bool DEFAULT_INVERT_Y_ENABLE = false;
-const bool DEFAULT_NEEDS_REST_Y = false;
-const long DEFAULT_MAX_TRAVEL_MM_Y = 360;
-const long DEFAULT_BACKLASH_DU_Y = 0;
-const char NAME_Y = 'Y';
-
+// NanoELS H5 PCB silkscreen hardware pin headers (reserved/unpopulated)
 #define Y_ENA 1
 #define Y_DIR 2
 #define Y_STEP 17
@@ -121,7 +107,6 @@ const unsigned long HANDWHEEL_PULSE_WAIT_MS = 20;
 const bool DEFAULT_JOYSTICK_ENABLED = false;
 const bool DEFAULT_JOYSTICK_Z_ENABLED = true;
 const bool DEFAULT_JOYSTICK_X_ENABLED = true;
-const bool DEFAULT_JOYSTICK_Y_ENABLED = true;
 const bool DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF = false;
 const int DEFAULT_JOYSTICK_CENTER_SAMPLES = 64;
 const int DEFAULT_JOYSTICK_OVERSAMPLES = 4;
@@ -138,7 +123,6 @@ const unsigned long JOYSTICK_BUTTON_TOGGLE_MAX_MS = 500;
 const int JOYSTICK_STARTUP_CENTER_TOLERANCE_MIN = 32;
 const bool DEFAULT_INVERT_JOYSTICK_Z = false;
 const bool DEFAULT_INVERT_JOYSTICK_X = false;
-const bool DEFAULT_INVERT_JOYSTICK_Y = false;
 const bool DEFAULT_INVERT_JOYSTICK_BUTTON = false;
 
 // Step timing
@@ -236,7 +220,6 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define MODE_THREAD 7
 #define MODE_ELLIPSE 8
 #define MODE_GCODE 9
-#define MODE_Y 10
 #define MODE_JOYSTICK 11
 #define MODE_SLOT 12
 
@@ -311,7 +294,6 @@ extern NumpadMode numpadEntryMode;
 #define B_MODE_ASYNC 103
 #define B_MODE_ELLIPSE 104
 #define B_MODE_GCODE 105
-#define B_MODE_Y 106
 #define B_MODE 107
 #define B_MODE_JOYSTICK 108
 #define B_MODE_XGEAR 109
@@ -414,26 +396,12 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define CFG_ENABLE_CONTINUOUS_MOVE "contStep"
 #define CFG_SAFE_DISTANCE_DU "safeDistDu"
 #define CFG_SLOT_LEFT_REDUCTION_DU "slotLeftDu"
-#define CFG_ACTIVE_Y "yActive"
-#define CFG_ROTARY_Y "yRotary"
-#define CFG_MOTOR_STEPS_Y "yMotor"
-#define CFG_SCREW_Y_DU "yScrew"
-#define CFG_SPEED_START_Y "yStart"
-#define CFG_ACCELERATION_Y "yAccel"
-#define CFG_SPEED_MANUAL_MOVE_Y "yManual"
-#define CFG_INVERT_Y "yInv"
-#define CFG_INVERT_Y_ENABLE "yInvEn"
-#define CFG_NEEDS_REST_Y "yRest"
-#define CFG_MAX_TRAVEL_MM_Y "yTravel"
-#define CFG_BACKLASH_DU_Y "yBacklash"
 #define CFG_PULSE_PER_REVOLUTION "pulseRev"
 #define CFG_PULSE_PER_REVOLUTION_Z "zPulseRev"
 #define CFG_PULSE_PER_REVOLUTION_X "xPulseRev"
-#define CFG_PULSE_PER_REVOLUTION_Y "yPulseRev"
 #define CFG_JOYSTICK_ENABLED "joyOn"
 #define CFG_JOYSTICK_Z_ENABLED "joyZOn"
 #define CFG_JOYSTICK_X_ENABLED "joyXOn"
-#define CFG_JOYSTICK_Y_ENABLED "joyYOn"
 #define CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF "joyBtnOn"
 #define CFG_JOYSTICK_CENTER_SAMPLES "joyCenter"
 #define CFG_JOYSTICK_OVERSAMPLES "joyOver"
@@ -445,7 +413,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define CFG_JOYSTICK_RAPID_RPS "joyRapid"
 #define CFG_INVERT_JOYSTICK_Z "joyInvZ"
 #define CFG_INVERT_JOYSTICK_X "joyInvX"
-#define CFG_INVERT_JOYSTICK_Y "joyInvY"
 #define CFG_INVERT_JOYSTICK_BUTTON "joyInvB"
 
 #define WCFG_VERSION "v"
@@ -494,27 +461,12 @@ extern String WIFI_SSID;
 extern String WIFI_PASSWORD;
 extern String WIFI_HOSTNAME;
 
-extern bool ACTIVE_Y;
-extern bool ROTARY_Y;
-extern long MOTOR_STEPS_Y;
-extern long SCREW_Y_DU;
-extern long SPEED_START_Y;
-extern long ACCELERATION_Y;
-extern long SPEED_MANUAL_MOVE_Y;
-extern bool INVERT_Y;
-extern bool INVERT_Y_ENABLE;
-extern bool NEEDS_REST_Y;
-extern long MAX_TRAVEL_MM_Y;
-extern long BACKLASH_DU_Y;
-
 extern float PULSE_PER_REVOLUTION_Z;
 extern float PULSE_PER_REVOLUTION_X;
-extern float PULSE_PER_REVOLUTION_Y;
 
 extern bool JOYSTICK_ENABLED;
 extern bool JOYSTICK_Z_ENABLED;
 extern bool JOYSTICK_X_ENABLED;
-extern bool JOYSTICK_Y_ENABLED;
 extern bool JOYSTICK_BUTTON_TOGGLES_ON_OFF;
 extern int JOYSTICK_CENTER_SAMPLES;
 extern int JOYSTICK_OVERSAMPLES;
@@ -526,7 +478,6 @@ extern float JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
 extern float JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
 extern bool INVERT_JOYSTICK_Z;
 extern bool INVERT_JOYSTICK_X;
-extern bool INVERT_JOYSTICK_Y;
 extern bool INVERT_JOYSTICK_BUTTON;
 
 extern int ENCODER_STEPS_INT;
@@ -557,7 +508,6 @@ void setMachineConfigDefaults();
 void applyDerivedMachineConfig();
 void normalizeMachineConfig();
 void loadMachineConfig();
-void saveMachineConfig();
 
 // Active Lathe Machine Profile (Tier 1 Architecture)
 extern LatheConfiguration activeMachineProfile;

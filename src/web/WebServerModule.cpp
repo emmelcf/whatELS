@@ -251,144 +251,7 @@ static bool readBoolConfigArg(const char* name, bool* value, String* error) {
   return true;
 }
 
-static bool readLongConfigArg(const char* name, long* target, long minValue, long maxValue, String* error) {
-  if (!server.hasArg(name)) {
-    if(error) *error = String("Missing config value: ") + name;
-    return false;
-  }
-  long value;
-  if (!parseLongValue(server.arg(name), &value) || value < minValue || value > maxValue) {
-    if(error) *error = String(name) + " must be between " + String(minValue) + " and " + String(maxValue);
-    return false;
-  }
-  *target = value;
-  return true;
-}
 
-static bool readIntConfigArg(const char* name, int* target, int minValue, int maxValue, String* error) {
-  long value;
-  if (!readLongConfigArg(name, &value, minValue, maxValue, error)) return false;
-  *target = int(value);
-  return true;
-}
-
-static bool readFloatConfigArg(const char* name, float* target, float minValue, float maxValue, String* error) {
-  if (!server.hasArg(name)) {
-    if(error) *error = String("Missing config value: ") + name;
-    return false;
-  }
-  float value;
-  if (!parseFloatValue(server.arg(name), &value) || value < minValue || value > maxValue) {
-    if(error) *error = String(name) + " must be between " + String(minValue, 2) + " and " + String(maxValue, 2);
-    return false;
-  }
-  *target = value;
-  return true;
-}
-
-static bool readPulsePerRevolutionConfigArgs(String* error) {
-  if (server.hasArg("zPulsePerRevolution") || server.hasArg("xPulsePerRevolution") || server.hasArg("yPulsePerRevolution")) {
-    return
-      readFloatConfigArg("zPulsePerRevolution", &PULSE_PER_REVOLUTION_Z, 1.0, 100000.0, error) &&
-      readFloatConfigArg("xPulsePerRevolution", &PULSE_PER_REVOLUTION_X, 1.0, 100000.0, error) &&
-      readFloatConfigArg("yPulsePerRevolution", &PULSE_PER_REVOLUTION_Y, 1.0, 100000.0, error);
-  }
-  float pulsePerRevolution;
-  if (!readFloatConfigArg("pulsePerRevolution", &pulsePerRevolution, 1.0, 100000.0, error)) return false;
-  PULSE_PER_REVOLUTION_Z = pulsePerRevolution;
-  PULSE_PER_REVOLUTION_X = pulsePerRevolution;
-  PULSE_PER_REVOLUTION_Y = pulsePerRevolution;
-  return true;
-}
-
-
-
-static bool validateMachineConfig(String* error) {
-  if (SPEED_START_Z > SPEED_MANUAL_MOVE_Z) {
-    if(error) *error = "zSpeedStart must be less than or equal to zSpeedManualMove";
-    return false;
-  }
-  if (SPEED_START_X > SPEED_MANUAL_MOVE_X) {
-    if(error) *error = "xSpeedStart must be less than or equal to xSpeedManualMove";
-    return false;
-  }
-  if (SPEED_START_Y > SPEED_MANUAL_MOVE_Y) {
-    if(error) *error = "ySpeedStart must be less than or equal to ySpeedManualMove";
-    return false;
-  }
-  if (JOYSTICK_DEADBAND >= JOYSTICK_ADC_MAX) {
-    if(error) *error = "joystickDeadband must be less than joystickAdcMax";
-    return false;
-  }
-  if (JOYSTICK_ENABLED && !anyJoystickAxisEnabled()) {
-    if(error) *error = "at least one joystick axis must be enabled when joystickEnabled is set";
-    return false;
-  }
-  return true;
-}
-
-static bool readMachineConfigFromRequest(String* error) {
-  return
-    readIntConfigArg("encoderPpr", &ENCODER_PPR, 1, 15000, error) &&
-    readIntConfigArg("encoderBacklash", &ENCODER_BACKLASH, 0, 30000, error) &&
-    readIntConfigArg("axisEncoderBacklash", &AXIS_ENCODER_BACKLASH, 0, 30000, error) &&
-    readLongConfigArg("zScrewDu", &SCREW_Z_DU, 1, 10000000, error) &&
-    readLongConfigArg("zMotorSteps", &MOTOR_STEPS_Z, 1, 1000000, error) &&
-    readLongConfigArg("zSpeedStart", &SPEED_START_Z, 1, 1000000, error) &&
-    readLongConfigArg("zAcceleration", &ACCELERATION_Z, 1, 100000000, error) &&
-    readLongConfigArg("zSpeedManualMove", &SPEED_MANUAL_MOVE_Z, 1, 1000000, error) &&
-    readBoolConfigArg("zInvert", &INVERT_Z, error) &&
-    readBoolConfigArg("zInvertEnable", &INVERT_Z_ENABLE, error) &&
-    readBoolConfigArg("zNeedsRest", &NEEDS_REST_Z, error) &&
-    readLongConfigArg("zMaxTravelMm", &MAX_TRAVEL_MM_Z, 1, 10000, error) &&
-    readLongConfigArg("zBacklashDu", &BACKLASH_DU_Z, 0, 10000000, error) &&
-    readLongConfigArg("xScrewDu", &SCREW_X_DU, 1, 10000000, error) &&
-    readLongConfigArg("xMotorSteps", &MOTOR_STEPS_X, 1, 1000000, error) &&
-    readLongConfigArg("xSpeedStart", &SPEED_START_X, 1, 1000000, error) &&
-    readLongConfigArg("xAcceleration", &ACCELERATION_X, 1, 100000000, error) &&
-    readLongConfigArg("xSpeedManualMove", &SPEED_MANUAL_MOVE_X, 1, 1000000, error) &&
-    readBoolConfigArg("xInvert", &INVERT_X, error) &&
-    readBoolConfigArg("xInvertEnable", &INVERT_X_ENABLE, error) &&
-    readBoolConfigArg("xNeedsRest", &NEEDS_REST_X, error) &&
-    readLongConfigArg("xMaxTravelMm", &MAX_TRAVEL_MM_X, 1, 10000, error) &&
-    readLongConfigArg("xBacklashDu", &BACKLASH_DU_X, 0, 10000000, error) &&
-    readLongConfigArg("stepTimeMs", &STEP_TIME_MS, 1, 10000, error) &&
-    readLongConfigArg("delayBetweenStepsMs", &DELAY_BETWEEN_STEPS_MS, 0, 10000, error) &&
-    readBoolConfigArg("enableContinuousMove", &ENABLE_CONTINUOUS_MOVE, error) &&
-    readLongConfigArg("safeDistanceDu", &SAFE_DISTANCE_DU, 0, 10000000, error) &&
-    readLongConfigArg("slotLeftReductionDu", &SLOT_LEFT_REDUCTION_DU, 0, 10000000, error) &&
-    readBoolConfigArg("activeY", &ACTIVE_Y, error) &&
-    readBoolConfigArg("rotaryY", &ROTARY_Y, error) &&
-    readLongConfigArg("yMotorSteps", &MOTOR_STEPS_Y, 1, 1000000, error) &&
-    readLongConfigArg("yScrewDu", &SCREW_Y_DU, 1, 10000000, error) &&
-    readLongConfigArg("ySpeedStart", &SPEED_START_Y, 1, 1000000, error) &&
-    readLongConfigArg("yAcceleration", &ACCELERATION_Y, 1, 100000000, error) &&
-    readLongConfigArg("ySpeedManualMove", &SPEED_MANUAL_MOVE_Y, 1, 1000000, error) &&
-    readBoolConfigArg("yInvert", &INVERT_Y, error) &&
-    readBoolConfigArg("yInvertEnable", &INVERT_Y_ENABLE, error) &&
-    readBoolConfigArg("yNeedsRest", &NEEDS_REST_Y, error) &&
-    readLongConfigArg("yMaxTravelMm", &MAX_TRAVEL_MM_Y, 1, 10000, error) &&
-    readLongConfigArg("yBacklashDu", &BACKLASH_DU_Y, 0, 10000000, error) &&
-    readPulsePerRevolutionConfigArgs(error) &&
-    readBoolConfigArg("joystickEnabled", &JOYSTICK_ENABLED, error) &&
-    readBoolConfigArg("joystickZEnabled", &JOYSTICK_Z_ENABLED, error) &&
-    readBoolConfigArg("joystickXEnabled", &JOYSTICK_X_ENABLED, error) &&
-    readBoolConfigArg("joystickYEnabled", &JOYSTICK_Y_ENABLED, error) &&
-    readBoolConfigArg("joystickButtonTogglesOnOff", &JOYSTICK_BUTTON_TOGGLES_ON_OFF, error) &&
-    readIntConfigArg("joystickCenterSamples", &JOYSTICK_CENTER_SAMPLES, 1, 1024, error) &&
-    readIntConfigArg("joystickOversamples", &JOYSTICK_OVERSAMPLES, 1, 1024, error) &&
-    readIntConfigArg("joystickSampleIntervalMs", &JOYSTICK_SAMPLE_INTERVAL_MS, 1, 1000, error) &&
-    readIntConfigArg("joystickAdcMax", &JOYSTICK_ADC_MAX, 1, 65535, error) &&
-    readIntConfigArg("joystickDeadband", &JOYSTICK_DEADBAND, 0, 65534, error) &&
-    readIntConfigArg("joystickPulseQueueLimit", &JOYSTICK_PULSE_QUEUE_LIMIT, 1, 1000000, error) &&
-    readFloatConfigArg("joystickNormalRevolutionsPerSecond", &JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND, 0.01, 1000.0, error) &&
-    readFloatConfigArg("joystickRapidRevolutionsPerSecond", &JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND, 0.01, 1000.0, error) &&
-    readBoolConfigArg("invertJoystickZ", &INVERT_JOYSTICK_Z, error) &&
-    readBoolConfigArg("invertJoystickX", &INVERT_JOYSTICK_X, error) &&
-    readBoolConfigArg("invertJoystickY", &INVERT_JOYSTICK_Y, error) &&
-    readBoolConfigArg("invertJoystickButton", &INVERT_JOYSTICK_BUTTON, error) &&
-    validateMachineConfig(error);
-}
 
 static bool readKeyboardConfigFromRequest(String* error) {
   if (!readBoolConfigArg("showKeyPresses", &SHOW_KEY_PRESSES, error)) return false;
@@ -734,72 +597,7 @@ static String getKeyboardConfigResponse() {
   return response;
 }
 
-static String getMachineConfigResponse() {
-  String response = "";
-  response.reserve(2600);
-  appendConfigLine(&response, "encoderPpr", ENCODER_PPR);
-  appendConfigLine(&response, "encoderBacklash", ENCODER_BACKLASH);
-  appendConfigLine(&response, "axisEncoderBacklash", AXIS_ENCODER_BACKLASH);
-  appendConfigLine(&response, "zScrewDu", SCREW_Z_DU);
-  appendConfigLine(&response, "zMotorSteps", MOTOR_STEPS_Z);
-  appendConfigLine(&response, "zPulsePerRevolution", PULSE_PER_REVOLUTION_Z);
-  appendConfigLine(&response, "zSpeedStart", SPEED_START_Z);
-  appendConfigLine(&response, "zAcceleration", ACCELERATION_Z);
-  appendConfigLine(&response, "zSpeedManualMove", SPEED_MANUAL_MOVE_Z);
-  appendConfigLine(&response, "zInvert", INVERT_Z);
-  appendConfigLine(&response, "zInvertEnable", INVERT_Z_ENABLE);
-  appendConfigLine(&response, "zNeedsRest", NEEDS_REST_Z);
-  appendConfigLine(&response, "zMaxTravelMm", MAX_TRAVEL_MM_Z);
-  appendConfigLine(&response, "zBacklashDu", BACKLASH_DU_Z);
-  appendConfigLine(&response, "xScrewDu", SCREW_X_DU);
-  appendConfigLine(&response, "xMotorSteps", MOTOR_STEPS_X);
-  appendConfigLine(&response, "xPulsePerRevolution", PULSE_PER_REVOLUTION_X);
-  appendConfigLine(&response, "xSpeedStart", SPEED_START_X);
-  appendConfigLine(&response, "xAcceleration", ACCELERATION_X);
-  appendConfigLine(&response, "xSpeedManualMove", SPEED_MANUAL_MOVE_X);
-  appendConfigLine(&response, "xInvert", INVERT_X);
-  appendConfigLine(&response, "xInvertEnable", INVERT_X_ENABLE);
-  appendConfigLine(&response, "xNeedsRest", NEEDS_REST_X);
-  appendConfigLine(&response, "xMaxTravelMm", MAX_TRAVEL_MM_X);
-  appendConfigLine(&response, "xBacklashDu", BACKLASH_DU_X);
-  appendConfigLine(&response, "stepTimeMs", STEP_TIME_MS);
-  appendConfigLine(&response, "delayBetweenStepsMs", DELAY_BETWEEN_STEPS_MS);
-  appendConfigLine(&response, "enableContinuousMove", ENABLE_CONTINUOUS_MOVE);
-  appendConfigLine(&response, "safeDistanceDu", SAFE_DISTANCE_DU);
-  appendConfigLine(&response, "slotLeftReductionDu", SLOT_LEFT_REDUCTION_DU);
-  appendConfigLine(&response, "activeY", ACTIVE_Y);
-  appendConfigLine(&response, "rotaryY", ROTARY_Y);
-  appendConfigLine(&response, "yMotorSteps", MOTOR_STEPS_Y);
-  appendConfigLine(&response, "yPulsePerRevolution", PULSE_PER_REVOLUTION_Y);
-  appendConfigLine(&response, "yScrewDu", SCREW_Y_DU);
-  appendConfigLine(&response, "ySpeedStart", SPEED_START_Y);
-  appendConfigLine(&response, "yAcceleration", ACCELERATION_Y);
-  appendConfigLine(&response, "ySpeedManualMove", SPEED_MANUAL_MOVE_Y);
-  appendConfigLine(&response, "yInvert", INVERT_Y);
-  appendConfigLine(&response, "yInvertEnable", INVERT_Y_ENABLE);
-  appendConfigLine(&response, "yNeedsRest", NEEDS_REST_Y);
-  appendConfigLine(&response, "yMaxTravelMm", MAX_TRAVEL_MM_Y);
-  appendConfigLine(&response, "yBacklashDu", BACKLASH_DU_Y);
-  appendConfigLine(&response, "pulsePerRevolution", PULSE_PER_REVOLUTION_Z);
-  appendConfigLine(&response, "joystickEnabled", JOYSTICK_ENABLED);
-  appendConfigLine(&response, "joystickZEnabled", JOYSTICK_Z_ENABLED);
-  appendConfigLine(&response, "joystickXEnabled", JOYSTICK_X_ENABLED);
-  appendConfigLine(&response, "joystickYEnabled", JOYSTICK_Y_ENABLED);
-  appendConfigLine(&response, "joystickButtonTogglesOnOff", JOYSTICK_BUTTON_TOGGLES_ON_OFF);
-  appendConfigLine(&response, "joystickCenterSamples", JOYSTICK_CENTER_SAMPLES);
-  appendConfigLine(&response, "joystickOversamples", JOYSTICK_OVERSAMPLES);
-  appendConfigLine(&response, "joystickSampleIntervalMs", JOYSTICK_SAMPLE_INTERVAL_MS);
-  appendConfigLine(&response, "joystickAdcMax", JOYSTICK_ADC_MAX);
-  appendConfigLine(&response, "joystickDeadband", JOYSTICK_DEADBAND);
-  appendConfigLine(&response, "joystickPulseQueueLimit", JOYSTICK_PULSE_QUEUE_LIMIT);
-  appendConfigLine(&response, "joystickNormalRevolutionsPerSecond", JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND);
-  appendConfigLine(&response, "joystickRapidRevolutionsPerSecond", JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND);
-  appendConfigLine(&response, "invertJoystickZ", INVERT_JOYSTICK_Z);
-  appendConfigLine(&response, "invertJoystickX", INVERT_JOYSTICK_X);
-  appendConfigLine(&response, "invertJoystickY", INVERT_JOYSTICK_Y);
-  appendConfigLine(&response, "invertJoystickButton", INVERT_JOYSTICK_BUTTON);
-  return response;
-}
+
 
 static String getWifiMode() {
   if (!WIFI_ENABLED) return "off";
@@ -1213,40 +1011,7 @@ static bool machineConfigChangeBlocked() {
   return isOn || tftUploadActive || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
 }
 
-static void handleConfigGet() {
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send(200, "text/plain", getMachineConfigResponse());
-}
 
-static void handleConfigSave() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before changing machine config");
-    return;
-  }
-
-  String error = "";
-  if (!readMachineConfigFromRequest(&error)) {
-    loadMachineConfig();
-    server.send(400, "text/plain", error);
-    return;
-  }
-
-  saveMachineConfig();
-  scheduleConfigRestart();
-  server.send(200, "text/plain", "Machine config saved. Restarting controller...");
-}
-
-static void handleConfigReset() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before resetting machine config");
-    return;
-  }
-
-  setMachineConfigDefaults();
-  saveMachineConfig();
-  scheduleConfigRestart();
-  server.send(200, "text/plain", "Machine config reset. Restarting controller...");
-}
 
 static void handleKeyboardConfigGet() {
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1681,9 +1446,7 @@ static void registerWebRoutes() {
   server.on("/gcode/list", HTTP_GET, handleGcodeList);
   server.on("/gcode/get", HTTP_GET, handleGcodeGet);
   server.on("/gcode/remove", HTTP_POST, handleGcodeRemove);
-  server.on("/config", HTTP_GET, handleConfigGet);
-  server.on("/config", HTTP_POST, handleConfigSave);
-  server.on("/config/reset", HTTP_POST, handleConfigReset);
+
   server.on("/keyboard-config", HTTP_GET, handleKeyboardConfigGet);
   server.on("/keyboard-config", HTTP_POST, handleKeyboardConfigSave);
   server.on("/keyboard-config/reset", HTTP_POST, handleKeyboardConfigReset);

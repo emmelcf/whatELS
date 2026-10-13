@@ -204,7 +204,6 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | :--- | :--- | :---: | :--- |
 | `SCREW_Z_DU` | `machine.z.pitchDu` | `du` | **KEEP & MODERNIZE:** Core leadscrew pitch ($10{,}000\text{ du} = 1\text{ mm}$). |
 | `SCREW_X_DU` | `machine.x.pitchDu` | `du` | **KEEP & MODERNIZE:** Core cross-slide pitch. |
-| `SCREW_Y_DU` | `machine.y.pitchDu` | `du` | **KEEP & MODERNIZE:** Auxiliary axis screw/worm pitch. |
 | `MOTOR_STEPS_Z` | `machine.z.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
 | `MOTOR_STEPS_X` | `machine.x.motorSteps` | `steps/rev` | **KEEP & MODERNIZE:** Motor steps $\times$ microstepping $\times$ gearing. |
 | `ENCODER_PPR` | `machine.spindle.encoderPpr` | `ppr` | **KEEP & MODERNIZE:** Spindle quadrature encoder pulses per rev. |
@@ -252,6 +251,9 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `Z_NEEDS_REST / X_NEEDS_REST`| Cut stepper current while stationary | **DISCARD:** Disabling holding torque on a lathe carriage without a mechanical brake causes tool deflection and leadscrew back-drive. |
 | `SHOW_KEY_PRESSES` | Debug overlay flag on Nextion LCD | **DISCARD:** Obsolete display debugging artifact. |
 | `tftFirstUpload` | Nextion 9600 baud flashing flag | **DISCARD:** Firmware flashing utility flag, not a machine setting. |
+| `Y_*` (All Y params) | Obsolete auxiliary Y-axis software logic | **DISCARD:** Fully retired Y-axis software motion, profiles, and settings; physical H5 PCB silkscreen GPIO defines (`Y_ENA 1`, `Y_DIR 2`, `Y_STEP 17`, `Y_PULSE_A 45`, `Y_PULSE_B 48`, `JOY_Y 6`) preserved in `Config.h` for hardware header reference. |
+| `saveMachineConfig()` | Monolithic 45-field blind flat NVS dump | **DISCARD:** Retired in favor of `PersistentSetting<T>` dirty-checked storage and JSON lathe machine profiles. |
+| `/config` & `/config/reset` | Monolithic HTTP form configuration endpoints | **DISCARD:** Retired in favor of `SETTINGS` namespace over WebSocket and REST profile schema endpoints. |
 
 ---
 

@@ -35,14 +35,14 @@ void publishMotionSnapshot() {
   snap.timestamp = millis();
   snap.zDu = getAxisCanonicalPosDu(&z);
   snap.xDu = getAxisCanonicalPosDu(&x);
-  snap.yDu = getAxisCanonicalPosDu(&y);
+  snap.yDu = 0;
   snap.zLeftDu = getAxisCanonicalStopDu(&z, true);
   snap.zRightDu = getAxisCanonicalStopDu(&z, false);
   snap.xUpDu = getAxisCanonicalStopDu(&x, true);
   snap.xDownDu = getAxisCanonicalStopDu(&x, false);
   snap.zDisabled = z.disabled;
   snap.xDisabled = x.disabled;
-  snap.yDisabled = y.disabled;
+  snap.yDisabled = false;
   snap.rpm = getApproxRpm();
   snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
@@ -82,14 +82,14 @@ KinematicsState MachineModel::captureKinematics() {
   // Fallback to direct read if queue not yet populated
   k.zDu = getAxisCanonicalPosDu(&z);
   k.xDu = getAxisCanonicalPosDu(&x);
-  k.yDu = getAxisCanonicalPosDu(&y);
+  k.yDu = 0;
   k.zLeftDu = getAxisCanonicalStopDu(&z, true);
   k.zRightDu = getAxisCanonicalStopDu(&z, false);
   k.xUpDu = getAxisCanonicalStopDu(&x, true);
   k.xDownDu = getAxisCanonicalStopDu(&x, false);
   k.zDisabled = z.disabled;
   k.xDisabled = x.disabled;
-  k.yDisabled = y.disabled;
+  k.yDisabled = false;
   k.rpm = getApproxRpm();
   k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
@@ -161,14 +161,12 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
 
   if (prev.kinematics.zDu != current.kinematics.zDu ||
       prev.kinematics.xDu != current.kinematics.xDu ||
-      prev.kinematics.yDu != current.kinematics.yDu ||
       prev.kinematics.zLeftDu != current.kinematics.zLeftDu ||
       prev.kinematics.zRightDu != current.kinematics.zRightDu ||
       prev.kinematics.xUpDu != current.kinematics.xUpDu ||
       prev.kinematics.xDownDu != current.kinematics.xDownDu ||
       prev.kinematics.zDisabled != current.kinematics.zDisabled ||
       prev.kinematics.xDisabled != current.kinematics.xDisabled ||
-      prev.kinematics.yDisabled != current.kinematics.yDisabled ||
       prev.kinematics.rpm != current.kinematics.rpm ||
       fabsf(prev.kinematics.turns - current.kinematics.turns) > turnsThreshold ||
       fabsf(prev.kinematics.angle - current.kinematics.angle) > angleThreshold ||

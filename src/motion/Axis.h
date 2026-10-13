@@ -9,7 +9,6 @@ enum PulseCounter {
   PULSE_COUNTER_SPINDLE,
   PULSE_COUNTER_Z,
   PULSE_COUNTER_X,
-  PULSE_COUNTER_Y,
   PULSE_COUNTER_COUNT
 };
 
@@ -82,7 +81,6 @@ struct Axis {
 // Global Axes
 extern Axis z;
 extern Axis x;
-extern Axis y;
 
 // DRO Scales
 extern DRO_Scale xScale;
@@ -202,4 +200,3 @@ void startPulseCounter(PulseCounter pulseCounter, int gpioA, int gpioB);
 void taskAttachInterrupts(void *param);
 void taskMoveZ(void *param);
 void taskMoveX(void *param);
-void taskMoveY(void *param);

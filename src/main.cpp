@@ -61,12 +61,6 @@ void setup() {
   pinMode(X_ENA, OUTPUT);
   DHIGH(X_STEP);
 
-  if (ACTIVE_Y) {
-    pinMode(Y_DIR, OUTPUT);
-    pinMode(Y_STEP, OUTPUT);
-    pinMode(Y_ENA, OUTPUT);
-    DHIGH(Y_STEP);
-  }
   DEBUG_PRINTLN("initJoystick...");
   initJoystick();
 
@@ -82,11 +76,10 @@ void setup() {
   pref.end();
   Serial.flush();
 
-  DEBUG_PRINTLN("initAxis Z/X/Y...");
+  DEBUG_PRINTLN("initAxis Z/X...");
   Serial.flush();
   initAxis(&z, NAME_Z, true, false, MOTOR_STEPS_Z, SCREW_Z_DU, PULSE_PER_REVOLUTION_Z, SPEED_START_Z, SPEED_MANUAL_MOVE_Z, ACCELERATION_Z, INVERT_Z, INVERT_Z_ENABLE, NEEDS_REST_Z, MAX_TRAVEL_MM_Z, BACKLASH_DU_Z, Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z);
   initAxis(&x, NAME_X, true, false, MOTOR_STEPS_X, SCREW_X_DU, PULSE_PER_REVOLUTION_X, SPEED_START_X, SPEED_MANUAL_MOVE_X, ACCELERATION_X, INVERT_X, INVERT_X_ENABLE, NEEDS_REST_X, MAX_TRAVEL_MM_X, BACKLASH_DU_X, X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X);
-  initAxis(&y, NAME_Y, ACTIVE_Y, ROTARY_Y, MOTOR_STEPS_Y, SCREW_Y_DU, PULSE_PER_REVOLUTION_Y, SPEED_START_Y, SPEED_MANUAL_MOVE_Y, ACCELERATION_Y, INVERT_Y, INVERT_Y_ENABLE, NEEDS_REST_Y, MAX_TRAVEL_MM_Y, BACKLASH_DU_Y, Y_ENA, Y_DIR, Y_STEP, Y_PULSE_A, Y_PULSE_B, PULSE_COUNTER_Y);
   DEBUG_PRINTLN("initAxis done.");
   Serial.flush();
 
@@ -115,14 +108,6 @@ void setup() {
   x.savedRightStop = x.rightStop = LONG_MIN;
   x.savedDisabled = x.disabled = false;
 
-  y.savedPos = y.pos = 0;
-  y.savedPosGlobal = y.posGlobal = 0;
-  y.savedOriginPos = y.originPos = 0;
-  y.savedMotorPos = y.motorPos = 0;
-  y.savedLeftStop = y.leftStop = LONG_MAX;
-  y.savedRightStop = y.rightStop = LONG_MIN;
-  y.savedDisabled = y.disabled = false;
-
   // Spindle phase & angle unreferenced until index/tick sync
   savedSpindlePos = spindlePos = 0;
   savedSpindlePosAvg = spindlePosAvg = 0;
@@ -143,7 +128,6 @@ void setup() {
   Serial.flush();
   if (!z.needsRest && !z.disabled) digitalWrite(z.ena, z.invertEnable ? LOW : HIGH);
   if (!x.needsRest && !x.disabled) digitalWrite(x.ena, x.invertEnable ? LOW : HIGH);
-  if (y.active && !y.needsRest && !y.disabled) digitalWrite(y.ena, y.invertEnable ? LOW : HIGH);
 
   DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
@@ -186,7 +170,6 @@ void setup() {
   xTaskCreatePinnedToCore(taskDisplay, "taskDisplay", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   xTaskCreatePinnedToCore(taskMoveZ, "taskMoveZ", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   xTaskCreatePinnedToCore(taskMoveX, "taskMoveX", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  if (ACTIVE_Y) xTaskCreatePinnedToCore(taskMoveY, "taskMoveY", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   xTaskCreatePinnedToCore(taskGcode, "taskGcode", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   if (WIFI_ENABLED) {
     DEBUG_PRINTLN("Creating taskWiFi...");
@@ -239,7 +222,6 @@ void loop() {
   }
   moveAxis(&z);
   moveAxis(&x);
-  if (ACTIVE_Y) moveAxis(&y);
   xSemaphoreGive(motionMutex);
 
   static unsigned long lastSnapshotPublish = 0;

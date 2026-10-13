@@ -610,7 +610,6 @@ static Axis* getAxisById(AxisId axis) {
   switch (axis) {
     case AXIS_Z: return &z;
     case AXIS_X: return &x;
-    case AXIS_Y: return &y;
     default:     return nullptr;
   }
 }
@@ -936,11 +935,7 @@ int SettingsService::getSpindleDisplayMode() {
 // --- Tier 2 / Category 5: Operational Mode & Motion State ---
 bool SettingsService::requestMode(int targetMode) {
   if (targetMode < MODE_NORMAL || targetMode > MODE_SLOT) {
-    if (targetMode == MODE_Y && ACTIVE_Y) {
-      // Allowed
-    } else {
-      return false;
-    }
+    return false;
   }
   nextMode = targetMode;
   nextModeFlag = true;
@@ -1154,14 +1149,6 @@ bool SettingsService::get(const char* key, String* reply) {
     appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
     if (!getAll) return true;
   }
-  if (getAll || strcasecmp(key, "screwYDu") == 0) {
-    appendSetting("screwYDu", String(SCREW_Y_DU));
-    if (!getAll) return true;
-  }
-  if (getAll || strcasecmp(key, "motorStepsY") == 0) {
-    appendSetting("motorStepsY", String(MOTOR_STEPS_Y));
-    if (!getAll) return true;
-  }
 
   // --- Tier 3: Operator Preferences ---
   if (getAll || strcasecmp(key, "prefs.startupMeasure") == 0 || strcasecmp(key, "prefs.measure") == 0 || strcasecmp(key, "measure") == 0) {
@@ -1254,8 +1241,6 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     appendSetting("sys.dro.xPulsesPerMm", String(activeMachineProfile.xAxis.droScale.ppr));
     appendSetting("sys.mpg.zPulsesPerRev", String(PULSE_PER_REVOLUTION_Z, 2));
     appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
-    appendSetting("screwYDu", String(SCREW_Y_DU));
-    appendSetting("motorStepsY", String(MOTOR_STEPS_Y));
     return true;
   }
 
@@ -1406,26 +1391,6 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
     PULSE_PER_REVOLUTION_X = val;
     reportOk(keyBuf, String(val, 2));
-    return true;
-  }
-
-  if (strcasecmp(keyBuf, "screwYDu") == 0) {
-    long val = atol(valStr);
-    if (val < 1 || val > 10000000) { reportErr(keyBuf, "out of bounds (1..10000000)"); return true; }
-    SCREW_Y_DU = val;
-    y.screwPitch = val / 10000.0f;
-    saveMachineConfig();
-    reportOk(keyBuf, String(val));
-    return true;
-  }
-
-  if (strcasecmp(keyBuf, "motorStepsY") == 0) {
-    long val = atol(valStr);
-    if (val < 1 || val > 1000000) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
-    MOTOR_STEPS_Y = val;
-    y.motorSteps = val;
-    saveMachineConfig();
-    reportOk(keyBuf, String(val));
     return true;
   }
 

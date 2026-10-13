@@ -127,7 +127,6 @@ String printMode() {
   if (mode == MODE_THREAD) return "THREAD";
   if (mode == MODE_ELLIPSE) return "ELLIP";
   if (mode == MODE_GCODE) return "GCODE";
-  if (mode == MODE_Y) return "Y";
   if (mode == MODE_JOYSTICK) return "JOY";
   return "";
 }
@@ -345,14 +344,14 @@ DisplaySnapshot getDisplaySnapshot(int rpm, long numpadResult, bool spindleStopp
 
   // Primary Coordinates (Fixed 3 decimals)
   s.xPos = (!x.active || x.disabled) ? "" : formatPosition(getAxisPositionMm(&x));
-  s.yPos = (!y.active || y.disabled) ? "" : formatPosition(getAxisPositionMm(&y));
+  s.yPos = "";
   s.zPos = (!z.active || z.disabled) ? "" : formatPosition(getAxisPositionMm(&z));
 
   // Soft Stop Distances (Fixed 3 decimals, or "" if not active)
   s.xStopUp = (!x.active || x.disabled) ? "" : formatStopDistance(&x, true);
   s.xStopDown = (!x.active || x.disabled) ? "" : formatStopDistance(&x, false);
-  s.yStopUp = (!y.active || y.disabled) ? "" : formatStopDistance(&y, true);
-  s.yStopDown = (!y.active || y.disabled) ? "" : formatStopDistance(&y, false);
+  s.yStopUp = "";
+  s.yStopDown = "";
   s.zStopLeft = (!z.active || z.disabled) ? "" : formatStopDistance(&z, true);
   s.zStopRight = (!z.active || z.disabled) ? "" : formatStopDistance(&z, false);
 

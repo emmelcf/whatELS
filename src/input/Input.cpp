@@ -35,7 +35,6 @@ int spindleEncTimeIndex = 0;
 JoystickAxisState joystickAxes[] = {
   {&z, JOY_Z, &JOYSTICK_Z_ENABLED, &INVERT_JOYSTICK_Z, 0, 0, 0, 2048, 2048, 0, 0, 0},
   {&x, JOY_X, &JOYSTICK_X_ENABLED, &INVERT_JOYSTICK_X, 0, 0, 0, 2048, 2048, 0, 0, 0},
-  {&y, JOY_Y, &JOYSTICK_Y_ENABLED, &INVERT_JOYSTICK_Y, 0, 0, 0, 2048, 2048, 0, 0, 0},
 };
 const int JOYSTICK_AXIS_COUNT = sizeof(joystickAxes) / sizeof(joystickAxes[0]);
 
@@ -238,10 +237,6 @@ bool processNumpadResult(int keyCode) {
   // Shared piece for stops and moves.
   Axis* a = (keyCode == B_STOPL || keyCode == B_STOPR || keyCode == B_LEFT || keyCode == B_RIGHT || keyCode == B_Z) ? &z : &x;
   int sign = ((keyCode == B_STOPL || keyCode == B_STOPU || keyCode == B_LEFT || keyCode == B_UP || keyCode == B_Z || keyCode == B_X || keyCode == B_X_ENA) ? 1 : -1);
-  if (keyCode == B_STOPF || keyCode == B_STOPB || keyCode == B_FORWARD || keyCode == B_BACK || keyCode == B_Y) {
-    a = &y;
-    sign = (keyCode == B_BACK || keyCode == B_STOPB) ? -1 : 1;
-  }
   long posDiffAbs = (a->rotational ? numpadResult * 10 : newDu) / a->screwPitch * a->motorSteps;
   long pos = a->pos + posDiffAbs * sign;
 
@@ -258,17 +253,11 @@ bool processNumpadResult(int keyCode) {
   } else if (keyCode == B_STOPD) {
     setRightStop(&x, pos);
     return true;
-  } else if (keyCode == B_STOPF && ACTIVE_Y) {
-    setLeftStop(&y, pos);
-    return true;
-  } else if (keyCode == B_STOPB && ACTIVE_Y) {
-    setRightStop(&y, pos);
-    return true;
   }
 
   // Potentially move by newDu in the given direction.
   // We don't support precision manual moves when ON yet. Can't stay in the thread for most modes.
-  if (!isOn && (keyCode == B_LEFT || keyCode == B_RIGHT || keyCode == B_UP || keyCode == B_DOWN || keyCode == B_FORWARD || keyCode == B_BACK)) {
+  if (!isOn && (keyCode == B_LEFT || keyCode == B_RIGHT || keyCode == B_UP || keyCode == B_DOWN)) {
     if (pos < a->rightStop) {
       pos = a->rightStop;
       beep();
@@ -285,7 +274,7 @@ bool processNumpadResult(int keyCode) {
   }
 
   // Set axis 0 newDu ahead.
-  if (keyCode == B_Z || keyCode == B_X || keyCode == B_Y) {
+  if (keyCode == B_Z || keyCode == B_X) {
     a->originPos = -pos;
     return true;
   }
@@ -789,7 +778,7 @@ void initJoystick() {
     joystickAxes[i].center = calibrateJoystickCenter(joystickAxes[i].pin);
     if (!joystickStartupCenterLooksNeutral(joystickAxes[i].center)) {
       int offset = joystickAxes[i].center - JOYSTICK_ADC_MAX / 2;
-      char axisName = i == JOYSTICK_AXIS_Z ? NAME_Z : (i == JOYSTICK_AXIS_X ? NAME_X : NAME_Y);
+      char axisName = i == JOYSTICK_AXIS_Z ? NAME_Z : NAME_X;
       joystickStartupWarning = "Joy ";
       joystickStartupWarning += axisName;
       joystickStartupWarning += (offset >= 0 ? " +" : " -");
@@ -838,7 +827,7 @@ bool joystickLatheFeedCommandActive() {
 }
 
 bool manualMovesAllowedWhenOn() {
-  return isGearboxMode() || mode == MODE_ASYNC || mode == MODE_CONE || mode == MODE_Y || mode == MODE_JOYSTICK;
+  return isGearboxMode() || mode == MODE_ASYNC || mode == MODE_CONE || mode == MODE_JOYSTICK;
 }
 
 bool manualMovesIgnoredWhenOn() {
@@ -888,9 +877,9 @@ static const byte HEX_TO_KEYCODE[256] = {
   [12] = B_X,
   [13] = B_X_TOGGLE_DRO,
   [14] = 0,
-  [15] = B_Y_ENA,
+  [15] = 0,
   [16] = 0,
-  [17] = B_Y,
+  [17] = 0,
   [18] = 0,
   [19] = B_Z_ENA,
   [20] = 0,
@@ -952,7 +941,6 @@ static int processNextionMessage() {
         case 18: code = B_MODE_ELLIPSE; break;
         case 19: code = B_MODE_GCODE; break;
         case 20: code = B_MODE_ASYNC; break;
-        case 21: code = B_MODE_Y; break;
         case 23: code = B_MODE_XGEAR; break;
         case 25: code = B_MODE_JOYSTICK; break;
         case 27: code = B_MODE_SLOT; break;
@@ -1033,7 +1021,7 @@ void buttonOnOffPress(bool on) {
     setupIndex++;
   } else if (isOn && on && (mode == MODE_TURN || mode == MODE_FACE || mode == MODE_THREAD)) {
     opIndexAdvanceFlag = true;
-  } else if (!on && (z.movingManually || x.movingManually || y.movingManually)) {
+  } else if (!on && (z.movingManually || x.movingManually)) {
     setEmergencyStop(ESTOP_OFF_MANUAL_MOVE);
   } else if (!isOn && on && mode == MODE_GCODE && gcodeProgramIndex >= gcodeProgramCount) {
     beep();
@@ -1264,12 +1252,6 @@ void processKeypadEvent() {
     buttonLeftStopPress(&x);
   } else if (keyCode == B_STOPD) {
     buttonRightStopPress(&x);
-  } else if (keyCode == B_STOPF && ACTIVE_Y) {
-    buttonLeftStopPress(&y);
-  } else if (keyCode == B_STOPB && ACTIVE_Y) {
-    buttonRightStopPress(&y);
-  } else if (keyCode == B_MODE_Y && ACTIVE_Y) {
-    setModeFromUi(MODE_Y, eventFromNextion);
   } else if (keyCode == B_MODE_ELLIPSE) {
     setModeFromUi(MODE_ELLIPSE, eventFromNextion);
   } else if (keyCode == B_MODE_GCODE) {
@@ -1284,17 +1266,12 @@ void processKeypadEvent() {
     markAxis0(&x);
   } else if (keyCode == B_Z) {
     markAxis0(&z);
-  } else if (keyCode == B_Y && ACTIVE_Y) {
-    markAxis0(&y);
   } else if (keyCode == B_X_ENA) {
     x.disabled = !x.disabled;
     updateEnable(&x);
   } else if (keyCode == B_Z_ENA) {
     z.disabled = !z.disabled;
     updateEnable(&z);
-  } else if (keyCode == B_Y_ENA && ACTIVE_Y) {
-    y.disabled = !y.disabled;
-    updateEnable(&y);
   } else if (keyCode == B_STEP) {
     buttonMoveStepPress();
   } else if (keyCode == B_REVERSE) {
@@ -1322,8 +1299,7 @@ void processKeypadEvent() {
     else if (mode == MODE_THREAD) setModeFromTask(MODE_ELLIPSE);
     else if (mode == MODE_ELLIPSE) setModeFromTask(MODE_GCODE);
     else if (mode == MODE_GCODE) setModeFromTask(MODE_ASYNC);
-    else if (mode == MODE_ASYNC) setModeFromTask(y.active ? MODE_Y : MODE_NORMAL);
-    else if (mode == MODE_Y) setModeFromTask(MODE_NORMAL);
+    else if (mode == MODE_ASYNC) setModeFromTask(MODE_NORMAL);
     else setModeFromTask(MODE_NORMAL);
   } else if (keyCode == B_MODE_XGEAR) {
     setModeFromUi(MODE_XGEAR, eventFromNextion);
@@ -1372,7 +1348,6 @@ void taskKeypad(void *param) {
 void taskJoystick(void *param) {
   JoystickAxisState* joystickZ = &joystickAxes[JOYSTICK_AXIS_Z];
   JoystickAxisState* joystickX = &joystickAxes[JOYSTICK_AXIS_X];
-  JoystickAxisState* joystickY = &joystickAxes[JOYSTICK_AXIS_Y];
   while (emergencyStop == ESTOP_NONE && joystickUsable()) {
     bool rawButtonPressed = digitalRead(JOY_BUTTON) == (INVERT_JOYSTICK_BUTTON ? HIGH : LOW);
     unsigned long now = micros();
@@ -1381,27 +1356,10 @@ void taskJoystick(void *param) {
 
     readJoystickAxis(joystickZ);
     readJoystickAxis(joystickX);
-    readJoystickAxis(joystickY);
 
     bool moveNeutral = joystickZ->direction == 0 && joystickX->direction == 0;
     bool buttonPressed = updateJoystickButton(rawButtonPressed, moveNeutral);
     joystickRapidPressed = buttonPressed;
-
-    bool yAdjustsPitch = !buttonPressed && joystickPitchAdjustmentAllowed();
-    int pitchDirection = yAdjustsPitch ? joystickY->direction : 0;
-    joystickPitchAdjustDirection = pitchDirection;
-    if (pitchDirection != 0) {
-      joystickPitchStatusDirection = pitchDirection;
-      joystickPitchStatusMillis = millis();
-      joystickPitchChangeFraction += abs(joystickY->deflection) * JOYSTICK_PITCH_CHANGES_PER_SECOND * elapsedUs / 1000000.0;
-      int changes = min(10, int(joystickPitchChangeFraction));
-      joystickPitchChangeFraction -= changes;
-      for (int i = 0; i < changes; i++) {
-        adjustPitch(pitchDirection > 0);
-      }
-    } else {
-      joystickPitchChangeFraction = 0;
-    }
 
     if (mode == MODE_JOYSTICK) {
       bool manualJoystickMove = buttonPressed || !isOn;
@@ -1410,14 +1368,12 @@ void taskJoystick(void *param) {
       joystickLatheRapid = buttonPressed && !moveNeutral;
       updateJoystickManualAxis(joystickZ, manualJoystickMove, false, elapsedUs);
       updateJoystickManualAxis(joystickX, manualJoystickMove, false, elapsedUs);
-      updateJoystickManualAxis(joystickY, false, false, elapsedUs);
     } else {
       joystickLatheDirectionZ = 0;
       joystickLatheDirectionX = 0;
       joystickLatheRapid = false;
       updateJoystickManualAxis(joystickZ, true, true, elapsedUs);
       updateJoystickManualAxis(joystickX, true, true, elapsedUs);
-      updateJoystickManualAxis(joystickY, y.active && !yAdjustsPitch, true, elapsedUs);
     }
 
     DELAY(JOYSTICK_SAMPLE_INTERVAL_MS);

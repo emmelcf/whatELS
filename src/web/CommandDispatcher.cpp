@@ -11,7 +11,6 @@
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
   if (c == 'X' || c == 'x') return &x;
-  if (c == 'Y' || c == 'y') return &y;
   return nullptr;
 }
 

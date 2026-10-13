@@ -48,7 +48,7 @@ Axis* getPitchAxis() {
 }
 
 Axis* getAsyncAxis() {
-  return mode == MODE_Y ? &y : &z;
+  return &z;
 }
 
 bool needZStops() {
@@ -110,7 +110,7 @@ void updateAsyncTimerSettings() {
 
 void IRAM_ATTR onAsyncTimer() {
   Axis* a = getAsyncAxis();
-  if (!isOn || a->movingManually || (mode != MODE_ASYNC && mode != MODE_Y)) {
+  if (!isOn || a->movingManually || mode != MODE_ASYNC) {
     return;
   } else if (dupr > 0 && a->pos < a->leftStop) {
     if (a->pos <= a->motorPos) {
@@ -198,7 +198,7 @@ void applyDupr() {
       resetJoystickLatheFeed();
     }
   }
-  if (mode == MODE_ASYNC || mode == MODE_Y) {
+  if (mode == MODE_ASYNC) {
     updateAsyncTimerSettings();
   }
 }
@@ -254,7 +254,7 @@ void setModeFromLoop(int value) {
   }
   if (mode == MODE_THREAD) {
     setStarts(1);
-  } else if (mode == MODE_ASYNC || mode == MODE_Y) {
+  } else if (mode == MODE_ASYNC) {
     setAsyncTimerEnable(false);
   } else if (mode == MODE_JOYSTICK) {
     resetJoystickLatheFeed();
@@ -264,7 +264,7 @@ void setModeFromLoop(int value) {
   if (mode == MODE_JOYSTICK) {
     resetJoystickLatheFeed();
   }
-  if (mode == MODE_ASYNC || mode == MODE_Y) {
+  if (mode == MODE_ASYNC) {
     if (!timerAttached) {
       timerAttached = true;
       timerAttachInterrupt(async_timer, &onAsyncTimer);
@@ -819,14 +819,6 @@ void applySettings() {
     applyRightStop(&x);
     x.nextRightStopFlag = false;
   }
-  if (y.nextLeftStopFlag) {
-    applyLeftStop(&y);
-    y.nextLeftStopFlag = false;
-  }
-  if (y.nextRightStopFlag) {
-    applyRightStop(&y);
-    y.nextRightStopFlag = false;
-  }
   if (nextConeRatioFlag) {
     applyConeRatio();
     nextConeRatioFlag = false;
@@ -887,11 +879,10 @@ static long mmOrInchToAbsolutePos(Axis* a, float mmOrInch) {
   return part1 + part2;
 }
 
-static void updateAxisSpeeds(long diffX, long diffZ, long diffY) {
-  if (diffX == 0 && diffZ == 0 && diffY == 0) return;
+static void updateAxisSpeeds(long diffX, long diffZ) {
+  if (diffX == 0 && diffZ == 0) return;
   long absX = abs(diffX);
   long absZ = abs(diffZ);
-  long absC = abs(diffY);
   float stepsPerSecX = gcodeFeedDuPerSec * x.motorSteps / x.screwPitch;
   float minStepsPerSecX = GCODE_FEED_MIN_DU_SEC * x.motorSteps / x.screwPitch;
   if (stepsPerSecX > x.speedManualMove) stepsPerSecX = x.speedManualMove;
@@ -900,24 +891,17 @@ static void updateAxisSpeeds(long diffX, long diffZ, long diffY) {
   float minStepsPerSecZ = GCODE_FEED_MIN_DU_SEC * z.motorSteps / z.screwPitch;
   if (stepsPerSecZ > z.speedManualMove) stepsPerSecZ = z.speedManualMove;
   else if (stepsPerSecZ < minStepsPerSecZ) stepsPerSecZ = minStepsPerSecZ;
-  float stepsPerSecY = gcodeFeedDuPerSec * y.motorSteps / y.screwPitch;
-  float minStepsPerSecY = GCODE_FEED_MIN_DU_SEC * y.motorSteps / y.screwPitch;
-  if (stepsPerSecY > y.speedManualMove) stepsPerSecY = y.speedManualMove;
-  else if (stepsPerSecY < minStepsPerSecY) stepsPerSecY = minStepsPerSecY;
   float secX = absX / stepsPerSecX;
   float secZ = absZ / stepsPerSecZ;
-  float secY = absC / stepsPerSecY;
-  float sec = ACTIVE_Y ? max(max(secX, secZ), secY) : max(secX, secZ);
+  float sec = max(secX, secZ);
   x.speedMax = sec > 0 ? absX / sec : x.speedManualMove;
   z.speedMax = sec > 0 ? absZ / sec : z.speedManualMove;
-  y.speedMax = sec > 0 ? absC / sec : y.speedManualMove;
   if (x.speedMax < minStepsPerSecX) x.speedMax = minStepsPerSecX;
   if (z.speedMax < minStepsPerSecZ) z.speedMax = minStepsPerSecZ;
-  if (y.speedMax < minStepsPerSecY) y.speedMax = minStepsPerSecY;
 }
 
 static void gcodeWaitEpsilon(int epsilon) {
-  while (isOn && (abs(x.pendingPos) > epsilon || abs(z.pendingPos) > epsilon || abs(y.pendingPos) > epsilon || (SPINDLE_PAUSES_GCODE && getApproxRpm() < GCODE_MIN_RPM))) {
+  while (isOn && (abs(x.pendingPos) > epsilon || abs(z.pendingPos) > epsilon || (SPINDLE_PAUSES_GCODE && getApproxRpm() < GCODE_MIN_RPM))) {
     taskYIELD();
   }
 }
@@ -933,26 +917,21 @@ static void gcodeWaitStop() {
 static void G00_01(const String& command) {
   long xStart = x.pos;
   long zStart = z.pos;
-  long yStart = y.pos;
   long xEnd = command.indexOf(x.name) >= 0 ? mmOrInchToAbsolutePos(&x, getFloat(command, x.name)) : xStart;
   long zEnd = command.indexOf(z.name) >= 0 ? mmOrInchToAbsolutePos(&z, getFloat(command, z.name)) : zStart;
-  long yEnd = command.indexOf(y.name) >= 0 ? mmOrInchToAbsolutePos(&y, getFloat(command, y.name)) : yStart;
   long xDiff = xEnd - xStart;
   long zDiff = zEnd - zStart;
-  long yDiff = yEnd - yStart;
-  updateAxisSpeeds(xDiff, zDiff, yDiff);
-  long chunks = round(max(max(abs(xDiff), abs(zDiff)), abs(yDiff)) * LINEAR_INTERPOLATION_PRECISION);
+  updateAxisSpeeds(xDiff, zDiff);
+  long chunks = round(max(abs(xDiff), abs(zDiff)) * LINEAR_INTERPOLATION_PRECISION);
   for (long i = 0; i < chunks; i++) {
     if (!isOn) return;
     float scale = i / float(chunks);
     stepToContinuous(&x, xStart + xDiff * scale);
     stepToContinuous(&z, zStart + zDiff * scale);
-    if (ACTIVE_Y) stepToContinuous(&y, yStart + yDiff * scale);
     gcodeWaitNear();
   }
   stepToFinal(&x, xEnd);
   stepToFinal(&z, zEnd);
-  if (ACTIVE_Y) stepToFinal(&y, yEnd);
   gcodeWaitStop();
 }
 
@@ -1026,13 +1005,10 @@ static bool G32(const String& command) {
 
   long xStart = x.pos;
   long zStart = z.pos;
-  long yStart = y.pos;
   long xEnd = command.indexOf(x.name) >= 0 ? mmOrInchToAbsolutePos(&x, getFloat(command, x.name)) : xStart;
   long zEnd = command.indexOf(z.name) >= 0 ? mmOrInchToAbsolutePos(&z, getFloat(command, z.name)) : zStart;
-  long yEnd = command.indexOf(y.name) >= 0 ? mmOrInchToAbsolutePos(&y, getFloat(command, y.name)) : yStart;
   long xDiff = xEnd - xStart;
   long zDiff = zEnd - zStart;
-  long yDiff = yEnd - yStart;
 
   Axis* lead = NULL;
   long leadDiff = 0;
@@ -1042,9 +1018,6 @@ static bool G32(const String& command) {
   } else if (xDiff != 0) {
     lead = &x;
     leadDiff = xDiff;
-  } else if (ACTIVE_Y && yDiff != 0) {
-    lead = &y;
-    leadDiff = yDiff;
   } else {
     return gcodeError("G32 requires an axis move", command);
   }
@@ -1061,7 +1034,6 @@ static bool G32(const String& command) {
 
   x.speedMax = LONG_MAX;
   z.speedMax = LONG_MAX;
-  y.speedMax = LONG_MAX;
 
   while (isOn) {
     long spindle = spindlePosAvg;
@@ -1072,7 +1044,6 @@ static bool G32(const String& command) {
 
     stepToContinuous(&x, round(xDiff * progress));
     stepToContinuous(&z, round(zDiff * progress));
-    if (ACTIVE_Y) stepToContinuous(&y, round(yDiff * progress));
 
     if (finished) break;
     taskYIELD();
@@ -1081,7 +1052,6 @@ static bool G32(const String& command) {
   if (!isOn) return true;
   stepToFinal(&x, xDiff);
   stepToFinal(&z, zDiff);
-  if (ACTIVE_Y) stepToFinal(&y, yDiff);
   gcodeWaitStop();
   return true;
 }
@@ -1136,7 +1106,6 @@ bool handleGcodeCommand(String command) {
 
   z.gcodeRelativePos = gcodeAbsolutePositioning ? -z.originPos : z.pos;
   x.gcodeRelativePos = gcodeAbsolutePositioning ? -x.originPos : x.pos;
-  y.gcodeRelativePos = gcodeAbsolutePositioning ? -y.originPos : y.pos;
 
   if (!(code == 'G' && getInt(command, 'G') == 32)) {
     setFeedRate(command);
@@ -1144,8 +1113,7 @@ bool handleGcodeCommand(String command) {
   switch (code) {
     case 'G':
     case NAME_Z:
-    case NAME_X:
-    case NAME_Y: return handleGcode(command);
+    case NAME_X: return handleGcode(command);
     case 'F': return true;
     case 'M': return handleMcode(command);
     case 'T': return true;
@@ -1206,8 +1174,6 @@ void taskGcode(void *param) {
         writeBuffer(&outBuffer, isOn ? "Run" : "Idle");
         writeBuffer(&outBuffer, "|WPos:");
         writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&x)));
-        writeBuffer(&outBuffer, ",");
-        writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&y)));
         writeBuffer(&outBuffer, ",");
         writeBuffer(&outBuffer, formatPosition(getAxisPositionMm(&z)));
         writeBuffer(&outBuffer, "|FS:");
@@ -1335,14 +1301,14 @@ bool setAxisPositionDu(Axis* a, long posDu) {
 
 bool setAxisLimitDu(Axis* a, bool isLeftOrUp, long limitDu) {
   if (!a) return false;
-  AxisId axisId = (a == &x) ? AXIS_X : ((a == &y) ? AXIS_Y : AXIS_Z);
+  AxisId axisId = (a == &x) ? AXIS_X : AXIS_Z;
   LimitDirection dir = isLeftOrUp ? LIMIT_LEFT_OR_UP : LIMIT_RIGHT_OR_DOWN;
   return SettingsService::setAxisLimitDu(axisId, dir, limitDu);
 }
 
 bool clearAxisLimit(Axis* a, bool isLeftOrUp) {
   if (!a) return false;
-  AxisId axisId = (a == &x) ? AXIS_X : ((a == &y) ? AXIS_Y : AXIS_Z);
+  AxisId axisId = (a == &x) ? AXIS_X : AXIS_Z;
   LimitDirection dir = isLeftOrUp ? LIMIT_LEFT_OR_UP : LIMIT_RIGHT_OR_DOWN;
   return SettingsService::clearAxisLimit(axisId, dir);
 }

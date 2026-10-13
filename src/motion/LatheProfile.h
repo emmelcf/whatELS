@@ -180,7 +180,6 @@ struct LatheConfiguration {
 
   AxisHardwareConfig    zAxis;           // Carriage (Z)
   AxisHardwareConfig    xAxis;           // Cross-Slide (X)
-  AxisHardwareConfig    yAxis;           // Auxiliary axis (Y)
 
   SpindleHardwareConfig spindle;         // Spindle encoder & VFD
   LatheDimensions       dimensions;      // Bed, chuck, and swing geometry

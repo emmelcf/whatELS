@@ -68,8 +68,7 @@ struct JoystickAxisState {
 
 enum JoystickAxisIndex {
   JOYSTICK_AXIS_Z = 0,
-  JOYSTICK_AXIS_X = 1,
-  JOYSTICK_AXIS_Y = 2,
+  JOYSTICK_AXIS_X = 1
 };
 
 extern JoystickAxisState joystickAxes[];

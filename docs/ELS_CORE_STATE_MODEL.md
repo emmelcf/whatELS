@@ -162,14 +162,14 @@ enum DomainFlags : uint8_t {
 struct KinematicsState {
   long    zDu;          // Carriage longitudinal position in deci-microns
   long    xDu;          // Cross-slide transverse position in canonical radius deci-microns
-  long    yDu;          // Optional compound or auxiliary axis in deci-microns
+  long    yDu;          // Reserved wire transport placeholder (constant 0; Y axis software retired)
   long    zLeftDu;      // Chuck-side soft limit coordinate (LONG_MAX if unset)
   long    zRightDu;     // Tailstock-side soft limit coordinate (LONG_MIN if unset)
   long    xUpDu;        // Centerline-infeed soft limit coordinate (LONG_MAX if unset)
   long    xDownDu;      // Retract soft limit coordinate (LONG_MIN if unset)
   bool    zDisabled;    // True if Z axis stepper driver is powered down / disengaged
   bool    xDisabled;    // True if X axis stepper driver is powered down / disengaged
-  bool    yDisabled;    // True if Y axis stepper driver is powered down / disengaged
+  bool    yDisabled;    // Reserved wire transport placeholder (constant false)
   int     rpm;          // Spindle speed in revolutions per minute
   float   turns;        // Cumulative continuous spindle revolutions (signed)
   float   angle;        // Spindle angular position in degrees [0.0°, 360.0°)

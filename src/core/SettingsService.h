@@ -7,8 +7,7 @@
 
 enum AxisId : uint8_t {
   AXIS_Z = 0,
-  AXIS_X = 1,
-  AXIS_Y = 2
+  AXIS_X = 1
 };
 
 enum LimitDirection : uint8_t {

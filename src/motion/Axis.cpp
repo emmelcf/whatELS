@@ -7,14 +7,12 @@
 // Global Axes
 Axis z;
 Axis x;
-Axis y;
 
 // DRO Scales
 DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, X_SCALE_PULSES_PER_MM, 100);
 DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, Z_SCALE_PULSES_PER_MM, 100);
 
 pcnt_unit_handle_t pulseUnits[PULSE_COUNTER_COUNT] = {
-  NULL,
   NULL,
   NULL,
   NULL
@@ -242,7 +240,6 @@ void zeroSpindlePos() {
 void markOrigin() {
   markAxisOrigin(&z);
   markAxisOrigin(&x);
-  markAxisOrigin(&y);
   zeroSpindlePos();
 }
 
@@ -270,7 +267,6 @@ void setEmergencyStop(int kind) {
   setAsyncTimerEnable(false);
   xSemaphoreTake(z.mutex, 10);
   xSemaphoreTake(x.mutex, 10);
-  xSemaphoreTake(y.mutex, 10);
 }
 
 void setIsOnFromTask(bool on) {
@@ -289,7 +285,6 @@ void setIsOnFromLoop(bool on) {
   }
   stepperEnable(&z, on);
   stepperEnable(&x, on);
-  stepperEnable(&y, on);
   if (joystickMode) {
     cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
@@ -297,7 +292,7 @@ void setIsOnFromLoop(bool on) {
     markOrigin();
   }
   if (on) {
-    if (mode == MODE_ASYNC || mode == MODE_Y) {
+    if (mode == MODE_ASYNC) {
       updateAsyncTimerSettings();
     }
     isOn = true;
@@ -654,9 +649,6 @@ void taskAttachInterrupts(void *param) {
 #if !HAS_DRO_X
   startPulseCounter(PULSE_COUNTER_X, X_PULSE_A, X_PULSE_B);
 #endif
-  if (ACTIVE_Y) {
-    startPulseCounter(PULSE_COUNTER_Y, Y_PULSE_A, Y_PULSE_B);
-  }
   DEBUG_PRINTLN("taskAttachInterrupts completed successfully");
   Serial.flush();
   pulseCountersReady = true;
@@ -843,73 +835,6 @@ void taskMoveX(void *param) {
       stepperEnable(&x, false);
     }
 
-    taskYIELD();
-  }
-  vTaskDelete(NULL);
-}
-
-void taskMoveY(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
-    int pulseDelta = getAndResetPulses(&y);
-    bool plus = buttonForwardPressed || pulseDelta > 0;
-    bool minus = buttonBackPressed || pulseDelta < 0;
-    if (!plus && !minus) {
-      taskYIELD();
-      continue;
-    }
-    y.movingManually = true;
-    y.speedMax = getStepMaxSpeed(&y);
-    stepperEnable(&y, true);
-
-    int delta = 0;
-    int sign = plus ? 1 : -1;
-    bool pulseMove = false;
-    bool buttonActive = false;
-    unsigned long buttonPressStart = millis();
-    bool continuousAllowed = false;
-    do {
-      pulseMove = pulseDelta != 0;
-      float fractionalDelta = (pulseMove ? pulseDelta / y.pulsePerRevolution : getMoveStepForAxis(&y) * sign / y.screwPitch) * y.motorSteps + y.fractionalPos;
-      delta = round(fractionalDelta);
-      y.fractionalPos = fractionalDelta - delta;
-      if (delta == 0) delta = sign;
-
-      int deltaSign = delta > 0 ? 1 : -1;
-      long posCopy = getManualMoveTargetPos(&y, deltaSign);
-      if (posCopy + delta > y.leftStop) {
-        delta = y.leftStop - posCopy;
-      } else if (posCopy + delta < y.rightStop) {
-        delta = y.rightStop - posCopy;
-      }
-      y.speedMax = getManualMoveSpeedMax(&y, pulseMove);
-      stepToContinuous(&y, posCopy + delta);
-      waitForManualMoveStep(&y, pulseMove);
-      if (pulseMove && delta != 0) {
-        sign = deltaSign;
-        pulseDelta = waitForNextPulseMoveDelta(&y, sign);
-      } else if (pulseMove) {
-        pulseDelta = 0;
-      } else {
-        pulseDelta = getAndResetPulses(&y);
-      }
-
-      buttonActive = plus ? buttonForwardPressed : buttonBackPressed;
-      if (!pulseMove && buttonActive && !continuousAllowed) {
-        while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
-          DELAY(5);
-          buttonActive = plus ? buttonForwardPressed : buttonBackPressed;
-        }
-        if (buttonActive) {
-          continuousAllowed = true;
-        }
-      }
-    } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
-    y.continuous = false;
-    waitForPendingPos0(&y);
-    if (isOn && mode == MODE_Y) updateAsyncTimerSettings();
-    y.movingManually = false;
-    y.speedMax = LONG_MAX;
-    stepperEnable(&y, false);
     taskYIELD();
   }
   vTaskDelete(NULL);
