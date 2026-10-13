@@ -130,11 +130,11 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
   }
 
   if (prev.intent.thread.format != current.intent.thread.format ||
-      abs(prev.intent.thread.authorPitch - current.intent.thread.authorPitch) > 0.0001f ||
+      fabsf(prev.intent.thread.authorPitch - current.intent.thread.authorPitch) > 0.0001f ||
       prev.intent.thread.dupr != current.intent.thread.dupr ||
       prev.intent.taper.modeType != current.intent.taper.modeType ||
-      abs(prev.intent.taper.authorVal - current.intent.taper.authorVal) > 0.0001f ||
-      abs(prev.intent.taper.coneRatio - current.intent.taper.coneRatio) > 0.000001f ||
+      fabsf(prev.intent.taper.authorVal - current.intent.taper.authorVal) > 0.0001f ||
+      fabsf(prev.intent.taper.coneRatio - current.intent.taper.coneRatio) > 0.000001f ||
       prev.intent.taper.presetId != current.intent.taper.presetId ||
       prev.intent.feedStepDu != current.intent.feedStepDu ||
       prev.intent.jogStepDu != current.intent.jogStepDu ||
