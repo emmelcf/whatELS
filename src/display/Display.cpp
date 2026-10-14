@@ -160,7 +160,7 @@ void updateDisplay() {
       (z.leftStop == LONG_MAX ? 123 : z.leftStop) + (z.rightStop == LONG_MIN ? 1234 : z.rightStop) +
       (x.leftStop == LONG_MAX ? 1235 : x.leftStop) + (x.rightStop == LONG_MIN ? 123456 : x.rightStop) + gcodeCommandHash +
       pitchStatusDirection * 149 +
-      (mode == LatheMode::JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + joystickConfig.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
+      (mode == LatheMode::JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + sysConfig.joystick.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
   bool updateLine3 = lcdHashLine3 != newHashLine3;
   if (updateLine3) {
     lcdHashLine3 = newHashLine3;

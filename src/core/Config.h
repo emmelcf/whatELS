@@ -127,30 +127,8 @@ const long DUPR_MAX = 254000;
 const int32_t STARTS_MAX = 124;
 const long PASSES_MAX = 999;
 
-// Main Lead Screw (Z) Default Parameters
-const long DEFAULT_SCREW_Z_DU = 40000;
-const long DEFAULT_MOTOR_STEPS_Z = 800;
-const long DEFAULT_SPEED_START_Z = DEFAULT_MOTOR_STEPS_Z;
-const long DEFAULT_ACCELERATION_Z = 25 * DEFAULT_MOTOR_STEPS_Z;
-const long DEFAULT_SPEED_MANUAL_MOVE_Z = 8 * DEFAULT_MOTOR_STEPS_Z;
-const bool DEFAULT_INVERT_Z = false;
-const bool DEFAULT_INVERT_Z_ENABLE = false;
-const bool DEFAULT_NEEDS_REST_Z = false;
-const long DEFAULT_MAX_TRAVEL_MM_Z = 300;
-const long DEFAULT_BACKLASH_DU_Z = 0;
+// Axis Identifiers
 const char NAME_Z = 'Z';
-
-// Cross-Slide Lead Screw (X) Default Parameters
-const long DEFAULT_SCREW_X_DU = 40000;
-const long DEFAULT_MOTOR_STEPS_X = 800;
-const long DEFAULT_SPEED_START_X = DEFAULT_MOTOR_STEPS_X;
-const long DEFAULT_ACCELERATION_X = 25 * DEFAULT_MOTOR_STEPS_X;
-const long DEFAULT_SPEED_MANUAL_MOVE_X = 8 * DEFAULT_MOTOR_STEPS_X;
-const bool DEFAULT_INVERT_X = true;
-const bool DEFAULT_INVERT_X_ENABLE = false;
-const bool DEFAULT_NEEDS_REST_X = false;
-const long DEFAULT_MAX_TRAVEL_MM_X = 100;
-const long DEFAULT_BACKLASH_DU_X = 0;
 const char NAME_X = 'X';
 
 // -----------------------------------------------------------------------------
@@ -232,51 +210,8 @@ struct ControllerConfig {
 
 extern ControllerConfig sysConfig;
 
-#define HANDWHEEL_PULSE_WAIT_MS (sysConfig.mpg.pulseWaitMs)
-
-#define joystickConfig (sysConfig.joystick)
-#define DEFAULT_JOYSTICK_ENABLED (false)
-#define DEFAULT_JOYSTICK_Z_ENABLED (true)
-#define DEFAULT_JOYSTICK_X_ENABLED (true)
-#define DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF (false)
-#define DEFAULT_JOYSTICK_CENTER_SAMPLES (64)
-#define DEFAULT_JOYSTICK_OVERSAMPLES (4)
-#define DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS (20)
-#define DEFAULT_JOYSTICK_ADC_MAX (4095)
-#define DEFAULT_JOYSTICK_DEADBAND (250)
-#define DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT (10000)
-#define DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND (1.0f)
-#define DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND (8.0f)
-#define JOYSTICK_PITCH_CHANGES_PER_SECOND (20.0f)
-#define JOYSTICK_PITCH_STATUS_HOLD_MS (500)
-#define JOYSTICK_BUTTON_DEBOUNCE_MS (30)
-#define JOYSTICK_BUTTON_TOGGLE_MAX_MS (500)
-#define JOYSTICK_STARTUP_CENTER_TOLERANCE_MIN (32)
-#define DEFAULT_INVERT_JOYSTICK_Z (false)
-#define DEFAULT_INVERT_JOYSTICK_X (false)
-#define DEFAULT_INVERT_JOYSTICK_BUTTON (false)
-
-#define DIRECTION_SETUP_DELAY_US (sysConfig.timing.directionSetupDelayUs)
-#define STEPPED_ENABLE_DELAY_MS (sysConfig.timing.steppedEnableDelayMs)
-#define JOG_HOLD_DELAY_MS (sysConfig.timing.jogHoldDelayMs)
-#define DEFAULT_JOG_HOLD_DELAY_MS (sysConfig.timing.jogHoldDelayMs)
-#define STEP_TIME_MS (sysConfig.timing.stepTimeMs)
-#define DELAY_BETWEEN_STEPS_MS (sysConfig.timing.delayBetweenStepsMs)
-#define ENABLE_CONTINUOUS_MOVE (sysConfig.timing.enableContinuousMove)
-#define DEFAULT_STEP_TIME_MS (500)
-#define DEFAULT_DELAY_BETWEEN_STEPS_MS (80)
-#define DEFAULT_ENABLE_CONTINUOUS_MOVE (true)
-
-#define LINEAR_INTERPOLATION_PRECISION (sysConfig.gcode.linearInterpolationPrecision)
-#define GCODE_WAIT_EPSILON_STEPS (sysConfig.gcode.waitEpsilonSteps)
-#define SPINDLE_PAUSES_GCODE (sysConfig.gcode.spindlePausesGcode)
-#define GCODE_MIN_RPM (sysConfig.gcode.minRpm)
-#define GCODE_FEED_DEFAULT_DU_SEC (sysConfig.gcode.defaultFeedDuPerSec)
-#define GCODE_FEED_MIN_DU_SEC (sysConfig.gcode.minFeedDuPerSec)
-
 const long DEFAULT_SAFE_DISTANCE_DU = 5000;
 const long DEFAULT_SLOT_LEFT_REDUCTION_DU = 0;
-const long SAVE_DELAY_US = 5000000;
 const float TPI_ROUND_EPSILON = 0.03f;
 
 // =============================================================================
@@ -288,25 +223,6 @@ constexpr long JOG_STEPS_METRIC[]   = { 10000, 1000, 100 };       // 1.0mm, 0.1m
 constexpr long JOG_STEPS_IMPERIAL[] = { 25400, 2540, 254 };       // 0.1", 0.01", 0.001"
 constexpr long FEED_STEPS_METRIC[]  = { 100, 500, 1000, 2000 };   // 0.01, 0.05, 0.10, 0.20 mm/rev
 constexpr long FEED_STEPS_IMPERIAL[]= { 25, 51, 127, 254 };       // 0.001", 0.002", 0.005", 0.010"/rev
-
-// Backward-compatible step size defines
-#define MOVE_STEP_1 JOG_STEPS_METRIC[0]
-#define MOVE_STEP_2 JOG_STEPS_METRIC[1]
-#define MOVE_STEP_3 JOG_STEPS_METRIC[2]
-
-#define MOVE_STEP_IMP_1 JOG_STEPS_IMPERIAL[0]
-#define MOVE_STEP_IMP_2 JOG_STEPS_IMPERIAL[1]
-#define MOVE_STEP_IMP_3 JOG_STEPS_IMPERIAL[2]
-
-#define FEED_STEP_1 FEED_STEPS_METRIC[0]
-#define FEED_STEP_2 FEED_STEPS_METRIC[1]
-#define FEED_STEP_3 FEED_STEPS_METRIC[2]
-#define FEED_STEP_4 FEED_STEPS_METRIC[3]
-
-#define FEED_STEP_IMP_1 FEED_STEPS_IMPERIAL[0]
-#define FEED_STEP_IMP_2 FEED_STEPS_IMPERIAL[1]
-#define FEED_STEP_IMP_3 FEED_STEPS_IMPERIAL[2]
-#define FEED_STEP_IMP_4 FEED_STEPS_IMPERIAL[3]
 
 // Lathe Operating Modes
 enum class LatheMode : uint8_t {
@@ -350,8 +266,8 @@ struct OperatorPreferences {
   bool isAbsoluteMode = true;     // Absolute (G90) vs Incremental (G91)
   bool zDroActive = false;        // Optical linear scale vs motor step tracking
   bool xDroActive = false;
-  long jogStepDu = MOVE_STEP_1;   // 1.0 mm (metric) or 0.1" (imperial)
-  long feedStepDu = FEED_STEP_1;  // 0.01 mm/rev or 0.001"/rev
+  long jogStepDu = JOG_STEPS_METRIC[0];   // 1.0 mm (metric) or 0.1" (imperial)
+  long feedStepDu = FEED_STEPS_METRIC[0];  // 0.01 mm/rev or 0.001"/rev
   float deadbandAngle = 0.0f;
   bool isDeadbandAngleAuto = true;
   float deadbandTurns = 0.0f;
@@ -476,29 +392,8 @@ extern const int KEYBOARD_BINDING_COUNT;
 
 // Machine Configuration Keys
 #define CFG_VERSION "v"
-#define CFG_ENCODER_PPR "encPpr"
 #define CFG_ENCODER_BACKLASH "encBacklash"
 #define CFG_AXIS_ENCODER_BACKLASH "axisEncBacklash"
-#define CFG_SCREW_Z_DU "zScrew"
-#define CFG_MOTOR_STEPS_Z "zMotor"
-#define CFG_SPEED_START_Z "zStart"
-#define CFG_ACCELERATION_Z "zAccel"
-#define CFG_SPEED_MANUAL_MOVE_Z "zManual"
-#define CFG_INVERT_Z "zInv"
-#define CFG_INVERT_Z_ENABLE "zInvEn"
-#define CFG_NEEDS_REST_Z "zRest"
-#define CFG_MAX_TRAVEL_MM_Z "zTravel"
-#define CFG_BACKLASH_DU_Z "zBacklash"
-#define CFG_SCREW_X_DU "xScrew"
-#define CFG_MOTOR_STEPS_X "xMotor"
-#define CFG_SPEED_START_X "xStart"
-#define CFG_ACCELERATION_X "xAccel"
-#define CFG_SPEED_MANUAL_MOVE_X "xManual"
-#define CFG_INVERT_X "xInv"
-#define CFG_INVERT_X_ENABLE "xInvEn"
-#define CFG_NEEDS_REST_X "xRest"
-#define CFG_MAX_TRAVEL_MM_X "xTravel"
-#define CFG_BACKLASH_DU_X "xBacklash"
 #define CFG_STEP_TIME_MS "stepMs"
 #define CFG_DELAY_BETWEEN_STEPS_MS "stepDelay"
 #define CFG_ENABLE_CONTINUOUS_MOVE "contStep"
@@ -534,31 +429,7 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define KCFG_VERSION "v"
 #define KCFG_SHOW_KEY_PRESSES "showKeys"
 
-// Legacy / Deprecated Volatile Keys (retained for backward migration compatibility if needed)
-#define PREF_DUPR "d"
-#define PREF_POS_Z "zp"
-#define PREF_LEFT_STOP_Z "zls"
-#define PREF_RIGHT_STOP_Z "zrs"
-#define PREF_ORIGIN_POS_Z "zpo"
-#define PREF_POS_GLOBAL_Z "zpg"
-#define PREF_MOTOR_POS_Z "zpm"
-#define PREF_DISABLED_Z "zd"
-#define PREF_POS_X "xp"
-#define PREF_LEFT_STOP_X "xls"
-#define PREF_RIGHT_STOP_X "xrs"
-#define PREF_ORIGIN_POS_X "xpo"
-#define PREF_POS_GLOBAL_X "xpg"
-#define PREF_MOTOR_POS_X "xpm"
-#define PREF_DISABLED_X "xd"
-#define PREF_SPINDLE_POS "sp"
-#define PREF_SPINDLE_POS_AVG "spa"
-#define PREF_OUT_OF_SYNC "oos"
-#define PREF_SPINDLE_POS_GLOBAL "spg"
-#define PREF_STARTS "sta"
-#define PREF_MODE "mod"
-#define PREF_CONE_RATIO "cr"
-#define PREF_TURN_PASSES "tp"
-#define PREF_AUX_FORWARD "af"
+
 
 // =============================================================================
 // 7. GLOBAL RUNTIME STATE & LIFECYCLE FUNCTIONS

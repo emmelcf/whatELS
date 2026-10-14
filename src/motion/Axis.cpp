@@ -161,7 +161,7 @@ void initAxis(Axis* a, char name, bool active, bool rotational, float motorSteps
 void updateEnable(Axis* a) {
   if (!a->disabled && (!a->needsRest || a->stepperEnableCounter > 0)) {
     digitalWrite(a->ena, a->invertEnable ? LOW : HIGH);
-    DELAY(STEPPED_ENABLE_DELAY_MS);
+    DELAY(sysConfig.timing.steppedEnableDelayMs);
   } else {
     digitalWrite(a->ena, a->invertEnable ? HIGH : LOW);
   }
@@ -331,7 +331,7 @@ void setDir(Axis* a, bool dir) {
     a->direction = dir;
     a->directionInitialized = true;
     digitalWrite(a->dir, dir ^ a->invertStepper);
-    delayMicroseconds(DIRECTION_SETUP_DELAY_US);
+    delayMicroseconds(sysConfig.timing.directionSetupDelayUs);
   }
 }
 
@@ -448,7 +448,7 @@ long getMoveStepForAxis(Axis* a) {
 long getStepMaxSpeed(Axis* a) {
   long joystickSpeed = getJoystickManualSpeed(a);
   if (isJoystickManualMove(a) && joystickSpeed > 0) return joystickSpeed;
-  return (isContinuousStep() || isRapidManualMove()) ? a->speedManualMove : min(long(a->speedManualMove), abs(getMoveStepForAxis(a)) * 1000 / STEP_TIME_MS);
+  return (isContinuousStep() || isRapidManualMove()) ? a->speedManualMove : min(long(a->speedManualMove), abs(getMoveStepForAxis(a)) * 1000 / sysConfig.timing.stepTimeMs);
 }
 
 long getManualMoveSpeedMax(Axis* a, bool pulseMove) {
@@ -461,7 +461,7 @@ void waitForStep(Axis* a) {
   } else {
     a->continuous = false;
     waitForPendingPos0(a);
-    DELAY(DELAY_BETWEEN_STEPS_MS);
+    DELAY(sysConfig.timing.delayBetweenStepsMs);
   }
 }
 
@@ -472,7 +472,7 @@ void waitForManualMoveStep(Axis* a, bool pulseMove) {
 
 int waitForNextHandwheelPulseDelta(Axis* a) {
   unsigned long start = millis();
-  while (emergencyStop == EstopCode::NONE && millis() - start < HANDWHEEL_PULSE_WAIT_MS) {
+  while (emergencyStop == EstopCode::NONE && millis() - start < sysConfig.mpg.pulseWaitMs) {
     int pulseDelta = getAndResetPulses(a);
     if (pulseDelta == 0) {
       DELAY(1);
@@ -486,7 +486,7 @@ int waitForNextHandwheelPulseDelta(Axis* a) {
 int waitForNextJoystickPulseDelta(Axis* a, int sign) {
   if (!(isJoystickManualMove(a) && getJoystickManualDirection(a) == sign)) return 0;
   unsigned long start = millis();
-  unsigned long timeoutMs = min(100, max(10, joystickConfig.sampleIntervalMs * 3));
+  unsigned long timeoutMs = min(100, max(10, sysConfig.joystick.sampleIntervalMs * 3));
   while (emergencyStop == EstopCode::NONE && (isJoystickManualMove(a) && getJoystickManualDirection(a) == sign) && millis() - start < timeoutMs) {
     int pulseDelta = getAndResetPulses(a);
     if (pulseDelta == 0) {
@@ -735,7 +735,7 @@ void taskMoveZ(void *param) {
 
         buttonActive = left ? buttonLeftPressed : buttonRightPressed;
         if (!pulseMove && buttonActive && !continuousAllowed) {
-          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)sysConfig.timing.jogHoldDelayMs)) {
             DELAY(5);
             buttonActive = left ? buttonLeftPressed : buttonRightPressed;
           }
@@ -830,7 +830,7 @@ void taskMoveX(void *param) {
 
         buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
         if (!pulseMove && buttonActive && !continuousAllowed) {
-          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)sysConfig.timing.jogHoldDelayMs)) {
             DELAY(5);
             buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
           }

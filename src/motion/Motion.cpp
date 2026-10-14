@@ -17,7 +17,7 @@ long opDupr = 0;
 
 // GCode state
 String gcodeCommand = "";
-long gcodeFeedDuPerSec = GCODE_FEED_DEFAULT_DU_SEC;
+long gcodeFeedDuPerSec = 20000;
 bool gcodeInitialized = false;
 bool gcodeAbsolutePositioning = true;
 bool gcodeInBrace = false;
@@ -36,7 +36,7 @@ int gcodeProgramCharIndex = 0;
 
 ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
 TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
-long feedStepDu = FEED_STEP_2;
+long feedStepDu = FEED_STEPS_METRIC[1];
 
 static long auxSafeDistance = 0;
 static long startOffset = 0;
@@ -88,11 +88,11 @@ long getPassModeXStart() {
 
 void resetGcodeState() {
   gcodeCommand = "";
-  gcodeFeedDuPerSec = GCODE_FEED_DEFAULT_DU_SEC;
+  gcodeFeedDuPerSec = sysConfig.gcode.defaultFeedDuPerSec;
   gcodeAbsolutePositioning = true;
   gcodeInBrace = false;
   gcodeInSemicolon = false;
-  SettingsService::setMeasure(static_cast<int>(MeasureUnit::METRIC));
+  SettingsService::setMeasure(MeasureUnit::METRIC);
 }
 
 static unsigned int getTimerLimit() {
@@ -884,11 +884,11 @@ static void updateAxisSpeeds(long diffX, long diffZ) {
   long absX = abs(diffX);
   long absZ = abs(diffZ);
   float stepsPerSecX = gcodeFeedDuPerSec * x.motorSteps / x.screwPitch;
-  float minStepsPerSecX = GCODE_FEED_MIN_DU_SEC * x.motorSteps / x.screwPitch;
+  float minStepsPerSecX = sysConfig.gcode.minFeedDuPerSec * x.motorSteps / x.screwPitch;
   if (stepsPerSecX > x.speedManualMove) stepsPerSecX = x.speedManualMove;
   else if (stepsPerSecX < minStepsPerSecX) stepsPerSecX = minStepsPerSecX;
   float stepsPerSecZ = gcodeFeedDuPerSec * z.motorSteps / z.screwPitch;
-  float minStepsPerSecZ = GCODE_FEED_MIN_DU_SEC * z.motorSteps / z.screwPitch;
+  float minStepsPerSecZ = sysConfig.gcode.minFeedDuPerSec * z.motorSteps / z.screwPitch;
   if (stepsPerSecZ > z.speedManualMove) stepsPerSecZ = z.speedManualMove;
   else if (stepsPerSecZ < minStepsPerSecZ) stepsPerSecZ = minStepsPerSecZ;
   float secX = absX / stepsPerSecX;
@@ -901,13 +901,13 @@ static void updateAxisSpeeds(long diffX, long diffZ) {
 }
 
 static void gcodeWaitEpsilon(int epsilon) {
-  while (isOn && (abs(x.pendingPos) > epsilon || abs(z.pendingPos) > epsilon || (SPINDLE_PAUSES_GCODE && getApproxRpm() < GCODE_MIN_RPM))) {
+  while (isOn && (abs(x.pendingPos) > epsilon || abs(z.pendingPos) > epsilon || (sysConfig.gcode.spindlePausesGcode && getApproxRpm() < sysConfig.gcode.minRpm))) {
     taskYIELD();
   }
 }
 
 static void gcodeWaitNear() {
-  gcodeWaitEpsilon(GCODE_WAIT_EPSILON_STEPS);
+  gcodeWaitEpsilon(sysConfig.gcode.waitEpsilonSteps);
 }
 
 static void gcodeWaitStop() {
@@ -922,7 +922,7 @@ static void G00_01(const String& command) {
   long xDiff = xEnd - xStart;
   long zDiff = zEnd - zStart;
   updateAxisSpeeds(xDiff, zDiff);
-  long chunks = round(max(abs(xDiff), abs(zDiff)) * LINEAR_INTERPOLATION_PRECISION);
+  long chunks = round(max(abs(xDiff), abs(zDiff)) * sysConfig.gcode.linearInterpolationPrecision);
   for (long i = 0; i < chunks; i++) {
     if (!isOn) return;
     float scale = i / float(chunks);
@@ -950,7 +950,7 @@ static long spindleFromPosWithPitch(Axis* a, long pos, long pitchDu) {
 }
 
 static bool gcodeWaitForSpindle() {
-  while (isOn && getApproxRpm() < GCODE_MIN_RPM) {
+  while (isOn && getApproxRpm() < sysConfig.gcode.minRpm) {
     taskYIELD();
   }
   return isOn;
@@ -961,7 +961,7 @@ static long gcodeWaitForThreadPhase(Axis* lead, long pitchDu) {
 
   long lastPhase = spindleModulo(spindlePosGlobal - spindleFromPosWithPitch(lead, lead->posGlobal, pitchDu));
   while (isOn) {
-    if (getApproxRpm() < GCODE_MIN_RPM) {
+    if (getApproxRpm() < sysConfig.gcode.minRpm) {
       if (!gcodeWaitForSpindle()) return -1;
       lastPhase = spindleModulo(spindlePosGlobal - spindleFromPosWithPitch(lead, lead->posGlobal, pitchDu));
     }
@@ -1063,7 +1063,7 @@ static bool handleGcode(const String& command) {
   } else if (op == 32) {
     return G32(command);
   } else if (op == 20 || op == 21) {
-    SettingsService::setMeasure(op == 20 ? static_cast<int>(MeasureUnit::INCH) : static_cast<int>(MeasureUnit::METRIC));
+    SettingsService::setMeasure(op == 20 ? MeasureUnit::INCH : MeasureUnit::METRIC);
   } else if (op == 90 || op == 91) {
     gcodeAbsolutePositioning = op == 90;
   } else if (op == 94) {
@@ -1334,15 +1334,15 @@ long getFeedStepDu() {
 
 void cycleFeedStep() {
   if (measure == MeasureUnit::METRIC) {
-    if (feedStepDu == FEED_STEP_1) feedStepDu = FEED_STEP_2;
-    else if (feedStepDu == FEED_STEP_2) feedStepDu = FEED_STEP_3;
-    else if (feedStepDu == FEED_STEP_3) feedStepDu = FEED_STEP_4;
-    else feedStepDu = FEED_STEP_1;
+    if (feedStepDu == FEED_STEPS_METRIC[0]) feedStepDu = FEED_STEPS_METRIC[1];
+    else if (feedStepDu == FEED_STEPS_METRIC[1]) feedStepDu = FEED_STEPS_METRIC[2];
+    else if (feedStepDu == FEED_STEPS_METRIC[2]) feedStepDu = FEED_STEPS_METRIC[3];
+    else feedStepDu = FEED_STEPS_METRIC[0];
   } else {
-    if (feedStepDu == FEED_STEP_IMP_1) feedStepDu = FEED_STEP_IMP_2;
-    else if (feedStepDu == FEED_STEP_IMP_2) feedStepDu = FEED_STEP_IMP_3;
-    else if (feedStepDu == FEED_STEP_IMP_3) feedStepDu = FEED_STEP_IMP_4;
-    else feedStepDu = FEED_STEP_IMP_1;
+    if (feedStepDu == FEED_STEPS_IMPERIAL[0]) feedStepDu = FEED_STEPS_IMPERIAL[1];
+    else if (feedStepDu == FEED_STEPS_IMPERIAL[1]) feedStepDu = FEED_STEPS_IMPERIAL[2];
+    else if (feedStepDu == FEED_STEPS_IMPERIAL[2]) feedStepDu = FEED_STEPS_IMPERIAL[3];
+    else feedStepDu = FEED_STEPS_IMPERIAL[0];
   }
   operatorPrefs.feedStepDu = feedStepDu;
 }

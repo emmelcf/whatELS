@@ -42,13 +42,13 @@ static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<long> s_jogStepDu(PREF_NAMESPACE, PREF_MOVE_STEP, MOVE_STEP_1, [](const long& val) {
+static PersistentSetting<long> s_jogStepDu(PREF_NAMESPACE, PREF_MOVE_STEP, JOG_STEPS_METRIC[0], [](const long& val) {
   operatorPrefs.jogStepDu = val;
   moveStep = val;
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<long> s_feedStepDu(PREF_NAMESPACE, PREF_FEED_STEP, FEED_STEP_1, [](const long& val) {
+static PersistentSetting<long> s_feedStepDu(PREF_NAMESPACE, PREF_FEED_STEP, FEED_STEPS_METRIC[0], [](const long& val) {
   operatorPrefs.feedStepDu = val;
   feedStepDu = val;
   machineStatusForcePublish = true;
@@ -820,22 +820,22 @@ long SettingsService::getJogStepDu() {
 }
 
 bool SettingsService::cycleJogStep() {
-  long nextStep = MOVE_STEP_1;
+  long nextStep = JOG_STEPS_METRIC[0];
   if (measure == MeasureUnit::METRIC) {
-    if (moveStep == MOVE_STEP_1) {
-      nextStep = MOVE_STEP_2;
-    } else if (moveStep == MOVE_STEP_2) {
-      nextStep = MOVE_STEP_3;
+    if (moveStep == JOG_STEPS_METRIC[0]) {
+      nextStep = JOG_STEPS_METRIC[1];
+    } else if (moveStep == JOG_STEPS_METRIC[1]) {
+      nextStep = JOG_STEPS_METRIC[2];
     } else {
-      nextStep = MOVE_STEP_1;
+      nextStep = JOG_STEPS_METRIC[0];
     }
   } else {
-    if (moveStep == MOVE_STEP_IMP_1) {
-      nextStep = MOVE_STEP_IMP_2;
-    } else if (moveStep == MOVE_STEP_IMP_2) {
-      nextStep = MOVE_STEP_IMP_3;
+    if (moveStep == JOG_STEPS_IMPERIAL[0]) {
+      nextStep = JOG_STEPS_IMPERIAL[1];
+    } else if (moveStep == JOG_STEPS_IMPERIAL[1]) {
+      nextStep = JOG_STEPS_IMPERIAL[2];
     } else {
-      nextStep = MOVE_STEP_IMP_1;
+      nextStep = JOG_STEPS_IMPERIAL[0];
     }
   }
   return setJogStepDu(nextStep);
@@ -980,14 +980,18 @@ bool SettingsService::isXDroMode() {
   return s_xDroMode.get();
 }
 
+bool SettingsService::setMeasure(MeasureUnit m) {
+  return setMeasure(static_cast<int>(m));
+}
+
 bool SettingsService::setMeasure(int m) {
   if (m < 0 || m > 2) return false;
   operatorPrefs.measure = static_cast<MeasureUnit>(m);
   return s_measure.set(m);
 }
 
-int SettingsService::getMeasure() {
-  return s_measure.get();
+MeasureUnit SettingsService::getMeasure() {
+  return static_cast<MeasureUnit>(s_measure.get());
 }
 
 bool SettingsService::setSpindleDisplayMode(int m) {

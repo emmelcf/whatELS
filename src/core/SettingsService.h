@@ -83,8 +83,9 @@ public:
   static bool getAuxForward();
 
   // --- Tier 2 / Category 4: Display & Unit Modes ---
+  static bool setMeasure(MeasureUnit m);
   static bool setMeasure(int m);
-  static int getMeasure();
+  static MeasureUnit getMeasure();
   static bool setDiameterMode(bool dia);
   static bool isDiameterMode();
   static bool setAbsoluteMode(bool abs);

@@ -539,6 +539,13 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `WIFI_*` (`WIFI_SSID`, `WIFI_PASSWORD`, etc.) | WiFi credential macro defines in `Config.h` | **DISCARD MACROS:** Encapsulated into typed configuration struct `sysConfig.wifi.*`. |
 | `PULSE_PER_REVOLUTION_Z`<br>`PULSE_PER_REVOLUTION_X` | MPG handwheel resolution macros in `Config.h` | **DISCARD MACROS:** Encapsulated into typed MPG configuration `sysConfig.mpg.*Handwheel.ppr`. |
 | `SPEED_START_Z/X`<br>`ACCELERATION_Z/X`<br>`SPEED_MANUAL_MOVE_Z/X`<br>`INVERT_Z/X`<br>`INVERT_Z/X_ENABLE`<br>`NEEDS_REST_Z/X` | Loose kinematic & driver polarity globals in `Config.h` / `Config.cpp` | **DISCARD AS GLOBALS:** Fully removed from `Config.h`/`Config.cpp`. Kinematic math and polarity are sourced directly from `activeMachineProfile` and `Axis::z` / `Axis::x`. |
+| `MOVE_STEP_*`<br>`FEED_STEP_*` | Step table macros in `Config.h` | **DISCARD MACROS:** Replaced with canonical arrays `JOG_STEPS_METRIC`, `JOG_STEPS_IMPERIAL`, `FEED_STEPS_METRIC`, `FEED_STEPS_IMPERIAL`. |
+| `DIRECTION_SETUP_DELAY_US`<br>`STEPPED_ENABLE_DELAY_MS`<br>`JOG_HOLD_DELAY_MS`<br>`STEP_TIME_MS`<br>`DELAY_BETWEEN_STEPS_MS`<br>`ENABLE_CONTINUOUS_MOVE` | Timing & jog delay macros in `Config.h` | **DISCARD MACROS:** Sourced directly from `sysConfig.timing.*` (`MotionTimingConfig`). |
+| `LINEAR_INTERPOLATION_PRECISION`<br>`GCODE_WAIT_EPSILON_STEPS`<br>`SPINDLE_PAUSES_GCODE`<br>`GCODE_MIN_RPM`<br>`GCODE_FEED_DEFAULT_DU_SEC`<br>`GCODE_FEED_MIN_DU_SEC` | G-code parameters macros in `Config.h` | **DISCARD MACROS:** Sourced directly from `sysConfig.gcode.*` (`GCodeConfig`). |
+| `HANDWHEEL_PULSE_WAIT_MS` | MPG timing macro in `Config.h` | **DISCARD MACROS:** Sourced directly from `sysConfig.mpg.pulseWaitMs`. |
+| `joystickConfig`<br>`DEFAULT_JOYSTICK_*` (18 macros) | Joystick alias and default macros in `Config.h` | **DISCARD MACROS:** Sourced directly from `sysConfig.joystick.*` and standard `JoystickConfig{}` defaults. |
+| `CFG_SCREW_Z/X_DU`<br>`CFG_MOTOR_STEPS_Z/X`<br>`CFG_SPEED_START_Z/X` (20 axis iron keys) | Dead axis iron NVS keys in `Config.h` | **DISCARD DEAD KEYS:** Machine iron settings are managed through JSON machine profiles (`activeMachineProfile`). |
+| `PREF_DUPR`<br>`PREF_POS_Z/X`<br>`PREF_LEFT/RIGHT_STOP_*` (25 volatile keys) | Legacy `h5.ino` volatile coordinates/stops NVS keys | **DISCARD DEAD KEYS:** Kinematics are strictly volatile in RAM and reset to origin on boot per ADR 12. |
 
 ---
 

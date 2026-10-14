@@ -100,29 +100,11 @@ float clampFloatValue(float value, float minValue, float maxValue) {
 void setMachineConfigDefaults() {
   ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
   AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
-  STEP_TIME_MS = DEFAULT_STEP_TIME_MS;
-  DELAY_BETWEEN_STEPS_MS = DEFAULT_DELAY_BETWEEN_STEPS_MS;
-  ENABLE_CONTINUOUS_MOVE = DEFAULT_ENABLE_CONTINUOUS_MOVE;
-  JOG_HOLD_DELAY_MS = DEFAULT_JOG_HOLD_DELAY_MS;
+  sysConfig.timing = MotionTimingConfig{};
   SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
   SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
-  sysConfig.mpg.zHandwheel.ppr = 600.0f;
-  sysConfig.mpg.xHandwheel.ppr = 600.0f;
-  joystickConfig.enabled = DEFAULT_JOYSTICK_ENABLED;
-  joystickConfig.zEnabled = DEFAULT_JOYSTICK_Z_ENABLED;
-  joystickConfig.xEnabled = DEFAULT_JOYSTICK_X_ENABLED;
-  joystickConfig.buttonTogglesOnOff = DEFAULT_JOYSTICK_BUTTON_TOGGLES_ON_OFF;
-  joystickConfig.centerSamples = DEFAULT_JOYSTICK_CENTER_SAMPLES;
-  joystickConfig.oversamples = DEFAULT_JOYSTICK_OVERSAMPLES;
-  joystickConfig.sampleIntervalMs = DEFAULT_JOYSTICK_SAMPLE_INTERVAL_MS;
-  joystickConfig.adcMax = DEFAULT_JOYSTICK_ADC_MAX;
-  joystickConfig.deadband = DEFAULT_JOYSTICK_DEADBAND;
-  joystickConfig.pulseQueueLimit = DEFAULT_JOYSTICK_PULSE_QUEUE_LIMIT;
-  joystickConfig.normalRps = DEFAULT_JOYSTICK_NORMAL_REVOLUTIONS_PER_SECOND;
-  joystickConfig.rapidRps = DEFAULT_JOYSTICK_RAPID_REVOLUTIONS_PER_SECOND;
-  joystickConfig.invertZ = DEFAULT_INVERT_JOYSTICK_Z;
-  joystickConfig.invertX = DEFAULT_INVERT_JOYSTICK_X;
-  joystickConfig.invertButton = DEFAULT_INVERT_JOYSTICK_BUTTON;
+  sysConfig.mpg = MpgConfig{};
+  sysConfig.joystick = JoystickConfig{};
 }
 
 void applyDerivedMachineConfig() {
@@ -135,19 +117,19 @@ void applyDerivedMachineConfig() {
 void normalizeMachineConfig() {
   ENCODER_BACKLASH = clampIntValue(ENCODER_BACKLASH, 0, 30000);
   AXIS_ENCODER_BACKLASH = clampIntValue(AXIS_ENCODER_BACKLASH, 0, 30000);
-  STEP_TIME_MS = clampLongValue(STEP_TIME_MS, 1, 10000);
-  DELAY_BETWEEN_STEPS_MS = clampLongValue(DELAY_BETWEEN_STEPS_MS, 0, 10000);
+  sysConfig.timing.stepTimeMs = clampLongValue(sysConfig.timing.stepTimeMs, 1, 10000);
+  sysConfig.timing.delayBetweenStepsMs = clampLongValue(sysConfig.timing.delayBetweenStepsMs, 0, 10000);
   SAFE_DISTANCE_DU = clampLongValue(SAFE_DISTANCE_DU, 0, 10000000);
   sysConfig.mpg.zHandwheel.ppr = clampFloatValue(sysConfig.mpg.zHandwheel.ppr, 1.0, 100000.0);
   sysConfig.mpg.xHandwheel.ppr = clampFloatValue(sysConfig.mpg.xHandwheel.ppr, 1.0, 100000.0);
-  joystickConfig.centerSamples = clampIntValue(joystickConfig.centerSamples, 1, 1024);
-  joystickConfig.oversamples = clampIntValue(joystickConfig.oversamples, 1, 1024);
-  joystickConfig.sampleIntervalMs = clampIntValue(joystickConfig.sampleIntervalMs, 1, 1000);
-  joystickConfig.adcMax = clampIntValue(joystickConfig.adcMax, 1, 65535);
-  joystickConfig.deadband = clampIntValue(joystickConfig.deadband, 0, joystickConfig.adcMax - 1);
-  joystickConfig.pulseQueueLimit = clampIntValue(joystickConfig.pulseQueueLimit, 1, 1000000);
-  joystickConfig.normalRps = clampFloatValue(joystickConfig.normalRps, 0.01, 1000.0);
-  joystickConfig.rapidRps = clampFloatValue(joystickConfig.rapidRps, 0.01, 1000.0);
+  sysConfig.joystick.centerSamples = clampIntValue(sysConfig.joystick.centerSamples, 1, 1024);
+  sysConfig.joystick.oversamples = clampIntValue(sysConfig.joystick.oversamples, 1, 1024);
+  sysConfig.joystick.sampleIntervalMs = clampIntValue(sysConfig.joystick.sampleIntervalMs, 1, 1000);
+  sysConfig.joystick.adcMax = clampIntValue(sysConfig.joystick.adcMax, 1, 65535);
+  sysConfig.joystick.deadband = clampIntValue(sysConfig.joystick.deadband, 0, sysConfig.joystick.adcMax - 1);
+  sysConfig.joystick.pulseQueueLimit = clampIntValue(sysConfig.joystick.pulseQueueLimit, 1, 1000000);
+  sysConfig.joystick.normalRps = clampFloatValue(sysConfig.joystick.normalRps, 0.01, 1000.0);
+  sysConfig.joystick.rapidRps = clampFloatValue(sysConfig.joystick.rapidRps, 0.01, 1000.0);
   SLOT_LEFT_REDUCTION_DU = clampLongValue(SLOT_LEFT_REDUCTION_DU, 0, 10000000);
   applyDerivedMachineConfig();
 }
@@ -162,29 +144,29 @@ void loadMachineConfig() {
   DEBUG_PRINTLN("loading fields...");
   ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
   AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
-  STEP_TIME_MS = cfg.getLong(CFG_STEP_TIME_MS, STEP_TIME_MS);
-  DELAY_BETWEEN_STEPS_MS = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, DELAY_BETWEEN_STEPS_MS);
-  ENABLE_CONTINUOUS_MOVE = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, ENABLE_CONTINUOUS_MOVE);
+  sysConfig.timing.stepTimeMs = cfg.getLong(CFG_STEP_TIME_MS, sysConfig.timing.stepTimeMs);
+  sysConfig.timing.delayBetweenStepsMs = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, sysConfig.timing.delayBetweenStepsMs);
+  sysConfig.timing.enableContinuousMove = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, sysConfig.timing.enableContinuousMove);
   SAFE_DISTANCE_DU = cfg.getLong(CFG_SAFE_DISTANCE_DU, SAFE_DISTANCE_DU);
   SLOT_LEFT_REDUCTION_DU = cfg.getLong(CFG_SLOT_LEFT_REDUCTION_DU, SLOT_LEFT_REDUCTION_DU);
   float legacyPulsePerRevolution = cfg.getFloat(CFG_PULSE_PER_REVOLUTION, -1.0);
   sysConfig.mpg.zHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_Z, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.zHandwheel.ppr);
   sysConfig.mpg.xHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_X, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.xHandwheel.ppr);
-  joystickConfig.enabled = cfg.getBool(CFG_JOYSTICK_ENABLED, joystickConfig.enabled);
-  joystickConfig.zEnabled = cfg.getBool(CFG_JOYSTICK_Z_ENABLED, joystickConfig.zEnabled);
-  joystickConfig.xEnabled = cfg.getBool(CFG_JOYSTICK_X_ENABLED, joystickConfig.xEnabled);
-  joystickConfig.buttonTogglesOnOff = cfg.getBool(CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF, joystickConfig.buttonTogglesOnOff);
-  joystickConfig.centerSamples = cfg.getInt(CFG_JOYSTICK_CENTER_SAMPLES, joystickConfig.centerSamples);
-  joystickConfig.oversamples = cfg.getInt(CFG_JOYSTICK_OVERSAMPLES, joystickConfig.oversamples);
-  joystickConfig.sampleIntervalMs = cfg.getInt(CFG_JOYSTICK_SAMPLE_INTERVAL_MS, joystickConfig.sampleIntervalMs);
-  joystickConfig.adcMax = cfg.getInt(CFG_JOYSTICK_ADC_MAX, joystickConfig.adcMax);
-  joystickConfig.deadband = cfg.getInt(CFG_JOYSTICK_DEADBAND, joystickConfig.deadband);
-  joystickConfig.pulseQueueLimit = cfg.getInt(CFG_JOYSTICK_PULSE_QUEUE_LIMIT, joystickConfig.pulseQueueLimit);
-  joystickConfig.normalRps = cfg.getFloat(CFG_JOYSTICK_NORMAL_RPS, joystickConfig.normalRps);
-  joystickConfig.rapidRps = cfg.getFloat(CFG_JOYSTICK_RAPID_RPS, joystickConfig.rapidRps);
-  joystickConfig.invertZ = cfg.getBool(CFG_INVERT_JOYSTICK_Z, joystickConfig.invertZ);
-  joystickConfig.invertX = cfg.getBool(CFG_INVERT_JOYSTICK_X, joystickConfig.invertX);
-  joystickConfig.invertButton = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, joystickConfig.invertButton);
+  sysConfig.joystick.enabled = cfg.getBool(CFG_JOYSTICK_ENABLED, sysConfig.joystick.enabled);
+  sysConfig.joystick.zEnabled = cfg.getBool(CFG_JOYSTICK_Z_ENABLED, sysConfig.joystick.zEnabled);
+  sysConfig.joystick.xEnabled = cfg.getBool(CFG_JOYSTICK_X_ENABLED, sysConfig.joystick.xEnabled);
+  sysConfig.joystick.buttonTogglesOnOff = cfg.getBool(CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF, sysConfig.joystick.buttonTogglesOnOff);
+  sysConfig.joystick.centerSamples = cfg.getInt(CFG_JOYSTICK_CENTER_SAMPLES, sysConfig.joystick.centerSamples);
+  sysConfig.joystick.oversamples = cfg.getInt(CFG_JOYSTICK_OVERSAMPLES, sysConfig.joystick.oversamples);
+  sysConfig.joystick.sampleIntervalMs = cfg.getInt(CFG_JOYSTICK_SAMPLE_INTERVAL_MS, sysConfig.joystick.sampleIntervalMs);
+  sysConfig.joystick.adcMax = cfg.getInt(CFG_JOYSTICK_ADC_MAX, sysConfig.joystick.adcMax);
+  sysConfig.joystick.deadband = cfg.getInt(CFG_JOYSTICK_DEADBAND, sysConfig.joystick.deadband);
+  sysConfig.joystick.pulseQueueLimit = cfg.getInt(CFG_JOYSTICK_PULSE_QUEUE_LIMIT, sysConfig.joystick.pulseQueueLimit);
+  sysConfig.joystick.normalRps = cfg.getFloat(CFG_JOYSTICK_NORMAL_RPS, sysConfig.joystick.normalRps);
+  sysConfig.joystick.rapidRps = cfg.getFloat(CFG_JOYSTICK_RAPID_RPS, sysConfig.joystick.rapidRps);
+  sysConfig.joystick.invertZ = cfg.getBool(CFG_INVERT_JOYSTICK_Z, sysConfig.joystick.invertZ);
+  sysConfig.joystick.invertX = cfg.getBool(CFG_INVERT_JOYSTICK_X, sysConfig.joystick.invertX);
+  sysConfig.joystick.invertButton = cfg.getBool(CFG_INVERT_JOYSTICK_BUTTON, sysConfig.joystick.invertButton);
   cfg.end();
   normalizeMachineConfig();
   loadMachineProfile();
@@ -541,7 +523,7 @@ void setMeasure(MeasureUnit value) {
   }
   measure = value;
   operatorPrefs.measure = value;
-  moveStep = measure == MeasureUnit::METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1;
+  moveStep = measure == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0];
   operatorPrefs.jogStepDu = moveStep;
 }
 

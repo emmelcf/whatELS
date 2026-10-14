@@ -35,8 +35,8 @@ int spindleEncTimeIndex = 0;
 
 // Joystick State
 JoystickAxisState joystickAxes[] = {
-  {&z, JOY_Z, &joystickConfig.zEnabled, &joystickConfig.invertZ, 0, 0, 0, 2048, 2048, 0, 0, 0},
-  {&x, JOY_X, &joystickConfig.xEnabled, &joystickConfig.invertX, 0, 0, 0, 2048, 2048, 0, 0, 0},
+  {&z, JOY_Z, &sysConfig.joystick.zEnabled, &sysConfig.joystick.invertZ, 0, 0, 0, 2048, 2048, 0, 0, 0},
+  {&x, JOY_X, &sysConfig.joystick.xEnabled, &sysConfig.joystick.invertX, 0, 0, 0, 2048, 2048, 0, 0, 0},
 };
 const int JOYSTICK_AXIS_COUNT = sizeof(joystickAxes) / sizeof(joystickAxes[0]);
 
@@ -533,7 +533,7 @@ void cancelJoystickLatheSync() {
 }
 
 bool joystickUsable() {
-  return joystickConfig.enabled && joystickAvailable;
+  return sysConfig.joystick.enabled && joystickAvailable;
 }
 
 void prepareJoystickLatheManualMove() {
@@ -544,8 +544,8 @@ void prepareJoystickLatheManualMove() {
 }
 
 bool isContinuousStep() {
-  if (!ENABLE_CONTINUOUS_MOVE) return false;
-  return moveStep == (measure == MeasureUnit::METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1);
+  if (!sysConfig.timing.enableContinuousMove) return false;
+  return moveStep == (measure == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0]);
 }
 
 bool isRapidManualMove() {
@@ -588,10 +588,10 @@ void addJoystickPulses(Axis* a, int delta) {
   if (pulseQueue == nullptr) return;
   portENTER_CRITICAL(&joystickPulseMux);
   int queued = *pulseQueue + delta;
-  if (queued > joystickConfig.pulseQueueLimit) {
-    queued = joystickConfig.pulseQueueLimit;
-  } else if (queued < -joystickConfig.pulseQueueLimit) {
-    queued = -joystickConfig.pulseQueueLimit;
+  if (queued > sysConfig.joystick.pulseQueueLimit) {
+    queued = sysConfig.joystick.pulseQueueLimit;
+  } else if (queued < -sysConfig.joystick.pulseQueueLimit) {
+    queued = -sysConfig.joystick.pulseQueueLimit;
   }
   *pulseQueue = queued;
   portEXIT_CRITICAL(&joystickPulseMux);
@@ -632,19 +632,19 @@ int getAndResetJoystickPulses(Axis* a) {
 
 static int readJoystickPin(int pin) {
   long total = 0;
-  for (int i = 0; i < joystickConfig.oversamples; i++) {
+  for (int i = 0; i < sysConfig.joystick.oversamples; i++) {
     total += analogRead(pin);
   }
-  return total / joystickConfig.oversamples;
+  return total / sysConfig.joystick.oversamples;
 }
 
 static int calibrateJoystickCenter(int pin) {
   long total = 0;
-  for (int i = 0; i < joystickConfig.centerSamples; i++) {
+  for (int i = 0; i < sysConfig.joystick.centerSamples; i++) {
     total += readJoystickPin(pin);
     DELAY(2);
   }
-  return total / joystickConfig.centerSamples;
+  return total / sysConfig.joystick.centerSamples;
 }
 
 static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
@@ -656,8 +656,8 @@ static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
     filteredDelta = -filteredDelta;
   }
 
-  bool rawNeutral = abs(rawDelta) <= joystickConfig.deadband;
-  bool filteredNeutral = abs(filteredDelta) <= joystickConfig.deadband;
+  bool rawNeutral = abs(rawDelta) <= sysConfig.joystick.deadband;
+  bool filteredNeutral = abs(filteredDelta) <= sysConfig.joystick.deadband;
   bool rawReversed = !rawNeutral && !filteredNeutral && ((rawDelta > 0) != (filteredDelta > 0));
   if (rawNeutral) {
     joystickAxis->filtered = joystickAxis->center;
@@ -670,18 +670,18 @@ static float getJoystickDeflection(JoystickAxisState* joystickAxis) {
   int delta = joystickAxis->filtered - joystickAxis->center;
   if (*joystickAxis->invert) delta = -delta;
   int absDelta = abs(delta);
-  if (absDelta <= joystickConfig.deadband) return 0;
+  if (absDelta <= sysConfig.joystick.deadband) return 0;
 
-  int range = delta > 0 ? joystickConfig.adcMax - joystickAxis->center : joystickAxis->center;
-  range = max(1, range - joystickConfig.deadband);
-  float normalized = (absDelta - joystickConfig.deadband) / float(range);
+  int range = delta > 0 ? sysConfig.joystick.adcMax - joystickAxis->center : joystickAxis->center;
+  range = max(1, range - sysConfig.joystick.deadband);
+  float normalized = (absDelta - sysConfig.joystick.deadband) / float(range);
   if (normalized > 1.0) normalized = 1.0;
   float curved = normalized * normalized;
   return delta > 0 ? curved : -curved;
 }
 
 static int getJoystickPulseDelta(JoystickAxisState* joystickAxis, unsigned long elapsedUs) {
-  float revolutionsPerSecond = joystickRapidPressed ? joystickConfig.rapidRps : joystickConfig.normalRps;
+  float revolutionsPerSecond = joystickRapidPressed ? sysConfig.joystick.rapidRps : sysConfig.joystick.normalRps;
   joystickAxis->pulseFraction += joystickAxis->deflection * joystickAxis->axis->pulsePerRevolution * revolutionsPerSecond * elapsedUs / 1000000.0;
   int delta = int(joystickAxis->pulseFraction);
   joystickAxis->pulseFraction -= delta;
@@ -690,7 +690,7 @@ static int getJoystickPulseDelta(JoystickAxisState* joystickAxis, unsigned long 
 
 static long getJoystickSpeedFromDeflection(JoystickAxisState* joystickAxis) {
   if (joystickAxis->deflection == 0) return 0;
-  float revolutionsPerSecond = joystickRapidPressed ? joystickConfig.rapidRps : joystickConfig.normalRps;
+  float revolutionsPerSecond = joystickRapidPressed ? sysConfig.joystick.rapidRps : sysConfig.joystick.normalRps;
   long speed = round(abs(joystickAxis->deflection) * revolutionsPerSecond * joystickAxis->axis->motorSteps);
   if (speed < 1) speed = 1;
   return min((long)joystickAxis->axis->speedManualMove, speed);
@@ -730,8 +730,8 @@ static void resetJoystickAxisMotion(JoystickAxisState* joystickAxis) {
 }
 
 static bool joystickStartupCenterLooksNeutral(int center) {
-  int midpoint = joystickConfig.adcMax / 2;
-  int tolerance = max(joystickConfig.deadband, JOYSTICK_STARTUP_CENTER_TOLERANCE_MIN);
+  int midpoint = sysConfig.joystick.adcMax / 2;
+  int tolerance = max(sysConfig.joystick.deadband, sysConfig.joystick.startupCenterToleranceMin);
   return abs(center - midpoint) <= tolerance;
 }
 
@@ -742,21 +742,21 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
     joystickButtonRawChangeMillis = now;
   }
 
-  if (rawPressed != joystickButtonPressed && now - joystickButtonRawChangeMillis >= JOYSTICK_BUTTON_DEBOUNCE_MS) {
+  if (rawPressed != joystickButtonPressed && now - joystickButtonRawChangeMillis >= sysConfig.joystick.buttonDebounceMs) {
     joystickButtonPressed = rawPressed;
     if (joystickButtonPressed) {
       joystickButtonPressMillis = now;
       joystickButtonToggleBlocked = mode != LatheMode::JOYSTICK || !moveNeutral;
     } else {
-      bool shortClick = now - joystickButtonPressMillis <= JOYSTICK_BUTTON_TOGGLE_MAX_MS;
-      if (joystickConfig.buttonTogglesOnOff && mode == LatheMode::JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
+      bool shortClick = now - joystickButtonPressMillis <= sysConfig.joystick.buttonToggleMaxMs;
+      if (sysConfig.joystick.buttonTogglesOnOff && mode == LatheMode::JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
         buttonOnOffPress(!isOn);
       }
       joystickButtonToggleBlocked = false;
     }
   }
 
-  if (joystickButtonPressed && (mode != LatheMode::JOYSTICK || !moveNeutral || now - joystickButtonPressMillis > JOYSTICK_BUTTON_TOGGLE_MAX_MS)) {
+  if (joystickButtonPressed && (mode != LatheMode::JOYSTICK || !moveNeutral || now - joystickButtonPressMillis > sysConfig.joystick.buttonToggleMaxMs)) {
     joystickButtonToggleBlocked = true;
   }
 
@@ -766,7 +766,7 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
 void initJoystick() {
   joystickAvailable = false;
   joystickStartupWarning = "";
-  if (!joystickConfig.enabled) return;
+  if (!sysConfig.joystick.enabled) return;
   if (!anyJoystickAxisEnabled()) return;
   analogReadResolution(12);
   for (int i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
@@ -779,12 +779,12 @@ void initJoystick() {
     if (!joystickAxisEnabled(&joystickAxes[i])) continue;
     joystickAxes[i].center = calibrateJoystickCenter(joystickAxes[i].pin);
     if (!joystickStartupCenterLooksNeutral(joystickAxes[i].center)) {
-      int offset = joystickAxes[i].center - joystickConfig.adcMax / 2;
+      int offset = joystickAxes[i].center - sysConfig.joystick.adcMax / 2;
       char axisName = i == JOYSTICK_AXIS_Z ? NAME_Z : NAME_X;
       joystickStartupWarning = "Joy ";
       joystickStartupWarning += axisName;
       joystickStartupWarning += (offset >= 0 ? " +" : " -");
-      joystickStartupWarning += String(max(0, abs(offset) - joystickConfig.deadband));
+      joystickStartupWarning += String(max(0, abs(offset) - sysConfig.joystick.deadband));
       joystickStartupWarning += " past deadband";
       return;
     }
@@ -792,7 +792,7 @@ void initJoystick() {
 
   for (int i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
     if (!joystickAxisEnabled(&joystickAxes[i])) {
-      joystickAxes[i].center = joystickConfig.adcMax / 2;
+      joystickAxes[i].center = sysConfig.joystick.adcMax / 2;
       joystickAxes[i].filtered = joystickAxes[i].center;
       joystickAxes[i].deflection = 0;
       joystickAxes[i].direction = 0;
@@ -845,7 +845,7 @@ static bool joystickPitchAdjustmentAllowed() {
 int getJoystickPitchStatusDirection() {
   int direction = joystickPitchAdjustDirection;
   if (direction != 0) return direction;
-  if (millis() - joystickPitchStatusMillis < JOYSTICK_PITCH_STATUS_HOLD_MS) {
+  if (millis() - joystickPitchStatusMillis < sysConfig.joystick.pitchStatusHoldMs) {
     return joystickPitchStatusDirection;
   }
   return 0;
@@ -966,7 +966,7 @@ void adjustPitch(bool plus) {
   bool minus = !plus;
   long currentDupr = nextDuprFlag ? nextDupr : dupr;
   if (measure != MeasureUnit::TPI) {
-    long delta = feedStepDu > 0 ? feedStepDu : (measure == MeasureUnit::METRIC ? FEED_STEP_2 : FEED_STEP_IMP_3);
+    long delta = feedStepDu > 0 ? feedStepDu : (measure == MeasureUnit::METRIC ? FEED_STEPS_METRIC[1] : FEED_STEPS_IMPERIAL[2]);
     long normalizedDupr = normalizePitch(currentDupr);
     if (minus && currentDupr > -DUPR_MAX) {
       setFeedrateDupr(max(-DUPR_MAX, normalizedDupr - delta), false);
@@ -1076,11 +1076,11 @@ static void buttonMoveStepPress() {
 
 static void buttonMeasurePress() {
   if (measure == MeasureUnit::METRIC) {
-    SettingsService::setMeasure(static_cast<int>(MeasureUnit::INCH));
+    SettingsService::setMeasure(MeasureUnit::INCH);
   } else if (measure == MeasureUnit::INCH) {
-    SettingsService::setMeasure(static_cast<int>(MeasureUnit::TPI));
+    SettingsService::setMeasure(MeasureUnit::TPI);
   } else {
-    SettingsService::setMeasure(static_cast<int>(MeasureUnit::METRIC));
+    SettingsService::setMeasure(MeasureUnit::METRIC);
   }
 }
 
@@ -1099,7 +1099,7 @@ static void processHeldRepeatKey() {
     return;
   }
   unsigned long now = millis();
-  if (now - heldRepeatPressTime >= (unsigned long)JOG_HOLD_DELAY_MS) {
+  if (now - heldRepeatPressTime >= (unsigned long)sysConfig.timing.jogHoldDelayMs) {
     if (now - heldRepeatLastStepTime >= 200) {
       heldRepeatLastStepTime = now;
       buttonPlusMinusPress(heldRepeatKey == B_PLUS);
@@ -1351,7 +1351,7 @@ void taskJoystick(void *param) {
   JoystickAxisState* joystickZ = &joystickAxes[JOYSTICK_AXIS_Z];
   JoystickAxisState* joystickX = &joystickAxes[JOYSTICK_AXIS_X];
   while (emergencyStop == EstopCode::NONE && joystickUsable()) {
-    bool rawButtonPressed = digitalRead(JOY_BUTTON) == (joystickConfig.invertButton ? HIGH : LOW);
+    bool rawButtonPressed = digitalRead(JOY_BUTTON) == (sysConfig.joystick.invertButton ? HIGH : LOW);
     unsigned long now = micros();
     unsigned long elapsedUs = now - joystickSampleTimeUs;
     joystickSampleTimeUs = now;
@@ -1378,7 +1378,7 @@ void taskJoystick(void *param) {
       updateJoystickManualAxis(joystickX, true, true, elapsedUs);
     }
 
-    DELAY(joystickConfig.sampleIntervalMs);
+    DELAY(sysConfig.joystick.sampleIntervalMs);
   }
   vTaskDelete(NULL);
 }

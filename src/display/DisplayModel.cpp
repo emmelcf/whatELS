@@ -306,7 +306,7 @@ String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int 
     else if (isOn && numpadResult == 0) result = "Cone ratio " + printNoTrailing0(coneRatio);
   } else if (mode == LatheMode::JOYSTICK && !inNumpad) {
     String directionText = joystickLatheDirectionText(joystickLatheDirectionZ, joystickLatheDirectionX);
-    if (!joystickConfig.enabled) result = "Joystick disabled";
+    if (!sysConfig.joystick.enabled) result = "Joystick disabled";
     else if (!joystickAvailable) result = joystickStartupWarning.length() > 0 ? joystickStartupWarning : "Joystick not connected";
     else if (joystickLatheRapid && directionText != "") {
       result = "Rapid ";
