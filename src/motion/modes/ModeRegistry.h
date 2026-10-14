@@ -2,6 +2,8 @@
 
 #include "IELSMode.h"
 
+class UnifiedGearboxMode;
+
 /**
  * @brief Authoritative Mode Registry and State Manager for NanoELS.
  * Decouples the motion loop and supervisory systems from concrete mode types.
@@ -32,6 +34,10 @@ public:
     // Capability Validation & Discovery
     static bool isModeSupported(const IELSMode* mode, uint32_t hardwareCapabilities);
     static String serializeDiscoveryJson(uint32_t hardwareCapabilities, bool includeAll = false);
+
+    // Standard Core Initialization
+    static void initStandardModes();
+    static UnifiedGearboxMode* getGearboxMode();
 
     // Reset / Testing
     static void reset();

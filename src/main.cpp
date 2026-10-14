@@ -12,6 +12,7 @@
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
 #include "MachineModel.h"
+#include "modes/ModeRegistry.h"
 
 void setup() {
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
@@ -108,6 +109,9 @@ void setup() {
   savedSpindlePosGlobal = spindlePosGlobal = 0;
 
   // Always boot cleanly and safely into standard manual feed / DRO mode
+  DEBUG_PRINTLN("Initializing ModeRegistry & standard modes...");
+  ModeRegistry::initStandardModes();
+
   DEBUG_PRINTLN("setModeFromLoop LatheMode::NORMAL...");
   Serial.flush();
   setModeFromLoop(LatheMode::NORMAL);
@@ -188,10 +192,20 @@ void loop() {
     cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
   }
+  IELSMode* activeMode = ModeRegistry::getActiveMode();
   if (!isOn || (dupr == 0 && currentMode != LatheMode::SLOT) || spindlePosSync != 0) {
     if (currentMode == LatheMode::JOYSTICK && (!isOn || dupr == 0)) {
       resetJoystickLatheFeedPosition();
     }
+    if (activeMode && activeMode->isRunning()) {
+      activeMode->stop(StopType::NORMAL_STOP);
+    }
+  } else if (activeMode && activeMode->getId() == ModeIds::GEARBOX &&
+             (currentMode == LatheMode::NORMAL || currentMode == LatheMode::XGEAR || currentMode == LatheMode::CONE)) {
+    if (!activeMode->isRunning()) {
+      activeMode->start();
+    }
+    activeMode->onMotionTick();
   } else if (currentMode == LatheMode::NORMAL) {
     modeGearbox(&z);
   } else if (currentMode == LatheMode::XGEAR) {

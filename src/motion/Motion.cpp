@@ -6,6 +6,8 @@
 #include "Display.h"
 #include "WebServerModule.h"
 #include "SettingsService.h"
+#include "ModeRegistry.h"
+#include "composite/UnifiedGearboxMode.h"
 
 // Automation and Operation State
 long setupIndex = 0;
@@ -261,6 +263,24 @@ void setModeFromLoop(LatheMode value) {
   }
   mode = value;
   setupIndex = 0;
+
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) {
+    if (value == LatheMode::NORMAL) {
+      gb->setActiveAxis("Z");
+      gb->setSync(true);
+    } else if (value == LatheMode::XGEAR) {
+      gb->setActiveAxis("X");
+      gb->setSync(true);
+    } else if (value == LatheMode::ASYNC) {
+      gb->setActiveAxis("Z");
+      gb->setSync(false);
+    } else if (value == LatheMode::CONE) {
+      gb->setActiveAxis("ZX");
+      gb->setSync(true);
+    }
+  }
+
   if (mode == LatheMode::JOYSTICK) {
     resetJoystickLatheFeed();
   }

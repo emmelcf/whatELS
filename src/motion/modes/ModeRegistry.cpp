@@ -137,6 +137,19 @@ String ModeRegistry::serializeDiscoveryJson(uint32_t hardwareCapabilities, bool 
     return out;
 }
 
+#include "composite/UnifiedGearboxMode.h"
+
+static UnifiedGearboxMode s_unifiedGearboxMode;
+
+void ModeRegistry::initStandardModes() {
+    registerMode(&s_unifiedGearboxMode);
+    activateMode(ModeIds::GEARBOX);
+}
+
+UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
+    return &s_unifiedGearboxMode;
+}
+
 void ModeRegistry::reset() {
     s_modeCount = 0;
     s_activeMode = nullptr;

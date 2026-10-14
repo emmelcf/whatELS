@@ -1,5 +1,7 @@
 #include "RichClientAdapter.h"
 #include "MachineModel.h"
+#include "modes/ModeRegistry.h"
+#include "composite/UnifiedGearboxMode.h"
 
 static unsigned long lastTelemetryHash = 0;
 
@@ -20,6 +22,20 @@ static void serializeKinematics(String* out, const KinematicsState& k) {
   *out += "K.estop=" + String(k.estop ? 1 : 0) + "\n";
   *out += "K.dupr=" + String(k.dupr) + "\n";
   *out += "K.nextDupr=" + String(k.nextDupr) + "\n";
+
+  IELSMode* activeMode = ModeRegistry::getActiveMode();
+  uint32_t perms = activeMode ? activeMode->getLivePermissions() : 0;
+  char permBuf[16];
+  snprintf(permBuf, sizeof(permBuf), "0x%08X", (unsigned int)perms);
+  *out += "K.perms=" + String(permBuf) + "\n";
+
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) {
+    char axisBuf[2] = { gb->getActiveAxis(), '\0' };
+    *out += "K.gearAxis=" + String(axisBuf) + "\n";
+    *out += "K.gearSync=" + String(gb->isSync() ? 1 : 0) + "\n";
+    *out += "K.gearDir=" + String(gb->isFeedDirForward() ? "FWD" : "REV") + "\n";
+  }
 }
 
 static void serializeIntent(String* out, const IntentState& i) {

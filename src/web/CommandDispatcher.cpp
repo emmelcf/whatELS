@@ -8,6 +8,8 @@
 #include "WebServerModule.h"
 #include "SettingsService.h"
 #include "PresetService.h"
+#include "modes/ModeRegistry.h"
+#include "composite/UnifiedGearboxMode.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -96,6 +98,50 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     return PresetService::dispatch(sub, strlen(sub), reply);
   }
 
+  // 2c. Mode Namespace (MODE.discover)
+  if (length >= 4 && strncasecmp(payload, "MODE", 4) == 0) {
+    const char* sub = payload + 4;
+    if (*sub == '.') sub++;
+    while (*sub == ' ' || *sub == '\t') sub++;
+    if (strncasecmp(sub, "discover", 8) == 0) {
+      const char* q = strchr(sub, '?');
+      uint32_t caps = 0;
+      bool includeAll = false;
+
+      if (q) {
+        q++;
+        if (strncasecmp(q, "all=1", 5) == 0 || strncasecmp(q, "all=true", 8) == 0) {
+          includeAll = true;
+          caps = 0xFFFFFFFF;
+        } else if (strncasecmp(q, "caps=", 5) == 0) {
+          caps = (uint32_t)strtoul(q + 5, nullptr, 0);
+        } else if (strncasecmp(q, "profile=", 8) == 0) {
+          const char* profSlug = q + 8;
+          const LatheConfiguration* prof = findPresetBySlug(profSlug);
+          if (prof) {
+            caps = prof->capabilities;
+          } else {
+            LatheConfiguration loaded;
+            if (loadProfileFromLittleFS(profSlug, &loaded)) {
+              caps = loaded.capabilities;
+            } else {
+              caps = SettingsService::getActiveProfile().capabilities;
+            }
+          }
+        } else {
+          caps = SettingsService::getActiveProfile().capabilities;
+        }
+      } else {
+        caps = SettingsService::getActiveProfile().capabilities;
+      }
+
+      if (reply) {
+        *reply = ModeRegistry::serializeDiscoveryJson(caps, includeAll) + "\n";
+      }
+      return true;
+    }
+  }
+
   // 3. Domain State Queries (?get=K,I / ?state / ?get=ALL)
   if ((length >= 4 && strncmp(payload, "?get", 4) == 0) ||
       (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
@@ -117,6 +163,15 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       MachineModel m = MachineModel::captureAll();
       String rep = RichClientAdapter::buildTelemetry(m, mask);
       if (reply) *reply = rep;
+      return true;
+    }
+
+    // CMD.modes alias for MODE.discover
+    if (cmdLen >= 5 && strncasecmp(cmd, "modes", 5) == 0) {
+      if (reply) {
+        uint32_t caps = SettingsService::getActiveProfile().capabilities;
+        *reply = ModeRegistry::serializeDiscoveryJson(caps, false) + "\n";
+      }
       return true;
     }
 
@@ -157,6 +212,11 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     }
     // CMD.feedRev
     if (cmdLen == 7 && strncmp(cmd, "feedRev", 7) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_SET_DIR, active->getState())) {
+        if (reply) *reply = "ERR:CMD.feedRev=locked during active motion\n";
+        return false;
+      }
       reverseFeedDirection();
       return true;
     }
@@ -168,6 +228,11 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     }
     // CMD.feedStepCycle
     if (cmdLen == 13 && strncmp(cmd, "feedStepCycle", 13) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_STEP_CYCLE, active->getState())) {
+        if (reply) *reply = "ERR:CMD.feedStepCycle=locked during active motion\n";
+        return false;
+      }
       cycleFeedStep();
       return true;
     }
@@ -269,6 +334,11 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     }
     // CMD.axisZero=<axis>
     if (cmdLen >= 9 && strncmp(cmd, "axisZero=", 9) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_ZERO_AXIS, active->getState())) {
+        if (reply) *reply = "ERR:CMD.axisZero=locked during active motion\n";
+        return false;
+      }
       Axis* a = parseAxis(cmd[9]);
       if (a) setAxisZero(a);
       return true;
@@ -310,10 +380,122 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         return true;
       }
     }
-    // CMD.mode=<modeId>
+    // CMD.gearAxis=<Z|X|0|1>
+    if (cmdLen >= 9 && strncmp(cmd, "gearAxis=", 9) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_SET_AXIS, active->getState())) {
+        if (reply) *reply = "ERR:CMD.gearAxis=locked during active motion\n";
+        return false;
+      }
+      char ax = (cmd[9] == '1' || cmd[9] == 'X' || cmd[9] == 'x') ? 'X' : 'Z';
+      char axStr[2] = { ax, '\0' };
+      UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+      if (gb) {
+        gb->setActiveAxis(axStr);
+        if (gb->isSync()) {
+          setOperatingMode(ax == 'Z' ? static_cast<int>(LatheMode::NORMAL) : static_cast<int>(LatheMode::XGEAR));
+        }
+        if (reply) *reply = String("OK:CMD.gearAxis=") + ax + "\n";
+        return true;
+      }
+      return false;
+    }
+    // CMD.gearSync=<1|0|SYNC|ASYNC|true|false>
+    if (cmdLen >= 9 && strncmp(cmd, "gearSync=", 9) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_SET_SYNC, active->getState())) {
+        if (reply) *reply = "ERR:CMD.gearSync=locked during active motion\n";
+        return false;
+      }
+      bool sync = (strcasecmp(cmd + 9, "0") != 0 && strcasecmp(cmd + 9, "ASYNC") != 0 && strcasecmp(cmd + 9, "false") != 0);
+      UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+      if (gb) {
+        gb->setSync(sync);
+        if (!sync) {
+          setOperatingMode(static_cast<int>(LatheMode::ASYNC));
+        } else {
+          setOperatingMode(gb->getActiveAxis() == 'X' ? static_cast<int>(LatheMode::XGEAR) : static_cast<int>(LatheMode::NORMAL));
+        }
+        if (reply) *reply = String("OK:CMD.gearSync=") + (sync ? "1" : "0") + "\n";
+        return true;
+      }
+      return false;
+    }
+    // CMD.gearDir=<1|-1|FWD|REV|LEFT|RIGHT|IN|OUT> or CMD.feedDir=...
+    if ((cmdLen >= 8 && strncmp(cmd, "gearDir=", 8) == 0) ||
+        (cmdLen >= 8 && strncmp(cmd, "feedDir=", 8) == 0)) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_SET_DIR, active->getState())) {
+        if (reply) *reply = "ERR:CMD.gearDir=locked during active motion\n";
+        return false;
+      }
+      const char* val = cmd + 8;
+      UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+      if (gb) {
+        gb->setDirection(val);
+        if (reply) *reply = String("OK:CMD.gearDir=") + (gb->isFeedDirForward() ? "1" : "-1") + "\n";
+        return true;
+      }
+      return false;
+    }
+    // CMD.feedNudge=<+1|-1>
+    if (cmdLen >= 10 && strncmp(cmd, "feedNudge=", 10) == 0) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_FEED_NUDGE, active->getState())) {
+        if (reply) *reply = "ERR:CMD.feedNudge=locked during active motion\n";
+        return false;
+      }
+      int nudgeDir = (cmd[10] == '-' || atoi(cmd + 10) < 0) ? -1 : 1;
+      UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+      if (gb) {
+        gb->nudgeFeed(nudgeDir);
+        if (reply) *reply = String("OK:CMD.feedNudge=") + nudgeDir + "\n";
+        return true;
+      }
+      return false;
+    }
+    // CMD.mode=<modeId|modeSlug>
     if (cmdLen >= 5 && strncmp(cmd, "mode=", 5) == 0) {
-      int m = atoi(cmd + 5);
+      const char* mStr = cmd + 5;
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && !active->canExecuteCommand(CommandId::CMD_SWITCH_MODE, active->getState())) {
+        if (reply) *reply = "ERR:CMD.mode=locked during active cutting motion\n";
+        return false;
+      }
+
+      // 1. Check for slug match in ModeRegistry
+      IELSMode* targetBySlug = ModeRegistry::getModeBySlug(mStr);
+      if (targetBySlug) {
+        ModeRegistry::activateMode(targetBySlug->getId());
+        if (targetBySlug->getId() == ModeIds::GEARBOX) {
+          UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+          if (gb) {
+            if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
+            else if (gb->getActiveAxis() == 'X') setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+            else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
+          }
+        }
+        if (reply) *reply = String("OK:CMD.mode=") + targetBySlug->getSlug() + "\n";
+        return true;
+      }
+
+      // 2. Check for numeric mode ID
+      int m = atoi(mStr);
+      if (m == ModeIds::GEARBOX) {
+        ModeRegistry::activateMode(ModeIds::GEARBOX);
+        UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+        if (gb) {
+          if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
+          else if (gb->getActiveAxis() == 'X') setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+          else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
+        }
+        if (reply) *reply = "OK:CMD.mode=gearbox\n";
+        return true;
+      }
+
+      // Standard legacy mode IDs
       setOperatingMode(m);
+      if (reply) *reply = String("OK:CMD.mode=") + m + "\n";
       return true;
     }
 #if ENABLE_SPINDLE_SIM
