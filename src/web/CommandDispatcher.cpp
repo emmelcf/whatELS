@@ -7,6 +7,7 @@
 #include "RichClientAdapter.h"
 #include "WebServerModule.h"
 #include "SettingsService.h"
+#include "PresetService.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -85,6 +86,14 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       const char* name = (sub[6] == '=') ? sub + 7 : nullptr;
       return SettingsService::getSchema(name, reply);
     }
+  }
+
+  // 2b. Preset Namespace (PRESET.discover / PRESET.get)
+  if (length >= 6 && strncasecmp(payload, "PRESET", 6) == 0) {
+    const char* sub = payload + 6;
+    if (*sub == '.') sub++;
+    while (*sub == ' ' || *sub == '\t') sub++;
+    return PresetService::dispatch(sub, strlen(sub), reply);
   }
 
   // 3. Domain State Queries (?get=K,I / ?state / ?get=ALL)

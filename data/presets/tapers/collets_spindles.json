@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "domain": "tapers",
+    "standard_org": "ISO/ASME/DIN",
+    "standard_id": "SPINDLE_COLLETS",
+    "standard_title": "Machine Tool Spindles and Collets",
+    "unit_system": "hybrid",
+    "version": "1.0.0"
+  },
+  "items": [
+    {
+      "id": "r8",
+      "designation": "R8 Collet",
+      "series": "SPINDLE",
+      "choice": 1,
+      "form": "internal",
+      "cone_ratio": 0.29627,
+      "half_angle_deg": 8.425,
+      "included_angle_deg": 16.85,
+      "taper_in_per_ft": 3.555,
+      "spec_notes": "16\u00b0 51' included (Bridgeport standard)"
+    },
+    {
+      "id": "5c",
+      "designation": "5C Collet",
+      "series": "SPINDLE",
+      "choice": 1,
+      "form": "internal",
+      "cone_ratio": 0.352654,
+      "half_angle_deg": 10.0,
+      "included_angle_deg": 20.0,
+      "taper_in_per_ft": 4.232,
+      "spec_notes": "20\u00b0 00' included (Hardinge standard)"
+    },
+    {
+      "id": "er",
+      "designation": "ER Collet (ER11-ER40)",
+      "series": "SPINDLE",
+      "choice": 1,
+      "form": "internal",
+      "cone_ratio": 0.281096,
+      "half_angle_deg": 8.0,
+      "included_angle_deg": 16.0,
+      "taper_in_per_ft": 3.373,
+      "spec_notes": "16\u00b0 00' included (DIN 6499)"
+    },
+    {
+      "id": "7_24",
+      "designation": "7:24 Steep Taper (ISO/CAT/BT)",
+      "series": "SPINDLE",
+      "choice": 1,
+      "form": "internal",
+      "cone_ratio": 0.291667,
+      "half_angle_deg": 8.2971,
+      "included_angle_deg": 16.5942,
+      "taper_in_per_ft": 3.5,
+      "spec_notes": "7:24 ratio (ISO 7388 / ASME B5.50)"
+    }
+  ]
+}

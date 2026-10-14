@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "domain": "tapers",
+    "standard_org": "ISO/ASME",
+    "standard_id": "PINS_CENTERS",
+    "standard_title": "Standard Taper Pins, Chamfers & Lathe Centers",
+    "unit_system": "hybrid",
+    "version": "1.0.0"
+  },
+  "items": [
+    {
+      "id": "pin_1_50_metric",
+      "designation": "1:50 Metric Taper Pin",
+      "series": "PIN",
+      "choice": 1,
+      "form": "external",
+      "standard_org": "ISO",
+      "standard_id": "2339",
+      "cone_ratio": 0.02,
+      "half_angle_deg": 0.5729,
+      "included_angle_deg": 1.1459,
+      "taper_in_per_ft": 0.24,
+      "spec_notes": "ISO 2339 / DIN 1 (1:50)"
+    },
+    {
+      "id": "pin_1_48_us",
+      "designation": "1:48 US Taper Pin",
+      "series": "PIN",
+      "choice": 1,
+      "form": "external",
+      "standard_org": "ASME",
+      "standard_id": "B18.8.2",
+      "cone_ratio": 0.020833,
+      "half_angle_deg": 0.5968,
+      "included_angle_deg": 1.1937,
+      "taper_in_per_ft": 0.25,
+      "spec_notes": "1/4 inch per foot (ASME B18.8.2)"
+    },
+    {
+      "id": "center_60_deg",
+      "designation": "60\u00b0 Lathe Center",
+      "series": "CENTER",
+      "choice": 1,
+      "form": "external",
+      "standard_org": "ISO",
+      "standard_id": "STANDARD",
+      "cone_ratio": 1.154701,
+      "half_angle_deg": 30.0,
+      "included_angle_deg": 60.0,
+      "spec_notes": "Standard 60\u00b0 included live/dead center"
+    },
+    {
+      "id": "chamfer_45_deg",
+      "designation": "45\u00b0 Lead Chamfer",
+      "series": "CHAMFER",
+      "choice": 1,
+      "form": "external",
+      "standard_org": "ISO",
+      "standard_id": "STANDARD",
+      "cone_ratio": 2.0,
+      "half_angle_deg": 45.0,
+      "included_angle_deg": 90.0,
+      "spec_notes": "1:1 slope 45\u00b0 corner break"
+    },
+    {
+      "id": "bevel_30_deg",
+      "designation": "30\u00b0 Lead Bevel",
+      "series": "CHAMFER",
+      "choice": 2,
+      "form": "external",
+      "standard_org": "ISO",
+      "standard_id": "STANDARD",
+      "cone_ratio": 1.154701,
+      "half_angle_deg": 30.0,
+      "included_angle_deg": 60.0,
+      "spec_notes": "30\u00b0 lead angle bevel"
+    }
+  ]
+}

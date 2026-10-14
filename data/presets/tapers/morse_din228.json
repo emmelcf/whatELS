@@ -1,0 +1,110 @@
+{
+  "meta": {
+    "domain": "tapers",
+    "standard_org": "DIN",
+    "standard_id": "228-1",
+    "standard_title": "Morse Tapers and Metric Tapers",
+    "unit_system": "metric",
+    "version": "1.0.0"
+  },
+  "items": [
+    {
+      "id": "mt0",
+      "designation": "MT0",
+      "series": "MT",
+      "choice": 2,
+      "form": "external",
+      "cone_ratio": 0.052052,
+      "half_angle_deg": 1.4908,
+      "included_angle_deg": 2.9816,
+      "taper_in_per_ft": 0.6246,
+      "gauge_dia_large_du": 90450,
+      "gauge_dia_small_du": 64420,
+      "gauge_length_du": 500000
+    },
+    {
+      "id": "mt1",
+      "designation": "MT1",
+      "series": "MT",
+      "choice": 1,
+      "form": "external",
+      "cone_ratio": 0.049882,
+      "half_angle_deg": 1.4286,
+      "included_angle_deg": 2.8572,
+      "taper_in_per_ft": 0.5986,
+      "gauge_dia_large_du": 120650,
+      "gauge_dia_small_du": 94000,
+      "gauge_length_du": 535000
+    },
+    {
+      "id": "mt2",
+      "designation": "MT2",
+      "series": "MT",
+      "choice": 1,
+      "form": "external",
+      "cone_ratio": 0.049951,
+      "half_angle_deg": 1.4306,
+      "included_angle_deg": 2.8612,
+      "taper_in_per_ft": 0.5994,
+      "gauge_dia_large_du": 177800,
+      "gauge_dia_small_du": 146000,
+      "gauge_length_du": 640000
+    },
+    {
+      "id": "mt3",
+      "designation": "MT3",
+      "series": "MT",
+      "choice": 1,
+      "form": "external",
+      "cone_ratio": 0.050196,
+      "half_angle_deg": 1.4376,
+      "included_angle_deg": 2.8752,
+      "taper_in_per_ft": 0.6024,
+      "gauge_dia_large_du": 238250,
+      "gauge_dia_small_du": 198000,
+      "gauge_length_du": 810000
+    },
+    {
+      "id": "mt4",
+      "designation": "MT4",
+      "series": "MT",
+      "choice": 1,
+      "form": "external",
+      "cone_ratio": 0.051938,
+      "half_angle_deg": 1.4875,
+      "included_angle_deg": 2.975,
+      "taper_in_per_ft": 0.6233,
+      "gauge_dia_large_du": 312670,
+      "gauge_dia_small_du": 260000,
+      "gauge_length_du": 1025000
+    },
+    {
+      "id": "mt5",
+      "designation": "MT5",
+      "series": "MT",
+      "choice": 2,
+      "form": "external",
+      "cone_ratio": 0.052626,
+      "half_angle_deg": 1.5072,
+      "included_angle_deg": 3.0144,
+      "taper_in_per_ft": 0.6315,
+      "gauge_dia_large_du": 443990,
+      "gauge_dia_small_du": 376000,
+      "gauge_length_du": 1295000
+    },
+    {
+      "id": "mt6",
+      "designation": "MT6",
+      "series": "MT",
+      "choice": 2,
+      "form": "external",
+      "cone_ratio": 0.05214,
+      "half_angle_deg": 1.4933,
+      "included_angle_deg": 2.9866,
+      "taper_in_per_ft": 0.6257,
+      "gauge_dia_large_du": 633480,
+      "gauge_dia_small_du": 538000,
+      "gauge_length_du": 1820000
+    }
+  ]
+}

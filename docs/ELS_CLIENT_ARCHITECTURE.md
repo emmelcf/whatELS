@@ -6,7 +6,7 @@
 > **Author:** Antigravity & Emil  
 > **Date:** October 13, 2026  
 > **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
-> **Referenced By:** `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`
+> **Referenced By:** `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `ELS_PRESET_CATALOG.md`
 
 ---
 
