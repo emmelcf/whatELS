@@ -48,47 +48,54 @@ This document provides the exhaustive, 1-to-1 mapping of every interactive eleme
 | **18** | **Runstack: STOP** | `#btnStop` | Click / tap | `stopCycle()` | `CMD.on=0\n` | `setIsOnFromTask(false)`. Immediately halts stepping; disengages cycle. |
 | **19** | **Zero Z Axis** | `#btnZeroZ` | Click / tap | `zeroAxis('Z')` | `CMD.axisZero=Z\n` | `setAxisZero(&z)`. Sets current carriage position as $Z=0.000$. |
 | **20** | **Zero X Axis** | `#btnZeroX` | Click / tap | `zeroAxis('X')` | `CMD.axisZero=X\n` | `setAxisZero(&x)`. Sets current cross-slide position as $X=0.000$. |
-| **21** | **Mode Selector** | Nav tabs / `.mode-chip` | Click / tap | `setMode(modeId)` | `CMD.mode=<id>\n` | Transitions controller to requested ModeId. |
-| **22** | **Reverse Feed / Pitch** | `#deckToggleDir` | Click / tap | `reverseFeed()` | `CMD.feedRev\n` | Inverts sign of active `dupr` leadscrew pitch. |
+| **21** | **Mode Selector** | Nav tabs / `.mode-chip` | Click / tap | `setMode(modeSlug)` | `CMD.mode=<slug>\n` | Activates canonical mode (`gearbox`, `turning`, `threading`, etc.). |
+| **22** | **Reverse Feed / Pitch** | `#deckToggleDir` | Click / tap | `setGearDir(dir)` / `reverseFeed()` | `CMD.gearDir=<dir>\n` / `CMD.feedRev\n` | Flips motion travel direction (CHUCK/TAIL or INFEED/RETRACT). |
 | **23** | **Jog Step Cycle** | `#stepMain` | Click / tap | `cycleJogStep()` | `CMD.jogStepDu=<du>\n` | Cycles in-memory `moveStep` through standard table (e.g. 100, 1000, 10000 du). |
 | **24** | **Custom Jog Step** | `#stepMain` | Long-press (>600ms) | `openKeypad('step')` | `CMD.jogStepDu=<du>\n` | Opens keypad to input non-standard step increment. |
 | **25** | **Feed Step Increment** | `#deckStepCycle` | Click / tap | `cycleFeedStep()` | `CMD.feedStepDu=<du>\n` | Advances feed override increment ($0.01 \to 0.05 \to 0.10 \to 0.20\text{ mm}$). |
-| **26** | **Feed Nudge Minus** | `#deckNudgeMinus` | Click / tap | `nudgeFeed(-1)` | `CMD.feedDupr=<newDupr>\n` | Decrements active cutting feed by current step delta under chip load. |
-| **27** | **Feed Nudge Plus** | `#deckNudgePlus` | Click / tap | `nudgeFeed(+1)` | `CMD.feedDupr=<newDupr>\n` | Increments active cutting feed by current step delta under chip load. |
-| **28** | **Unit System Toggle** | `#unitToggle` | Click / tap | `cycleMeasure()` | *None (Client Local)* | Toggles `$store.machine.measure` (`0`: mm, `1`: in). Zero wire traffic. |
-| **29** | **Diameter / Radius Toggle** | `#repBadge` | Click / tap | `toggleDiaRad()` | *None (Client Local)* | Toggles `$store.machine.dia` (`Ø` vs `R`). Core kinematics remain pure radius. |
-| **30** | **Set Z Left Limit** | `#chipZLeft` | Click / tap | `openLimitModal('Z', 'L')` | `CMD.axisLimitDu=Z,L,<du>\n` | Programs hardware left limit register (`z.leftStop`). |
-| **31** | **Set Z Right Limit** | `#chipZRight` | Click / tap | `openLimitModal('Z', 'R')` | `CMD.axisLimitDu=Z,R,<du>\n` | Programs hardware right limit register (`z.rightStop`). |
-| **32** | **Clear Z Limits** | `#btnClearLimitZ` | Click / tap | `clearLimit('Z')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded carriage travel. |
-| **33** | **Set X Infeed Limit** | `#chipXUp` | Click / tap | `openLimitModal('X', 'U')` | `CMD.axisLimitDu=X,L,<du>\n` | Programs hardware infeed limit register (`x.leftStop`). |
-| **34** | **Set X Retract Limit** | `#chipXDown` | Click / tap | `openLimitModal('X', 'D')` | `CMD.axisLimitDu=X,R,<du>\n` | Programs hardware retract limit register (`x.rightStop`). |
-| **35** | **Set Metric Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateMm(mm)` | `CMD.feedMm=<val>\n` | Computes deci-microns per rev and engages metric leadscrew ratio. |
-| **36** | **Set TPI Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateTpi(tpi)` | `CMD.feedTpi=<val>\n` | Computes fractional leadscrew ratio for imperial threads per inch. |
-| **37** | **Set Taper Angle** | Taper keypad confirm | Keypad SET tap | `setTaperAngle(deg)` | `CMD.taperAngle=<val>\n` | Computes $K = 2\tan(\theta)$ and configures coordinated cone kinematics. |
-| **38** | **Set Taper Ratio** | Taper keypad confirm | Keypad SET tap | `setTaperRatio(1/K)` | `CMD.taperRatio=<val>\n` | Configures cone slope ratio directly (e.g. 1:10, 1:20). |
-| **39** | **Spindle Sim RPM** | Visualizer Spindle HUD | Click / input | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
-| **40** | **Spindle Sim Turn** | Visualizer Chuck Wheel | Pointer drag / step | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Generates queued encoder pulses equivalent to specified hand rotation. |
+| **26** | **Feed Nudge Minus** | `#deckNudgeMinus` | Click / tap | `nudgeFeed(-1)` | `CMD.feedNudge=-1\n` | Nudges active cutting feed downward by 1 `feedStepDu`. Permitted while `RUNNING`. |
+| **27** | **Feed Nudge Plus** | `#deckNudgePlus` | Click / tap | `nudgeFeed(+1)` | `CMD.feedNudge=+1\n` | Nudges active cutting feed upward by 1 `feedStepDu`. Permitted while `RUNNING`. |
+| **28** | **Gearbox Axis Selector** | `#deckAxisSelector` / `.axis-tab` | Click / tap | `setGearAxis(axis)` | `CMD.gearAxis=<Z\|X\|ZX>\n` | Switches active leadscrew axis (Carriage $Z$, Cross-slide $X$, or Taper $ZX$). |
+| **29** | **Gearbox Sync Toggle** | `#deckSyncToggle` | Click / tap | `setGearSync(sync)` | `CMD.gearSync=<1\|0>\n` | Toggles between Spindle Synchronized feed and continuous Timer Velocity feed. |
+| **30** | **Unit System Toggle** | `#unitToggle` | Click / tap | `cycleMeasure()` | *None (Client Local)* | Toggles `$store.machine.measure` (`0`: mm, `1`: in). Zero wire traffic. |
+| **31** | **Diameter / Radius Toggle** | `#repBadge` | Click / tap | `toggleDiaRad()` | *None (Client Local)* | Toggles `$store.machine.dia` (`Ø` vs `R`). Core kinematics remain pure radius. |
+| **32** | **Set Z Left Limit** | `#chipZLeft` | Click / tap | `openLimitModal('Z', 'L')` | `CMD.axisLimitDu=Z,L,<du>\n` | Programs hardware left limit register (`z.leftStop`). |
+| **33** | **Set Z Right Limit** | `#chipZRight` | Click / tap | `openLimitModal('Z', 'R')` | `CMD.axisLimitDu=Z,R,<du>\n` | Programs hardware right limit register (`z.rightStop`). |
+| **34** | **Clear Z Limits** | `#btnClearLimitZ` | Click / tap | `clearLimit('Z')` | `CMD.axisClearLimit=Z,L\n` | Clears `z.leftStop = LONG_MAX`, restoring unbounded carriage travel. |
+| **35** | **Set X Infeed Limit** | `#chipXUp` | Click / tap | `openLimitModal('X', 'U')` | `CMD.axisLimitDu=X,L,<du>\n` | Programs hardware infeed limit register (`x.leftStop`). |
+| **36** | **Set X Retract Limit** | `#chipXDown` | Click / tap | `openLimitModal('X', 'D')` | `CMD.axisLimitDu=X,R,<du>\n` | Programs hardware retract limit register (`x.rightStop`). |
+| **37** | **Set Metric Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateMm(mm)` | `CMD.feedMm=<val>\n` | Computes deci-microns per rev and engages metric leadscrew ratio. |
+| **38** | **Set TPI Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateTpi(tpi)` | `CMD.feedTpi=<val>\n` | Computes fractional leadscrew ratio for imperial threads per inch. |
+| **39** | **Set Taper Angle** | Taper keypad confirm | Keypad SET tap | `setTaperAngle(deg)` | `CMD.taperAngle=<val>\n` | Computes $K = 2\tan(\theta)$ and configures coordinated cone kinematics. |
+| **40** | **Set Taper Ratio** | Taper keypad confirm | Keypad SET tap | `setTaperRatio(1/K)` | `CMD.taperRatio=<val>\n` | Configures cone slope ratio directly (e.g. 1:10, 1:20). |
+| **41** | **Spindle Sim RPM** | Visualizer Spindle HUD | Click / input | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
+| **42** | **Spindle Sim Turn** | Visualizer Chuck Wheel | Pointer drag / step | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Generates queued encoder pulses equivalent to specified hand rotation. |
 
 ---
 
-## 3. Running Motion Lockout Guard Implementation
+## 3. Dynamic In-Motion Safety Guard & Permission Policy
 
-In `lathe-controller.js`, the running lockout guard is anchored at the top of all modal entry points and parameter editing functions:
+Rather than applying an indiscriminate, blanket lockout that breaks runtime ergonomics, the Web UI client dynamically evaluates the authoritative **`K.perms`** (`LivePermissionFlags`) bitmask streamed continuously from the controller:
 
 ```javascript
-function openKeypad(target, opts) {
-  // Safety Invariant: Never mount a modal during active motion
-  if (Alpine.store('machine').isOn) {
-    console.warn('[Safety] Keypad blocked: Motion cycle is actively running.');
-    return;
-  }
-  // Proceed with modal mounting...
-}
+// Live In-Motion Safety Guard in lathe-controller.js
+function canExecuteAction(actionFlag) {
+  const machine = Alpine.store('machine');
+  // If machine is not running a cut, all standard setup actions are permitted
+  if (!machine.isOn && machine.rpm === 0) return true;
 
-function openLimitModal(axis, bound) {
-  if (Alpine.store('machine').isOn) return;
-  // Proceed with limit editing...
+  // If machine is running, only actions permitted by active mode perms are allowed
+  return (machine.perms & actionFlag) !== 0;
 }
 ```
 
-This guarantees defense-in-depth: regardless of stray touch events or vibrations on the shop floor, the operator's view of the DRO coordinates and the tactile path to the stationary red **STOP** button remain 100% unobstructed.
+### Safety & Lockout Rules:
+1. **Live Feed Trimming Under Chip Load:**
+   - When cutting under chip load (`PERM_LIVE_FEED_TRIM` active in `K.perms`), the Feed Nudge buttons (`#deckNudgeMinus`, `#deckNudgePlus`) and step cycle button (`#deckStepCycle`) remain **fully responsive**.
+2. **Structural Modifications Strictly Suppressed:**
+   - While `RUNNING`, modal overlays, keypad popups, axis swaps (`CMD.gearAxis`), sync mode toggles (`CMD.gearSync`), mode switches (`CMD.mode`), and coordinate zeroing (`CMD.axisZero`) are **visually dimmed and disabled**.
+   - Attempting to tap dimmed structural controls emits a non-intrusive warning badge and zero wire traffic.
+3. **Permanent Red STOP Corner:**
+   - The red `STOP` button is permanently anchored in the bottom-right corner across all modes. It is never covered, shifted, or unmounted under any circumstance.
+4. **Semantic Intent Over Raw Signs:**
+   - Clients transmit operator intent (`CHUCK`, `TAIL`, `INFEED`, `RETRACT`) rather than raw Cartesian $+/-$ signs, protecting against crashes across front/rear toolpost setups.

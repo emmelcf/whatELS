@@ -122,6 +122,15 @@ handleIncomingMessage(line) {
 2. **Soft Limit Sanitization:** Unset limits (`LONG_MAX = 2147483647`, `LONG_MIN = -2147483648`) are sanitized before formatting to guarantee zero `NaN` or overflow displays on limit chips.
 3. **Continuous Spindle Telemetry:** Floating-point spindle turns and angles are ingested directly into `$store.machine.turns` and `$store.machine.angle` without integer truncation.
 
+### 4.3 Mode Telemetry & Dynamic In-Motion Permissions
+The controller continuously broadcasts operational state and safety permissions under the `K.` domain:
+* **`K.perms`:** The active mode's live runtime permission bitmask (`LivePermissionFlags`). When a cut is active (`RUNNING`), `$store.machine.perms` dictates which controls remain live (e.g., `PERM_LIVE_FEED_TRIM` keeps feed nudge $[−]/[+]$ active) and which are locked and dimmed (axis selection, sync toggling, mode switching, limit editing).
+* **`K.gearAxis`:** The authoritative active leadscrew axis (`'Z'` or `'X'`).
+* **`K.gearSync`:** Spindle synchronization state (`1` for spindle-slaved leadscrew, `0` for continuous async velocity feed).
+* **`K.gearDir`:** Motion travel direction forward (`1`) vs reverse (`-1`).
+
+Bidirectional synchronization occurs automatically: if an external hardware handwheel or Nextion panel alters the active axis or sync state, the Web UI immediately reflects the change in its active tab and badges without state divergence.
+
 ---
 
 ## 5. Reactive State Architecture & Boundary Contract
