@@ -11,20 +11,6 @@ LatheConfiguration activeMachineProfile = {};
 int ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
 int AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
 
-long SPEED_START_Z = DEFAULT_SPEED_START_Z;
-long ACCELERATION_Z = DEFAULT_ACCELERATION_Z;
-long SPEED_MANUAL_MOVE_Z = DEFAULT_SPEED_MANUAL_MOVE_Z;
-bool INVERT_Z = DEFAULT_INVERT_Z;
-bool INVERT_Z_ENABLE = DEFAULT_INVERT_Z_ENABLE;
-bool NEEDS_REST_Z = DEFAULT_NEEDS_REST_Z;
-
-long SPEED_START_X = DEFAULT_SPEED_START_X;
-long ACCELERATION_X = DEFAULT_ACCELERATION_X;
-long SPEED_MANUAL_MOVE_X = DEFAULT_SPEED_MANUAL_MOVE_X;
-bool INVERT_X = DEFAULT_INVERT_X;
-bool INVERT_X_ENABLE = DEFAULT_INVERT_X_ENABLE;
-bool NEEDS_REST_X = DEFAULT_NEEDS_REST_X;
-
 ControllerConfig sysConfig = {};
 OperatorPreferences operatorPrefs = {};
 
@@ -114,26 +100,14 @@ float clampFloatValue(float value, float minValue, float maxValue) {
 void setMachineConfigDefaults() {
   ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
   AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
-  SPEED_START_Z = DEFAULT_SPEED_START_Z;
-  ACCELERATION_Z = DEFAULT_ACCELERATION_Z;
-  SPEED_MANUAL_MOVE_Z = DEFAULT_SPEED_MANUAL_MOVE_Z;
-  INVERT_Z = DEFAULT_INVERT_Z;
-  INVERT_Z_ENABLE = DEFAULT_INVERT_Z_ENABLE;
-  NEEDS_REST_Z = DEFAULT_NEEDS_REST_Z;
-  SPEED_START_X = DEFAULT_SPEED_START_X;
-  ACCELERATION_X = DEFAULT_ACCELERATION_X;
-  SPEED_MANUAL_MOVE_X = DEFAULT_SPEED_MANUAL_MOVE_X;
-  INVERT_X = DEFAULT_INVERT_X;
-  INVERT_X_ENABLE = DEFAULT_INVERT_X_ENABLE;
-  NEEDS_REST_X = DEFAULT_NEEDS_REST_X;
   STEP_TIME_MS = DEFAULT_STEP_TIME_MS;
   DELAY_BETWEEN_STEPS_MS = DEFAULT_DELAY_BETWEEN_STEPS_MS;
   ENABLE_CONTINUOUS_MOVE = DEFAULT_ENABLE_CONTINUOUS_MOVE;
   JOG_HOLD_DELAY_MS = DEFAULT_JOG_HOLD_DELAY_MS;
   SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
   SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
-  PULSE_PER_REVOLUTION_Z = DEFAULT_PULSE_PER_REVOLUTION_Z;
-  PULSE_PER_REVOLUTION_X = DEFAULT_PULSE_PER_REVOLUTION_X;
+  sysConfig.mpg.zHandwheel.ppr = 600.0f;
+  sysConfig.mpg.xHandwheel.ppr = 600.0f;
   joystickConfig.enabled = DEFAULT_JOYSTICK_ENABLED;
   joystickConfig.zEnabled = DEFAULT_JOYSTICK_Z_ENABLED;
   joystickConfig.xEnabled = DEFAULT_JOYSTICK_X_ENABLED;
@@ -161,17 +135,11 @@ void applyDerivedMachineConfig() {
 void normalizeMachineConfig() {
   ENCODER_BACKLASH = clampIntValue(ENCODER_BACKLASH, 0, 30000);
   AXIS_ENCODER_BACKLASH = clampIntValue(AXIS_ENCODER_BACKLASH, 0, 30000);
-  SPEED_START_Z = clampLongValue(SPEED_START_Z, 1, 1000000);
-  ACCELERATION_Z = clampLongValue(ACCELERATION_Z, 1, 100000000);
-  SPEED_MANUAL_MOVE_Z = clampLongValue(SPEED_MANUAL_MOVE_Z, 1, 1000000);
-  SPEED_START_X = clampLongValue(SPEED_START_X, 1, 1000000);
-  ACCELERATION_X = clampLongValue(ACCELERATION_X, 1, 100000000);
-  SPEED_MANUAL_MOVE_X = clampLongValue(SPEED_MANUAL_MOVE_X, 1, 1000000);
   STEP_TIME_MS = clampLongValue(STEP_TIME_MS, 1, 10000);
   DELAY_BETWEEN_STEPS_MS = clampLongValue(DELAY_BETWEEN_STEPS_MS, 0, 10000);
   SAFE_DISTANCE_DU = clampLongValue(SAFE_DISTANCE_DU, 0, 10000000);
-  PULSE_PER_REVOLUTION_Z = clampFloatValue(PULSE_PER_REVOLUTION_Z, 1.0, 100000.0);
-  PULSE_PER_REVOLUTION_X = clampFloatValue(PULSE_PER_REVOLUTION_X, 1.0, 100000.0);
+  sysConfig.mpg.zHandwheel.ppr = clampFloatValue(sysConfig.mpg.zHandwheel.ppr, 1.0, 100000.0);
+  sysConfig.mpg.xHandwheel.ppr = clampFloatValue(sysConfig.mpg.xHandwheel.ppr, 1.0, 100000.0);
   joystickConfig.centerSamples = clampIntValue(joystickConfig.centerSamples, 1, 1024);
   joystickConfig.oversamples = clampIntValue(joystickConfig.oversamples, 1, 1024);
   joystickConfig.sampleIntervalMs = clampIntValue(joystickConfig.sampleIntervalMs, 1, 1000);
@@ -181,8 +149,6 @@ void normalizeMachineConfig() {
   joystickConfig.normalRps = clampFloatValue(joystickConfig.normalRps, 0.01, 1000.0);
   joystickConfig.rapidRps = clampFloatValue(joystickConfig.rapidRps, 0.01, 1000.0);
   SLOT_LEFT_REDUCTION_DU = clampLongValue(SLOT_LEFT_REDUCTION_DU, 0, 10000000);
-  if (SPEED_START_Z > SPEED_MANUAL_MOVE_Z) SPEED_START_Z = SPEED_MANUAL_MOVE_Z;
-  if (SPEED_START_X > SPEED_MANUAL_MOVE_X) SPEED_START_X = SPEED_MANUAL_MOVE_X;
   applyDerivedMachineConfig();
 }
 
@@ -196,26 +162,14 @@ void loadMachineConfig() {
   DEBUG_PRINTLN("loading fields...");
   ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
   AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
-  SPEED_START_Z = cfg.getLong(CFG_SPEED_START_Z, SPEED_START_Z);
-  ACCELERATION_Z = cfg.getLong(CFG_ACCELERATION_Z, ACCELERATION_Z);
-  SPEED_MANUAL_MOVE_Z = cfg.getLong(CFG_SPEED_MANUAL_MOVE_Z, SPEED_MANUAL_MOVE_Z);
-  INVERT_Z = cfg.getBool(CFG_INVERT_Z, INVERT_Z);
-  INVERT_Z_ENABLE = cfg.getBool(CFG_INVERT_Z_ENABLE, INVERT_Z_ENABLE);
-  NEEDS_REST_Z = cfg.getBool(CFG_NEEDS_REST_Z, NEEDS_REST_Z);
-  SPEED_START_X = cfg.getLong(CFG_SPEED_START_X, SPEED_START_X);
-  ACCELERATION_X = cfg.getLong(CFG_ACCELERATION_X, ACCELERATION_X);
-  SPEED_MANUAL_MOVE_X = cfg.getLong(CFG_SPEED_MANUAL_MOVE_X, SPEED_MANUAL_MOVE_X);
-  INVERT_X = cfg.getBool(CFG_INVERT_X, INVERT_X);
-  INVERT_X_ENABLE = cfg.getBool(CFG_INVERT_X_ENABLE, INVERT_X_ENABLE);
-  NEEDS_REST_X = cfg.getBool(CFG_NEEDS_REST_X, NEEDS_REST_X);
   STEP_TIME_MS = cfg.getLong(CFG_STEP_TIME_MS, STEP_TIME_MS);
   DELAY_BETWEEN_STEPS_MS = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, DELAY_BETWEEN_STEPS_MS);
   ENABLE_CONTINUOUS_MOVE = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, ENABLE_CONTINUOUS_MOVE);
   SAFE_DISTANCE_DU = cfg.getLong(CFG_SAFE_DISTANCE_DU, SAFE_DISTANCE_DU);
   SLOT_LEFT_REDUCTION_DU = cfg.getLong(CFG_SLOT_LEFT_REDUCTION_DU, SLOT_LEFT_REDUCTION_DU);
   float legacyPulsePerRevolution = cfg.getFloat(CFG_PULSE_PER_REVOLUTION, -1.0);
-  PULSE_PER_REVOLUTION_Z = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_Z, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : PULSE_PER_REVOLUTION_Z);
-  PULSE_PER_REVOLUTION_X = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_X, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : PULSE_PER_REVOLUTION_X);
+  sysConfig.mpg.zHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_Z, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.zHandwheel.ppr);
+  sysConfig.mpg.xHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_X, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.xHandwheel.ppr);
   joystickConfig.enabled = cfg.getBool(CFG_JOYSTICK_ENABLED, joystickConfig.enabled);
   joystickConfig.zEnabled = cfg.getBool(CFG_JOYSTICK_Z_ENABLED, joystickConfig.zEnabled);
   joystickConfig.xEnabled = cfg.getBool(CFG_JOYSTICK_X_ENABLED, joystickConfig.xEnabled);
@@ -362,7 +316,6 @@ void loadMachineProfile() {
 
   ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
   ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
-
   printMachineProfileBanner();
 }
 
@@ -491,22 +444,22 @@ void loadKeyboardConfig() {
 }
 
 void setWifiConfigDefaults() {
-  WIFI_ENABLED = DEFAULT_WIFI_ENABLED;
-  WIFI_SSID = DEFAULT_WIFI_SSID;
-  WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
-  WIFI_HOSTNAME = DEFAULT_WIFI_HOSTNAME;
+  sysConfig.wifi.enabled = true;
+  sysConfig.wifi.ssid = "";
+  sysConfig.wifi.password = "";
+  sysConfig.wifi.hostname = "nanoels";
 }
 
 bool validateWifiConfig(String* error) {
-  if (WIFI_SSID.length() > 32) {
+  if (sysConfig.wifi.ssid.length() > 32) {
     *error = "wifiSsid must be 32 characters or less";
     return false;
   }
-  if (WIFI_PASSWORD.length() > 63) {
+  if (sysConfig.wifi.password.length() > 63) {
     *error = "wifiPassword must be 63 characters or less";
     return false;
   }
-  if (WIFI_PASSWORD.length() > 0 && WIFI_PASSWORD.length() < 8) {
+  if (sysConfig.wifi.password.length() > 0 && sysConfig.wifi.password.length() < 8) {
     *error = "wifiPassword must be empty or at least 8 characters";
     return false;
   }
@@ -515,16 +468,16 @@ bool validateWifiConfig(String* error) {
 
 // Persistent Settings for WiFi (Stored in Tier 2 "sys")
 static PersistentSetting<bool> s_wifiEnabled("sys", "wifi_en", true, [](const bool& val) {
-  WIFI_ENABLED = val;
+  sysConfig.wifi.enabled = val;
 });
 static PersistentSetting<String> s_wifiSsid("sys", "wifi_ssid", "", [](const String& val) {
-  WIFI_SSID = val;
+  sysConfig.wifi.ssid = val;
 });
 static PersistentSetting<String> s_wifiPassword("sys", "wifi_pwd", "", [](const String& val) {
-  WIFI_PASSWORD = val;
+  sysConfig.wifi.password = val;
 });
 static PersistentSetting<String> s_wifiHostname("sys", "wifi_host", "nanoels", [](const String& val) {
-  WIFI_HOSTNAME = val;
+  sysConfig.wifi.hostname = val;
 });
 
 void loadWifiConfig() {
@@ -564,10 +517,10 @@ void loadWifiConfig() {
   s_wifiPassword.init();
   s_wifiHostname.init();
 
-  WIFI_ENABLED = s_wifiEnabled.get();
-  WIFI_SSID = s_wifiSsid.get();
-  WIFI_PASSWORD = s_wifiPassword.get();
-  WIFI_HOSTNAME = s_wifiHostname.get();
+  sysConfig.wifi.enabled = s_wifiEnabled.get();
+  sysConfig.wifi.ssid = s_wifiSsid.get();
+  sysConfig.wifi.password = s_wifiPassword.get();
+  sysConfig.wifi.hostname = s_wifiHostname.get();
 
   String error = "";
   if (!validateWifiConfig(&error)) {
@@ -576,18 +529,22 @@ void loadWifiConfig() {
 }
 
 void saveWifiConfig() {
-  s_wifiEnabled.set(WIFI_ENABLED);
-  s_wifiSsid.set(WIFI_SSID);
-  s_wifiPassword.set(WIFI_PASSWORD);
-  s_wifiHostname.set(WIFI_HOSTNAME);
+  s_wifiEnabled.set(sysConfig.wifi.enabled);
+  s_wifiSsid.set(sysConfig.wifi.ssid);
+  s_wifiPassword.set(sysConfig.wifi.password);
+  s_wifiHostname.set(sysConfig.wifi.hostname);
 }
 
-void setMeasure(int value) {
+void setMeasure(MeasureUnit value) {
   if (measure == value) {
     return;
   }
   measure = value;
   operatorPrefs.measure = value;
-  moveStep = measure == MEASURE_METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1;
+  moveStep = measure == MeasureUnit::METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1;
   operatorPrefs.jogStepDu = moveStep;
+}
+
+void setMeasure(int value) {
+  setMeasure(static_cast<MeasureUnit>(value));
 }

@@ -58,9 +58,9 @@ void applyConeRatio();
 void applySettings();
 void updateAsyncTimerSettings();
 
-void setModeFromLoop(int m);
-void setModeFromTask(int m);
-void setModeFromUi(int m, bool fromNextion);
+void setModeFromLoop(LatheMode m);
+void setModeFromTask(LatheMode m);
+void setModeFromUi(LatheMode m, bool fromNextion);
 
 void discountFullSpindleTurns();
 

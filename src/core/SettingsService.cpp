@@ -32,9 +32,9 @@ static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false
   machineStatusForcePublish = true;
 });
 
-static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, MEASURE_METRIC, [](const int& val) {
-  operatorPrefs.measure = val;
-  ::setMeasure(val);
+static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, static_cast<int>(MeasureUnit::METRIC), [](const int& val) {
+  operatorPrefs.measure = static_cast<MeasureUnit>(val);
+  ::setMeasure(static_cast<MeasureUnit>(val));
   machineStatusForcePublish = true;
 });
 
@@ -157,7 +157,7 @@ void SettingsService::init() {
   operatorPrefs.xDroActive = s_xDroMode.get();
 
   s_measure.init();
-  operatorPrefs.measure = measure = s_measure.get();
+  operatorPrefs.measure = measure = static_cast<MeasureUnit>(s_measure.get());
 
   s_spindleDisplayMode.init();
 
@@ -177,10 +177,10 @@ void SettingsService::init() {
 
   // Synchronize Intent settings from active/restored globals
   long absDu = abs(dupr);
-  if (measure == MEASURE_METRIC) {
+  if (measure == MeasureUnit::METRIC) {
     currentThreadSetting.format = THREAD_METRIC;
     currentThreadSetting.authorPitch = absDu / 10000.0f;
-  } else if (measure == MEASURE_TPI) {
+  } else if (measure == MeasureUnit::TPI) {
     currentThreadSetting.format = THREAD_TPI;
     currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
   } else {
@@ -734,10 +734,10 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
     duprVal = -abs(duprVal);
   }
   long absDu = abs(duprVal);
-  if (measure == MEASURE_METRIC) {
+  if (measure == MeasureUnit::METRIC) {
     currentThreadSetting.format = THREAD_METRIC;
     currentThreadSetting.authorPitch = absDu / 10000.0f;
-  } else if (measure == MEASURE_TPI) {
+  } else if (measure == MeasureUnit::TPI) {
     currentThreadSetting.format = THREAD_TPI;
     currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
   } else {
@@ -821,7 +821,7 @@ long SettingsService::getJogStepDu() {
 
 bool SettingsService::cycleJogStep() {
   long nextStep = MOVE_STEP_1;
-  if (measure == MEASURE_METRIC) {
+  if (measure == MeasureUnit::METRIC) {
     if (moveStep == MOVE_STEP_1) {
       nextStep = MOVE_STEP_2;
     } else if (moveStep == MOVE_STEP_2) {
@@ -982,7 +982,7 @@ bool SettingsService::isXDroMode() {
 
 bool SettingsService::setMeasure(int m) {
   if (m < 0 || m > 2) return false;
-  operatorPrefs.measure = m;
+  operatorPrefs.measure = static_cast<MeasureUnit>(m);
   return s_measure.set(m);
 }
 
@@ -1001,10 +1001,10 @@ int SettingsService::getSpindleDisplayMode() {
 
 // --- Tier 2 / Category 5: Operational Mode & Motion State ---
 bool SettingsService::requestMode(int targetMode) {
-  if (targetMode < MODE_NORMAL || targetMode > MODE_SLOT) {
+  if (targetMode < static_cast<int>(LatheMode::NORMAL) || targetMode > static_cast<int>(LatheMode::SLOT)) {
     return false;
   }
-  nextMode = targetMode;
+  nextMode = static_cast<LatheMode>(targetMode);
   nextModeFlag = true;
 
   machineStatusForcePublish = true;
@@ -1012,7 +1012,7 @@ bool SettingsService::requestMode(int targetMode) {
 }
 
 int SettingsService::getMode() {
-  return nextModeFlag ? nextMode : mode;
+  return static_cast<int>(nextModeFlag ? nextMode : mode);
 }
 
 bool SettingsService::requestIsOn(bool on) {
@@ -1027,17 +1027,17 @@ bool SettingsService::isOn() {
 }
 
 void SettingsService::triggerEstop(int estopCode) {
-  setEmergencyStop(estopCode);
+  setEmergencyStop(static_cast<EstopCode>(estopCode));
   machineStatusForcePublish = true;
 }
 
 void SettingsService::clearEstop() {
-  emergencyStop = ESTOP_NONE;
+  emergencyStop = EstopCode::NONE;
   machineStatusForcePublish = true;
 }
 
 int SettingsService::getEstopCode() {
-  return emergencyStop;
+  return static_cast<int>(emergencyStop);
 }
 
 void SettingsService::applyCore1PendingLatches() {
@@ -1198,15 +1198,15 @@ bool SettingsService::get(const char* key, String* reply) {
 
   // --- Tier 2: Controller Infrastructure ---
   if (getAll || strcasecmp(key, "sys.wifi.enabled") == 0) {
-    appendSetting("sys.wifi.enabled", WIFI_ENABLED ? "1" : "0");
+    appendSetting("sys.wifi.enabled", sysConfig.wifi.enabled ? "1" : "0");
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.wifi.ssid") == 0) {
-    appendSetting("sys.wifi.ssid", WIFI_SSID);
+    appendSetting("sys.wifi.ssid", sysConfig.wifi.ssid);
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.wifi.hostname") == 0) {
-    appendSetting("sys.wifi.hostname", WIFI_HOSTNAME);
+    appendSetting("sys.wifi.hostname", sysConfig.wifi.hostname);
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.dro.zPulsesPerMm") == 0) {
@@ -1218,17 +1218,17 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevZ") == 0) {
-    appendSetting("sys.mpg.zPulsesPerRev", String(PULSE_PER_REVOLUTION_Z, 2));
+    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr, 2));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevX") == 0) {
-    appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
+    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr, 2));
     if (!getAll) return true;
   }
 
   // --- Tier 3: Operator Preferences ---
   if (getAll || strcasecmp(key, "prefs.startupMeasure") == 0 || strcasecmp(key, "prefs.measure") == 0 || strcasecmp(key, "measure") == 0) {
-    appendSetting("prefs.startupMeasure", String(measure));
+    appendSetting("prefs.startupMeasure", String(static_cast<int>(measure)));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.diaRad") == 0 || strcasecmp(key, "prefs.dia") == 0 || strcasecmp(key, "dia") == 0 || strcasecmp(key, "isDiameterMode") == 0) {
@@ -1310,18 +1310,18 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
   }
 
   if (strcasecmp(groupName, "sys") == 0) {
-    appendSetting("sys.wifi.enabled", WIFI_ENABLED ? "1" : "0");
-    appendSetting("sys.wifi.ssid", WIFI_SSID);
-    appendSetting("sys.wifi.hostname", WIFI_HOSTNAME);
+    appendSetting("sys.wifi.enabled", sysConfig.wifi.enabled ? "1" : "0");
+    appendSetting("sys.wifi.ssid", sysConfig.wifi.ssid);
+    appendSetting("sys.wifi.hostname", sysConfig.wifi.hostname);
     appendSetting("sys.dro.zPulsesPerMm", String(activeMachineProfile.zAxis.droScale.ppr));
     appendSetting("sys.dro.xPulsesPerMm", String(activeMachineProfile.xAxis.droScale.ppr));
-    appendSetting("sys.mpg.zPulsesPerRev", String(PULSE_PER_REVOLUTION_Z, 2));
-    appendSetting("sys.mpg.xPulsesPerRev", String(PULSE_PER_REVOLUTION_X, 2));
+    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr, 2));
+    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr, 2));
     return true;
   }
 
   if (strcasecmp(groupName, "prefs") == 0) {
-    appendSetting("prefs.startupMeasure", String(measure));
+    appendSetting("prefs.startupMeasure", String(static_cast<int>(measure)));
     appendSetting("prefs.jogStepDu", String(moveStep));
     appendSetting("prefs.feedStepDu", String(feedStepDu));
     appendSetting("prefs.diaRad", isDiameterMode() ? "1" : "0");
@@ -1418,23 +1418,23 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   // --- Tier 2: Controller Infrastructure ---
   if (strcasecmp(keyBuf, "sys.wifi.enabled") == 0) {
-    WIFI_ENABLED = (atoi(valStr) != 0);
+    sysConfig.wifi.enabled = (atoi(valStr) != 0);
     saveWifiConfig();
-    reportOk(keyBuf, WIFI_ENABLED ? "1" : "0");
+    reportOk(keyBuf, sysConfig.wifi.enabled ? "1" : "0");
     return true;
   }
 
   if (strcasecmp(keyBuf, "sys.wifi.ssid") == 0) {
-    WIFI_SSID = valStr;
+    sysConfig.wifi.ssid = valStr;
     saveWifiConfig();
-    reportOk(keyBuf, WIFI_SSID);
+    reportOk(keyBuf, sysConfig.wifi.ssid);
     return true;
   }
 
   if (strcasecmp(keyBuf, "sys.wifi.hostname") == 0) {
-    WIFI_HOSTNAME = valStr;
+    sysConfig.wifi.hostname = valStr;
     saveWifiConfig();
-    reportOk(keyBuf, WIFI_HOSTNAME);
+    reportOk(keyBuf, sysConfig.wifi.hostname);
     return true;
   }
 
@@ -1457,7 +1457,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   if (strcasecmp(keyBuf, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevZ") == 0) {
     float val = atof(valStr);
     if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
-    PULSE_PER_REVOLUTION_Z = val;
+    sysConfig.mpg.zHandwheel.ppr = val;
     reportOk(keyBuf, String(val, 2));
     return true;
   }
@@ -1465,7 +1465,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   if (strcasecmp(keyBuf, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevX") == 0) {
     float val = atof(valStr);
     if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
-    PULSE_PER_REVOLUTION_X = val;
+    sysConfig.mpg.xHandwheel.ppr = val;
     reportOk(keyBuf, String(val, 2));
     return true;
   }

@@ -68,12 +68,11 @@ void setup() {
 
   DEBUG_PRINTLN("initAxis Z/X...");
   Serial.flush();
-  long zMotorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
-  long zTravelMax = (long)round(activeMachineProfile.zAxis.limits.travelMaxMm);
-  long xMotorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
-  long xTravelMax = (long)round(activeMachineProfile.xAxis.limits.travelMaxMm);
-  initAxis(&z, NAME_Z, true, false, zMotorSteps, activeMachineProfile.zAxis.leadscrewPitchDu(), PULSE_PER_REVOLUTION_Z, SPEED_START_Z, SPEED_MANUAL_MOVE_Z, ACCELERATION_Z, INVERT_Z, INVERT_Z_ENABLE, NEEDS_REST_Z, zTravelMax, activeMachineProfile.zAxis.backlashDu(), Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z);
-  initAxis(&x, NAME_X, true, false, xMotorSteps, activeMachineProfile.xAxis.leadscrewPitchDu(), PULSE_PER_REVOLUTION_X, SPEED_START_X, SPEED_MANUAL_MOVE_X, ACCELERATION_X, INVERT_X, INVERT_X_ENABLE, NEEDS_REST_X, xTravelMax, activeMachineProfile.xAxis.backlashDu(), X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X);
+  AxisPins zPins = { Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z };
+  initAxis(&z, NAME_Z, true, false, activeMachineProfile.zAxis, sysConfig.mpg.zHandwheel.ppr, zPins);
+
+  AxisPins xPins = { X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X };
+  initAxis(&x, NAME_X, true, false, activeMachineProfile.xAxis, sysConfig.mpg.xHandwheel.ppr, xPins);
   DEBUG_PRINTLN("initAxis done.");
   Serial.flush();
 
@@ -109,9 +108,9 @@ void setup() {
   savedSpindlePosGlobal = spindlePosGlobal = 0;
 
   // Always boot cleanly and safely into standard manual feed / DRO mode
-  DEBUG_PRINTLN("setModeFromLoop MODE_NORMAL...");
+  DEBUG_PRINTLN("setModeFromLoop LatheMode::NORMAL...");
   Serial.flush();
-  setModeFromLoop(MODE_NORMAL);
+  setModeFromLoop(LatheMode::NORMAL);
   DEBUG_PRINTLN("setModeFromLoop done.");
   Serial.flush();
 
@@ -129,7 +128,7 @@ void setup() {
   motionSnapshotQueue = xQueueCreate(1, sizeof(StatusSnapshot));
   publishMotionSnapshot();
 
-  if (WIFI_ENABLED) {
+  if (sysConfig.wifi.enabled) {
     webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
   }
 
@@ -165,7 +164,7 @@ void setup() {
   xTaskCreatePinnedToCore(taskMoveZ, "taskMoveZ", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   xTaskCreatePinnedToCore(taskMoveX, "taskMoveX", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   xTaskCreatePinnedToCore(taskGcode, "taskGcode", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  if (WIFI_ENABLED) {
+  if (sysConfig.wifi.enabled) {
     DEBUG_PRINTLN("Creating taskWiFi...");
     Serial.flush();
     xTaskCreatePinnedToCore(taskWiFi, "taskWiFi", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
@@ -175,7 +174,7 @@ void setup() {
 }
 
 void loop() {
-  if (emergencyStop != ESTOP_NONE) {
+  if (emergencyStop != EstopCode::NONE) {
     return;
   }
   if (xSemaphoreTake(motionMutex, 1) != pdTRUE) {
@@ -184,34 +183,34 @@ void loop() {
   applySettings();
   processSpindleCounter();
   discountFullSpindleTurns();
-  int currentMode = mode;
-  if (currentMode == MODE_JOYSTICK && spindlePosSync != 0 && !joystickLatheFeedCommandActive()) {
+  LatheMode currentMode = mode;
+  if (currentMode == LatheMode::JOYSTICK && spindlePosSync != 0 && !joystickLatheFeedCommandActive()) {
     cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
   }
-  if (!isOn || (dupr == 0 && currentMode != MODE_SLOT) || spindlePosSync != 0) {
-    if (currentMode == MODE_JOYSTICK && (!isOn || dupr == 0)) {
+  if (!isOn || (dupr == 0 && currentMode != LatheMode::SLOT) || spindlePosSync != 0) {
+    if (currentMode == LatheMode::JOYSTICK && (!isOn || dupr == 0)) {
       resetJoystickLatheFeedPosition();
     }
-  } else if (currentMode == MODE_NORMAL) {
+  } else if (currentMode == LatheMode::NORMAL) {
     modeGearbox(&z);
-  } else if (currentMode == MODE_XGEAR) {
+  } else if (currentMode == LatheMode::XGEAR) {
     modeGearbox(&x);
-  } else if (currentMode == MODE_JOYSTICK) {
+  } else if (currentMode == LatheMode::JOYSTICK) {
     modeJoystick();
-  } else if (currentMode == MODE_TURN) {
+  } else if (currentMode == LatheMode::TURN) {
     modeTurn(&z, &x);
-  } else if (currentMode == MODE_FACE) {
+  } else if (currentMode == LatheMode::FACE) {
     modeTurn(&x, &z);
-  } else if (currentMode == MODE_CUT) {
+  } else if (currentMode == LatheMode::CUT) {
     modeCut();
-  } else if (currentMode == MODE_SLOT) {
+  } else if (currentMode == LatheMode::SLOT) {
     modeSlot();
-  } else if (currentMode == MODE_CONE) {
+  } else if (currentMode == LatheMode::CONE) {
     modeCone();
-  } else if (currentMode == MODE_THREAD) {
+  } else if (currentMode == LatheMode::THREAD) {
     modeTurn(&z, &x);
-  } else if (currentMode == MODE_ELLIPSE) {
+  } else if (currentMode == LatheMode::ELLIPSE) {
     modeEllipse(&z, &x);
   }
   moveAxis(&z);

@@ -600,7 +600,7 @@ static String getKeyboardConfigResponse() {
 
 
 static String getWifiMode() {
-  if (!WIFI_ENABLED) return "off";
+  if (!sysConfig.wifi.enabled) return "off";
   if (wifiSetupApActive) return "setup-ap";
   if (wifiStationConnected) return "station";
   return "starting";
@@ -609,19 +609,19 @@ static String getWifiMode() {
 static String getWifiConfigResponse() {
   String response = "";
   response.reserve(360);
-  appendConfigLine(&response, "wifiEnabled", WIFI_ENABLED);
-  appendConfigLine(&response, "wifiSsid", WIFI_SSID);
-  appendConfigLine(&response, "wifiHostname", WIFI_HOSTNAME);
-  appendConfigLine(&response, "wifiPasswordSet", WIFI_PASSWORD.length() > 0);
+  appendConfigLine(&response, "wifiEnabled", sysConfig.wifi.enabled);
+  appendConfigLine(&response, "wifiSsid", sysConfig.wifi.ssid);
+  appendConfigLine(&response, "wifiHostname", sysConfig.wifi.hostname);
+  appendConfigLine(&response, "wifiPasswordSet", sysConfig.wifi.password.length() > 0);
   appendConfigLine(&response, "wifiMode", getWifiMode());
   appendConfigLine(&response, "wifiIp", wifiIpAddress);
   appendConfigLine(&response, "wifiStatus", wifiStatus);
-  appendConfigLine(&response, "setupApSsid", WIFI_SETUP_AP_SSID);
+  appendConfigLine(&response, "setupApSsid", sysConfig.wifi.setupApSsid.c_str());
   return response;
 }
 
 static bool readWifiConfigFromRequest(String* error) {
-  bool enabled = WIFI_ENABLED;
+  bool enabled = sysConfig.wifi.enabled;
   if (!readBoolConfigArg("wifiEnabled", &enabled, error)) {
     return false;
   }
@@ -649,13 +649,13 @@ static bool readWifiConfigFromRequest(String* error) {
   String hostname = server.arg("wifiHostname");
   hostname.trim();
 
-  WIFI_ENABLED = enabled;
-  WIFI_SSID = ssid;
-  WIFI_HOSTNAME = hostname.length() > 0 ? hostname : DEFAULT_WIFI_HOSTNAME;
+  sysConfig.wifi.enabled = enabled;
+  sysConfig.wifi.ssid = ssid;
+  sysConfig.wifi.hostname = hostname.length() > 0 ? hostname : "nanoels";
   if (clearPassword) {
-    WIFI_PASSWORD = "";
+    sysConfig.wifi.password = "";
   } else if (password.length() > 0) {
-    WIFI_PASSWORD = password;
+    sysConfig.wifi.password = password;
   }
   return validateWifiConfig(error);
 }
@@ -1472,27 +1472,27 @@ static bool connectStationWifi() {
   wifiStationConnected = false;
   wifiIpAddress = "";
 
-  if (WIFI_SSID.length() == 0) {
+  if (sysConfig.wifi.ssid.length() == 0) {
     setWiFiStatus("No SSID");
     return false;
   }
 
-  if (WIFI_HOSTNAME.length() > 0) {
-    DEBUG_PRINTF("Setting WiFi hostname to: %s\n", WIFI_HOSTNAME.c_str());
-    WiFi.setHostname(WIFI_HOSTNAME.c_str());
+  if (sysConfig.wifi.hostname.length() > 0) {
+    DEBUG_PRINTF("Setting WiFi hostname to: %s\n", sysConfig.wifi.hostname.c_str());
+    WiFi.setHostname(sysConfig.wifi.hostname.c_str());
   } else {
-    DEBUG_PRINTLN("WIFI_HOSTNAME is empty! Falling back to default.");
+    DEBUG_PRINTLN("sysConfig.wifi.hostname is empty! Falling back to default.");
     WiFi.setHostname("nanoels");
   }
 
   WiFi.mode(WIFI_STA);
   
-  if (WIFI_HOSTNAME.length() > 0) {
-    WiFi.setHostname(WIFI_HOSTNAME.c_str());
+  if (sysConfig.wifi.hostname.length() > 0) {
+    WiFi.setHostname(sysConfig.wifi.hostname.c_str());
   }
   
-  DEBUG_PRINTF("Connecting to WiFi SSID: %s\n", WIFI_SSID.c_str());
-  WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
+  DEBUG_PRINTF("Connecting to WiFi SSID: %s\n", sysConfig.wifi.ssid.c_str());
+  WiFi.begin(sysConfig.wifi.ssid.c_str(), sysConfig.wifi.password.c_str());
   setWiFiStatus("Connecting");
   for (int i = 0; i < 40; i++) {
     if (WiFi.status() == WL_CONNECTED) {
@@ -1515,9 +1515,9 @@ static bool connectStationWifi() {
   wifiStationConnected = true;
   wifiIpAddress = WiFi.localIP().toString();
   
-  if (WIFI_HOSTNAME.length() > 0) {
-    if (MDNS.begin(WIFI_HOSTNAME.c_str())) {
-      DEBUG_PRINTF("mDNS responder started: http://%s.local\n", WIFI_HOSTNAME.c_str());
+  if (sysConfig.wifi.hostname.length() > 0) {
+    if (MDNS.begin(sysConfig.wifi.hostname.c_str())) {
+      DEBUG_PRINTF("mDNS responder started: http://%s.local\n", sysConfig.wifi.hostname.c_str());
     } else {
       DEBUG_PRINTLN("Error setting up mDNS responder!");
     }
@@ -1533,7 +1533,7 @@ static bool startSetupAccessPoint() {
   WiFi.disconnect(true);
   DEBUG_PRINTLN("Starting Setup Access Point...");
   WiFi.mode(WIFI_AP);
-  wifiSetupApActive = WiFi.softAP(WIFI_SETUP_AP_SSID, WIFI_SETUP_AP_PASSWORD);
+  wifiSetupApActive = WiFi.softAP(sysConfig.wifi.setupApSsid.c_str(), sysConfig.wifi.setupApPassword.c_str());
   wifiStationConnected = false;
   if (!wifiSetupApActive) {
     DEBUG_PRINTLN("WiFi softAP creation failed!");
@@ -1546,9 +1546,9 @@ static bool startSetupAccessPoint() {
   wifiIpAddress = WiFi.softAPIP().toString();
   setWiFiStatus("Setup " + wifiIpAddress);
   DEBUG_PRINT("Setup AP: ");
-  DEBUG_PRINT(WIFI_SETUP_AP_SSID);
+  DEBUG_PRINT(sysConfig.wifi.setupApSsid);
   DEBUG_PRINT(" / ");
-  DEBUG_PRINTLN(WIFI_SETUP_AP_PASSWORD);
+  DEBUG_PRINTLN(sysConfig.wifi.setupApPassword);
   DEBUG_PRINT("Web UI: http://");
   DEBUG_PRINTLN(wifiIpAddress);
   return true;
@@ -1577,7 +1577,7 @@ void taskWiFi(void *param) {
   webSocket.begin();
   webSocket.onEvent(handleWebSocketEvent);
 
-  while (emergencyStop == ESTOP_NONE) {
+  while (emergencyStop == EstopCode::NONE) {
     server.handleClient();
     if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
       webSocket.loop();
@@ -1627,7 +1627,7 @@ void taskWiFi(void *param) {
       } else {
         wifiDisconnectStartedAt = 0;
       }
-    } else if (!wifiSetupApActive && WIFI_SSID.length() > 0) {
+    } else if (!wifiSetupApActive && sysConfig.wifi.ssid.length() > 0) {
       if (WiFi.status() == WL_CONNECTED) {
         wifiStationConnected = true;
         wifiIpAddress = WiFi.localIP().toString();

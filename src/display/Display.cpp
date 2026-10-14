@@ -57,7 +57,7 @@ void updateDisplay() {
 
   DisplaySnapshot snapshot = getDisplaySnapshot(rpm, numpadResult, spindleStopped, pitchStatusDirection);
 
-  long newHashLine0 = isOn + spindlePosSync + mode + measure + dupr + starts;
+  long newHashLine0 = isOn + spindlePosSync + static_cast<int>(mode) + static_cast<int>(measure) + dupr + starts;
   bool updateLine0 = lcdHashLine0 != newHashLine0;
   if (updateLine0) {
     lcdHashLine0 = newHashLine0;
@@ -67,7 +67,7 @@ void updateDisplay() {
     setText("bMeasure", snapshot.measure);
   }
 
-  long newHashLine1 = moveStep + rpm + spindlePos + measure + SettingsService::getSpindleDisplayMode() * 17 + (snapshot.spindleValColorGreen ? 300 : 0);
+  long newHashLine1 = moveStep + rpm + spindlePos + static_cast<int>(measure) + SettingsService::getSpindleDisplayMode() * 17 + (snapshot.spindleValColorGreen ? 300 : 0);
   bool updateLine1 = lcdHashLine1 != newHashLine1;
   if (updateLine1) {
     lcdHashLine1 = newHashLine1;
@@ -80,7 +80,7 @@ void updateDisplay() {
     setText("tSpindleVal", snapshot.spindleValue);
 
     if (snapshot.spindleValColorGreen) {
-      toScreen("tSpindleVal.pco=" + String(COLOR_DRO_ON));
+      toScreen("tSpindleVal.pco=" + String(sysConfig.theme.activeHighlight));
     } else {
       toScreen("tSpindleVal.pco=" + String(COLOR_NUMPAD_DEFAULT));
     }
@@ -88,7 +88,7 @@ void updateDisplay() {
 
   long newHashLine2 =
     x.pos + x.originPos + x.disabled + x.leftStop - x.rightStop +
-    z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop + measure + x.pos % 100 +
+    z.pos + z.originPos + z.disabled + z.leftStop - z.rightStop + static_cast<int>(measure) + x.pos % 100 +
     (snapshot.xIsDroActive ? (long)(xScale.getRawPosition() * 1000) : 0) +
     (snapshot.zIsDroActive ? (long)(zScale.getRawPosition() * 1000) : 0) +
     snapshot.isDiameterMode + snapshot.isAbsoluteMode + snapshot.xIsDroActive + snapshot.zIsDroActive;
@@ -97,7 +97,7 @@ void updateDisplay() {
     lcdHashLine2 = newHashLine2;
     setText("tX", snapshot.xPos);
     if (snapshot.xIsDroActive) {
-      toScreen("tX.pco=" + String(COLOR_DRO_ON));
+      toScreen("tX.pco=" + String(sysConfig.theme.activeHighlight));
     } else {
       toScreen("tX.pco=" + String(COLOR_NUMPAD_DEFAULT));
     }
@@ -108,7 +108,7 @@ void updateDisplay() {
     setText("tYDown", snapshot.yStopDown);
     setText("tZ", snapshot.zPos);
     if (snapshot.zIsDroActive) {
-      toScreen("tZ.pco=" + String(COLOR_DRO_ON));
+      toScreen("tZ.pco=" + String(sysConfig.theme.activeHighlight));
     } else {
       toScreen("tZ.pco=" + String(COLOR_NUMPAD_DEFAULT));
     }
@@ -116,33 +116,33 @@ void updateDisplay() {
     setText("tZRight", snapshot.zStopRight);
 
     if (snapshot.isDiameterMode) {
-      toScreen("tDia.pco=" + String(COLOR_DRO_ON));
+      toScreen("tDia.pco=" + String(sysConfig.theme.activeHighlight));
       toScreen("tDia.font=3");
       setText("tDia", "dia");
-      toScreen("tRad.pco=" + String(COLOR_DRO_OFF));
+      toScreen("tRad.pco=" + String(sysConfig.theme.inactiveDim));
       toScreen("tRad.font=2");
       setText("tRad", "rad");
     } else {
-      toScreen("tDia.pco=" + String(COLOR_DRO_OFF));
+      toScreen("tDia.pco=" + String(sysConfig.theme.inactiveDim));
       toScreen("tDia.font=2");
       setText("tDia", "dia");
-      toScreen("tRad.pco=" + String(COLOR_DRO_ON));
+      toScreen("tRad.pco=" + String(sysConfig.theme.activeHighlight));
       toScreen("tRad.font=3");
       setText("tRad", "rad");
     }
 
     if (!snapshot.isAbsoluteMode) {
-      toScreen("tInc.pco=" + String(COLOR_DRO_ON));
+      toScreen("tInc.pco=" + String(sysConfig.theme.activeHighlight));
       toScreen("tInc.font=3");
       setText("tInc", "inc");
-      toScreen("tAbs.pco=" + String(COLOR_DRO_OFF));
+      toScreen("tAbs.pco=" + String(sysConfig.theme.inactiveDim));
       toScreen("tAbs.font=2");
       setText("tAbs", "abs");
     } else {
-      toScreen("tInc.pco=" + String(COLOR_DRO_OFF));
+      toScreen("tInc.pco=" + String(sysConfig.theme.inactiveDim));
       toScreen("tInc.font=2");
       setText("tInc", "inc");
-      toScreen("tAbs.pco=" + String(COLOR_DRO_ON));
+      toScreen("tAbs.pco=" + String(sysConfig.theme.activeHighlight));
       toScreen("tAbs.font=3");
       setText("tAbs", "abs");
     }
@@ -155,12 +155,12 @@ void updateDisplay() {
   for (int i = 0; i < wifiStatus.length(); i++) {
     gcodeCommandHash += wifiStatus.charAt(i);
   }
-  long newHashLine3 = z.pos + (showAngle ? spindlePos : -1) + (showTacho ? rpm : -2) + measure + (numpadResult > 0 ? numpadResult : -1) + mode * 5 + dupr +
-      (mode == MODE_CONE ? round(coneRatio * 10000) : 0) + turnPasses + opIndex + setupIndex + gcodeProgramIndex + gcodeProgramCount + spindleStopped * 3 + (isOn ? 139 : -117) + (inNumpad ? 10 : 0) + (auxForward ? 17 : -31) +
+  long newHashLine3 = z.pos + (showAngle ? spindlePos : -1) + (showTacho ? rpm : -2) + static_cast<int>(measure) + (numpadResult > 0 ? numpadResult : -1) + static_cast<int>(mode) * 5 + dupr +
+      (mode == LatheMode::CONE ? round(coneRatio * 10000) : 0) + turnPasses + opIndex + setupIndex + gcodeProgramIndex + gcodeProgramCount + spindleStopped * 3 + (isOn ? 139 : -117) + (inNumpad ? 10 : 0) + (auxForward ? 17 : -31) +
       (z.leftStop == LONG_MAX ? 123 : z.leftStop) + (z.rightStop == LONG_MIN ? 1234 : z.rightStop) +
       (x.leftStop == LONG_MAX ? 1235 : x.leftStop) + (x.rightStop == LONG_MIN ? 123456 : x.rightStop) + gcodeCommandHash +
       pitchStatusDirection * 149 +
-      (mode == MODE_JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + joystickConfig.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
+      (mode == LatheMode::JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + joystickConfig.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
   bool updateLine3 = lcdHashLine3 != newHashLine3;
   if (updateLine3) {
     lcdHashLine3 = newHashLine3;
@@ -180,7 +180,7 @@ bool saveIfChanged() {
 }
 
 void taskDisplay(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
+  while (emergencyStop == EstopCode::NONE) {
     updateDisplay();
     // Periodic NVS flash sweeping has been retired in favor of event-driven sparse persistence in SettingsService.
     if (beepFlag) {
@@ -188,18 +188,18 @@ void taskDisplay(void *param) {
       beep();
     }
     if (abs(z.pendingPos) > z.estopSteps || abs(x.pendingPos) > x.estopSteps) {
-      setEmergencyStop(ESTOP_POS);
+      setEmergencyStop(EstopCode::POS);
     }
     taskYIELD();
   }
   setText("bMode", "ESTOP");
-  if (emergencyStop == ESTOP_POS) {
+  if (emergencyStop == EstopCode::POS) {
     setText("t3", "Requested position outside machine");
-  } else if (emergencyStop == ESTOP_MARK_ORIGIN) {
+  } else if (emergencyStop == EstopCode::MARK_ORIGIN) {
     setText("t3", "Unable to mark origin");
-  } else if (emergencyStop == ESTOP_ON_OFF) {
+  } else if (emergencyStop == EstopCode::ON_OFF) {
     setText("t3", "Unable to turn on/off");
-  } else if (emergencyStop == ESTOP_OFF_MANUAL_MOVE) {
+  } else if (emergencyStop == EstopCode::OFF_MANUAL_MOVE) {
     setText("t3", "Off during manual move");
   }
   vTaskDelete(NULL);

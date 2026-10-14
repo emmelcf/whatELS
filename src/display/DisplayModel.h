@@ -7,11 +7,11 @@
 // --- Unit Conversion Helpers ---
 // Pure conversion from internal metric units to active display units (Metric vs Imperial)
 inline float mmToDisplay(float mm) {
-  return (measure == MEASURE_INCH) ? (mm / 25.4f) : mm;
+  return (measure == MeasureUnit::INCH) ? (mm / 25.4f) : mm;
 }
 
 inline float duToDisplay(long deciMicrons) {
-  return (measure == MEASURE_INCH) ? (deciMicrons / 254000.0f) : (deciMicrons / 10000.0f);
+  return (measure == MeasureUnit::INCH) ? (deciMicrons / 254000.0f) : (deciMicrons / 10000.0f);
 }
 
 // --- Position & Stop Distance Resolution in Millimeters ---

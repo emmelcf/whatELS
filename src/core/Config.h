@@ -72,10 +72,7 @@
 #define Y_PULSE_A 45
 #define Y_PULSE_B 48
 
-// DRO Scales Configuration (set true if physical linear scale is used instead of handwheel)
-#define HAS_DRO_Z false
-#define HAS_DRO_X false
-
+// DRO Linear Scales Pinouts (Quadrature Encoder interface)
 #define Z_SCALE_PIN_A (gpio_num_t)9
 #define Z_SCALE_PIN_B (gpio_num_t)12
 #define Z_SCALE_PCNT_UNIT 1
@@ -85,9 +82,6 @@
 #define X_SCALE_PIN_B (gpio_num_t)39
 #define X_SCALE_PCNT_UNIT 2
 #define X_SCALE_PULSES_PER_MM 501.2f
-
-#define COLOR_DRO_ON 2016
-#define COLOR_DRO_OFF 25388
 
 // Analog / Contact Joystick Pins
 #define JOY_Z 4
@@ -221,6 +215,11 @@ struct JoystickConfig {
   bool invertButton = false;
 };
 
+struct NextionTheme {
+  uint16_t activeHighlight = 2016;  // RGB565 Green (0x07E0) for active states & highlights
+  uint16_t inactiveDim     = 25388; // RGB565 Dim Gray (0x632C) for inactive states
+};
+
 struct ControllerConfig {
   int swVersion = SOFTWARE_VERSION;
   WifiConfig wifi;
@@ -228,28 +227,11 @@ struct ControllerConfig {
   MpgConfig mpg;
   MotionTimingConfig timing;
   GCodeConfig gcode;
+  NextionTheme theme;
 };
 
 extern ControllerConfig sysConfig;
 
-// Backward-compatible aliases for existing call sites
-#define WIFI_ENABLED (sysConfig.wifi.enabled)
-#define WIFI_SSID (sysConfig.wifi.ssid)
-#define WIFI_PASSWORD (sysConfig.wifi.password)
-#define WIFI_HOSTNAME (sysConfig.wifi.hostname)
-#define DEFAULT_WIFI_ENABLED (true)
-#define DEFAULT_WIFI_SSID ("")
-#define DEFAULT_WIFI_PASSWORD ("")
-#define DEFAULT_WIFI_HOSTNAME ("nanoels")
-#define WIFI_SETUP_AP_SSID (sysConfig.wifi.setupApSsid.c_str())
-#define WIFI_SETUP_AP_PASSWORD (sysConfig.wifi.setupApPassword.c_str())
-#define INCOMING_BUFFER_SIZE (sysConfig.wifi.incomingBufferSize)
-#define OUTGOING_BUFFER_SIZE (sysConfig.wifi.outgoingBufferSize)
-
-#define PULSE_PER_REVOLUTION_Z (sysConfig.mpg.zHandwheel.ppr)
-#define PULSE_PER_REVOLUTION_X (sysConfig.mpg.xHandwheel.ppr)
-#define DEFAULT_PULSE_PER_REVOLUTION_Z (600.0f)
-#define DEFAULT_PULSE_PER_REVOLUTION_X (600.0f)
 #define HANDWHEEL_PULSE_WAIT_MS (sysConfig.mpg.pulseWaitMs)
 
 #define joystickConfig (sysConfig.joystick)
@@ -301,58 +283,69 @@ const float TPI_ROUND_EPSILON = 0.03f;
 // 4. OPERATIONAL MODES, UNITS & STEP INCREMENTS
 // =============================================================================
 
-// Step Sizes (Jogging)
-#define MOVE_STEP_1 10000 // 1mm
-#define MOVE_STEP_2 1000  // 0.1mm
-#define MOVE_STEP_3 100   // 0.01mm
+// Standard Jog & Feed Step Tables (Deci-microns: 10,000 du = 1.0mm; 254,000 du = 1.0")
+constexpr long JOG_STEPS_METRIC[]   = { 10000, 1000, 100 };       // 1.0mm, 0.1mm, 0.01mm
+constexpr long JOG_STEPS_IMPERIAL[] = { 25400, 2540, 254 };       // 0.1", 0.01", 0.001"
+constexpr long FEED_STEPS_METRIC[]  = { 100, 500, 1000, 2000 };   // 0.01, 0.05, 0.10, 0.20 mm/rev
+constexpr long FEED_STEPS_IMPERIAL[]= { 25, 51, 127, 254 };       // 0.001", 0.002", 0.005", 0.010"/rev
 
-#define MOVE_STEP_IMP_1 25400 // 1/10"
-#define MOVE_STEP_IMP_2 2540  // 1/100"
-#define MOVE_STEP_IMP_3 254   // 1/1000"
+// Backward-compatible step size defines
+#define MOVE_STEP_1 JOG_STEPS_METRIC[0]
+#define MOVE_STEP_2 JOG_STEPS_METRIC[1]
+#define MOVE_STEP_3 JOG_STEPS_METRIC[2]
 
-// Feed Step Sizes (Chip-load / feed rate adjustment)
-#define FEED_STEP_1 100   // 0.01mm/rev
-#define FEED_STEP_2 500   // 0.05mm/rev
-#define FEED_STEP_3 1000  // 0.10mm/rev
-#define FEED_STEP_4 2000  // 0.20mm/rev
+#define MOVE_STEP_IMP_1 JOG_STEPS_IMPERIAL[0]
+#define MOVE_STEP_IMP_2 JOG_STEPS_IMPERIAL[1]
+#define MOVE_STEP_IMP_3 JOG_STEPS_IMPERIAL[2]
 
-#define FEED_STEP_IMP_1 25   // 0.001"/rev
-#define FEED_STEP_IMP_2 51   // 0.002"/rev
-#define FEED_STEP_IMP_3 127  // 0.005"/rev
-#define FEED_STEP_IMP_4 254  // 0.010"/rev
+#define FEED_STEP_1 FEED_STEPS_METRIC[0]
+#define FEED_STEP_2 FEED_STEPS_METRIC[1]
+#define FEED_STEP_3 FEED_STEPS_METRIC[2]
+#define FEED_STEP_4 FEED_STEPS_METRIC[3]
+
+#define FEED_STEP_IMP_1 FEED_STEPS_IMPERIAL[0]
+#define FEED_STEP_IMP_2 FEED_STEPS_IMPERIAL[1]
+#define FEED_STEP_IMP_3 FEED_STEPS_IMPERIAL[2]
+#define FEED_STEP_IMP_4 FEED_STEPS_IMPERIAL[3]
 
 // Lathe Operating Modes
-#define MODE_NORMAL 0
-#define MODE_XGEAR 1
-#define MODE_ASYNC 2
-#define MODE_CONE 3
-#define MODE_TURN 4
-#define MODE_FACE 5
-#define MODE_CUT 6
-#define MODE_THREAD 7
-#define MODE_ELLIPSE 8
-#define MODE_GCODE 9
-#define MODE_JOYSTICK 11
-#define MODE_SLOT 12
+enum class LatheMode : uint8_t {
+  NORMAL   = 0,
+  XGEAR    = 1,
+  ASYNC    = 2,
+  CONE     = 3,
+  TURN     = 4,
+  FACE     = 5,
+  CUT      = 6,
+  THREAD   = 7,
+  ELLIPSE  = 8,
+  GCODE    = 9,
+  JOYSTICK = 11,
+  SLOT     = 12
+};
 
 // Units of Measure
-#define MEASURE_METRIC 0
-#define MEASURE_INCH 1
-#define MEASURE_TPI 2
+enum class MeasureUnit : uint8_t {
+  METRIC = 0,
+  INCH   = 1,
+  TPI    = 2
+};
 
 // Emergency Stop (E-Stop)
-#define ESTOP_NONE 0
-#define ESTOP_POS 2
-#define ESTOP_MARK_ORIGIN 3
-#define ESTOP_ON_OFF 4
-#define ESTOP_OFF_MANUAL_MOVE 5
+enum class EstopCode : uint8_t {
+  NONE             = 0,
+  POS              = 2,
+  MARK_ORIGIN      = 3,
+  ON_OFF           = 4,
+  OFF_MANUAL_MOVE  = 5
+};
 
 // -----------------------------------------------------------------------------
 // Workshop Operator Preferences (Tier 3)
 // -----------------------------------------------------------------------------
 
 struct OperatorPreferences {
-  int measure = MEASURE_METRIC;   // 0 = Metric, 1 = Imperial, 2 = Pitch
+  MeasureUnit measure = MeasureUnit::METRIC; // Metric (0), Imperial (1), Pitch/TPI (2)
   bool isDiameterMode = true;     // Diameter Ø (2x cross-slide) vs Radius R (1x)
   bool isAbsoluteMode = true;     // Absolute (G90) vs Incremental (G91)
   bool zDroActive = false;        // Optical linear scale vs motor step tracking
@@ -575,20 +568,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 extern int ENCODER_BACKLASH;
 extern int AXIS_ENCODER_BACKLASH;
 
-extern long SPEED_START_Z;
-extern long ACCELERATION_Z;
-extern long SPEED_MANUAL_MOVE_Z;
-extern bool INVERT_Z;
-extern bool INVERT_Z_ENABLE;
-extern bool NEEDS_REST_Z;
-
-extern long SPEED_START_X;
-extern long ACCELERATION_X;
-extern long SPEED_MANUAL_MOVE_X;
-extern bool INVERT_X;
-extern bool INVERT_X_ENABLE;
-extern bool NEEDS_REST_X;
-
 extern int ENCODER_STEPS_INT;
 extern float ENCODER_STEPS_FLOAT;
 extern long SAFE_DISTANCE_DU;
@@ -628,4 +607,5 @@ void loadWifiConfig();
 void saveWifiConfig();
 
 // Measure / Display Configuration
+void setMeasure(MeasureUnit value);
 void setMeasure(int value);

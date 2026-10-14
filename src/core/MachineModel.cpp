@@ -44,9 +44,9 @@ void publishMotionSnapshot() {
   snap.rpm = getApproxRpm();
   snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-  snap.mode = mode;
+  snap.mode = static_cast<uint8_t>(mode);
   snap.isOn = isOn;
-  snap.estop = emergencyStop;
+  snap.estop = emergencyStop != EstopCode::NONE;
   snap.dupr = dupr;
   snap.nextDupr = nextDuprFlag ? nextDupr : dupr;
   xQueueOverwrite(motionSnapshotQueue, &snap);
@@ -87,9 +87,9 @@ KinematicsState MachineModel::captureKinematics() {
   k.rpm = getApproxRpm();
   k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-  k.mode = mode;
+  k.mode = static_cast<int>(mode);
   k.isOn = isOn;
-  k.estop = emergencyStop;
+  k.estop = emergencyStop != EstopCode::NONE;
   k.dupr = dupr;
   k.nextDupr = nextDuprFlag ? nextDupr : dupr;
   return k;
@@ -121,7 +121,7 @@ MachineProperties MachineModel::captureProperties() {
   p.capabilities = profile.capabilities;
   strncpy(p.presetId, profile.profileId, sizeof(p.presetId) - 1);
   p.presetId[sizeof(p.presetId) - 1] = '\0';
-  p.measure = measure;
+  p.measure = static_cast<int>(measure);
   p.isDiameterMode = SettingsService::isDiameterMode();
   p.isAbsoluteMode = SettingsService::isAbsoluteMode();
   p.zDroActive = SettingsService::isZDroMode();

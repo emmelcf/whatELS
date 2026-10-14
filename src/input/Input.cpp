@@ -92,9 +92,9 @@ long numpadToDeciMicrons() {
   if (result == 0) {
     return 0;
   }
-  if (measure == MEASURE_INCH) {
+  if (measure == MeasureUnit::INCH) {
     result = result * 254;
-  } else if (measure == MEASURE_TPI) {
+  } else if (measure == MeasureUnit::TPI) {
     result = round(254000.0 / result);
   } else { // Metric
     result = result * 10;
@@ -179,16 +179,16 @@ bool processNumpadResult(int keyCode) {
   // Ignore numpad input unless confirmed with ON.
   if (keyCode == B_ON) {
     if (numpadEntryMode == DIAMETER) {
-      float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
+      float divisor = (measure == MeasureUnit::METRIC) ? 100.0f : 1000.0f;
       float desiredValue = numpadResult / divisor;
 
       if (SettingsService::isXDroMode()) {
         desiredValue /= 2.0f;
-        if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
+        if (measure != MeasureUnit::METRIC) desiredValue *= 25.4f;
         xScale.setPosition(desiredValue);
       } else {
         float targetRadiusMm = desiredValue / 2.0f;
-        if (measure != MEASURE_METRIC) targetRadiusMm = (desiredValue * 25.4f) / 2.0f;
+        if (measure != MeasureUnit::METRIC) targetRadiusMm = (desiredValue * 25.4f) / 2.0f;
         
         long targetSteps = round((targetRadiusMm * 10000.0f) * x.motorSteps / x.screwPitch);
         
@@ -202,15 +202,15 @@ bool processNumpadResult(int keyCode) {
       numpadEntryMode = PITCH;
       return true;
     } else if (numpadEntryMode == LENGTH) {
-      float divisor = (measure == MEASURE_METRIC) ? 100.0f : 1000.0f;
+      float divisor = (measure == MeasureUnit::METRIC) ? 100.0f : 1000.0f;
       float desiredValue = numpadResult / divisor;
 
       if (SettingsService::isZDroMode()) {
-        if (measure != MEASURE_METRIC) desiredValue *= 25.4f;
+        if (measure != MeasureUnit::METRIC) desiredValue *= 25.4f;
         zScale.setPosition(desiredValue);
       } else {
         float targetMm = desiredValue;
-        if (measure != MEASURE_METRIC) targetMm = desiredValue * 25.4f;
+        if (measure != MeasureUnit::METRIC) targetMm = desiredValue * 25.4f;
         long targetSteps = round((targetMm * 10000.0f) * z.motorSteps / z.screwPitch);
         z.originPos = targetSteps - z.pos;
       }
@@ -221,10 +221,10 @@ bool processNumpadResult(int keyCode) {
     if (isPassMode() && setupIndex == 1) {
       setTurnPasses(int(min((long)PASSES_MAX, numpadResult)));
       setupIndex++;
-    } else if (mode == MODE_THREAD && setupIndex == 3) {
+    } else if (mode == LatheMode::THREAD && setupIndex == 3) {
       setConeRatio(newConeRatio);
       setupIndex++;
-    } else if (mode == MODE_CONE && setupIndex == 1) {
+    } else if (mode == LatheMode::CONE && setupIndex == 1) {
       setConeRatio(newConeRatio);
       setupIndex++;
     } else {
@@ -490,7 +490,7 @@ void processSpindleCounter() {
     spindlePosSync += delta;
     if (spindlePosSync % ENCODER_STEPS_INT == 0) {
       spindlePosSync = 0;
-      if (mode == MODE_JOYSTICK && joystickLatheSyncPitch != 0) {
+      if (mode == LatheMode::JOYSTICK && joystickLatheSyncPitch != 0) {
         Axis* a = joystickLatheSyncAxis == 1 ? &x : &z;
         spindlePosAvg = spindlePos = spindleFromPosWithModePitch(a, a->pos, joystickLatheSyncPitch);
         joystickLatheSyncPitch = 0;
@@ -524,7 +524,7 @@ void resetJoystickLatheFeedPosition() {
 }
 
 void cancelJoystickLatheSync() {
-  if (mode == MODE_JOYSTICK) {
+  if (mode == LatheMode::JOYSTICK) {
     spindlePosSync = 0;
     joystickLatheSyncPitch = 0;
     joystickLatheRebaseZAfterSync = false;
@@ -537,7 +537,7 @@ bool joystickUsable() {
 }
 
 void prepareJoystickLatheManualMove() {
-  if (isOn && mode == MODE_JOYSTICK) {
+  if (isOn && mode == LatheMode::JOYSTICK) {
     cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
   }
@@ -545,7 +545,7 @@ void prepareJoystickLatheManualMove() {
 
 bool isContinuousStep() {
   if (!ENABLE_CONTINUOUS_MOVE) return false;
-  return moveStep == (measure == MEASURE_METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1);
+  return moveStep == (measure == MeasureUnit::METRIC ? MOVE_STEP_1 : MOVE_STEP_IMP_1);
 }
 
 bool isRapidManualMove() {
@@ -746,17 +746,17 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
     joystickButtonPressed = rawPressed;
     if (joystickButtonPressed) {
       joystickButtonPressMillis = now;
-      joystickButtonToggleBlocked = mode != MODE_JOYSTICK || !moveNeutral;
+      joystickButtonToggleBlocked = mode != LatheMode::JOYSTICK || !moveNeutral;
     } else {
       bool shortClick = now - joystickButtonPressMillis <= JOYSTICK_BUTTON_TOGGLE_MAX_MS;
-      if (joystickConfig.buttonTogglesOnOff && mode == MODE_JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
+      if (joystickConfig.buttonTogglesOnOff && mode == LatheMode::JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
         buttonOnOffPress(!isOn);
       }
       joystickButtonToggleBlocked = false;
     }
   }
 
-  if (joystickButtonPressed && (mode != MODE_JOYSTICK || !moveNeutral || now - joystickButtonPressMillis > JOYSTICK_BUTTON_TOGGLE_MAX_MS)) {
+  if (joystickButtonPressed && (mode != LatheMode::JOYSTICK || !moveNeutral || now - joystickButtonPressMillis > JOYSTICK_BUTTON_TOGGLE_MAX_MS)) {
     joystickButtonToggleBlocked = true;
   }
 
@@ -829,17 +829,17 @@ bool joystickLatheFeedCommandActive() {
 }
 
 bool manualMovesAllowedWhenOn() {
-  return isGearboxMode() || mode == MODE_ASYNC || mode == MODE_CONE || mode == MODE_JOYSTICK;
+  return isGearboxMode() || mode == LatheMode::ASYNC || mode == LatheMode::CONE || mode == LatheMode::JOYSTICK;
 }
 
 bool manualMovesIgnoredWhenOn() {
-  return mode == MODE_GCODE || isPassMode();
+  return mode == LatheMode::GCODE || isPassMode();
 }
 
 static bool joystickPitchAdjustmentAllowed() {
-  if (mode == MODE_GCODE) return false;
+  if (mode == LatheMode::GCODE) return false;
   if (!isOn) return true;
-  return mode != MODE_THREAD && mode != MODE_ELLIPSE;
+  return mode != LatheMode::THREAD && mode != LatheMode::ELLIPSE;
 }
 
 int getJoystickPitchStatusDirection() {
@@ -965,8 +965,8 @@ static int processNextionMessage() {
 void adjustPitch(bool plus) {
   bool minus = !plus;
   long currentDupr = nextDuprFlag ? nextDupr : dupr;
-  if (measure != MEASURE_TPI) {
-    long delta = feedStepDu > 0 ? feedStepDu : (measure == MEASURE_METRIC ? FEED_STEP_2 : FEED_STEP_IMP_3);
+  if (measure != MeasureUnit::TPI) {
+    long delta = feedStepDu > 0 ? feedStepDu : (measure == MeasureUnit::METRIC ? FEED_STEP_2 : FEED_STEP_IMP_3);
     long normalizedDupr = normalizePitch(currentDupr);
     if (minus && currentDupr > -DUPR_MAX) {
       setFeedrateDupr(max(-DUPR_MAX, normalizedDupr - delta), false);
@@ -995,7 +995,7 @@ void adjustPitch(bool plus) {
 
 void buttonPlusMinusPress(bool plus) {
   bool minus = !plus;
-  if (mode == MODE_THREAD && setupIndex == 2) {
+  if (mode == LatheMode::THREAD && setupIndex == 2) {
     if (minus && starts > 1) {
       setStarts(starts - 1);
     } else if (plus && starts < STARTS_MAX) {
@@ -1016,18 +1016,18 @@ void buttonOnOffPress(bool on) {
   bool missingZStops = needZStops() && (z.leftStop == LONG_MAX || z.rightStop == LONG_MIN);
   if (on && isPassMode() && (missingZStops || x.leftStop == LONG_MAX || x.rightStop == LONG_MIN)) {
     beep();
-  } else if (!isOn && on && mode == MODE_GCODE && gcodeProgramIndex >= gcodeProgramCount && setupIndex == 1) {
+  } else if (!isOn && on && mode == LatheMode::GCODE && gcodeProgramIndex >= gcodeProgramCount && setupIndex == 1) {
     beep();
   } else if (!isOn && on && setupIndex < getLastSetupIndex()) {
-    if (mode == MODE_THREAD && setupIndex == 3) setConeRatio(0);
+    if (mode == LatheMode::THREAD && setupIndex == 3) setConeRatio(0);
     setupIndex++;
-  } else if (isOn && on && (mode == MODE_TURN || mode == MODE_FACE || mode == MODE_THREAD)) {
+  } else if (isOn && on && (mode == LatheMode::TURN || mode == LatheMode::FACE || mode == LatheMode::THREAD)) {
     opIndexAdvanceFlag = true;
   } else if (!on && (z.movingManually || x.movingManually)) {
-    setEmergencyStop(ESTOP_OFF_MANUAL_MOVE);
-  } else if (!isOn && on && mode == MODE_GCODE && gcodeProgramIndex >= gcodeProgramCount) {
+    setEmergencyStop(EstopCode::OFF_MANUAL_MOVE);
+  } else if (!isOn && on && mode == LatheMode::GCODE && gcodeProgramIndex >= gcodeProgramCount) {
     beep();
-  } else if (!isOn && on && mode == MODE_GCODE) {
+  } else if (!isOn && on && mode == LatheMode::GCODE) {
     String name = getCurrentGcodeProgramName();
     if (name.length() == 0) {
       beep();
@@ -1075,12 +1075,12 @@ static void buttonMoveStepPress() {
 }
 
 static void buttonMeasurePress() {
-  if (measure == MEASURE_METRIC) {
-    SettingsService::setMeasure(MEASURE_INCH);
-  } else if (measure == MEASURE_INCH) {
-    SettingsService::setMeasure(MEASURE_TPI);
+  if (measure == MeasureUnit::METRIC) {
+    SettingsService::setMeasure(static_cast<int>(MeasureUnit::INCH));
+  } else if (measure == MeasureUnit::INCH) {
+    SettingsService::setMeasure(static_cast<int>(MeasureUnit::TPI));
   } else {
-    SettingsService::setMeasure(MEASURE_METRIC);
+    SettingsService::setMeasure(static_cast<int>(MeasureUnit::METRIC));
   }
 }
 
@@ -1094,7 +1094,7 @@ static unsigned long heldRepeatLastStepTime = 0;
 
 static void processHeldRepeatKey() {
   if (heldRepeatKey == 0) return;
-  if (isOn || inNumpad || emergencyStop != ESTOP_NONE) {
+  if (isOn || inNumpad || emergencyStop != EstopCode::NONE) {
     heldRepeatKey = 0;
     return;
   }
@@ -1179,7 +1179,7 @@ void processKeypadEvent() {
     if (isPress) buttonOnOffPress(false);
   }
 
-  if (mode == MODE_GCODE && isOn) {
+  if (mode == LatheMode::GCODE && isOn) {
     // Not allowed to interfere other than turn off.
     if (isPress && keyCode != B_OFF) beep();
     return;
@@ -1205,12 +1205,12 @@ void processKeypadEvent() {
   // Setup wizard navigation.
   if (isPress && setupIndex == 2 && (keyCode == B_LEFT || keyCode == B_RIGHT)) {
     SettingsService::setAuxForward(!SettingsService::getAuxForward());
-  } else if (isPress && mode == MODE_GCODE && setupIndex == 1 && (keyCode == B_UP || keyCode == B_DOWN)) {
+  } else if (isPress && mode == LatheMode::GCODE && setupIndex == 1 && (keyCode == B_UP || keyCode == B_DOWN)) {
     if (gcodeProgramIndex > 0 && keyCode == B_UP) gcodeProgramIndex--;
     else if (gcodeProgramIndex == 0 && gcodeProgramCount > 0 && keyCode == B_UP) gcodeProgramIndex = gcodeProgramCount - 1;
     else if ((gcodeProgramIndex < gcodeProgramCount - 1) && keyCode == B_DOWN) gcodeProgramIndex++;
     else if (keyCode == B_DOWN) gcodeProgramIndex = 0;
-  } else if (isPress && mode == MODE_GCODE && setupIndex == 1 && keyCode == B_MINUS) {
+  } else if (isPress && mode == LatheMode::GCODE && setupIndex == 1 && keyCode == B_MINUS) {
     removeGcodeByName(getCurrentGcodeProgramName());
     return;
   } else if (isWebUiMoveAction(byte(keyCode))) {
@@ -1255,11 +1255,11 @@ void processKeypadEvent() {
   } else if (keyCode == B_STOPD) {
     buttonRightStopPress(&x);
   } else if (keyCode == B_MODE_ELLIPSE) {
-    setModeFromUi(MODE_ELLIPSE, eventFromNextion);
+    setModeFromUi(LatheMode::ELLIPSE, eventFromNextion);
   } else if (keyCode == B_MODE_GCODE) {
-    setModeFromUi(MODE_GCODE, eventFromNextion);
+    setModeFromUi(LatheMode::GCODE, eventFromNextion);
   } else if (keyCode == B_MODE_ASYNC) {
-    setModeFromUi(MODE_ASYNC, eventFromNextion);
+    setModeFromUi(LatheMode::ASYNC, eventFromNextion);
   } else if (keyCode == B_MULTISTART) {
     buttonMultistartPress();
   } else if (keyCode == B_DISPL) {
@@ -1281,42 +1281,42 @@ void processKeypadEvent() {
   } else if (keyCode == B_MEASURE) {
     buttonMeasurePress();
   } else if (keyCode == B_MODE_GEARS) {
-    setModeFromUi(MODE_NORMAL, eventFromNextion);
+    setModeFromUi(LatheMode::NORMAL, eventFromNextion);
   } else if (keyCode == B_MODE_TURN) {
-    setModeFromUi(MODE_TURN, eventFromNextion);
+    setModeFromUi(LatheMode::TURN, eventFromNextion);
   } else if (keyCode == B_MODE) {
     // Note for multi-page screens (e.g. stock Nextion or future LVGL mode selection screen):
     // Stock Nextion opened a mode selection screen (page 1) when tapping the mode button:
     //   if (eventFromNextion) toScreen("page 1");
     // For single-page screens like GeckoSub's screenset, tapping the Mode button cycles
     // through the modes sequentially directly on the main screen:
-    if (mode == MODE_NORMAL) setModeFromTask(MODE_XGEAR);
-    else if (mode == MODE_XGEAR) setModeFromTask(MODE_JOYSTICK);
-    else if (mode == MODE_JOYSTICK) setModeFromTask(MODE_TURN);
-    else if (mode == MODE_TURN) setModeFromTask(MODE_FACE);
-    else if (mode == MODE_FACE) setModeFromTask(MODE_CONE);
-    else if (mode == MODE_CONE) setModeFromTask(MODE_CUT);
-    else if (mode == MODE_CUT) setModeFromTask(MODE_SLOT);
-    else if (mode == MODE_SLOT) setModeFromTask(MODE_THREAD);
-    else if (mode == MODE_THREAD) setModeFromTask(MODE_ELLIPSE);
-    else if (mode == MODE_ELLIPSE) setModeFromTask(MODE_GCODE);
-    else if (mode == MODE_GCODE) setModeFromTask(MODE_ASYNC);
-    else if (mode == MODE_ASYNC) setModeFromTask(MODE_NORMAL);
-    else setModeFromTask(MODE_NORMAL);
+    if (mode == LatheMode::NORMAL) setModeFromTask(LatheMode::XGEAR);
+    else if (mode == LatheMode::XGEAR) setModeFromTask(LatheMode::JOYSTICK);
+    else if (mode == LatheMode::JOYSTICK) setModeFromTask(LatheMode::TURN);
+    else if (mode == LatheMode::TURN) setModeFromTask(LatheMode::FACE);
+    else if (mode == LatheMode::FACE) setModeFromTask(LatheMode::CONE);
+    else if (mode == LatheMode::CONE) setModeFromTask(LatheMode::CUT);
+    else if (mode == LatheMode::CUT) setModeFromTask(LatheMode::SLOT);
+    else if (mode == LatheMode::SLOT) setModeFromTask(LatheMode::THREAD);
+    else if (mode == LatheMode::THREAD) setModeFromTask(LatheMode::ELLIPSE);
+    else if (mode == LatheMode::ELLIPSE) setModeFromTask(LatheMode::GCODE);
+    else if (mode == LatheMode::GCODE) setModeFromTask(LatheMode::ASYNC);
+    else if (mode == LatheMode::ASYNC) setModeFromTask(LatheMode::NORMAL);
+    else setModeFromTask(LatheMode::NORMAL);
   } else if (keyCode == B_MODE_XGEAR) {
-    setModeFromUi(MODE_XGEAR, eventFromNextion);
+    setModeFromUi(LatheMode::XGEAR, eventFromNextion);
   } else if (keyCode == B_MODE_JOYSTICK) {
-    setModeFromUi(MODE_JOYSTICK, eventFromNextion);
+    setModeFromUi(LatheMode::JOYSTICK, eventFromNextion);
   } else if (keyCode == B_MODE_FACE) {
-    setModeFromUi(MODE_FACE, eventFromNextion);
+    setModeFromUi(LatheMode::FACE, eventFromNextion);
   } else if (keyCode == B_MODE_CONE) {
-    setModeFromUi(MODE_CONE, eventFromNextion);
+    setModeFromUi(LatheMode::CONE, eventFromNextion);
   } else if (keyCode == B_MODE_CUT) {
-    setModeFromUi(MODE_CUT, eventFromNextion);
+    setModeFromUi(LatheMode::CUT, eventFromNextion);
   } else if (keyCode == B_MODE_SLOT) {
-    setModeFromUi(MODE_SLOT, eventFromNextion);
+    setModeFromUi(LatheMode::SLOT, eventFromNextion);
   } else if (keyCode == B_MODE_THREAD) {
-    setModeFromUi(MODE_THREAD, eventFromNextion);
+    setModeFromUi(LatheMode::THREAD, eventFromNextion);
   } else if (keyCode == B_X_TOGGLE_DRO) {
     if (SettingsService::getActiveProfile().xAxis.hasDroScale) {
       SettingsService::setXDroMode(!SettingsService::isXDroMode());
@@ -1340,7 +1340,7 @@ void processKeypadEvent() {
 }
 
 void taskKeypad(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
+  while (emergencyStop == EstopCode::NONE) {
     processKeypadEvent();
     taskYIELD();
   }
@@ -1350,7 +1350,7 @@ void taskKeypad(void *param) {
 void taskJoystick(void *param) {
   JoystickAxisState* joystickZ = &joystickAxes[JOYSTICK_AXIS_Z];
   JoystickAxisState* joystickX = &joystickAxes[JOYSTICK_AXIS_X];
-  while (emergencyStop == ESTOP_NONE && joystickUsable()) {
+  while (emergencyStop == EstopCode::NONE && joystickUsable()) {
     bool rawButtonPressed = digitalRead(JOY_BUTTON) == (joystickConfig.invertButton ? HIGH : LOW);
     unsigned long now = micros();
     unsigned long elapsedUs = now - joystickSampleTimeUs;
@@ -1363,7 +1363,7 @@ void taskJoystick(void *param) {
     bool buttonPressed = updateJoystickButton(rawButtonPressed, moveNeutral);
     joystickRapidPressed = buttonPressed;
 
-    if (mode == MODE_JOYSTICK) {
+    if (mode == LatheMode::JOYSTICK) {
       bool manualJoystickMove = buttonPressed || !isOn;
       joystickLatheDirectionZ = joystickZ->direction;
       joystickLatheDirectionX = joystickX->direction;

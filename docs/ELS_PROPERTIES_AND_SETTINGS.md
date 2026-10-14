@@ -102,7 +102,49 @@ Properties across the NanoELS ecosystem are partitioned into four distinct tiers
 
 To eliminate dozens of loose `extern` globals and sprawling `DEFAULT_*` constants, configuration across all three persistent tiers is organized into cohesive C++ structs with **in-struct member initializers**. Default values are defined directly on struct fields, enabling instant, type-safe resets (e.g. `sysConfig.wifi = WifiConfig{};`).
 
-#### Unified & Extensible Encoder Hardware Abstraction
+#### 1. Tier 1: Unified Axis Hardware Architecture (`AxisHardwareConfig`)
+
+All physical axes (Carriage Z, Cross-Slide X, and future expansion axes) share the **exact same C++ struct** and **identical JSON schema block** under `target["axes"]["<axis>"]`. Axis-specific physical kinematics, actuator electrical properties, limits, and feedback are encapsulated together:
+
+```cpp
+// Actuator drive technology and electrical polarity
+struct DriveConfig {
+  DriveType driveType = DRIVE_GENERIC;   // Actuator technology enum (generic, stepper, servo)
+  int8_t    alarmPin = -1;               // Driver fault/alarm input GPIO (-1 if unused)
+  int8_t    inPositionPin = -1;          // Servo INP signal GPIO (-1 if unused)
+  int8_t    brakePin = -1;               // Electromagnetic brake output GPIO (-1 if unused)
+  bool      invertDir = false;           // Direction pin logic (tailstock vs headstock motor mounting)
+  bool      invertEnable = false;        // Enable pin logic (active-high vs active-low optocoupler)
+  bool      needsRest = false;           // True if driver drops power when axis is idle
+};
+
+// Complete physical axis hardware configuration (Universal across Z, X, etc.)
+struct AxisHardwareConfig {
+  bool                    hasMotor = true;
+  DriveConfig             drive;
+  float                   stepsPerMm = 400.0f;       // Steps per millimeter
+  float                   leadscrewPitchMm = 2.0f;   // Physical pitch of screw in mm
+  float                   backlashMm = 0.0f;         // Measured screw backlash
+  float                   maxVelocityMmMin = 1500.0f;// Rapid traverse ceiling
+  float                   maxAccelMmSec2 = 250.0f;   // Acceleration ramp limit
+  float                   startVelocityMmMin = 120.0f;// Starting/minimum motion velocity
+
+  // Feedback & Limits
+  bool                    hasDroScale = false;       // True if physical linear scale fitted
+  QuadratureEncoderConfig droScale;                  // Reusable quadrature encoder definition
+  bool                    hasMpg = false;            // Dedicated MPG fitted
+  LimitsConfig            limits;                    // Travel boundaries and switch pins
+
+  // Canonical deci-micron helpers
+  long leadscrewPitchDu() const { return (long)round(leadscrewPitchMm * 10000.0f); }
+  long backlashDu() const { return (long)round(backlashMm * 10000.0f); }
+};
+```
+
+*Elimination of Positional Sprawl:* Because all motor and kinematics properties live on `AxisHardwareConfig`, initialization in `main.cpp` collapses from 21 separate positional arguments down to `initAxis(&axis, name, config, pins)`.
+
+#### 2. Unified & Extensible Encoder Hardware Abstraction & DRO Decoupling
+
 A core insight of the NanoELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
 
 Rather than duplicating disparate encoder structs, all pulse sensors reuse the authoritative `QuadratureEncoderConfig` (defined in `src/motion/LatheProfile.h`):
@@ -117,7 +159,67 @@ struct QuadratureEncoderConfig {
   int8_t   indexPin;    // GPIO pin for Index channel (-1 if unassigned)
 };
 ```
-*Extensibility for Future Sensor Types:* Because encoder mechanics are decoupled from motion consumers, future encoder hardware (e.g. contactless magnetic angle sensors like AS5048 / MT6701 via SPI/I2C, or serial absolute encoders via CAN/Modbus) can be integrated by adding an encoder type driver without altering electronic leadscrew gearing, threading synchronization, or DRO display logic.
+
+- **Linear DRO Scales:** Optical glass scales and magnetic linear tape scales output standard TTL quadrature square waves. On ESP32-S3, they attach directly to the hardware pulse counter (PCNT) in quadrature edge-counting mode. The only unit distinction is counting *pulses per millimeter* (e.g. 200 pulses/mm for 5µm pitch; 1000 pulses/mm for 1µm pitch) instead of *pulses per revolution*.
+- **Retirement of `#define HAS_DRO_Z/X`:** Compile-time preprocessor macros are eliminated. DRO hardware availability is determined dynamically at runtime via `activeMachineProfile.zAxis.hasDroScale` and `activeMachineProfile.xAxis.hasDroScale`.
+- **Extensibility for Future Sensor Types:** Future encoder hardware (e.g. contactless magnetic angle sensors like AS5048 / MT6701 via SPI/I2C, or serial absolute encoders via CAN/Modbus) can be integrated by adding an encoder type driver without altering electronic leadscrew gearing, threading synchronization, or DRO display logic.
+
+#### 3. Strongly-Typed Domain Enums
+
+Untyped `#define` integers from the legacy C codebase are replaced with scoped, strongly-typed C++ enums for compiler validation, debugger introspection, and type-safe state machines:
+
+```cpp
+// Lathe Operating Modes
+enum class LatheMode : uint8_t {
+  NORMAL   = 0,
+  XGEAR    = 1,
+  ASYNC    = 2,
+  CONE     = 3,
+  TURN     = 4,
+  FACE     = 5,
+  CUT      = 6,
+  THREAD   = 7,
+  ELLIPSE  = 8,
+  GCODE    = 9,
+  JOYSTICK = 11,
+  SLOT     = 12
+};
+
+// Units of Measure
+enum class MeasureUnit : uint8_t {
+  METRIC = 0,
+  INCH   = 1,
+  TPI    = 2
+};
+
+// Emergency Stop (E-Stop) Reasons
+enum class EstopCode : uint8_t {
+  NONE             = 0,
+  POS              = 2,
+  MARK_ORIGIN      = 3,
+  ON_OFF           = 4,
+  OFF_MANUAL_MOVE  = 5
+};
+
+// Standard D-pad and Feed Step Tables (Deci-microns)
+constexpr long JOG_STEPS_METRIC[]   = { 10000, 1000, 100 };       // 1.0mm, 0.1mm, 0.01mm
+constexpr long JOG_STEPS_IMPERIAL[] = { 25400, 2540, 254 };       // 0.1", 0.01", 0.001"
+constexpr long FEED_STEPS_METRIC[]  = { 100, 500, 1000, 2000 };   // 0.01, 0.05, 0.10, 0.20 mm/rev
+constexpr long FEED_STEPS_IMPERIAL[]= { 25, 51, 127, 254 };       // 0.001", 0.002", 0.005", 0.010"/rev
+```
+
+#### 4. Nextion & Display UI Theme (`NextionTheme`)
+
+Legacy misnomers `COLOR_DRO_ON` and `COLOR_DRO_OFF` are relocated from hardware pinout sections into a structured UI color theme:
+
+```cpp
+struct NextionTheme {
+  uint16_t activeHighlight = 2016;  // RGB565 Green (0x07E0) for active modes & states
+  uint16_t inactiveDim     = 25388; // RGB565 Dim Gray (0x632C) for inactive modes
+};
+```
+
+#### 5. Tier 2 & Tier 3 Configuration Structs
 
 ```cpp
 // -----------------------------------------------------------------------------
@@ -167,6 +269,7 @@ struct ControllerConfig {
   MotionTimingConfig timing;      // Hardware pulse timing & delay parameters
   GCodeConfig gcode;              // G-Code execution limits & thresholds
   KeyboardConfig keyboard;
+  NextionTheme theme;             // Screen color themes
 };
 
 extern ControllerConfig sysConfig;
@@ -384,11 +487,11 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `BACKLASH_DU_X` | `machine.x.backlashDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.backlashDu()`. |
 | `MAX_TRAVEL_MM_Z` | `machine.dimensions.maxZTravelMm` | `mm` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.limits.travelMaxMm`. |
 | `MAX_TRAVEL_MM_X` | `machine.dimensions.maxXTravelMm` | `mm` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.limits.travelMaxMm`. |
-| `SPEED_START_Z/X` | `machine.z.speedStartMmSec` | `mm/s` | **MODERNIZE:** Convert raw step pulses to physical linear speed. |
-| `ACCELERATION_Z/X`| `machine.z.accelMmSec2` | `mm/s²` | **MODERNIZE:** Convert raw pulses/s² to physical acceleration. |
-| `SPEED_MANUAL_MOVE`| `machine.z.maxRapidMmMin` | `mm/min` | **MODERNIZE:** Convert raw pulses/s to industry-standard rapid feed. |
-| `INVERT_Z / INVERT_X` | `machine.z.invertDir` | `bool` | **KEEP:** Motor direction polarity flag. |
-| `INVERT_Z/X_ENABLE`| `machine.z.invertEnable` | `bool` | **KEEP:** Stepper driver active-high vs active-low enable flag. |
+| `SPEED_START_Z/X` | `machine.z.speedStartMmSec` | `mm/s` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.speedStartMmSec` and `Axis::speedStartSteps`. |
+| `ACCELERATION_Z/X`| `machine.z.accelMmSec2` | `mm/s²` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.accelMmSec2` and `Axis::accelerationSteps`. |
+| `SPEED_MANUAL_MOVE`| `machine.z.maxRapidMmMin` | `mm/min` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.maxRapidMmMin` and `Axis::speedManualSteps`. |
+| `INVERT_Z / INVERT_X` | `machine.z.invertDir` | `bool` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.invertDir` and `Axis::invertDir`. |
+| `INVERT_Z/X_ENABLE`| `machine.z.invertEnable` | `bool` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.invertEnable` and `Axis::invertEnable`. |
 | *(None - New)* | `machine.dimensions.bedLengthMm` | `mm` | **NEW:** Lathe bed length for digital twin & clearance bounds. |
 | *(None - New)* | `machine.dimensions.chuckDiameterMm` | `mm` | **NEW:** Outside chuck diameter for safety envelope. |
 | *(None - New)* | `machine.dimensions.spindleBoreDiameterMm` | `mm` | **NEW:** Spindle through-bore diameter. |
@@ -429,6 +532,13 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `xScaleIncrementalOffset`<br>`zScaleIncrementalOffset` | Unused legacy DRO incremental offsets in `Config.h` | **DISCARD:** Dead globals from legacy DRO offset tracking. Fully retired. |
 | `RPM_BULK` | Redundant spindle pulse count alias in `Config.h` | **DISCARD:** Redundant shadow alias, consolidated into `ENCODER_STEPS_INT`. |
 | `isDiameterMode`<br>`isAbsoluteMode`<br>`zDisplayModeDRO`<br>`xDisplayModeDRO`<br>`spindleDisplayMode`<br>`spindleValColorGreen` | Presentation & Nextion UI flags in `Config.h` | **DISCARD AS GLOBALS:** Removed loose globals from `Config.h`/`Config.cpp`. Presentation state is now cleanly managed by `SettingsService`, `MachineProperties`, and `DisplaySnapshot`. |
+| `MODE_*` (e.g. `MODE_NORMAL`, `MODE_THREAD`, etc.) | Untyped mode macro defines in `Config.h` | **DISCARD MACROS:** Replaced entirely with scoped enum `enum class LatheMode : uint8_t` across all subsystems. |
+| `MEASURE_*` (`MEASURE_METRIC`, `MEASURE_INCH`, `MEASURE_TPI`) | Untyped unit macro defines in `Config.h` | **DISCARD MACROS:** Replaced entirely with scoped enum `enum class MeasureUnit : uint8_t`. |
+| `ESTOP_*` (`ESTOP_NONE`, `ESTOP_POS`, etc.) | Untyped safety trip macro defines in `Config.h` | **DISCARD MACROS:** Replaced entirely with scoped enum `enum class EstopCode : uint8_t`. |
+| `COLOR_DRO_ON`<br>`COLOR_DRO_OFF` | Display RGB565 color defines in `Config.h` | **DISCARD MACROS:** Encapsulated into typed theme struct `sysConfig.theme.activeHighlight` / `sysConfig.theme.inactiveDim`. |
+| `WIFI_*` (`WIFI_SSID`, `WIFI_PASSWORD`, etc.) | WiFi credential macro defines in `Config.h` | **DISCARD MACROS:** Encapsulated into typed configuration struct `sysConfig.wifi.*`. |
+| `PULSE_PER_REVOLUTION_Z`<br>`PULSE_PER_REVOLUTION_X` | MPG handwheel resolution macros in `Config.h` | **DISCARD MACROS:** Encapsulated into typed MPG configuration `sysConfig.mpg.*Handwheel.ppr`. |
+| `SPEED_START_Z/X`<br>`ACCELERATION_Z/X`<br>`SPEED_MANUAL_MOVE_Z/X`<br>`INVERT_Z/X`<br>`INVERT_Z/X_ENABLE`<br>`NEEDS_REST_Z/X` | Loose kinematic & driver polarity globals in `Config.h` / `Config.cpp` | **DISCARD AS GLOBALS:** Fully removed from `Config.h`/`Config.cpp`. Kinematic math and polarity are sourced directly from `activeMachineProfile` and `Axis::z` / `Axis::x`. |
 
 ---
 

@@ -21,7 +21,7 @@ volatile bool pulseCountersReady = false;
 
 SemaphoreHandle_t motionMutex = NULL;
 hw_timer_t *async_timer = NULL;
-int emergencyStop = 0;
+EstopCode emergencyStop = EstopCode::NONE;
 
 bool isOn = false;
 bool nextIsOn = false;
@@ -35,11 +35,11 @@ int starts = 1;
 int nextStarts = 1;
 bool nextStartsFlag = false;
 
-volatile int mode = -1;
-int nextMode = 0;
+volatile LatheMode mode = LatheMode::NORMAL;
+LatheMode nextMode = LatheMode::NORMAL;
 bool nextModeFlag = false;
 
-int measure = MEASURE_METRIC;
+MeasureUnit measure = MeasureUnit::METRIC;
 
 long moveStep = 0;
 
@@ -69,6 +69,24 @@ int shownRpm = 0;
 unsigned long shownRpmTime = 0;
 
 bool beepFlag = false;
+
+void initAxis(Axis* a, char name, bool active, bool rotational,
+              const AxisHardwareConfig& config, float pulsePerRevolution,
+              const AxisPins& pins) {
+  long motorSteps = config.motorSteps();
+  long screwPitchDu = config.leadscrewPitchDu();
+  long speedStart = config.speedStartSteps();
+  long speedManualMove = config.speedManualMoveSteps();
+  long acceleration = config.accelerationSteps();
+  long maxTravelMm = (long)round(config.limits.travelMaxMm);
+  long backlashDu = config.backlashDu();
+
+  initAxis(a, name, active, rotational, (float)motorSteps, (float)screwPitchDu, pulsePerRevolution,
+           speedStart, speedManualMove, acceleration,
+           config.drive.invertDir, config.drive.invertEnable, config.drive.needsRest,
+           maxTravelMm, backlashDu,
+           pins.ena, pins.dir, pins.step, pins.pulseA, pins.pulseB, pins.pulseCounter);
+}
 
 void initAxis(Axis* a, char name, bool active, bool rotational, float motorSteps, float screwPitch, float pulsePerRevolution, long speedStart, long speedManualMove,
     long acceleration, bool invertStepper, bool invertEnable, bool needsRest, long maxTravelMm, long backlashDu, int ena, int dir, int step, int pulseA, int pulseB, PulseCounter pulseCounter) {
@@ -247,7 +265,7 @@ void markOrigin() {
 
 bool markOriginOrEmergencyStop() {
   if (xSemaphoreTake(motionMutex, 100) != pdTRUE) {
-    setEmergencyStop(ESTOP_MARK_ORIGIN);
+    setEmergencyStop(EstopCode::MARK_ORIGIN);
     return false;
   } else {
     markOrigin();
@@ -264,7 +282,7 @@ void setAsyncTimerEnable(bool value) {
   }
 }
 
-void setEmergencyStop(int kind) {
+void setEmergencyStop(EstopCode kind) {
   emergencyStop = kind;
   setAsyncTimerEnable(false);
   xSemaphoreTake(z.mutex, 10);
@@ -280,7 +298,7 @@ void setIsOnFromLoop(bool on) {
   if (isOn && on) {
     return;
   }
-  bool joystickMode = mode == MODE_JOYSTICK;
+  bool joystickMode = mode == LatheMode::JOYSTICK;
   if (!on) {
     isOn = false;
     setupIndex = 0;
@@ -294,7 +312,7 @@ void setIsOnFromLoop(bool on) {
     markOrigin();
   }
   if (on) {
-    if (mode == MODE_ASYNC) {
+    if (mode == LatheMode::ASYNC) {
       updateAsyncTimerSettings();
     }
     isOn = true;
@@ -424,7 +442,7 @@ long getManualMoveTargetPos(Axis* a, int sign) {
 }
 
 long getMoveStepForAxis(Axis* a) {
-  return (a->rotational && measure != MEASURE_METRIC) ? (moveStep / 25.4) : moveStep;
+  return (a->rotational && measure != MeasureUnit::METRIC) ? (moveStep / 25.4) : moveStep;
 }
 
 long getStepMaxSpeed(Axis* a) {
@@ -454,7 +472,7 @@ void waitForManualMoveStep(Axis* a, bool pulseMove) {
 
 int waitForNextHandwheelPulseDelta(Axis* a) {
   unsigned long start = millis();
-  while (emergencyStop == ESTOP_NONE && millis() - start < HANDWHEEL_PULSE_WAIT_MS) {
+  while (emergencyStop == EstopCode::NONE && millis() - start < HANDWHEEL_PULSE_WAIT_MS) {
     int pulseDelta = getAndResetPulses(a);
     if (pulseDelta == 0) {
       DELAY(1);
@@ -469,7 +487,7 @@ int waitForNextJoystickPulseDelta(Axis* a, int sign) {
   if (!(isJoystickManualMove(a) && getJoystickManualDirection(a) == sign)) return 0;
   unsigned long start = millis();
   unsigned long timeoutMs = min(100, max(10, joystickConfig.sampleIntervalMs * 3));
-  while (emergencyStop == ESTOP_NONE && (isJoystickManualMove(a) && getJoystickManualDirection(a) == sign) && millis() - start < timeoutMs) {
+  while (emergencyStop == EstopCode::NONE && (isJoystickManualMove(a) && getJoystickManualDirection(a) == sign) && millis() - start < timeoutMs) {
     int pulseDelta = getAndResetPulses(a);
     if (pulseDelta == 0) {
       DELAY(1);
@@ -512,16 +530,12 @@ int getAndResetPulses(Axis* a) {
   if (!pulseCountersReady) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
-#if HAS_DRO_Z
-  if (a == &z) {
+  if (a == &z && activeMachineProfile.zAxis.hasDroScale) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
-#endif
-#if HAS_DRO_X
-  if (a == &x) {
+  if (a == &x && activeMachineProfile.xAxis.hasDroScale) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
-#endif
   if (a->pulseCounter < 0 || a->pulseCounter >= PULSE_COUNTER_COUNT) {
     return (isOn && manualMovesIgnoredWhenOn()) ? 0 : joystickDelta;
   }
@@ -645,12 +659,12 @@ void taskAttachInterrupts(void *param) {
   DEBUG_PRINTLN("taskAttachInterrupts started on Core 0");
   Serial.flush();
   startPulseCounter(PULSE_COUNTER_SPINDLE, ENC_A, ENC_B);
-#if !HAS_DRO_Z
-  startPulseCounter(PULSE_COUNTER_Z, Z_PULSE_A, Z_PULSE_B);
-#endif
-#if !HAS_DRO_X
-  startPulseCounter(PULSE_COUNTER_X, X_PULSE_A, X_PULSE_B);
-#endif
+  if (!activeMachineProfile.zAxis.hasDroScale) {
+    startPulseCounter(PULSE_COUNTER_Z, Z_PULSE_A, Z_PULSE_B);
+  }
+  if (!activeMachineProfile.xAxis.hasDroScale) {
+    startPulseCounter(PULSE_COUNTER_X, X_PULSE_A, X_PULSE_B);
+  }
   DEBUG_PRINTLN("taskAttachInterrupts completed successfully");
   Serial.flush();
   pulseCountersReady = true;
@@ -658,7 +672,7 @@ void taskAttachInterrupts(void *param) {
 }
 
 void taskMoveZ(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
+  while (emergencyStop == EstopCode::NONE) {
     int pulseDelta = getAndResetPulses(&z);
     bool left = buttonLeftPressed;
     bool right = buttonRightPressed;
@@ -721,7 +735,7 @@ void taskMoveZ(void *param) {
 
         buttonActive = left ? buttonLeftPressed : buttonRightPressed;
         if (!pulseMove && buttonActive && !continuousAllowed) {
-          while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
             DELAY(5);
             buttonActive = left ? buttonLeftPressed : buttonRightPressed;
           }
@@ -732,9 +746,9 @@ void taskMoveZ(void *param) {
       } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
       z.continuous = false;
       waitForPendingPos0(&z);
-      if (isOn && mode == MODE_CONE) {
+      if (isOn && mode == LatheMode::CONE) {
         markOriginOrEmergencyStop();
-      } else if (isOn && mode == MODE_ASYNC) {
+      } else if (isOn && mode == LatheMode::ASYNC) {
         updateAsyncTimerSettings();
       }
     }
@@ -749,7 +763,7 @@ void taskMoveZ(void *param) {
 }
 
 void taskMoveX(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
+  while (emergencyStop == EstopCode::NONE) {
     int pulseDelta = getAndResetPulses(&x);
     bool up = buttonUpPressed || pulseDelta > 0;
     bool down = buttonDownPressed || pulseDelta < 0;
@@ -816,7 +830,7 @@ void taskMoveX(void *param) {
 
         buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
         if (!pulseMove && buttonActive && !continuousAllowed) {
-          while (emergencyStop == ESTOP_NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
+          while (emergencyStop == EstopCode::NONE && buttonActive && (millis() - buttonPressStart < (unsigned long)JOG_HOLD_DELAY_MS)) {
             DELAY(5);
             buttonActive = positiveMove ? buttonUpPressed : buttonDownPressed;
           }
@@ -827,7 +841,7 @@ void taskMoveX(void *param) {
       } while (delta != 0 && (pulseDelta != 0 || (pulseMove ? false : (continuousAllowed && buttonActive))));
       x.continuous = false;
       waitForPendingPos0(&x);
-      if (isOn && mode == MODE_CONE) {
+      if (isOn && mode == LatheMode::CONE) {
         markOriginOrEmergencyStop();
       }
     }

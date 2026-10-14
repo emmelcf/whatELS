@@ -44,7 +44,7 @@ static bool timerAttached = false;
 
 // Axis helpers
 Axis* getPitchAxis() {
-  return (mode == MODE_FACE || mode == MODE_XGEAR) ? &x : &z;
+  return (mode == LatheMode::FACE || mode == LatheMode::XGEAR) ? &x : &z;
 }
 
 Axis* getAsyncAxis() {
@@ -52,37 +52,37 @@ Axis* getAsyncAxis() {
 }
 
 bool needZStops() {
-  return mode == MODE_TURN || mode == MODE_FACE || mode == MODE_THREAD || mode == MODE_ELLIPSE || mode == MODE_SLOT;
+  return mode == LatheMode::TURN || mode == LatheMode::FACE || mode == LatheMode::THREAD || mode == LatheMode::ELLIPSE || mode == LatheMode::SLOT;
 }
 
 bool isPassMode() {
-  return mode == MODE_TURN || mode == MODE_FACE || mode == MODE_CUT || mode == MODE_THREAD || mode == MODE_ELLIPSE || mode == MODE_SLOT;
+  return mode == LatheMode::TURN || mode == LatheMode::FACE || mode == LatheMode::CUT || mode == LatheMode::THREAD || mode == LatheMode::ELLIPSE || mode == LatheMode::SLOT;
 }
 
 bool isGearboxMode() {
-  return mode == MODE_NORMAL || mode == MODE_XGEAR;
+  return mode == LatheMode::NORMAL || mode == LatheMode::XGEAR;
 }
 
 int getLastSetupIndex() {
-  if (mode == MODE_CONE || mode == MODE_GCODE) return 2;
-  if (mode == MODE_THREAD) return 4;
-  if (mode == MODE_TURN || mode == MODE_FACE || mode == MODE_CUT || mode == MODE_ELLIPSE || mode == MODE_SLOT) return 3;
+  if (mode == LatheMode::CONE || mode == LatheMode::GCODE) return 2;
+  if (mode == LatheMode::THREAD) return 4;
+  if (mode == LatheMode::TURN || mode == LatheMode::FACE || mode == LatheMode::CUT || mode == LatheMode::ELLIPSE || mode == LatheMode::SLOT) return 3;
   return 0;
 }
 
 long getPassModeZStart() {
-  if (mode == MODE_TURN || mode == MODE_THREAD) return dupr > 0 ? z.rightStop : z.leftStop;
-  if (mode == MODE_SLOT) return z.rightStop;
-  if (mode == MODE_FACE) return auxForward ? z.rightStop : z.leftStop;
-  if (mode == MODE_ELLIPSE) return dupr > 0 ? z.leftStop : z.rightStop;
+  if (mode == LatheMode::TURN || mode == LatheMode::THREAD) return dupr > 0 ? z.rightStop : z.leftStop;
+  if (mode == LatheMode::SLOT) return z.rightStop;
+  if (mode == LatheMode::FACE) return auxForward ? z.rightStop : z.leftStop;
+  if (mode == LatheMode::ELLIPSE) return dupr > 0 ? z.leftStop : z.rightStop;
   return z.pos;
 }
 
 long getPassModeXStart() {
-  if (mode == MODE_TURN || mode == MODE_THREAD) return auxForward ? x.rightStop : x.leftStop;
-  if (mode == MODE_SLOT) return auxForward ? x.rightStop : x.leftStop;
-  if (mode == MODE_FACE || mode == MODE_CUT) return dupr > 0 ? x.rightStop : x.leftStop;
-  if (mode == MODE_ELLIPSE) return x.rightStop;
+  if (mode == LatheMode::TURN || mode == LatheMode::THREAD) return auxForward ? x.rightStop : x.leftStop;
+  if (mode == LatheMode::SLOT) return auxForward ? x.rightStop : x.leftStop;
+  if (mode == LatheMode::FACE || mode == LatheMode::CUT) return dupr > 0 ? x.rightStop : x.leftStop;
+  if (mode == LatheMode::ELLIPSE) return x.rightStop;
   return x.pos;
 }
 
@@ -92,7 +92,7 @@ void resetGcodeState() {
   gcodeAbsolutePositioning = true;
   gcodeInBrace = false;
   gcodeInSemicolon = false;
-  SettingsService::setMeasure(MEASURE_METRIC);
+  SettingsService::setMeasure(static_cast<int>(MeasureUnit::METRIC));
 }
 
 static unsigned int getTimerLimit() {
@@ -110,7 +110,7 @@ void updateAsyncTimerSettings() {
 
 void IRAM_ATTR onAsyncTimer() {
   Axis* a = getAsyncAxis();
-  if (!isOn || a->movingManually || mode != MODE_ASYNC) {
+  if (!isOn || a->movingManually || mode != LatheMode::ASYNC) {
     return;
   } else if (dupr > 0 && a->pos < a->leftStop) {
     if (a->pos <= a->motorPos) {
@@ -162,9 +162,9 @@ void applyConeRatio() {
 
 long normalizePitch(long pitch) {
   float scale = 1.0f;
-  if (measure == MEASURE_METRIC) {
+  if (measure == MeasureUnit::METRIC) {
     scale = 100.0f;
-  } else if (measure == MEASURE_INCH) {
+  } else if (measure == MeasureUnit::INCH) {
     scale = 25.4f;
   }
   return round(pitch / scale) * scale;
@@ -183,10 +183,10 @@ void applyDupr() {
   if (nextDupr == dupr) {
     return;
   }
-  bool signReverse = isOn && (isGearboxMode() || mode == MODE_CONE) && dupr != 0 && nextDupr == -dupr;
-  bool joystickSamePitchMagnitude = mode == MODE_JOYSTICK && abs(nextDupr) == abs(dupr);
+  bool signReverse = isOn && (isGearboxMode() || mode == LatheMode::CONE) && dupr != 0 && nextDupr == -dupr;
+  bool joystickSamePitchMagnitude = mode == LatheMode::JOYSTICK && abs(nextDupr) == abs(dupr);
   dupr = nextDupr;
-  if (mode == MODE_SLOT) {
+  if (mode == LatheMode::SLOT) {
     return;
   } else if (joystickSamePitchMagnitude) {
     return;
@@ -194,11 +194,11 @@ void applyDupr() {
     applyDuprSignReverse();
   } else {
     markOrigin();
-    if (mode == MODE_JOYSTICK) {
+    if (mode == LatheMode::JOYSTICK) {
       resetJoystickLatheFeed();
     }
   }
-  if (mode == MODE_ASYNC) {
+  if (mode == LatheMode::ASYNC) {
     updateAsyncTimerSettings();
   }
 }
@@ -222,7 +222,7 @@ void setRightStop(Axis* a, long value) {
 }
 
 static void leaveStop(Axis* a, long oldStop) {
-  if (mode == MODE_CONE) {
+  if (mode == LatheMode::CONE) {
     markOrigin();
   } else if (isGearboxMode() && a == getPitchAxis() && a->pos == oldStop) {
     spindlePosSync = spindleModulo(spindlePos - spindleFromPos(a, a->pos));
@@ -241,30 +241,30 @@ void applyRightStop(Axis* a) {
   leaveStop(a, oldStop);
 }
 
-void setModeFromTask(int value) {
-  SettingsService::requestMode(value);
+void setModeFromTask(LatheMode value) {
+  SettingsService::requestMode(static_cast<int>(value));
 }
 
-void setModeFromLoop(int value) {
+void setModeFromLoop(LatheMode value) {
   if (mode == value) {
     return;
   }
   if (isOn) {
     setIsOnFromLoop(false);
   }
-  if (mode == MODE_THREAD) {
+  if (mode == LatheMode::THREAD) {
     setStarts(1);
-  } else if (mode == MODE_ASYNC) {
+  } else if (mode == LatheMode::ASYNC) {
     setAsyncTimerEnable(false);
-  } else if (mode == MODE_JOYSTICK) {
+  } else if (mode == LatheMode::JOYSTICK) {
     resetJoystickLatheFeed();
   }
   mode = value;
   setupIndex = 0;
-  if (mode == MODE_JOYSTICK) {
+  if (mode == LatheMode::JOYSTICK) {
     resetJoystickLatheFeed();
   }
-  if (mode == MODE_ASYNC) {
+  if (mode == LatheMode::ASYNC) {
     if (!timerAttached) {
       timerAttached = true;
       timerAttachInterrupt(async_timer, &onAsyncTimer);
@@ -274,7 +274,7 @@ void setModeFromLoop(int value) {
   }
 }
 
-void setModeFromUi(int modeToSet, bool eventFromNextion) {
+void setModeFromUi(LatheMode modeToSet, bool eventFromNextion) {
   setModeFromTask(modeToSet);
   if (eventFromNextion && lastNextionPageId == 1) toScreen("page 0");
 }
@@ -457,7 +457,7 @@ void modeTurn(Axis* main, Axis* aux) {
       opIndex += starts;
     }
     float fraction = (turnPasses - ceil(opIndex / float(starts))) / (float)turnPasses;
-    if (mode == MODE_THREAD) fraction = fraction * fraction;
+    if (mode == LatheMode::THREAD) fraction = fraction * fraction;
     long auxPos = auxEndStop - (auxEndStop - auxStartStop) * fraction;
     if (opSubIndex == 0) {
       stepToFinal(aux, auxPos);
@@ -476,7 +476,7 @@ void modeTurn(Axis* main, Axis* aux) {
     if (opSubIndex == 2) {
       long mainTargetPos = posFromSpindle(main, spindlePosAvg, true);
       long auxTargetPos = auxPos;
-      if (mode == MODE_THREAD && coneRatio != 0) {
+      if (mode == LatheMode::THREAD && coneRatio != 0) {
         float coneEffectRatio = -coneRatio / 2.0 / main->motorSteps * aux->motorSteps / aux->screwPitch * main->screwPitch * (auxForward ? 1.0 : -1.0);
         auxTargetPos = auxPos + round(mainTargetPos * coneEffectRatio);
       }
@@ -491,7 +491,7 @@ void modeTurn(Axis* main, Axis* aux) {
       }
     }
     if (opSubIndex == 3) {
-      long auxTargetPos = (mode == MODE_THREAD ? auxStartStop : auxPos) + auxSafeDistance;
+      long auxTargetPos = (mode == LatheMode::THREAD ? auxStartStop : auxPos) + auxSafeDistance;
       stepToFinal(aux, auxTargetPos);
       if (aux->pos == auxTargetPos) {
         opSubIndex = 4;
@@ -760,7 +760,7 @@ void modeEllipse(Axis* main, Axis* aux) {
 }
 
 void discountFullSpindleTurns() {
-  if (dupr != 0 && (isGearboxMode() || mode == MODE_CONE)) {
+  if (dupr != 0 && (isGearboxMode() || mode == LatheMode::CONE)) {
     Axis* a = getPitchAxis();
     if (stepperIsRunning(a)) return;
     int spindlePosDiff = 0;
@@ -860,7 +860,7 @@ static int getInt(const String& command, char letter) {
 }
 
 static float gcodeUnitScaleDu() {
-  return measure == MEASURE_METRIC ? 10000.0 : 254000.0;
+  return measure == MeasureUnit::METRIC ? 10000.0 : 254000.0;
 }
 
 static long gcodeUnitToDu(float value) {
@@ -1063,7 +1063,7 @@ static bool handleGcode(const String& command) {
   } else if (op == 32) {
     return G32(command);
   } else if (op == 20 || op == 21) {
-    SettingsService::setMeasure(op == 20 ? MEASURE_INCH : MEASURE_METRIC);
+    SettingsService::setMeasure(op == 20 ? static_cast<int>(MeasureUnit::INCH) : static_cast<int>(MeasureUnit::METRIC));
   } else if (op == 90 || op == 91) {
     gcodeAbsolutePositioning = op == 90;
   } else if (op == 94) {
@@ -1123,8 +1123,8 @@ bool handleGcodeCommand(String command) {
 }
 
 void taskGcode(void *param) {
-  while (emergencyStop == ESTOP_NONE) {
-    if (mode != MODE_GCODE) {
+  while (emergencyStop == EstopCode::NONE) {
+    if (mode != LatheMode::GCODE) {
       gcodeInitialized = false;
     } else if (!gcodeInitialized) {
       gcodeInitialized = true;
@@ -1132,7 +1132,7 @@ void taskGcode(void *param) {
     }
     char receivedChar = '\0';
     bool isWebSocket = false;
-    if (mode == MODE_GCODE && isOn && gcodeProgramCharIndex < gcodeProgram.length()) {
+    if (mode == LatheMode::GCODE && isOn && gcodeProgramCharIndex < gcodeProgram.length()) {
       receivedChar = gcodeProgram.charAt(gcodeProgramCharIndex);
       gcodeProgramCharIndex++;
     } else if (bufferAvailable(&inBuffer)) {
@@ -1236,7 +1236,7 @@ void taskGcode(void *param) {
         keycodeCommand = "";
       }
     }
-    if (mode == MODE_GCODE && isOn && gcodeProgramCharIndex > 0 && gcodeProgramCharIndex == gcodeProgram.length()) {
+    if (mode == LatheMode::GCODE && isOn && gcodeProgramCharIndex > 0 && gcodeProgramCharIndex == gcodeProgram.length()) {
       setIsOnFromTask(false);
     }
     taskYIELD();
@@ -1313,6 +1313,10 @@ bool clearAxisLimit(Axis* a, bool isLeftOrUp) {
   return SettingsService::clearAxisLimit(axisId, dir);
 }
 
+bool setOperatingMode(LatheMode newMode) {
+  return SettingsService::requestMode(static_cast<int>(newMode));
+}
+
 bool setOperatingMode(int newMode) {
   return SettingsService::requestMode(newMode);
 }
@@ -1329,7 +1333,7 @@ long getFeedStepDu() {
 }
 
 void cycleFeedStep() {
-  if (measure == MEASURE_METRIC) {
+  if (measure == MeasureUnit::METRIC) {
     if (feedStepDu == FEED_STEP_1) feedStepDu = FEED_STEP_2;
     else if (feedStepDu == FEED_STEP_2) feedStepDu = FEED_STEP_3;
     else if (feedStepDu == FEED_STEP_3) feedStepDu = FEED_STEP_4;

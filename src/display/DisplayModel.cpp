@@ -66,7 +66,7 @@ String printDeciMicrons(long deciMicrons, int precisionPointsMax) {
   if (deciMicrons == 0) {
     return "0";
   }
-  bool imperial = measure != MEASURE_METRIC;
+  bool imperial = measure != MeasureUnit::METRIC;
   long v = imperial ? round(deciMicrons / 25.4) : deciMicrons;
   int points = 0;
   if (v == 0 && precisionPointsMax >= 5) {
@@ -96,10 +96,10 @@ String printDegrees(long degrees10000) {
 }
 
 String printDupr(long value) {
-  if (measure == MEASURE_INCH) {
+  if (measure == MeasureUnit::INCH) {
     return String(value / 254000.0, PITCH_INCH_DECIMAL_PLACES);
   }
-  if (measure != MEASURE_TPI || value == 0) return printDeciMicrons(value, 5);
+  if (measure != MeasureUnit::TPI || value == 0) return printDeciMicrons(value, 5);
 
   float tpi = 254000.0 / value;
   String result = "";
@@ -119,18 +119,18 @@ String printDupr(long value) {
 }
 
 String printMode() {
-  if (mode == MODE_NORMAL) return "GEAR";
-  if (mode == MODE_XGEAR) return "XGEAR";
-  if (mode == MODE_ASYNC) return "ASYNC";
-  if (mode == MODE_CONE) return "CONE";
-  if (mode == MODE_TURN) return "TURN";
-  if (mode == MODE_FACE) return "FACE";
-  if (mode == MODE_CUT) return "CUT";
-  if (mode == MODE_SLOT) return "SLOT";
-  if (mode == MODE_THREAD) return "THREAD";
-  if (mode == MODE_ELLIPSE) return "ELLIP";
-  if (mode == MODE_GCODE) return "GCODE";
-  if (mode == MODE_JOYSTICK) return "JOY";
+  if (mode == LatheMode::NORMAL) return "GEAR";
+  if (mode == LatheMode::XGEAR) return "XGEAR";
+  if (mode == LatheMode::ASYNC) return "ASYNC";
+  if (mode == LatheMode::CONE) return "CONE";
+  if (mode == LatheMode::TURN) return "TURN";
+  if (mode == LatheMode::FACE) return "FACE";
+  if (mode == LatheMode::CUT) return "CUT";
+  if (mode == LatheMode::SLOT) return "SLOT";
+  if (mode == LatheMode::THREAD) return "THREAD";
+  if (mode == LatheMode::ELLIPSE) return "ELLIP";
+  if (mode == LatheMode::GCODE) return "GCODE";
+  if (mode == LatheMode::JOYSTICK) return "JOY";
   return "";
 }
 
@@ -180,7 +180,7 @@ String getDisplayModeText() {
 }
 
 String getDisplayMeasureText() {
-  return measure == MEASURE_INCH ? "IN" : measure == MEASURE_METRIC ? "MM" : "TPI";
+  return measure == MeasureUnit::INCH ? "IN" : measure == MeasureUnit::METRIC ? "MM" : "TPI";
 }
 
 // --- Spindle Formatted Values ---
@@ -235,11 +235,11 @@ String getDisplaySpindleValue(int rpm) {
 // --- Contextual Message Helper ---
 String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int pitchStatusDirection) {
   String result = "";
-  if (mode != MODE_JOYSTICK && pitchStatusDirection > 0) {
+  if (mode != LatheMode::JOYSTICK && pitchStatusDirection > 0) {
     result = "Pitch +";
-  } else if (mode != MODE_JOYSTICK && pitchStatusDirection < 0) {
+  } else if (mode != LatheMode::JOYSTICK && pitchStatusDirection < 0) {
     result = "Pitch -";
-  } else if (mode == MODE_GCODE) {
+  } else if (mode == LatheMode::GCODE) {
     if (setupIndex == 1 && gcodeProgramCount == 0) {
       result = "No stored programs";
     } else if (setupIndex == 1) {
@@ -269,14 +269,14 @@ String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int 
       if (turnPasses == 1) result += " pass?";
       else result += " passes?";
     } else if (!isOn && setupIndex == 2) {
-      if (mode == MODE_FACE) {
+      if (mode == LatheMode::FACE) {
         result = auxForward ? "Right to left?" : "Left to right?";
-      } else if (mode == MODE_CUT) {
+      } else if (mode == LatheMode::CUT) {
         result = dupr >= 0 ? "Pitch > 0, external" : "Pitch < 0, internal";
       } else {
         result = auxForward ? "External?" : "Internal?";
       }
-    } else if (mode == MODE_THREAD && !isOn && setupIndex == 3) {
+    } else if (mode == LatheMode::THREAD && !isOn && setupIndex == 3) {
       result = "Cone ratio " + String(numpadToConeRatio(), 5) + "?";
     } else if (!isOn && setupIndex == getLastSetupIndex()) {
       long zOffset = getPassModeZStart() - z.pos;
@@ -293,18 +293,18 @@ String buildDisplayMessage(int rpm, long numpadResult, bool spindleStopped, int 
         result += formatPosition(stepsToDu(&x, xOffset) / 10000.0f, 2);
       }
       result += "?";
-    } else if (mode == MODE_SLOT && isOn && dupr == 0 && !inNumpad) {
+    } else if (mode == LatheMode::SLOT && isOn && dupr == 0 && !inNumpad) {
       result = "Set pitch";
     } else if (isOn && numpadResult == 0) {
       result = "Pass " + String(opIndex) + " of " + String(max(opIndex, long(turnPasses * starts)));
     }
-  } else if (mode == MODE_CONE) {
+  } else if (mode == LatheMode::CONE) {
     if (numpadResult != 0 && setupIndex == 1) result = "Use ratio " + String(numpadToConeRatio(), 5) + "?";
     else if (!isOn && setupIndex == 1) result = "Use ratio " + printNoTrailing0(coneRatio) + "?";
     else if (!isOn && setupIndex == 2) result = auxForward ? "External?" : "Internal?";
     else if (!isOn && setupIndex == 3) result = "Go?";
     else if (isOn && numpadResult == 0) result = "Cone ratio " + printNoTrailing0(coneRatio);
-  } else if (mode == MODE_JOYSTICK && !inNumpad) {
+  } else if (mode == LatheMode::JOYSTICK && !inNumpad) {
     String directionText = joystickLatheDirectionText(joystickLatheDirectionZ, joystickLatheDirectionX);
     if (!joystickConfig.enabled) result = "Joystick disabled";
     else if (!joystickAvailable) result = joystickStartupWarning.length() > 0 ? joystickStartupWarning : "Joystick not connected";

@@ -139,7 +139,7 @@ Below is the record of major architectural decisions, the problems they solved, 
 ### ADR 12: Volatile Kinematics on Boot & Observable Persistent Properties (`PersistentSetting<T>`)
 * **Context:** Open-loop steppers lose holding torque when power is cut; handwheels can be nudged and carriages moved while unpowered. Preserving stale coordinates, spindle angles, or soft travel limits across boots created extreme collision hazards (e.g. carriage crashing into chuck because soft limits moved relative to workpiece). Furthermore, procedural settings writes lacked dirty-checking, burning flash endurance when UI clients re-sent unchanged settings.
 * **Decision:**
-  1. Boot sequence initializes all axis coordinates to `0.000`, spindle phase/sync to `0`, travel limits to unbound (`LONG_MAX`/`LONG_MIN`), mode to safe manual `MODE_NORMAL`, and feed transmission disengaged (`isOn = false`).
+  1. Boot sequence initializes all axis coordinates to `0.000`, spindle phase/sync to `0`, travel limits to unbound (`LONG_MAX`/`LONG_MIN`), mode to safe manual `LatheMode::NORMAL`, and feed transmission disengaged (`isOn = false`).
   2. Implemented `PersistentSetting<T>` observable property template for operator preferences (Tiers 3 & 4): reads once on boot into RAM, strictly suppresses redundant flash writes (`if (value == newVal) return;`), and dispatches an `onChanged` event hook.
 * **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
 
@@ -150,5 +150,14 @@ Below is the record of major architectural decisions, the problems they solved, 
   2. Purged dead globals (`xScaleIncrementalOffset`, `zScaleIncrementalOffset`, `RPM_BULK`).
   3. Migrated all presentation state to `SettingsService` and `DisplaySnapshot`, removing raw externs and eliminating direct global mutation hazards from physical key handlers in `Input.cpp`.
   4. Encapsulated all 15 loose joystick parameters into a typed domain struct `struct JoystickConfig joystickConfig` in `src/input/Input.h`.
+* **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
+
+### ADR 14: Strong Typing, Scoped Enums, and Macro Alias Elimination
+* **Context:** Legacy firmware heavily relied on untyped `#define` macros for operational modes (`MODE_NORMAL`, `MODE_THREAD`, etc.), measurement units (`MEASURE_METRIC`, `MEASURE_INCH`, `MEASURE_TPI`), emergency stop triggers (`ESTOP_NONE`, `ESTOP_POS`, etc.), loose kinematic constants (`SPEED_START_Z/X`, `ACCELERATION_Z/X`, etc.), and scattered peripheral definitions (`WIFI_*`, `COLOR_DRO_ON/OFF`, `PULSE_PER_REVOLUTION_*`). This bypassed C++ type checking and obscured architectural data ownership.
+* **Decision:**
+  1. Converted all operational modes to scoped enum `enum class LatheMode : uint8_t` and refactored all call sites across `Motion`, `Axis`, `Input`, `Display`, and `SettingsService`.
+  2. Converted measurement units to `enum class MeasureUnit : uint8_t` and E-stop trip codes to `enum class EstopCode : uint8_t`.
+  3. Relocated Nextion UI colors to `sysConfig.theme` (`NextionTheme`), WiFi parameters to `sysConfig.wifi` (`WifiConfig`), and handwheel PPR to `sysConfig.mpg` (`MpgConfig`).
+  4. Permanently eliminated legacy `#define` aliases and loose kinematic globals (`SPEED_START_Z/X`, `ACCELERATION_Z/X`, `SPEED_MANUAL_MOVE_Z/X`, `INVERT_Z/X`, `INVERT_Z/X_ENABLE`, `NEEDS_REST_Z/X`), directing all motion calculations strictly through `activeMachineProfile` and `Axis::z` / `Axis::x`.
 * **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
 

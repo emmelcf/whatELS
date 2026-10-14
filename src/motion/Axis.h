@@ -93,7 +93,7 @@ extern volatile bool pulseCountersReady;
 // Core motion and machine state
 extern SemaphoreHandle_t motionMutex;
 extern hw_timer_t *async_timer;
-extern int emergencyStop;
+extern EstopCode emergencyStop;
 
 extern bool isOn;
 extern bool nextIsOn;
@@ -107,11 +107,11 @@ extern int starts;
 extern int nextStarts;
 extern bool nextStartsFlag;
 
-extern volatile int mode;
-extern int nextMode;
+extern volatile LatheMode mode;
+extern LatheMode nextMode;
 extern bool nextModeFlag;
 
-extern int measure;
+extern MeasureUnit measure;
 
 extern long moveStep;
 
@@ -142,7 +142,20 @@ extern unsigned long shownRpmTime;
 
 extern bool beepFlag;
 
+struct AxisPins {
+  int ena;
+  int dir;
+  int step;
+  int pulseA;
+  int pulseB;
+  PulseCounter pulseCounter;
+};
+
 // Axis Functions
+void initAxis(Axis* a, char name, bool active, bool rotational,
+              const AxisHardwareConfig& config, float pulsePerRevolution,
+              const AxisPins& pins);
+
 void initAxis(Axis* a, char name, bool active, bool rotational, float motorSteps, float screwPitch, float pulsePerRevolution, long speedStart, long speedManualMove,
     long acceleration, bool invertStepper, bool invertEnable, bool needsRest, long maxTravelMm, long backlashDu, int ena, int dir, int step, int pulseA, int pulseB, PulseCounter pulseCounter);
 
@@ -164,7 +177,7 @@ void markOrigin();
 bool markOriginOrEmergencyStop();
 void zeroSpindlePos();
 
-void setEmergencyStop(int kind);
+void setEmergencyStop(EstopCode kind);
 void setIsOnFromTask(bool on);
 void setIsOnFromLoop(bool on);
 

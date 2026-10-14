@@ -12,12 +12,13 @@ LatheConfiguration getDefaultProfile() {
 
   // Z Axis (Carriage Leadscrew Motorized)
   p.zAxis.hasMotor = true;
-  p.zAxis.drive = { DRIVE_GENERIC, -1, -1, -1 };
+  p.zAxis.drive = { DRIVE_GENERIC, -1, -1, -1, false, false, false };
   p.zAxis.stepsPerMm = 400.0f; // 800 motor steps / 2.0mm pitch
   p.zAxis.leadscrewPitchMm = 2.0f;
   p.zAxis.backlashMm = 0.0f;
   p.zAxis.maxVelocityMmMin = 1500.0f;
   p.zAxis.maxAccelMmSec2 = 250.0f;
+  p.zAxis.startVelocityMmMin = 120.0f;
   p.zAxis.hasDroScale = false;
   p.zAxis.droScale = { 200, 9, 12, false, false, -1 };
   p.zAxis.hasMpg = false;
@@ -25,12 +26,13 @@ LatheConfiguration getDefaultProfile() {
 
   // X Axis (Cross-Slide Leadscrew Motorized)
   p.xAxis.hasMotor = true;
-  p.xAxis.drive = { DRIVE_GENERIC, -1, -1, -1 };
+  p.xAxis.drive = { DRIVE_GENERIC, -1, -1, -1, false, false, false };
   p.xAxis.stepsPerMm = 400.0f; // 800 motor steps / 2.0mm pitch
   p.xAxis.leadscrewPitchMm = 2.0f;
   p.xAxis.backlashMm = 0.0f;
   p.xAxis.maxVelocityMmMin = 800.0f;
   p.xAxis.maxAccelMmSec2 = 200.0f;
+  p.xAxis.startVelocityMmMin = 120.0f;
   p.xAxis.hasDroScale = false;
   p.xAxis.droScale = { 200, 40, 39, false, false, -1 };
   p.xAxis.hasMpg = false;
@@ -112,7 +114,11 @@ static bool parseProfileObject(JsonObject target, const char* slug, LatheConfigu
     outProfile->zAxis.backlashMm = zAxis["kinematics"]["backlash_mm"] | outProfile->zAxis.backlashMm;
     outProfile->zAxis.maxVelocityMmMin = zAxis["kinematics"]["max_velocity_mm_min"] | outProfile->zAxis.maxVelocityMmMin;
     outProfile->zAxis.maxAccelMmSec2 = zAxis["kinematics"]["max_accel_mm_sec2"] | outProfile->zAxis.maxAccelMmSec2;
+    outProfile->zAxis.startVelocityMmMin = zAxis["kinematics"]["start_velocity_mm_min"] | outProfile->zAxis.startVelocityMmMin;
     outProfile->zAxis.stepsPerMm = zAxis["drive"]["steps_per_mm"] | outProfile->zAxis.stepsPerMm;
+    outProfile->zAxis.drive.invertDir = zAxis["drive"]["invert_dir"] | outProfile->zAxis.drive.invertDir;
+    outProfile->zAxis.drive.invertEnable = zAxis["drive"]["invert_enable"] | outProfile->zAxis.drive.invertEnable;
+    outProfile->zAxis.drive.needsRest = zAxis["drive"]["needs_rest"] | outProfile->zAxis.drive.needsRest;
     outProfile->zAxis.hasDroScale = zAxis["feedback"]["has_dro"] | false;
   }
 
@@ -123,7 +129,11 @@ static bool parseProfileObject(JsonObject target, const char* slug, LatheConfigu
     outProfile->xAxis.backlashMm = xAxis["kinematics"]["backlash_mm"] | outProfile->xAxis.backlashMm;
     outProfile->xAxis.maxVelocityMmMin = xAxis["kinematics"]["max_velocity_mm_min"] | outProfile->xAxis.maxVelocityMmMin;
     outProfile->xAxis.maxAccelMmSec2 = xAxis["kinematics"]["max_accel_mm_sec2"] | outProfile->xAxis.maxAccelMmSec2;
+    outProfile->xAxis.startVelocityMmMin = xAxis["kinematics"]["start_velocity_mm_min"] | outProfile->xAxis.startVelocityMmMin;
     outProfile->xAxis.stepsPerMm = xAxis["drive"]["steps_per_mm"] | outProfile->xAxis.stepsPerMm;
+    outProfile->xAxis.drive.invertDir = xAxis["drive"]["invert_dir"] | outProfile->xAxis.drive.invertDir;
+    outProfile->xAxis.drive.invertEnable = xAxis["drive"]["invert_enable"] | outProfile->xAxis.drive.invertEnable;
+    outProfile->xAxis.drive.needsRest = xAxis["drive"]["needs_rest"] | outProfile->xAxis.drive.needsRest;
     outProfile->xAxis.hasDroScale = xAxis["feedback"]["has_dro"] | false;
   }
 
@@ -432,7 +442,11 @@ bool saveProfileToLittleFS(const LatheConfiguration& profile) {
   zA["kinematics"]["backlash_mm"] = profile.zAxis.backlashMm;
   zA["kinematics"]["max_velocity_mm_min"] = profile.zAxis.maxVelocityMmMin;
   zA["kinematics"]["max_accel_mm_sec2"] = profile.zAxis.maxAccelMmSec2;
+  zA["kinematics"]["start_velocity_mm_min"] = profile.zAxis.startVelocityMmMin;
   zA["drive"]["steps_per_mm"] = profile.zAxis.stepsPerMm;
+  zA["drive"]["invert_dir"] = profile.zAxis.drive.invertDir;
+  zA["drive"]["invert_enable"] = profile.zAxis.drive.invertEnable;
+  zA["drive"]["needs_rest"] = profile.zAxis.drive.needsRest;
   zA["feedback"]["has_dro"] = profile.zAxis.hasDroScale;
 
   JsonObject xA = target["axes"]["x"].to<JsonObject>();
@@ -440,7 +454,11 @@ bool saveProfileToLittleFS(const LatheConfiguration& profile) {
   xA["kinematics"]["backlash_mm"] = profile.xAxis.backlashMm;
   xA["kinematics"]["max_velocity_mm_min"] = profile.xAxis.maxVelocityMmMin;
   xA["kinematics"]["max_accel_mm_sec2"] = profile.xAxis.maxAccelMmSec2;
+  xA["kinematics"]["start_velocity_mm_min"] = profile.xAxis.startVelocityMmMin;
   xA["drive"]["steps_per_mm"] = profile.xAxis.stepsPerMm;
+  xA["drive"]["invert_dir"] = profile.xAxis.drive.invertDir;
+  xA["drive"]["invert_enable"] = profile.xAxis.drive.invertEnable;
+  xA["drive"]["needs_rest"] = profile.xAxis.drive.needsRest;
   xA["feedback"]["has_dro"] = profile.xAxis.hasDroScale;
 
   File file = LittleFS.open("/presets/profiles.json", "w");

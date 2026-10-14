@@ -100,21 +100,24 @@ enum DriveType : uint8_t {
  * @brief Drive electrical & signal interlocks.
  */
 struct DriveConfig {
-  DriveType driveType;           // Actuator technology enum
-  int8_t    alarmPin;            // Driver fault/alarm input GPIO (-1 if unused)
-  int8_t    inPositionPin;       // Servo INP signal GPIO (-1 if unused)
-  int8_t    brakePin;            // Electromagnetic brake output GPIO (-1 if unused)
+  DriveType driveType = DRIVE_GENERIC;   // Actuator technology enum
+  int8_t    alarmPin = -1;               // Driver fault/alarm input GPIO (-1 if unused)
+  int8_t    inPositionPin = -1;          // Servo INP signal GPIO (-1 if unused)
+  int8_t    brakePin = -1;               // Electromagnetic brake output GPIO (-1 if unused)
+  bool      invertDir = false;           // Direction pin logic (motor mounting orientation)
+  bool      invertEnable = false;        // Enable pin logic (active-high vs active-low optocoupler)
+  bool      needsRest = false;           // True if driver drops power when axis is idle
 };
 
 /**
  * @brief Travel limits and boundary switches.
  */
 struct LimitsConfig {
-  float  travelMinMm;            // Extreme physical limit toward chuck/center
-  float  travelMaxMm;            // Extreme physical limit toward bed end/retract
-  int8_t minSwitchPin;           // Minimum limit microswitch GPIO (-1 if unused)
-  int8_t maxSwitchPin;           // Maximum limit microswitch GPIO (-1 if unused)
-  bool   stallGuardEnabled;      // True if sensorless stall detection is active
+  float  travelMinMm = 0.0f;             // Extreme physical limit toward chuck/center
+  float  travelMaxMm = 350.0f;           // Extreme physical limit toward bed end/retract
+  int8_t minSwitchPin = -1;              // Minimum limit microswitch GPIO (-1 if unused)
+  int8_t maxSwitchPin = -1;              // Maximum limit microswitch GPIO (-1 if unused)
+  bool   stallGuardEnabled = false;      // True if sensorless stall detection is active
 };
 
 /**
@@ -122,19 +125,20 @@ struct LimitsConfig {
  */
 struct AxisHardwareConfig {
   // Motor Configuration
-  bool                    hasMotor;          // True if axis is driven by stepper/servo
-  DriveConfig             drive;             // Drive type and interlock pins
-  float                   stepsPerMm;        // Motor driver pulses per millimeter of travel
-  float                   leadscrewPitchMm;  // Physical screw pitch in mm
-  float                   backlashMm;        // Measured screw backlash for compensation
-  float                   maxVelocityMmMin;  // Rapid traverse ceiling (mm/min)
-  float                   maxAccelMmSec2;    // Acceleration ramp limit (mm/sec^2)
+  bool                    hasMotor = true;         // True if axis is driven by stepper/servo
+  DriveConfig             drive;                   // Drive type and interlock pins
+  float                   stepsPerMm = 400.0f;     // Motor driver pulses per millimeter of travel
+  float                   leadscrewPitchMm = 2.0f; // Physical screw pitch in mm
+  float                   backlashMm = 0.0f;       // Measured screw backlash for compensation
+  float                   maxVelocityMmMin = 1500.0f;// Rapid traverse ceiling (mm/min)
+  float                   maxAccelMmSec2 = 250.0f; // Acceleration ramp limit (mm/sec^2)
+  float                   startVelocityMmMin = 120.0f;// Starting/minimum motion velocity (mm/min)
 
   // Feedback & Limits
-  bool                    hasDroScale;       // True if physical glass/magnetic scale fitted
-  QuadratureEncoderConfig droScale;          // Reusable encoder config for linear scale
-  bool                    hasMpg;            // True if dedicated MPG handwheel fitted
-  LimitsConfig            limits;            // Travel boundaries and switch pins
+  bool                    hasDroScale = false;     // True if physical glass/magnetic scale fitted
+  QuadratureEncoderConfig droScale = { 200, -1, -1, false, false, -1 }; // Reusable encoder config for linear scale
+  bool                    hasMpg = false;          // True if dedicated MPG handwheel fitted
+  LimitsConfig            limits;                  // Travel boundaries and switch pins
 
   // Canonical deci-micron helpers
   long leadscrewPitchDu() const {
@@ -142,6 +146,18 @@ struct AxisHardwareConfig {
   }
   long backlashDu() const {
     return (long)round(backlashMm * 10000.0f);
+  }
+  long motorSteps() const {
+    return (long)round(stepsPerMm * leadscrewPitchMm);
+  }
+  long speedStartSteps() const {
+    return (long)round((startVelocityMmMin / 60.0f) * stepsPerMm);
+  }
+  long speedManualMoveSteps() const {
+    return (long)round((maxVelocityMmMin / 60.0f) * stepsPerMm);
+  }
+  long accelerationSteps() const {
+    return (long)round(maxAccelMmSec2 * stepsPerMm);
   }
 };
 
