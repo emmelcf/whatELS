@@ -20,7 +20,7 @@ While this 1:1 screen-to-mode mapping worked for a dedicated serial LCD, it brea
 3. **Multi-Client Race Conditions & Fragility:** Multiple heterogeneous client terminals (e.g., a physical machine-mounted Nextion LCD, a dedicated 10" tablet Web DRO, and a remote desktop monitor) can connect simultaneously. Without a structured mode contract and capability negotiation, activating a mode on one client risks corrupting state, generating contradictory commands, or crashing axes.
 
 ### 1.2 Core Architectural Principles
-To solve these challenges, this architecture establishes five governing tenets:
+To solve these challenges, this architecture establishes eight governing tenets:
 
 1. **Controller Authority & Autonomous Orchestration:**  
    Motion execution, pass sequencing, and limit stops are strictly executed and orchestrated on the **controller MCU**. The client never streams real-time micro-coordinates over a network; it commands parametric cycles. If a client disconnects or lags, machine safety and execution determinism remain unaffected.
@@ -32,6 +32,13 @@ To solve these challenges, this architecture establishes five governing tenets:
    Clients register which modes they support. Simple clients can include/exclude modes, and the controller filters available operations accordingly.
 5. **Universal Safety Invariant:**  
    Even if a client does not understand an active mode running on the machine, **Emergency Stop and Feed Hold authority is universally active on all clients at all times**.
+6. **Mode-Agnostic Extensibility (Open-Closed Principle):**  
+   The core motion loop and supervisory engine interact exclusively through abstract interfaces (`IELSMode`, `ModeRegistry`). Adding new modes in the future (e.g. Spheres, Broaching, Knurling, Thread Repair) is strictly additive—zero modifications required to `main.cpp`, command routers, or supervisory logic.
+7. **In-Motion Safety Contract & Running Lockout:**  
+   A mode is not just a kinematic calculator; it is an authoritative runtime contract. Each mode explicitly declares what live operations (`LivePermissionFlags`) are permitted during active motion (e.g., live chip-load feed trim vs. strictly forbidden axis swaps or pitch rewrites), and the controller acts as an impenetrable gatekeeper rejecting invalid commands.
+8. **Core-First Architecture:**  
+   The ESP32 controller firmware motion engine is the single authoritative source of truth. UI clients (Web DRO, Nextion) consume canonical modes and permissions; legacy display idiosyncrasies are isolated to client adapters without compromising the core.
+
 
 ---
 
@@ -138,16 +145,36 @@ enum class ModeCategory : uint8_t {
     UTILITY           // Setup, calibration, test
 };
 
-// Runtime capability flags advertised to clients
-enum ModeCapabilityFlags : uint32_t {
-    CAP_NONE            = 0,
-    CAP_CAN_PAUSE       = 1 << 0,  // Supports Feed Hold without losing position/sync
-    CAP_CAN_RESUME      = 1 << 1,  // Supports resuming after Feed Hold
-    CAP_FEED_OVERRIDE   = 1 << 2,  // Supports runtime feedrate/pitch multiplier adjustment
-    CAP_RPM_OVERRIDE    = 1 << 3,  // Supports VFD spindle speed adjustment
-    CAP_MANUAL_JOG      = 1 << 4,  // Allows operator manual jog during pause
-    CAP_SPINDLE_SYNC    = 1 << 5,  // Requires active spindle rotation to advance
-    CAP_MULTI_PASS      = 1 << 6   // Exposes pass count / progress telemetry
+// Runtime permission flags governing what live interventions are permitted during active motion
+enum LivePermissionFlags : uint32_t {
+    PERM_NONE               = 0,
+    PERM_FEED_HOLD          = 1 << 0,  // Supports Feed Hold (pause with sync and position retained)
+    PERM_LIVE_FEED_TRIM     = 1 << 1,  // Supports runtime feedrate/pitch nudge ([−] / [+]) under chip load
+    PERM_LIVE_STEP_CYCLE    = 1 << 2,  // Supports cycling feed step increment (e.g. 0.01 -> 0.05mm) while running
+    PERM_LIVE_RPM_OVERRIDE  = 1 << 3,  // Supports VFD / spindle RPM adjustment while running
+    PERM_PAUSE_MANUAL_JOG   = 1 << 4,  // Allows operator manual jog during pause (e.g., to inspect tool or clear chips)
+    PERM_LIVE_LIMIT_TRIM    = 1 << 5,  // Supports dynamic limit adjustment during operation
+    PERM_MULTI_PASS_TELEMETRY = 1 << 6 // Exposes pass count / cut depth progress telemetry
+};
+
+// Canonical Controller Command Identifiers for In-Motion Safety Validation
+enum class CommandId : uint8_t {
+    CMD_STOP = 0,             // Normal deceleration stop (universally permitted)
+    CMD_ESTOP,                // Immediate emergency stop (universally permitted)
+    CMD_RUN,                  // Engage / start motion
+    CMD_FEED_HOLD,            // Temporary pause / feed hold
+    CMD_FEED_RESUME,          // Resume from feed hold
+    CMD_FEED_NUDGE,           // Live feed trim ([−] / [+])
+    CMD_STEP_CYCLE,           // Cycle feed step size
+    CMD_RPM_OVERRIDE,         // VFD spindle override
+    CMD_SET_PARAM,            // Generic parameter write
+    CMD_SET_AXIS,             // Switch active motion axis
+    CMD_SET_SYNC,             // Switch between spindle sync and async velocity
+    CMD_SET_DIR,              // Flip motion travel direction
+    CMD_SET_PITCH,            // Major pitch / lead re-specification
+    CMD_SET_LIMIT,            // Adjust axis limit stops
+    CMD_ZERO_AXIS,            // Zero out DRO coordinate
+    CMD_SWITCH_MODE           // Change operating mode
 };
 
 // Stop actions
@@ -163,14 +190,15 @@ enum class StopType : uint8_t {
 
 ### 3.2 Parameter Manifest & Introspection Schema
 
-To enable clients to validate inputs and optionally generate dynamic UIs without hardcoding mode details, each mode defines a **Parameter Descriptor**:
+To enable clients to validate inputs and dynamically discover and configure modes without hardcoded firmware schemas, each mode defines a **Parameter Descriptor**:
 
 ```cpp
 enum class ParamType : uint8_t {
     INT32 = 0,
     FLOAT,
     BOOL,
-    ENUM
+    ENUM,
+    STRING
 };
 
 // Visibility and substitution policy for modes in the UI
@@ -181,7 +209,7 @@ enum class VisibilityPolicy : uint8_t {
 };
 
 struct ParamDescriptor {
-    const char* key;        // Machine key, e.g. "pitch_mm", "taper_ratio"
+    const char* key;        // Machine key, e.g. "axis", "pitch_mm", "taper_ratio"
     const char* label;      // Human readable label
     ParamType type;
     const char* unit;       // "mm", "mm/rev", "deg", "TPI", "steps"
@@ -189,16 +217,17 @@ struct ParamDescriptor {
     float minVal;
     float maxVal;
     float stepVal;
+    const char* options;    // Comma-separated enum options, e.g. "Z,X,ZX"
 };
 
 struct ModeManifest {
-    ModeId            id;                     // Unique Mode ID (e.g. MODE_THREAD_AUTO)
-    ModeId            baseModeId;             // Ancestor / Base Mode ID (e.g. MODE_THREAD_MANUAL or NONE)
-    const char*       slug;                   // Machine slug ("thread_auto")
-    const char*       name;                   // Display name ("Auto Threading")
-    const char*       family;                 // Family group ("THREADING")
+    ModeId            id;                     // Unique Mode ID (e.g. ModeIds::GEARBOX)
+    ModeId            baseModeId;             // Ancestor / Base Mode ID (or ModeIds::NONE)
+    const char*       slug;                   // Machine slug ("gearbox", "thread_auto")
+    const char*       name;                   // Display name ("Electronic Gearbox")
+    const char*       family;                 // Family group ("GEARBOX", "THREADING")
     ModeCategory      category;               // PRIMITIVE, COMPOSITE, or UTILITY
-    uint32_t          runtimeCapabilities;    // Runtime flags: CAN_PAUSE, FEED_OVERRIDE, etc.
+    uint32_t          livePermissions;        // Bitmask of LivePermissionFlags allowed when running
     uint32_t          requiredHardwareCaps;   // Bitmask of required LatheCapabilityFlags
     VisibilityPolicy  visibility;             // How it surfaces relative to base mode
     uint8_t           paramCount;
@@ -209,45 +238,38 @@ struct ModeManifest {
 #### JSON Representation of Mode Manifest (Over WebSocket):
 ```json
 {
-  "id": 53,
-  "base_mode_id": 52,
-  "slug": "thread_auto",
-  "name": "Automated Threading",
-  "family": "THREADING",
+  "id": 50,
+  "base_mode_id": 0,
+  "slug": "gearbox",
+  "name": "Electronic Gearbox",
+  "family": "GEARBOX",
   "category": "COMPOSITE",
-  "runtime_capabilities": ["CAN_PAUSE", "FEED_HOLD", "SPINDLE_SYNC"],
-  "required_hardware": ["SPINDLE_ENCODER", "MOTOR_Z", "MOTOR_X"],
-  "visibility": "PREFER_EXTENDED",
+  "live_permissions": ["FEED_HOLD", "LIVE_FEED_TRIM", "LIVE_STEP_CYCLE", "LIVE_RPM_OVERRIDE"],
+  "required_hardware": ["SPINDLE_ENCODER", "MOTOR_Z"],
+  "visibility": "ALWAYS_VISIBLE",
   "params": [
     {
-      "key": "pitch",
-      "label": "Thread Pitch",
-      "type": "float",
-      "unit": "mm",
-      "default": 1.5,
-      "min": 0.25,
-      "max": 6.0,
-      "step": 0.05
+      "key": "axis",
+      "label": "Active Feed Axis",
+      "type": "enum",
+      "options": "Z,X,ZX",
+      "default": "Z"
     },
     {
-      "key": "total_depth",
-      "label": "Thread Depth",
+      "key": "sync",
+      "label": "Spindle Synchronized",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "pitch_mm",
+      "label": "Feedrate / Pitch",
       "type": "float",
       "unit": "mm",
-      "default": 0.92,
-      "min": 0.05,
-      "max": 5.0,
+      "default": 0.10,
+      "min": 0.001,
+      "max": 10.0,
       "step": 0.01
-    },
-    {
-      "key": "passes",
-      "label": "Total Passes",
-      "type": "int",
-      "unit": "passes",
-      "default": 6,
-      "min": 1,
-      "max": 30,
-      "step": 1
     }
   ]
 }
@@ -257,9 +279,11 @@ struct ModeManifest {
 
 ### 3.3 The Core Interface: `IELSMode`
 
-Every mode in the controller implements this abstract interface:
+Every mode in the controller implements this abstract, mode-agnostic interface. Adding a new mode in the future requires implementing this interface and registering the instance with `ModeRegistry`—**zero alterations to the core motion loop, state machine, or command dispatcher**:
 
 ```cpp
+class TelemetryWriter; // Forward declaration for streaming telemetry buffer
+
 class IELSMode {
 public:
     virtual ~IELSMode() = default;
@@ -267,12 +291,15 @@ public:
     // --- 1. Introspection & Metadata ---
     virtual const ModeManifest& getManifest() const = 0;
     virtual ModeId getId() const = 0;
+    virtual const char* getSlug() const = 0;
     virtual const char* getName() const = 0;
     virtual ModeCategory getCategory() const = 0;
-    virtual uint32_t getCapabilities() const = 0;
+    virtual uint32_t getRequiredHardware() const = 0;
 
-    // --- 2. Configuration & Parameter Validation ---
-    virtual bool configure(const void* paramBuffer, size_t size) = 0;
+    // --- 2. Mode-Agnostic Parameter Interface ---
+    virtual bool setParam(const char* key, float value) = 0;
+    virtual bool setParam(const char* key, const char* strValue) = 0;
+    virtual bool getParam(const char* key, float& outVal) const = 0;
     virtual bool validateParams(char* errBuf, size_t errBufLen) const = 0;
 
     // --- 3. Lifecycle Hooks ---
@@ -283,33 +310,79 @@ public:
     virtual void onExit() = 0;
 
     // --- 4. Execution State Machine Control ---
-    // Start running the cycle / engagement
     virtual bool start() = 0;
-    
-    // Stop or pause execution
     virtual void stop(StopType stopType) = 0;
-    
-    // Resume from paused feed hold
     virtual bool resume() = 0;
 
-    // Current execution state
     virtual ModeState getState() const = 0;
     virtual bool isRunning() const = 0;
 
-    // --- 5. Real-Time Kinematic Hooks (Executed in ISR / High-Priority Task) ---
+    // --- 5. In-Motion Safety Contract & Gatekeeper ---
+    virtual uint32_t getLivePermissions() const = 0;
+    
+    // Evaluates whether an incoming command is permitted in the current execution state
+    virtual bool canExecuteCommand(CommandId cmd, ModeState state) const {
+        // Stop and E-Stop are inviolable and universally permitted in all states
+        if (cmd == CommandId::CMD_STOP || cmd == CommandId::CMD_ESTOP) return true;
+        
+        if (state == ModeState::RUNNING) {
+            if (cmd == CommandId::CMD_FEED_HOLD) return (getLivePermissions() & PERM_FEED_HOLD) != 0;
+            if (cmd == CommandId::CMD_FEED_NUDGE) return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
+            if (cmd == CommandId::CMD_STEP_CYCLE) return (getLivePermissions() & PERM_LIVE_STEP_CYCLE) != 0;
+            if (cmd == CommandId::CMD_RPM_OVERRIDE) return (getLivePermissions() & PERM_LIVE_RPM_OVERRIDE) != 0;
+            // Any structural change (axis, direction, mode, pitch rewrite) is locked
+            return false;
+        }
+
+        if (state == ModeState::PAUSED) {
+            if (cmd == CommandId::CMD_FEED_RESUME) return true;
+            if (cmd == CommandId::CMD_FEED_NUDGE) return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
+            // Manual MPG jog only allowed if mode specifically permits pause-jogging
+            return false;
+        }
+
+        return true; // All configuration commands permitted when IDLE/STOPPED
+    }
+
+    // --- 6. Real-Time Kinematic Hooks (Executed in ISR / High-Priority Motion Task) ---
     // Called on spindle encoder quadrature edges
     virtual void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) = 0;
 
-    // Called on high-frequency timer tick for velocity / asynchronous feeds
-    virtual void onTimerTick(uint32_t deltaMicros) = 0;
+    // High-frequency task tick (velocity async, timer step math)
+    virtual void onMotionTick() = 0;
 
     // Called when an axis trips a soft-stop or hardware limit
     virtual void onLimitReached(uint8_t axisId, bool isHighLimit) = 0;
 
-    // --- 6. Telemetry & Progress (10 Hz - 50 Hz poll) ---
-    virtual void getTelemetry(void* telemetryBuffer, size_t bufferSize) const = 0;
+    // --- 7. Telemetry & Progress Serialization ---
+    virtual void writeTelemetry(TelemetryWriter& writer) const = 0;
 };
 ```
+
+---
+
+### 3.4 In-Motion Safety Contract & Operational Permissions Matrix
+
+In a lathe controller, safety depends on strictly governing what an operator or client is allowed to modify while axes are cutting under chip load. The following matrix governs command validity:
+
+| Command / Operation | Electronic Gearbox (`GEARBOX`) | Threading Cycle (`THREADING`) | Turning Cycle (`TURNING`) | Facing Cycle (`FACING`) | Cutoff / Parting (`CUTOFF`) | Slotting / Keyway (`SLOTTING`) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Emergency Stop (`CMD_ESTOP`)** | ✅ **Universal** | ✅ **Universal** | ✅ **Universal** | ✅ **Universal** | ✅ **Universal** | ✅ **Universal** |
+| **Normal Stop (`CMD_STOP`)** | ✅ Permitted | ✅ Permitted (Abort) | ✅ Permitted (Abort) | ✅ Permitted (Abort) | ✅ Permitted (Abort) | ✅ Permitted (Abort) |
+| **Feed Hold / Pause (`CMD_FEED_HOLD`)** | ✅ Permitted | ✅ Permitted (End of pass) | ✅ Permitted | ✅ Permitted | ✅ Permitted | ✅ Permitted |
+| **Feed Rate Nudge (`CMD_FEED_NUDGE`)** | ✅ **Permitted** (Live chip trim) | ❌ **Locked** (Destroys pitch) | ✅ **Permitted** (Roughing feed) | ✅ **Permitted** (Roughing feed) | ✅ **Permitted** (Plunge trim) | ❌ **Locked** (Stroke rate fixed) |
+| **Cycle Feed Step (`CMD_STEP_CYCLE`)** | ✅ **Permitted** | ❌ **Locked** | ✅ **Permitted** | ✅ **Permitted** | ✅ **Permitted** | ❌ **Locked** |
+| **Spindle RPM Override (`CMD_RPM_OVERRIDE`)**| ✅ Permitted | ⚠️ Permitted (Within sync) | ✅ Permitted | ✅ Permitted | ✅ Permitted | ❌ Locked (Spindle locked) |
+| **Manual Jog in Pause (`CMD_PAUSE_JOG`)** | ❌ **Locked** | ❌ **Locked** (Loses phase) | ✅ **Permitted** (Clear chips) | ✅ **Permitted** (Clear chips) | ❌ **Locked** | ❌ **Locked** |
+| **Switch Active Axis (`CMD_SET_AXIS`)** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+| **Toggle Sync Type (`CMD_SET_SYNC`)** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+| **Reverse Feed Direction (`CMD_SET_DIR`)**| ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+| **Rewrite Pitch / Limits (`CMD_SET_PITCH`)**| ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+| **Switch Operating Mode (`CMD_SWITCH_MODE`)**| ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+| **Zero Coordinate (`CMD_ZERO_AXIS`)** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** | ❌ **Locked** |
+
+> **Safety Invariant:** All command attempts marked as **Locked** are rejected by `canExecuteCommand()` at the controller dispatch boundary with `ERR_COMMAND_LOCKED_DURING_MOTION`. Telemetry continuously broadcasts `K.perms` so client UIs dynamically lock or dim interactive controls.
+
 
 ---
 
@@ -347,7 +420,36 @@ graph TD
     P_Cone --> MotionHW
 ```
 
-#### Delegation Implementation:
+#### 4.1.1 The Four Composed Primitives
+1. **`GearZPrimitive` (Longitudinal Leadscrew Feed)**:
+   - Slaves $Z$ motor steps directly to spindle encoder pulses via Bresenham fractional step accumulation.
+   - Respects $Z$ travel limits (`z_min`, `z_max`), feed reverse (`feedDirZ`), and thread/feed pitches (`dupr`).
+2. **`GearXPrimitive` (Transverse Cross-Slide Feed)**:
+   - Slaves $X$ cross-slide motor steps to spindle encoder pulses.
+   - Respects $X$ travel limits (`x_min`, `x_max`) and cross-feed pitches (`xDupr`).
+3. **`AsyncPrimitive` (Time-Based Velocity Feed / Rapid)**:
+   - Drives $Z$ or $X$ at a constant linear speed ($\text{mm/min}$ or $\text{in/min}$) via high-resolution hardware timer, completely decoupled from spindle rotation.
+   - Used for continuous power feeding or rapid moves when the spindle is stopped.
+4. **`ConePrimitive` (Coordinated Synchronized Taper)**:
+   - Drives $Z$ and $X$ simultaneously in a fixed diametral ratio ($1:k$, half-angle $\alpha$, or standard Morse taper preset) slaved to the spindle.
+
+#### 4.1.2 Canonical Command Protocol:
+- **Mode Activation:** `CMD.mode=GEARBOX`
+- **Sub-Mode Selection:**
+  - `CMD.gearAxis=<Z|X|ZX>` (Carriage, Cross-slide, or Taper)
+  - `CMD.gearSync=<1|0>` (Spindle Synchronized vs. Time-based Velocity)
+  - `CMD.gearDir=<Z|X>,<CHUCK|TAIL|CENTER|RETRACT>`
+- **Feed Setpoints (reusing canonical Intent models):**
+  - `CMD.feedMm=<mm>` / `CMD.feedTpi=<tpi>` / `CMD.feedDupr=<dupr>`
+  - `CMD.asyncSpeed=<Z|X>,<duPerMin>`
+  - `CMD.taperAngle=<deg>` / `CMD.taperRatio=<ratio>` / `CMD.taperPreset=<id>`
+- **Live In-Cut Interventions:**
+  - `CMD.feedNudge=<+1|-1>` (nudges feed rate by `feedStepDu` under chip load)
+  - `CMD.feedStepCycle` (cycles active feed step size: 0.01, 0.05, 0.10, 0.20 mm)
+- **Execution:**
+  - `CMD.run=1` (Engage feed) / `CMD.run=0` (Disengage / stop feed)
+
+#### 4.1.3 Delegation Implementation:
 ```cpp
 class UnifiedGearboxMode : public IELSMode {
 private:
@@ -358,23 +460,63 @@ private:
     
     IELSMode*        m_activePrimitive = &m_gearZ; // Default to Z leadscrew
     ModeState        m_state = ModeState::IDLE;
+    char             m_activeAxis = 'Z';
+    bool             m_isSync = true;
 
 public:
-    void setSubMode(ModeId primitiveId) {
-        if (m_state == ModeState::RUNNING) {
-            // Cannot hot-swap kinematic kernels while actively cutting!
-            return;
-        }
+    const ModeManifest& getManifest() const override;
+    ModeId getId() const override { return ModeIds::GEARBOX; }
+    const char* getSlug() const override { return "gearbox"; }
+    const char* getName() const override { return "Electronic Gearbox"; }
+    ModeCategory getCategory() const override { return ModeCategory::COMPOSITE; }
+    uint32_t getRequiredHardware() const override { return CAP_SPINDLE_ENCODER | CAP_MOTOR_Z; }
+    uint32_t getLivePermissions() const override {
+        return PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE;
+    }
+
+    bool setParam(const char* key, float value) override {
+        if (strcmp(key, "sync") == 0) return setSync(value != 0.0f);
+        if (strcmp(key, "nudge") == 0) return nudgeFeed((int)value);
+        return m_activePrimitive->setParam(key, value);
+    }
+
+    bool setParam(const char* key, const char* strValue) override {
+        if (strcmp(key, "axis") == 0) return setActiveAxis(strValue);
+        if (strcmp(key, "dir") == 0) return setDirection(strValue);
+        return m_activePrimitive->setParam(key, strValue);
+    }
+
+    bool setActiveAxis(const char* axisStr) {
+        if (m_state == ModeState::RUNNING) return false; // In-motion safety lock!
         if (m_activePrimitive) m_activePrimitive->onExit();
 
-        switch (primitiveId) {
-            case ModeIds::PRIM_GEAR_X:  m_activePrimitive = &m_gearX; break;
-            case ModeIds::PRIM_ASYNC_Z: m_activePrimitive = &m_asyncFeed; break;
-            case ModeIds::PRIM_CONE:    m_activePrimitive = &m_cone; break;
-            case ModeIds::PRIM_GEAR_Z:
-            default:                    m_activePrimitive = &m_gearZ; break;
+        if (strcmp(axisStr, "X") == 0) {
+            m_activeAxis = 'X';
+            m_activePrimitive = &m_gearX;
+        } else if (strcmp(axisStr, "ZX") == 0) {
+            m_activeAxis = 'Z'; // compound
+            m_activePrimitive = &m_cone;
+        } else {
+            m_activeAxis = 'Z';
+            m_activePrimitive = m_isSync ? static_cast<IELSMode*>(&m_gearZ) : static_cast<IELSMode*>(&m_asyncFeed);
         }
         m_activePrimitive->onEnter();
+        return true;
+    }
+
+    bool setSync(bool sync) {
+        if (m_state == ModeState::RUNNING) return false; // In-motion safety lock!
+        m_isSync = sync;
+        return setActiveAxis(m_activeAxis == 'X' ? "X" : "Z");
+    }
+
+    bool nudgeFeed(int direction) {
+        if (!isRunning()) return false;
+        long step = getFeedStepDu();
+        long currentDupr = getThreadSetting().dupr;
+        long newDupr = currentDupr + (direction > 0 ? step : -step);
+        if (newDupr <= 0) return false;
+        return setFeedrateDupr(newDupr, true);
     }
 
     // Delegated execution hooks:
@@ -389,17 +531,30 @@ public:
         m_state = m_activePrimitive->getState();
     }
 
+    bool resume() override {
+        bool ok = m_activePrimitive->resume();
+        if (ok) m_state = ModeState::RUNNING;
+        return ok;
+    }
+
     void onSpindlePulse(int32_t delta, uint32_t rpm) override {
         if (m_state == ModeState::RUNNING) {
             m_activePrimitive->onSpindlePulse(delta, rpm);
         }
     }
 
-    void onTimerTick(uint32_t dt) override {
+    void onMotionTick() override {
         if (m_state == ModeState::RUNNING) {
-            m_activePrimitive->onTimerTick(dt);
+            m_activePrimitive->onMotionTick();
         }
     }
+
+    void onLimitReached(uint8_t axisId, bool isHighLimit) override {
+        m_activePrimitive->onLimitReached(axisId, isHighLimit);
+        m_state = m_activePrimitive->getState();
+    }
+
+    void writeTelemetry(TelemetryWriter& writer) const override;
 };
 ```
 
@@ -679,7 +834,77 @@ When any client connects to the controller (via WebSocket or Serial), it exchang
 
 ---
 
-### 6.3 The Universal Safety Lockout Protocol
+### 6.3 Mode Discovery & Capability Negotiation Protocol (`MODE.discover`)
+
+To enable clients to dynamically query available modes, discover parameter schemas, and evaluate hardware requirements against different machine configurations, the controller implements the **`MODE.discover`** query protocol (matching our established `PRESET.discover` and `SETTINGS.schema` patterns).
+
+#### Supported Discovery Query Forms:
+1. **Active Machine Profile Filter (Default):**
+   ```text
+   MODE.discover
+   // or CMD.modes
+   ```
+   *Behavior:* Returns only modes whose `requiredHardwareCaps` bitmask is a subset of the currently active lathe profile (`activeMachineProfile.capabilities`). Unavailable modes (e.g., automated 2-axis cycles on a 1-axis lathe) are cleanly omitted.
+
+2. **Named Machine Preset Evaluation:**
+   ```text
+   MODE.discover?profile=mini_lathe_7x14
+   MODE.discover?profile=large_toolroom_1440
+   ```
+   *Behavior:* Evaluates registered modes against the hardware capabilities of the specified factory preset profile, allowing client configuration wizards to simulate and preview capabilities.
+
+3. **Explicit Hardware Capability Bitmask:**
+   ```text
+   MODE.discover?caps=0x0000001B
+   ```
+   *Behavior:* Tests registered modes directly against a custom hexadecimal capability bitmask.
+
+4. **Unfiltered System Introspection:**
+   ```text
+   MODE.discover?all=1
+   ```
+   *Behavior:* Returns all registered modes in the system regardless of active hardware.
+
+#### Discovery JSON Response Payload:
+```json
+{
+  "active_profile": "pm_1022v",
+  "active_capabilities": "0x0000001B",
+  "active_mode": "gearbox",
+  "modes": [
+    {
+      "id": 50,
+      "slug": "gearbox",
+      "name": "Electronic Gearbox",
+      "category": "COMPOSITE",
+      "required_hardware": ["SPINDLE_ENCODER", "MOTOR_Z"],
+      "live_permissions": ["FEED_HOLD", "LIVE_FEED_TRIM", "LIVE_STEP_CYCLE", "LIVE_RPM_OVERRIDE"],
+      "params": [
+        { "key": "axis", "type": "enum", "options": ["Z", "X", "ZX"], "default": "Z" },
+        { "key": "sync", "type": "bool", "default": true },
+        { "key": "pitch_mm", "type": "float", "unit": "mm", "min": 0.001, "max": 10.0, "default": 0.10 }
+      ]
+    },
+    {
+      "id": 53,
+      "slug": "threading",
+      "name": "Threading Cycle",
+      "category": "COMPOSITE",
+      "required_hardware": ["SPINDLE_ENCODER", "MOTOR_Z"],
+      "live_permissions": ["FEED_HOLD"],
+      "params": [
+        { "key": "pitch", "type": "float", "unit": "mm", "default": 1.5 },
+        { "key": "tpi", "type": "float", "unit": "TPI", "default": 16.0 },
+        { "key": "passes", "type": "int", "default": 6 }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 6.4 The Universal Safety Lockout Protocol
 
 What happens if Client A triggers an advanced cycle (e.g., `ModeId: 56 - SPHERE`) that Client B (an older physical panel) does not know how to render or control?
 
@@ -712,7 +937,7 @@ sequenceDiagram
     end
 ```
 
-### 6.4 The 3 Client Capability Tiers
+### 6.5 The 3 Client Capability Tiers
 
 | Tier | Condition | Operator Experience |
 |---|---|---|
@@ -795,30 +1020,35 @@ stateDiagram-v2
 
 ---
 
-## 9. Implementation Roadmap
+## 9. Implementation Roadmap (Core-First Architecture)
 
-### Phase 1: Prototype / Simulator Implementation (JavaScript)
-- [ ] Create `ELSMode` base class and `ModeRegistry` in `nanoels-emulator.js` and `nanoels-service.js`.
-- [ ] Implement `LatheConfiguration` model with capability flags in `nanoels-state.js`.
-- [ ] Refactor existing emulator modes (`gear`, `xgear`, `async`, `cone`) into discrete primitive modes.
-- [ ] Implement `UnifiedGearboxMode` composite wrapper in the emulator.
-- [ ] Implement multi-layer mode inheritance (`ManualThreadingMode` $\to$ `AutoThreadingMode`).
-- [ ] Add client registration and capability negotiation to `nanoels-service.js`.
-- [ ] Build the **Safe Monitor Lockout** overlay in `lathe_dro_nanoels_controller.html`.
+To ensure machine execution determinism and establish the controller as the single source of truth, implementation proceeds strictly from the **Controller Motion Core outward**:
 
-### Phase 2: Web UI Workspace Integration
-- [ ] Wire the Web UI mode switcher so it communicates using canonical `ModeId`s.
-- [ ] Bind the composite Gearbox workspace to the underlying `UnifiedGearboxMode` sub-modes.
-- [ ] Add the Lathe Machine Profile modal to adjust machine dimensions and axis motor/DRO checkboxes.
-- [ ] Connect the visualizer to use `LatheConfiguration` dimensions directly.
-- [ ] Test multi-client simulation (two browser tabs interacting with the same emulator session).
+### Phase 1: Controller Firmware C++ Core (`src/motion/modes/`)
+- [ ] **Slice 1.1: Core Interfaces & Kinematic Primitives:**
+  - Create `IELSMode.h` defining the abstract lifecycle, mode-agnostic parameter contract (`setParam`/`getParam`), runtime gatekeeper (`canExecuteCommand`), and `LivePermissionFlags`.
+  - Extract and encapsulate the 4 kinematic primitives: `GearZPrimitive` (spindle sync Z), `GearXPrimitive` (spindle sync X), `AsyncPrimitive` (time-based velocity), and `ConePrimitive` (coordinated ratio taper).
+- [ ] **Slice 1.2: `UnifiedGearboxMode` Composite & Mode Registry:**
+  - Implement `UnifiedGearboxMode` orchestrating the 4 primitives with sub-mode switching (`gearAxis`, `gearSync`, `gearDir`) and live in-cut chip load trim (`feedNudge`).
+  - Implement `ModeRegistry` managing static mode instances, active mode pointer, and lifecycle transitions (`onExit`/`onEnter`).
+- [ ] **Slice 1.3: Motion Loop & Safety Interlocks:**
+  - Update `main.cpp` motion loop to delegate active stepping directly through `ModeRegistry::getActiveMode()`, eliminating procedural switch-case ladders.
+  - Enforce `canExecuteCommand()` at the motion supervisor boundary, rejecting invalid commands during active cuts.
+- [ ] **Slice 1.4: Command Dispatcher & Mode Discovery:**
+  - Implement `MODE.discover` with capability filtering against `activeMachineProfile.capabilities`.
+  - Wire canonical commands (`CMD.mode=GEARBOX`, `CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedNudge`) in `CommandDispatcher.cpp`.
+  - Broadcast `K.perms` in telemetry snapshots.
 
-### Phase 3: ESP32 Firmware C++ Refactoring
-- [ ] Implement `IELSMode.h`, `ModeRegistry.h`, `ModeManifest.h`, and `LatheProfile.h` in `src/motion/` and `src/core/`.
-- [ ] Refactor `Motion.cpp` kinematic routines into `GearZPrimitive`, `GearXPrimitive`, `AsyncPrimitive`, and `ConePrimitive`.
-- [ ] Create the C++ composite modes for Gearbox, Turning, Facing, and Threading.
-- [ ] Implement `ModeRegistry::resolveDefaultModeForFamily()`.
-- [ ] Adapt the Nextion serial parser to map page IDs to canonical mode IDs.
+### Phase 2: Web UI Client Integration (`clients/web_ui/`)
+- [ ] Update `lathe-controller.js` to natively command `mode: 'GEARBOX'` with axis/sync parameters directly to the controller, removing the client-side emulation mapping.
+- [ ] Bind dynamic UI control locking/dimming directly to `K.perms` received from the controller.
+- [ ] Wire `MODE.discover` so the UI dynamically renders available workspaces based on active machine capabilities.
+- [ ] Test multi-client interaction with concurrent live DRO feedback.
+
+### Phase 3: Nextion Client Migration (External Protocol Adapter)
+- [ ] Implement an external protocol adapter mapping Nextion screen pages (`page_gear`, `page_xgear`, `page_async`, `page_cone`) to canonical controller commands (`CMD.gearAxis`, `CMD.gearSync`) without touching the core firmware.
+- [ ] Map Nextion touch events to standard `CommandId` dispatches.
+
 
 ---
 
