@@ -1,7 +1,7 @@
 #include "RichClientAdapter.h"
 #include "MachineModel.h"
 #include "modes/ModeRegistry.h"
-#include "composite/UnifiedGearboxMode.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 
 static unsigned long lastTelemetryHash = 0;
 
@@ -17,13 +17,14 @@ static void serializeKinematics(String* out, const KinematicsState& k) {
   *out += "K.rpm=" + String(k.rpm) + "\n";
   *out += "K.turns=" + String(k.turns, 2) + "\n";
   *out += "K.angle=" + String(k.angle, 2) + "\n";
-  *out += "K.mode=" + String(k.mode) + "\n";
+  IELSMode* activeMode = ModeRegistry::getActiveMode();
+  int modeId = activeMode ? activeMode->getId() : k.mode;
+  *out += "K.mode=" + String(modeId) + "\n";
   *out += "K.on=" + String(k.isOn ? 1 : 0) + "\n";
   *out += "K.estop=" + String(k.estop ? 1 : 0) + "\n";
   *out += "K.dupr=" + String(k.dupr) + "\n";
   *out += "K.nextDupr=" + String(k.nextDupr) + "\n";
 
-  IELSMode* activeMode = ModeRegistry::getActiveMode();
   uint32_t perms = activeMode ? activeMode->getLivePermissions() : 0;
   char permBuf[16];
   snprintf(permBuf, sizeof(permBuf), "0x%08X", (unsigned int)perms);
@@ -31,8 +32,7 @@ static void serializeKinematics(String* out, const KinematicsState& k) {
 
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
   if (gb) {
-    char axisBuf[2] = { gb->getActiveAxis(), '\0' };
-    *out += "K.gearAxis=" + String(axisBuf) + "\n";
+    *out += "K.gearAxis=" + String(gb->getActiveAxis()) + "\n";
     *out += "K.gearSync=" + String(gb->isSync() ? 1 : 0) + "\n";
     *out += "K.gearDir=" + String(gb->isFeedDirForward() ? "FWD" : "REV") + "\n";
   }

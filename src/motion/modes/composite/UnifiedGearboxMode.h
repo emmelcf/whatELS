@@ -19,7 +19,7 @@ private:
 
     IELSMode*        m_activePrimitive = &m_gearZ;
     ModeState        m_state = ModeState::IDLE;
-    char             m_activeAxis = 'Z';
+    char             m_activeAxis[4] = "Z";
     bool             m_isSync = true;
     bool             m_feedDirForward = true; // Z: Chuck (-Z), X: Center (-X)
 
@@ -44,7 +44,7 @@ public:
     bool setDirection(const char* dirStr);
     bool nudgeFeed(int direction);
 
-    char getActiveAxis() const { return m_activeAxis; }
+    const char* getActiveAxis() const { return m_activeAxis; }
     bool isSync() const { return m_isSync; }
     bool isFeedDirForward() const { return m_feedDirForward; }
     IELSMode* getActivePrimitive() const { return m_activePrimitive; }

@@ -196,6 +196,20 @@ The client model accommodates both intelligent and protocol-constrained clients:
     2. **Component Mapping**: Maps raw touch events into canonical `CommandDispatcher` actions.
     3. **Quirk Isolation**: Nextion-specific hashing and delta-rendering reside strictly inside the Nextion adapter, keeping core firmware clean.
 
+### 3.4 Multi-Client Idle Decoupling & Atomic Cycle Inception
+A core tenet of the multi-client architecture is that the **Core Motion Engine does not track or enforce conversational setup modes while the lathe is stationary and idle (`isOn == false`)**:
+1. **Independent Idle Drafting (Zero Screen Hijacking):**
+   - While idle, conversational wizards, modal cards, and mode selectors in client UIs are strictly **independent local drafting environments**.
+   - Operator A configuring a Threading cycle on a tablet and Operator B adjusting a Gearbox feed on a phone do not fight over MCU registers, nor do their actions forcefully switch each other's active screens.
+2. **Atomic Cycle Inception:**
+   - To engage physical motion, the core requires a fully qualified command specifying the target mode and all mandatory parameters (e.g. `CMD.startCycle=threading,pitch=1.5,passes=6` or atomic `CMD.mode=<mode>\nCMD.on=1\n`).
+   - The core validates all parameters via `IELSMode::validateParams()` before transitioning from `IDLE` to `RUNNING`.
+3. **Role of Client Translation Layers (Adapters):**
+   - **Rich Clients (Web UI / Tablets):** Gather inputs locally in conversational wizards, perform client-side math and validation, and dispatch the fully qualified command upon tapping `START FEED` / `START CYCLE`.
+   - **Constrained / Simple Clients (Nextion LCD / Pendants):** Rely on their dedicated ESP32 adapter / translation layer (`NextionAdapter`) to buffer incremental button presses into a staged session struct. When the operator hits the physical green button, the translation layer synthesizes the validated start command on the client's behalf.
+4. **Change Broadcast on Motion Inception:**
+   - The controller only broadcasts mode transitions (`K.mode=<modeId>`, `K.on=1`) when physical stepping actually begins (`RUNNING`). At that point, all connected clients reflect active motion or enter Safe Monitor Lockout.
+
 ---
 
 ## 4. Change-Driven Status Dispatch & Immutable `StatusSnapshot`

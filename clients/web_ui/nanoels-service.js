@@ -82,7 +82,11 @@ class NanoelsService extends EventTarget {
       screwXDu: 40000,
       motorStepsZ: 800,
       motorStepsX: 800,
-      encoderPpr: 2400
+      encoderPpr: 2400,
+      perms: 0,
+      gearAxis: 'Z',
+      gearSync: true,
+      gearDir: 1
     };
 
     // Action Code Mapping (from docs/h5.ino)
@@ -522,31 +526,42 @@ class NanoelsService extends EventTarget {
     this.setFeedMm(pitchMm);
   }
 
+  // --- Gearbox Composite APIs ---
+  setGearAxis(axis) {
+    if (!axis) return;
+    const ax = String(axis).toUpperCase();
+    this.sendRaw(`CMD.gearAxis=${ax}\n`, `Set Gear Axis ${ax}`);
+  }
+
+  setGearSync(isSync) {
+    const val = isSync ? 1 : 0;
+    this.sendRaw(`CMD.gearSync=${val}\n`, `Set Gear Sync [${val}]`);
+  }
+
+  setGearDir(dir) {
+    if (dir === undefined) return;
+    this.sendRaw(`CMD.gearDir=${dir}\n`, `Set Gear Direction [${dir}]`);
+  }
+
+  nudgeFeed(dir) {
+    const d = (dir === '-' || Number(dir) < 0) ? -1 : 1;
+    this.sendRaw(`CMD.feedNudge=${d}\n`, `Feed Nudge [${d > 0 ? '+1' : '-1'}]`);
+  }
+
+  discoverModes(query = '') {
+    const q = query ? (query.startsWith('?') ? query : '?' + query) : '';
+    this.sendRaw(`MODE.discover${q}\n`, `Discover Modes [${query}]`);
+  }
+
   // Mode Selection
   setMode(modeKeyOrId) {
-    let modeId = 0;
     if (typeof modeKeyOrId === 'number') {
-      modeId = modeKeyOrId;
+      this.sendRaw(`CMD.mode=${modeKeyOrId}\n`, `Set Mode [ID ${modeKeyOrId}]`);
     } else if (typeof modeKeyOrId === 'string') {
-      const map = {
-        'GEAR': 0, 'GEARS': 0, 'NORMAL': 0, 'GEARBOX': 0,
-        'XGEAR': 1, 'X-GEAR': 1,
-        'ASYNC': 2,
-        'CONE': 3, 'TAPER': 3,
-        'TURN': 4, 'TURNING': 4,
-        'FACE': 5, 'FACING': 5,
-        'CUT': 6, 'CUTOFF': 6,
-        'THREAD': 7, 'THREADING': 7,
-        'ELLIPSE': 8, 'SPHERE': 8,
-        'GCODE': 9,
-        'Y': 10,
-        'JOYSTICK': 11,
-        'SLOT': 12, 'SLOTTING': 12
-      };
-      const upper = modeKeyOrId.toUpperCase();
-      modeId = upper in map ? map[upper] : 0;
+      const slug = modeKeyOrId.trim().toLowerCase();
+      // If it's a known canonical slug, send the slug directly; otherwise translate or send as is
+      this.sendRaw(`CMD.mode=${slug}\n`, `Set Mode [${slug}]`);
     }
-    this.sendRaw(`CMD.mode=${modeId}\n`, `Set Mode ${modeKeyOrId} [ID ${modeId}]`);
   }
 
   setLogStatusPushes(enabled) {
@@ -582,13 +597,19 @@ class NanoelsService extends EventTarget {
             if (typeof this.canonical[key] === 'boolean') {
               this.canonical[key] = val === '1' || val === 'true';
             } else if (typeof this.canonical[key] === 'number') {
-              const num = parseFloat(val);
-              if (!isNaN(num)) {
-                this.canonical[key] = num;
-              } else if (key === 'zRightDu' || key === 'xDownDu') {
-                this.canonical[key] = -2147483648;
-              } else if (key === 'zLeftDu' || key === 'xUpDu') {
-                this.canonical[key] = 2147483647;
+              if (key === 'perms' && typeof val === 'string' && (val.startsWith('0x') || val.startsWith('0X'))) {
+                this.canonical[key] = parseInt(val, 16);
+              } else if (key === 'gearDir') {
+                this.canonical[key] = (val === 'FWD' || val === '1' || val === 1) ? 1 : -1;
+              } else {
+                const num = parseFloat(val);
+                if (!isNaN(num)) {
+                  this.canonical[key] = num;
+                } else if (key === 'zRightDu' || key === 'xDownDu') {
+                  this.canonical[key] = -2147483648;
+                } else if (key === 'zLeftDu' || key === 'xUpDu') {
+                  this.canonical[key] = 2147483647;
+                }
               }
             } else {
               this.canonical[key] = val;

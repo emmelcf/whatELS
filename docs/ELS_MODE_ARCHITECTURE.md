@@ -824,11 +824,19 @@ Because `LatheConfiguration` is shared across controller and client:
 
 ## 6. Multi-Client Capability Filtering & Safety Lockout
 
-### 6.1 The Multi-Client Challenge
+### 6.1 The Multi-Client Challenge & Mode Inception Contract
 A machine tool setup may feature:
 - A **Dedicated Web UI / Tablet** featuring advanced wizards (Turning, Threading, Taper, Gearbox).
 - A **Nextion Serial Panel** on the headstock with legacy single-purpose screens.
 - A **Wireless Pendant / Jog Handwheel** with basic mode selectors and emergency controls.
+
+#### Core Idle Indifference vs. Atomic Mode Inception:
+1. **Core Idle Indifference:** While the lathe is stationary (`isOn == false`), the Core Motion Engine does not enforce or require global conversational mode alignment across clients. Each client owns its local authoring view (wizards, modals, setup cards).
+2. **Explicit Complete Parameter Delivery:** To engage motion, the core requires an atomic start command providing the target mode identifier and all necessary kinematic parameters. The core validates this complete bundle via `validateParams()` before engaging stepper pulses.
+3. **Decoupled Client Adapters:**
+   - **Rich Clients (Web UI):** Manage conversational input drafting on the client device and emit the validated start command atomically upon `START`.
+   - **Constrained Clients (Nextion LCD):** An on-board Translation Layer / Adapter buffers single-key inputs and synthesizes the fully qualified command when the operator triggers physical motion.
+4. **Broadcast on Inception:** Only when physical motion begins (`RUNNING`) does the controller broadcast active mode ownership, transitioning observing clients to active tracking or Safe Monitor Lockout.
 
 ### 6.2 Client Registration Handshake
 When any client connects to the controller (via WebSocket or Serial), it exchanges a capability manifest:

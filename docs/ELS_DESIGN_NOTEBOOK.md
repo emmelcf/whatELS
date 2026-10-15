@@ -161,3 +161,13 @@ Below is the record of major architectural decisions, the problems they solved, 
   4. Permanently eliminated legacy `#define` aliases and loose kinematic globals (`SPEED_START_Z/X`, `ACCELERATION_Z/X`, `SPEED_MANUAL_MOVE_Z/X`, `INVERT_Z/X`, `INVERT_Z/X_ENABLE`, `NEEDS_REST_Z/X`), directing all motion calculations strictly through `activeMachineProfile` and `Axis::z` / `Axis::x`.
 * **Documented in:** [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md), [`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md).
 
+### ADR 15: Multi-Client Idle Mode Decoupling & Atomic Cycle Inception
+* **Context:** In multi-client environments (e.g. tablet Web DRO, phone interface, and hardware Nextion panel), when a client adjusted parameters or browsed setup wizards while the lathe was stopped (`isOn == false`), the controller broadcast mode updates (`K.mode`), causing connected displays to suffer screen hijacking, parameter flickering, or race conditions. Furthermore, if a client disconnected or ignored idle mode pushes, sending a naked `CMD.on=1` risked running the wrong kinematic mode under chip load.
+* **Decision:**
+  1. The Core Motion Engine does not track or enforce conversational setup modes while the lathe is idle (`isOn == false`). Client wizards and setup cards represent strictly independent local authoring states.
+  2. Physical motion inception requires an explicit, fully qualified command specifying the target mode and its validated kinematic parameters (e.g. `CMD.startCycle=...` or atomic `CMD.mode=<mode>\nCMD.on=1\n`).
+  3. Simple clients (Nextion LCD, hardware serial buttons) rely on their on-board Translation Layer / Adapter to buffer incremental keystrokes and synthesize the validated start command upon physical START.
+  4. Only when physical stepping commences (`RUNNING`, `isOn == true`) does the core broadcast active mode ownership, transitioning observing clients to active tracking or Safe Monitor Lockout.
+* **Documented in:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
+
+

@@ -58,6 +58,10 @@ class NanoelsEmulator {
     this.heldMoveAction = 0;
     this.heldMoveMillis = 0;
     this.moveTimeoutMs = 500; // Firmware timeout
+    this.perms = 15; // PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE
+    this.gearAxis = 'Z';
+    this.gearSync = true;
+    this.gearDir = 1;
 
     // Pass cycle progression
     this.cycleStage = 0;
@@ -119,6 +123,21 @@ class NanoelsEmulator {
     }
     if (line === '~') {
       this.isOn = true;
+      return;
+    }
+    if (line.startsWith('MODE.discover') || line === 'CMD.modes') {
+      const disc = {
+        active_mode_id: 50,
+        active_mode_slug: "gearbox",
+        modes: [
+          { id: 50, slug: "gearbox", name: "Electronic Gearbox", category: "COMPOSITE", required_hardware: 9, live_permissions: 15 },
+          { id: 10, slug: "prim_gear_z", name: "Gear Z Spindle Sync", category: "PRIMITIVE", required_hardware: 9, live_permissions: 15 },
+          { id: 11, slug: "prim_gear_x", name: "Gear X Spindle Sync", category: "PRIMITIVE", required_hardware: 17, live_permissions: 15 },
+          { id: 12, slug: "prim_async", name: "Async Velocity Feed", category: "PRIMITIVE", required_hardware: 8, live_permissions: 7 },
+          { id: 14, slug: "prim_cone", name: "Cone Taper Sync", category: "PRIMITIVE", required_hardware: 25, live_permissions: 15 }
+        ]
+      };
+      this._emitRaw(JSON.stringify(disc) + '\n');
       return;
     }
 
@@ -229,10 +248,27 @@ class NanoelsEmulator {
         const isLeft = parts[1] === '1';
         if (ax === 'Z') { if (isLeft) this.zLeft = null; else this.zRight = null; }
         if (ax === 'X') { if (isLeft) this.xLeft = null; else this.xRight = null; }
+      } else if (cmd.startsWith('gearAxis=')) {
+        this.gearAxis = cmd.substring(9).toUpperCase();
+        this.mode = 'GEARBOX';
+      } else if (cmd.startsWith('gearSync=')) {
+        this.gearSync = cmd.substring(9) !== '0' && cmd.substring(9).toUpperCase() !== 'ASYNC';
+        this.mode = 'GEARBOX';
+      } else if (cmd.startsWith('gearDir=')) {
+        const val = cmd.substring(8).toUpperCase();
+        this.gearDir = (val === 'CHUCK' || val === 'CENTER' || val === '1' || val === 'FWD') ? 1 : -1;
+      } else if (cmd.startsWith('feedNudge=')) {
+        const dir = (cmd[10] === '-' || parseInt(cmd.substring(10), 10) < 0) ? -1 : 1;
+        this.dupr = Math.max(100, this.dupr + (dir * (this.feedStepDu || 500)));
       } else if (cmd.startsWith('mode=')) {
-        const m = parseInt(cmd.substring(5), 10);
-        const modeMap = ['GEAR', 'XGEAR', 'ASYNC', 'CONE', 'TURN', 'FACE', 'CUT', 'THREAD', 'ELLIPSE', 'GCODE', 'Y', 'JOYSTICK', 'SLOT'];
-        if (modeMap[m]) this.mode = modeMap[m];
+        const mStr = cmd.substring(5).trim();
+        if (mStr.toLowerCase() === 'gearbox' || mStr === '50') {
+          this.mode = 'GEAR';
+        } else {
+          const m = parseInt(mStr, 10);
+          const modeMap = ['GEAR', 'XGEAR', 'ASYNC', 'CONE', 'TURN', 'FACE', 'CUT', 'THREAD', 'ELLIPSE', 'GCODE', 'Y', 'JOYSTICK', 'SLOT'];
+          if (modeMap[m]) this.mode = modeMap[m];
+        }
       } else if (cmd.startsWith('on=')) {
         this.isOn = cmd.substring(3) === '1';
         if (this.isOn) this.spindleRunning = true;
@@ -560,7 +596,7 @@ class NanoelsEmulator {
 
   _buildDomainTelemetry(domainMask = 0x0F) {
     let out = '';
-    const modeInt = this.mode === 'GEAR' ? 0 : (this.mode === 'XGEAR' ? 1 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 7 : 0)));
+    const modeInt = (this.mode === 'GEARBOX' || this.mode === 'GEAR' || this.mode === 'XGEAR' || this.mode === 'ASYNC') ? 50 : (this.mode === 'CONE' ? 3 : (this.mode === 'THREAD' ? 53 : (this.mode === 'TURN' ? 51 : (this.mode === 'FACE' ? 52 : 50))));
     const zLeftVal = this.zLeft !== null ? Math.round(this.zLeft) : 2147483647;
     const zRightVal = this.zRight !== null ? Math.round(this.zRight) : -2147483648;
     const xUpVal = this.xLeft !== null ? Math.round(this.xLeft) : 2147483647;
@@ -582,7 +618,11 @@ class NanoelsEmulator {
              `K.on=${this.isOn ? 1 : 0}\n` +
              `K.estop=0\n` +
              `K.dupr=${this.dupr}\n` +
-             `K.nextDupr=${this.dupr}\n`;
+             `K.nextDupr=${this.dupr}\n` +
+             `K.perms=${this.perms || 15}\n` +
+             `K.gearAxis=${this.gearAxis || 'Z'}\n` +
+             `K.gearSync=${this.gearSync !== false ? 1 : 0}\n` +
+             `K.gearDir=${this.gearDir || 1}\n`;
     }
     if (domainMask & 0x02) { // Intent (I)
       out += `I.thFmt=${this.thFmt}\n` +

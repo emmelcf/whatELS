@@ -28,9 +28,10 @@ static const ModeManifest GEARBOX_MANIFEST = {
 UnifiedGearboxMode::UnifiedGearboxMode()
     : m_activePrimitive(&m_gearZ),
       m_state(ModeState::IDLE),
-      m_activeAxis('Z'),
       m_isSync(true),
-      m_feedDirForward(true) {}
+      m_feedDirForward(true) {
+    strncpy(m_activeAxis, "Z", sizeof(m_activeAxis));
+}
 
 const ModeManifest& UnifiedGearboxMode::getManifest() const {
     return GEARBOX_MANIFEST;
@@ -43,18 +44,18 @@ bool UnifiedGearboxMode::setActiveAxis(const char* axisStr) {
     if (m_activePrimitive) m_activePrimitive->onExit();
 
     if (strcasecmp(axisStr, "X") == 0) {
-        m_activeAxis = 'X';
+        strncpy(m_activeAxis, "X", sizeof(m_activeAxis));
         if (m_isSync) {
             m_activePrimitive = &m_gearX;
         } else {
             m_asyncFeed.setParam("axis", "X");
             m_activePrimitive = &m_asyncFeed;
         }
-    } else if (strcasecmp(axisStr, "ZX") == 0 || strcasecmp(axisStr, "TAPER") == 0) {
-        m_activeAxis = 'Z'; // compound dual-axis
+    } else if (strcasecmp(axisStr, "ZX") == 0 || strcasecmp(axisStr, "Z+X") == 0 || strcasecmp(axisStr, "TAPER") == 0) {
+        strncpy(m_activeAxis, "ZX", sizeof(m_activeAxis)); // compound dual-axis
         m_activePrimitive = &m_cone;
     } else {
-        m_activeAxis = 'Z';
+        strncpy(m_activeAxis, "Z", sizeof(m_activeAxis));
         if (m_isSync) {
             m_activePrimitive = &m_gearZ;
         } else {
@@ -70,10 +71,7 @@ bool UnifiedGearboxMode::setActiveAxis(const char* axisStr) {
 bool UnifiedGearboxMode::setSync(bool sync) {
     if (m_state == ModeState::RUNNING) return false; // In-motion safety lock!
     m_isSync = sync;
-    char axisBuf[4];
-    axisBuf[0] = m_activeAxis;
-    axisBuf[1] = '\0';
-    return setActiveAxis(axisBuf);
+    return setActiveAxis(m_activeAxis);
 }
 
 bool UnifiedGearboxMode::setDirection(const char* dirStr) {
@@ -180,7 +178,7 @@ void UnifiedGearboxMode::onLimitReached(uint8_t axisId, bool isHighLimit) {
 }
 
 void UnifiedGearboxMode::writeTelemetry(TelemetryWriter& writer) const {
-    writer.writeKeyValue("gear_axis", m_activeAxis == 'X' ? "X" : "Z");
+    writer.writeKeyValue("gear_axis", m_activeAxis);
     writer.writeKeyValue("gear_sync", static_cast<int32_t>(m_isSync ? 1 : 0));
     writer.writeKeyValue("gear_dir", m_feedDirForward ? "FWD" : "REV");
     m_activePrimitive->writeTelemetry(writer);

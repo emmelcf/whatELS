@@ -9,7 +9,7 @@
 #include "SettingsService.h"
 #include "PresetService.h"
 #include "modes/ModeRegistry.h"
-#include "composite/UnifiedGearboxMode.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -381,21 +381,30 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       }
     }
     // CMD.gearAxis=<Z|X|0|1>
+    // CMD.gearAxis=<Z|X|ZX|Z+X|0|1|2>
     if (cmdLen >= 9 && strncmp(cmd, "gearAxis=", 9) == 0) {
       IELSMode* active = ModeRegistry::getActiveMode();
       if (active && !active->canExecuteCommand(CommandId::CMD_SET_AXIS, active->getState())) {
         if (reply) *reply = "ERR:CMD.gearAxis=locked during active motion\n";
         return false;
       }
-      char ax = (cmd[9] == '1' || cmd[9] == 'X' || cmd[9] == 'x') ? 'X' : 'Z';
-      char axStr[2] = { ax, '\0' };
+      const char* val = cmd + 9;
+      const char* axStr = "Z";
+      int targetLowLevelMode = static_cast<int>(LatheMode::NORMAL);
+      if (strcasecmp(val, "X") == 0 || strcmp(val, "1") == 0) {
+        axStr = "X";
+        targetLowLevelMode = static_cast<int>(LatheMode::XGEAR);
+      } else if (strcasecmp(val, "ZX") == 0 || strcasecmp(val, "Z+X") == 0 || strcmp(val, "2") == 0 || strcasecmp(val, "TAPER") == 0) {
+        axStr = "ZX";
+        targetLowLevelMode = static_cast<int>(LatheMode::CONE);
+      }
       UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
       if (gb) {
         gb->setActiveAxis(axStr);
         if (gb->isSync()) {
-          setOperatingMode(ax == 'Z' ? static_cast<int>(LatheMode::NORMAL) : static_cast<int>(LatheMode::XGEAR));
+          setOperatingMode(targetLowLevelMode);
         }
-        if (reply) *reply = String("OK:CMD.gearAxis=") + ax + "\n";
+        if (reply) *reply = String("OK:CMD.gearAxis=") + axStr + "\n";
         return true;
       }
       return false;
@@ -414,7 +423,10 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (!sync) {
           setOperatingMode(static_cast<int>(LatheMode::ASYNC));
         } else {
-          setOperatingMode(gb->getActiveAxis() == 'X' ? static_cast<int>(LatheMode::XGEAR) : static_cast<int>(LatheMode::NORMAL));
+          const char* curAx = gb->getActiveAxis();
+          if (strcasecmp(curAx, "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+          else if (strcasecmp(curAx, "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
+          else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
         }
         if (reply) *reply = String("OK:CMD.gearSync=") + (sync ? "1" : "0") + "\n";
         return true;
@@ -471,7 +483,8 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
           UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
           if (gb) {
             if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
-            else if (gb->getActiveAxis() == 'X') setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+            else if (strcasecmp(gb->getActiveAxis(), "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+            else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
             else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
           }
         }
@@ -486,7 +499,8 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
         if (gb) {
           if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
-          else if (gb->getActiveAxis() == 'X') setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+          else if (strcasecmp(gb->getActiveAxis(), "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
+          else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
           else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
         }
         if (reply) *reply = "OK:CMD.mode=gearbox\n";

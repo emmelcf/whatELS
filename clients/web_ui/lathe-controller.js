@@ -60,6 +60,8 @@
     // Operating Mode & State
     mode: 'GEARBOX', // Default mode
     runState: 'stopped', // strictly 'stopped' or 'running' (NanoELS hardware binary state)
+    perms: 0, // Live in-motion permission flags (K.perms)
+    hasHydratedMode: false, // ADR 15: True once initial connection mode hydration completes
     
     // Gearbox Mode
     gearboxMode: 'SYNC', // 'SYNC' (spindle synchronized) or 'ASYNC' (time-based)
@@ -146,6 +148,18 @@
       'READY: GEARBOX SYNCHRONIZED TO SPINDLE'
     ]
   };
+
+  // Live in-motion permission bitmask flags (mirrors LivePermissionFlags)
+  var PERM_FEED_HOLD = 1;
+  var PERM_LIVE_FEED_TRIM = 2;
+  var PERM_LIVE_STEP_CYCLE = 4;
+  var PERM_LIVE_RPM_OVERRIDE = 8;
+
+  function canExecuteAction(permFlag){
+    if(state.runState !== 'running') return true;
+    var perms = (window.Alpine && Alpine.store('machine') && Alpine.store('machine').perms) || state.perms || 0;
+    return (perms & permFlag) !== 0;
+  }
 
   // Standard Fasteners Dataset with Ranges & 3rd-Choice Secondary Sizes
   var THREAD_FAMILIES = {
@@ -568,25 +582,27 @@
         '<span style="font-size:10.5px; color:var(--amber); font-weight:700;">Z+X TAPER</span>' :
         '<span style="font-size:10.5px; color:' + (state.activeFeedAxis==='Z'?'var(--green)':'var(--blue)') + '; font-weight:700;">' + state.activeFeedAxis + '-AXIS</span>';
 
+      var canTrim = canExecuteAction(PERM_LIVE_FEED_TRIM);
       deck.innerHTML = '' +
         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
           '<span style="font-size:11px; font-weight:700; color:var(--dim);">' + deckHeaderLeft + '</span>' +
           deckHeaderRight +
         '</div>' +
         '<div class="deck-controls">' +
-          '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + activeDisp.val + '</span>' +
             '<span class="deck-unit">' + activeDisp.unit + '</span>' +
             (activeDisp.companion ? '<span class="deck-companion mono" style="font-size:11px; color:var(--dim); margin-left:6px; font-weight:600;">' + activeDisp.companion + '</span>' : '') +
           '</div>' +
-          '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgePlus">+</div>' +
         '</div>' +
         stepChipsHTML;
 
     } else if(state.mode === 'TURNING'){
       var pInfo = getTurnPasses();
       var stepInfo = getActiveGearStepInfo();
+      var canTrim = canExecuteAction(PERM_LIVE_FEED_TRIM);
 
       deck.innerHTML = '' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
@@ -594,18 +610,19 @@
           (isRun ? '<span class="deck-pass-badge mono">PASS ' + state.turnCurrentPass + ' / ' + pInfo.count + '</span>' : '<span style="font-size:10px;color:var(--green);font-weight:700;">Z-AXIS</span>') +
         '</div>' +
         '<div class="deck-controls">' +
-          '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + lenStr(state.turnPitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
-          '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgePlus">+</div>' +
         '</div>' +
         renderDeckStepRowHTML(stepInfo);
 
     } else if(state.mode === 'FACING'){
       var fpInfo = getFacePasses();
       var stepInfo = getActiveGearStepInfo();
+      var canTrim = canExecuteAction(PERM_LIVE_FEED_TRIM);
 
       deck.innerHTML = '' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
@@ -613,12 +630,12 @@
           (isRun ? '<span class="deck-pass-badge mono">PASS ' + state.faceCurrentPass + ' / ' + fpInfo.count + '</span>' : '<span style="font-size:10px;color:var(--blue);font-weight:700;">X-AXIS</span>') +
         '</div>' +
         '<div class="deck-controls">' +
-          '<div class="deck-nudge tap" id="deckNudgeMinus">−</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgeMinus">−</div>' +
           '<div class="deck-readout ' + (!isRun ? 'tap' : '') + '" id="deckReadout"' + (isRun ? ' style="cursor:default;"' : '') + '>' +
             '<span class="deck-val mono">' + lenStr(state.facePitch, state.unit==='mm'?3:4) + '</span>' +
             '<span class="deck-unit">' + unitLabel() + '/rev</span>' +
           '</div>' +
-          '<div class="deck-nudge tap" id="deckNudgePlus">+</div>' +
+          '<div class="deck-nudge tap' + (isRun && !canTrim ? ' disabled' : '') + '" id="deckNudgePlus">+</div>' +
         '</div>' +
         renderDeckStepRowHTML(stepInfo);
 
@@ -729,6 +746,11 @@
 
     if(btnMinus && btnPlus){
       btnMinus.addEventListener('click', function(){
+        if(state.runState === 'running'){
+          if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
+          if(window.nanoelsClient) window.nanoelsClient.nudgeFeed(-1);
+          return;
+        }
         if(state.mode === 'GEARBOX'){
           var info = getActiveGearStepInfo();
           if(info.type === 'async'){
@@ -766,6 +788,11 @@
       });
 
       btnPlus.addEventListener('click', function(){
+        if(state.runState === 'running'){
+          if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
+          if(window.nanoelsClient) window.nanoelsClient.nudgeFeed(+1);
+          return;
+        }
         if(state.mode === 'GEARBOX'){
           var info = getActiveGearStepInfo();
           if(info.type === 'async'){
@@ -1054,8 +1081,9 @@
       var btnSync = $('fld-gearSync');
       if(btnSync){
         btnSync.addEventListener('click', function(){
+          if(state.runState === 'running') return;
           state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
-          syncModeToController('GEARBOX');
+          if(window.nanoelsClient) window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
           updateStatusMsg(); render();
         });
       }
@@ -1063,6 +1091,7 @@
       var btnAxis = $('fld-gearAxis');
       if(btnAxis){
         btnAxis.addEventListener('click', function(){
+          if(state.runState === 'running') return;
           if(state.activeFeedAxis === 'Z'){
             state.activeFeedAxis = 'X';
             state.gearboxMode = 'SYNC';
@@ -1072,7 +1101,11 @@
           } else {
             state.activeFeedAxis = 'Z';
           }
-          syncModeToController('GEARBOX');
+          var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
+          if(window.nanoelsClient) {
+            window.nanoelsClient.setGearAxis(ax);
+            window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
+          }
           syncPitchToController();
           updateStatusMsg(); render();
         });
@@ -1084,11 +1117,11 @@
           if(state.runState === 'running') return;
           if(state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X'){
             state.gearDirZ = (state.gearDirZ === 'FWD' ? 'REV' : 'FWD');
-            if(window.nanoelsClient) window.nanoelsClient.reversePitch();
+            if(window.nanoelsClient) window.nanoelsClient.setGearDir(state.gearDirZ === 'FWD' ? 1 : -1);
             setStatusMsg('Z FEED DIRECTION: ' + (state.gearDirZ==='FWD'?'← TO CHUCK (Z−)':'→ TO TAIL (Z+)'));
           } else {
             state.gearDirX = (state.gearDirX === 'IN' ? 'OUT' : 'IN');
-            if(window.nanoelsClient) window.nanoelsClient.reversePitch();
+            if(window.nanoelsClient) window.nanoelsClient.setGearDir(state.gearDirX === 'IN' ? 1 : -1);
             setStatusMsg('X FEED DIRECTION: ' + (state.gearDirX==='IN'?'↑ TO CENTER (X−)':'↓ RETRACT (X+)'));
           }
           render();
@@ -1612,15 +1645,13 @@
     var m = targetMode || state.mode;
     var actionKey = modeMap[m];
     if(m === 'GEARBOX'){
-      if(state.activeFeedAxis === 'Z'){
-        actionKey = (state.gearboxMode === 'ASYNC') ? 'ASYNC' : 'GEARS';
-      } else if(state.activeFeedAxis === 'X'){
-        actionKey = 'XGEAR';
-      } else if(state.activeFeedAxis === 'Z+X'){
-        actionKey = 'CONE';
-      } else {
-        actionKey = 'GEARS';
-      }
+      window.nanoelsClient.setMode('gearbox');
+      var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
+      window.nanoelsClient.setGearAxis(ax);
+      window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
+      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? 1 : -1) : (state.gearDirZ === 'FWD' ? 1 : -1);
+      window.nanoelsClient.setGearDir(dirVal);
+      return;
     }
     if(actionKey){
       window.nanoelsClient.setMode(actionKey);
@@ -4076,43 +4107,56 @@
         if(data.zDro !== undefined) state.zIsDro = (data.zDro === '1');
         if(data.message !== undefined && data.message !== '') state.statusMsg = data.message;
 
-        // 5. Controller Operating Mode Mapping
-        if(data.mode !== undefined && data.mode !== ''){
-          var modeKey = data.mode.toUpperCase();
-          if(modeKey === 'GEAR' || modeKey === 'XGEAR' || modeKey === 'ASYNC'){
-            state.mode = 'GEARBOX';
-            state.gearboxMode = (modeKey === 'ASYNC') ? 'ASYNC' : 'SYNC';
-            if(modeKey === 'XGEAR') state.activeFeedAxis = 'X';
-            else state.activeFeedAxis = 'Z';
-          } else if(modeKey === 'CONE'){
-            if(state.mode === 'TAPER'){
-              // Trigger A: Motion started externally on lathe hardware while UI was idle in TAPER setup
-              var isControllerRunning = (data.status === 'ON' || data.status === 'SYN');
-              if(isControllerRunning && !state.taperCycleActive){
-                state.mode = 'GEARBOX';
-                state.gearboxMode = 'SYNC';
-                state.activeFeedAxis = 'Z+X';
-              }
-            } else {
-              // Switch was initiated on controller or in GEARBOX: map to Gearbox Z+X
+        // 11. Live Permissions & Gearbox Submode Telemetry
+        if(c && c.perms !== undefined){
+          state.perms = c.perms;
+        } else if(data.perms !== undefined){
+          state.perms = typeof data.perms === 'string' && data.perms.startsWith('0x') ? parseInt(data.perms, 16) : (parseInt(data.perms, 10) || 0);
+        }
+
+        if(c && c.gearAxis !== undefined){
+          if(c.gearAxis === 'X') state.activeFeedAxis = 'X';
+          else if(c.gearAxis === 'ZX') state.activeFeedAxis = 'Z+X';
+          else state.activeFeedAxis = 'Z';
+        }
+        if(c && c.gearSync !== undefined){
+          state.gearboxMode = (c.gearSync && c.gearSync !== '0') ? 'SYNC' : 'ASYNC';
+        }
+        if(c && c.gearDir !== undefined){
+          var isFwd = (c.gearDir === 1 || c.gearDir === '1' || c.gearDir === 'FWD');
+          if(state.activeFeedAxis === 'X'){
+            state.gearDirX = isFwd ? 'IN' : 'OUT';
+          } else {
+            state.gearDirZ = isFwd ? 'FWD' : 'REV';
+          }
+        }
+
+        // 5. Controller Operating Mode Mapping (ADR 15: Idle Decoupling vs Active Motion)
+        var isLiveMotion = (state.runState === 'running');
+        if(isLiveMotion || !state.hasHydratedMode){
+          state.hasHydratedMode = true;
+          var rawMode = (c && c.mode !== undefined) ? c.mode : data.mode;
+          if(rawMode !== undefined && rawMode !== ''){
+            var mStr = String(rawMode).trim().toUpperCase();
+            if(mStr === '50' || mStr === 'GEARBOX' || mStr === '0' || mStr === '1' || mStr === '2' || mStr === 'GEAR' || mStr === 'XGEAR' || mStr === 'ASYNC'){
               state.mode = 'GEARBOX';
-              state.gearboxMode = 'SYNC';
-              state.activeFeedAxis = 'Z+X';
+            } else if(mStr === '51' || mStr === 'TURN' || mStr === '4'){
+              state.mode = 'TURNING';
+            } else if(mStr === '52' || mStr === 'FACE' || mStr === '5'){
+              state.mode = 'FACING';
+            } else if(mStr === '53' || mStr === 'THREAD' || mStr === '7'){
+              state.mode = 'THREADING';
+            } else if(mStr === '54' || mStr === 'CUT' || mStr === '6'){
+              state.mode = 'CUTOFF';
+            } else if(mStr === '55' || mStr === 'SLOT' || mStr === '10' || mStr === '12'){
+              state.mode = 'SLOTTING';
+            } else if(mStr === '56' || mStr === 'SPHERE' || mStr === 'ELLIP' || mStr === '8'){
+              state.mode = 'SPHERE';
+            } else if(mStr === 'JOY' || mStr === 'JOYSTICK' || mStr === '9' || mStr === '11'){
+              state.mode = 'JOYSTICK';
+            } else if(mStr === 'CONE' || mStr === '3'){
+              state.mode = 'TAPER';
             }
-          } else if(modeKey === 'TURN'){
-            state.mode = 'TURNING';
-          } else if(modeKey === 'FACE'){
-            state.mode = 'FACING';
-          } else if(modeKey === 'THREAD'){
-            state.mode = 'THREADING';
-          } else if(modeKey === 'CUT'){
-            state.mode = 'CUTOFF';
-          } else if(modeKey === 'SLOT'){
-            state.mode = 'SLOTTING';
-          } else if(modeKey === 'ELLIP'){
-            state.mode = 'SPHERE';
-          } else if(modeKey === 'JOY'){
-            state.mode = 'JOYSTICK';
           }
         }
 

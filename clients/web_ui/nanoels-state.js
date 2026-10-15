@@ -22,11 +22,15 @@ function registerMachineStore() {
     rpm: 0,
     turns: 0,
     angle: 0,
-    mode: 0,             // 0: GEAR, 1: XGEAR, 2: ASYNC, 3: CONE, 4: TURN, 5: FACE, 6: CUT, 7: THREAD...
+    mode: 0,             // 0: GEAR, 1: XGEAR, 2: ASYNC, 3: CONE, 4: TURN, 5: FACE, 6: CUT, 7: THREAD, 50: GEARBOX
     isOn: false,
     estop: false,
     dupr: 0,
     nextDupr: 0,
+    perms: 0,           // Live in-motion permissions bitmask (LivePermissionFlags)
+    gearAxis: 'Z',      // Authoritative active leadscrew axis ('Z' or 'X')
+    gearSync: true,     // Spindle synchronized (true) vs async timer (false)
+    gearDir: 1,         // Motion travel direction forward (1) vs reverse (-1)
 
     // -------------------------------------------------------------
     // Intent Domain ('I.*' - Exact operator typed setpoints)
@@ -164,10 +168,13 @@ function registerMachineStore() {
     },
 
     get modeName() {
+      if (this.mode === 50 || this.mode === 'gearbox' || this.mode === 0 || this.mode === 1 || this.mode === 2) {
+        return 'GEARBOX';
+      }
       const names = [
         'GEARBOX',   // 0: GEAR
-        'X-GEAR',    // 1: XGEAR
-        'ASYNC',     // 2: ASYNC
+        'GEARBOX',   // 1: XGEAR (normalized into Gearbox)
+        'GEARBOX',   // 2: ASYNC (normalized into Gearbox)
         'TAPER',     // 3: CONE
         'TURNING',   // 4: TURN
         'FACING',    // 5: FACE
@@ -178,6 +185,20 @@ function registerMachineStore() {
         'SLOTTING'   // 10: SLOT
       ];
       return names[this.mode] || 'GEARBOX';
+    },
+
+    get canFeedNudge() {
+      if (!this.isOn && this.rpm === 0) return true;
+      return (this.perms & 2) !== 0; // PERM_LIVE_FEED_TRIM = 1 << 1
+    },
+
+    get canStepCycle() {
+      if (!this.isOn && this.rpm === 0) return true;
+      return (this.perms & 4) !== 0; // PERM_LIVE_STEP_CYCLE = 1 << 2
+    },
+
+    get canFeedHold() {
+      return (this.perms & 1) !== 0; // PERM_FEED_HOLD = 1 << 0
     },
 
     get statusStr() {

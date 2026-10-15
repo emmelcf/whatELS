@@ -140,6 +140,7 @@
     display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--fg); font-weight: 700;
   }
   .deck-nudge:active { background: #283a49; }
+  .deck-nudge.disabled { opacity: 0.35; pointer-events: none; }
   .deck-readout { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 82px; }
   .deck-val { font-size: 17px; font-weight: 700; color: var(--amber); }
   .deck-unit { font-size: 10px; color: var(--dim); }
