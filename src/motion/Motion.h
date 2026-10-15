@@ -99,6 +99,23 @@ struct TaperSetting {
   int presetId;      // Preset index if applicable
 };
 
+// Subsystem 2 Kinematic Velocity Feed State (ADR 0001)
+struct VelocityFeedState {
+  Axis*   axis = nullptr;          // Target axis (&z or &x)
+  int32_t speedDuPerMin = 0;       // Feed velocity magnitude (> 0) in deci-microns per min
+  int8_t  direction = 0;           // Cartesian polarity: -1 (negative coords) or +1 (positive coords)
+  int32_t targetDistDu = -1;       // Target distance in du (-1 for continuous to soft limit)
+  long    targetPos = 0;           // Target step coordinate bounded by soft limits
+  bool    active = false;          // True when velocity feed is in progress
+};
+
+extern VelocityFeedState velocityFeed;
+
+void initVelocityTimer();
+bool startVelocityFeed(Axis* a, int32_t speedDuPerMin, int8_t direction, int32_t targetDistDu = -1);
+void stopVelocityFeed();
+bool isVelocityFeedActive();
+
 extern ThreadSetting currentThreadSetting;
 extern TaperSetting currentTaperSetting;
 extern long feedStepDu;

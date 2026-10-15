@@ -103,6 +103,11 @@ While Tier 4 presentation properties are strictly decoupled from motion math, lo
 * The controller provides a pass-through key-value storage hook in NVS flash (`client.global.*` and `client.<clientId>.*`).
 * The controller motion engine treats these keys as opaque byte blobs and never parses them for motion control, acting purely as a persistent broker for connected clients.
 
+### 2.8 In-Cut Execution Mode vs. Client Idle View State (ADR 0002)
+* **Idle Machine Invariant:** When physical motion is disengaged (`isOn == false`), the machine is universally **`IDLE`**.
+* The core controller has no awareness of which tab, menu, or form the operator is browsing across various connected clients. Client view state is strictly local.
+* `KinematicsState.mode` identifies the operational mode currently executing physical motion when `isOn == true`. When idle, command validation is based on machine capability and state invariants, not arbitrary UI tab states.
+
 ---
 
 ## 3. Four-Domain State Architecture
@@ -207,11 +212,12 @@ struct TaperSetting {
 };
 
 struct IntentState {
-  ThreadSetting thread;      // Active thread authoring state
-  TaperSetting  taper;       // Active taper authoring state
-  long          feedStepDu;  // Feed step override increment in deci-microns
-  long          jogStepDu;   // Manual D-pad jog step increment in deci-microns
-  bool          feedReverse; // Invert leadscrew feed direction relative to spindle
+  ThreadSetting thread;        // Active thread authoring state
+  TaperSetting  taper;         // Active taper authoring state
+  long          feedStepDu;    // Feed step override increment in deci-microns
+  long          jogStepDu;     // Manual D-pad jog step increment in deci-microns
+  int8_t        direction;     // Cartesian travel direction: -1 (negative coords) or +1 (positive coords)
+  int32_t       targetDistDu;  // Target stroke distance in deci-microns (-1 = continuous / soft-limit bound)
 };
 ```
 

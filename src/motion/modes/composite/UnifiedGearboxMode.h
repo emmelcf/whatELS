@@ -1,27 +1,22 @@
 #pragma once
 
-#include "IELSMode.h"
-#include "primitives/GearZPrimitive.h"
-#include "primitives/GearXPrimitive.h"
-#include "primitives/AsyncPrimitive.h"
-#include "primitives/ConePrimitive.h"
+#include "../IELSMode.h"
+#include "../../MotionConversions.h"
 
 /**
- * @brief Unified Gearbox Composite Mode for NanoELS.
- * Statically orchestrates GearZ, GearX, Async, and Cone primitives under a single cohesive workspace.
+ * @brief Consolidated Electronic Gearbox Operational Mode (Subsystem 3).
+ * Directly orchestrates synchronized (G95) and asynchronous velocity (G94) kinematic stepping
+ * without intermediate primitive wrappers. Adheres to ADR 0001 & ADR 0002.
  */
 class UnifiedGearboxMode : public IELSMode {
 private:
-    GearZPrimitive   m_gearZ;
-    GearXPrimitive   m_gearX;
-    AsyncPrimitive   m_asyncFeed;
-    ConePrimitive    m_cone;
+    ModeState m_state = ModeState::IDLE;
 
-    IELSMode*        m_activePrimitive = &m_gearZ;
-    ModeState        m_state = ModeState::IDLE;
-    char             m_activeAxis[4] = "Z";
-    bool             m_isSync = true;
-    bool             m_feedDirForward = true; // Z: Chuck (-Z), X: Center (-X)
+    AxisId    m_axis = AXIS_Z;
+    bool      m_isSync = true;
+    int8_t    m_direction = -1;        // Cartesian polarity: -1 (chuck/infeed), +1 (tail/retract)
+    int32_t   m_feedRateDu = 1000;     // Canonical magnitude: dupr if sync, du/min if async
+    int32_t   m_targetDistDu = -1;     // Stroke distance in du (-1 = continuous to soft limit)
 
 public:
     UnifiedGearboxMode();
@@ -33,21 +28,31 @@ public:
     const char* getSlug() const override { return "gearbox"; }
     const char* getName() const override { return "Electronic Gearbox"; }
     ModeCategory getCategory() const override { return ModeCategory::COMPOSITE; }
-    uint32_t getRequiredHardware() const override { return CAP_SPINDLE_ENCODER | CAP_MOTOR_Z; }
+    uint32_t getRequiredHardware() const override { return CAP_MOTOR_Z; }
     uint32_t getLivePermissions() const override {
         return PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE;
     }
 
-    // --- Sub-Mode & Parameter Control ---
+    // --- Atomic Motion Invocation (ADR 0001 / ADR 0002) ---
+    bool startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction, int32_t targetDistDu = -1);
+
+    // --- Staging & Parameter Control ---
     bool setActiveAxis(const char* axisStr);
     bool setSync(bool sync);
     bool setDirection(const char* dirStr);
+    bool setDirectionSign(int8_t dir);
+    bool setFeedRate(int32_t feedRateDu);
+    bool setFeedRateMm(float mm);
     bool nudgeFeed(int direction);
 
-    const char* getActiveAxis() const { return m_activeAxis; }
+    AxisId getAxis() const { return m_axis; }
+    const char* getActiveAxisStr() const { return (m_axis == AXIS_X) ? "X" : "Z"; }
+    const char* getActiveAxis() const { return getActiveAxisStr(); }
     bool isSync() const { return m_isSync; }
-    bool isFeedDirForward() const { return m_feedDirForward; }
-    IELSMode* getActivePrimitive() const { return m_activePrimitive; }
+    int8_t getDirection() const { return m_direction; }
+    bool isFeedDirForward() const { return m_direction < 0; }
+    int32_t getFeedRateDu() const { return m_feedRateDu; }
+    int32_t getTargetDistDu() const { return m_targetDistDu; }
 
     // --- Mode-Agnostic Parameter Interface ---
     bool setParam(const char* key, float value) override;

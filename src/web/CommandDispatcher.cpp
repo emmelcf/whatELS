@@ -10,6 +10,7 @@
 #include "PresetService.h"
 #include "modes/ModeRegistry.h"
 #include "modes/composite/UnifiedGearboxMode.h"
+#include "motion/MotionConversions.h"
 
 static Axis* parseAxis(char c) {
   if (c == 'Z' || c == 'z') return &z;
@@ -185,6 +186,83 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         return SettingsService::set(sub + 4, reply);
       }
     }
+
+    // =========================================================================
+    // CANONICAL RICH CLIENT MOTION COMMANDS (ADR 0001 & ADR 0002)
+    // =========================================================================
+
+    // CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]
+    if (cmdLen >= 10 && strncasecmp(cmd, "startFeed=", 10) == 0) {
+      const char* p = cmd + 10;
+      char axisToken[8] = {0};
+      char syncToken[16] = {0};
+      char rateToken[32] = {0};
+      char dirToken[16] = {0};
+      char distToken[32] = {0};
+
+      int parsed = sscanf(p, "%7[^,],%15[^,],%31[^,],%15[^,],%31s",
+                          axisToken, syncToken, rateToken, dirToken, distToken);
+      if (parsed < 4) {
+        if (reply) *reply = "ERR:CMD.startFeed requires <axis>,<sync>,<feedRate>,<dir>,[dist]\n";
+        return false;
+      }
+
+      AxisId axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
+      bool isSync = (strcasecmp(syncToken, "1") == 0 || strcasecmp(syncToken, "sync") == 0 || strcasecmp(syncToken, "true") == 0);
+      int8_t dir = MotionConversions::semanticToDirection(axis, dirToken);
+      if (dir == 0) {
+        dir = (atoi(dirToken) < 0) ? -1 : 1;
+      }
+
+      int32_t feedRateDu = 0;
+      if (strchr(rateToken, '.')) {
+        feedRateDu = MotionConversions::mmToDu(atof(rateToken));
+      } else {
+        feedRateDu = atol(rateToken);
+      }
+
+      int32_t distDu = -1;
+      if (parsed >= 5 && distToken[0] && strcmp(distToken, "-1") != 0) {
+        if (strchr(distToken, '.')) {
+          distDu = MotionConversions::mmToDu(atof(distToken));
+        } else {
+          distDu = atol(distToken);
+        }
+      }
+
+      UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+      if (!gb) {
+        if (reply) *reply = "ERR:Gearbox mode not registered\n";
+        return false;
+      }
+
+      ModeRegistry::activateMode(ModeIds::GEARBOX);
+      bool ok = gb->startFeed(axis, isSync, feedRateDu, dir, distDu);
+      if (ok) {
+        if (reply) *reply = "OK:CMD.startFeed\n";
+        return true;
+      } else {
+        if (reply) *reply = "ERR:CMD.startFeed failed\n";
+        return false;
+      }
+    }
+
+    // CMD.stop
+    if ((cmdLen == 4 && strncasecmp(cmd, "stop", 4) == 0) ||
+        (cmdLen == 5 && strncasecmp(cmd, "stop\n", 5) == 0)) {
+      IELSMode* active = ModeRegistry::getActiveMode();
+      if (active && active->isRunning()) {
+        active->stop(StopType::NORMAL_STOP);
+      }
+      stopVelocityFeed();
+      SettingsService::requestIsOn(false);
+      if (reply) *reply = "OK:CMD.stop\n";
+      return true;
+    }
+
+    // =========================================================================
+    // TRANSITIONAL / COMPATIBILITY MODAL SETTERS (QUARANTINED - ADR 0002)
+    // =========================================================================
 
     // CMD.feedDupr=<du>
     if (cmdLen >= 9 && strncmp(cmd, "feedDupr=", 9) == 0) {
@@ -445,7 +523,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
       if (gb) {
         gb->setDirection(val);
-        if (reply) *reply = String("OK:CMD.gearDir=") + (gb->isFeedDirForward() ? "1" : "-1") + "\n";
+        if (reply) *reply = String("OK:CMD.gearDir=") + (gb->getDirection() < 0 ? "-1" : "1") + "\n";
         return true;
       }
       return false;
@@ -528,10 +606,19 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       return true;
     }
 #endif
-    // CMD.on=<0|1>
+    // CMD.on=<0|1> (Deprecated: use CMD.startFeed / CMD.stop per ADR 0002)
     if (cmdLen >= 3 && strncmp(cmd, "on=", 3) == 0) {
       int on = atoi(cmd + 3);
-      SettingsService::requestIsOn(on != 0);
+      if (on == 0) {
+        IELSMode* active = ModeRegistry::getActiveMode();
+        if (active && active->isRunning()) {
+          active->stop(StopType::NORMAL_STOP);
+        }
+        stopVelocityFeed();
+        SettingsService::requestIsOn(false);
+      } else {
+        SettingsService::requestIsOn(true);
+      }
       return true;
     }
     // CMD.measure=<0|1|2>

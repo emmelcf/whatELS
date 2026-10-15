@@ -91,14 +91,16 @@ To eliminate cross-file coupling and provide clear architectural homes for all c
 │    & HAL (`hal/`)   │ drivers, quadrature spindle    │ • NEVER include WiFi, WebSockets, or UI. │
 │                     │ interrupts, optical DRO scales.│ • Lock-free hardware register access.    │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
-│ 2. Kinematic Kernel │ Atomic motion primitives       │ • Core 1 only.                           │
-│    & Motion         │ (`MoveTo`, `FollowSpindle`),   │ • Operates in integer deci-microns (du). │
-│    (`motion/`)      │ gearing math, backlash inject, │ • Zero floating-point roundtrip drift.   │
-│                     │ acceleration profiling.        │ • Pure math & pulse coordination.        │
+│ 2. Kinematic Kernel │ Atomic kinematic functions     │ • Core 1 only.                           │
+│    & Motion         │ (`FollowSpindle`,              │ • Operates in integer deci-microns (du). │
+│    (`motion/`)      │  `MoveVelocity`), gearing math,│ • Universal soft limit safety envelope   │
+│                     │ backlash, accel/decel profiling│   enforced across ALL modes.             │
+│                     │ and hardware pulse generation. │ • Pure math & pulse coordination.        │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
-│ 3. Operational Mode │ Mode lifecycle state machines  │ • Implements `IELSMode` (enter/loop/exit)│
-│    Engine (`modes/`)| (`GearboxMode`, `TurnMode`,    │ • Prunes unavailable modes via `caps`.   │
-│                     │ `ThreadMode`, `TaperMode`).    │ • Orchestrates primitives from Subsystem 2│
+│ 3. Operational Mode │ Operational mode state machines│ • Implements `IELSMode` (enter/loop/exit)│
+│    Engine (`modes/`)| (`GearboxMode`, `TurnCycle`,   │ • Orchestrates functions from Subsystem 2│
+│                     │ `FaceCycle`, `ThreadCycle`).   │ • Atomic motion execution (`startFeed`). │
+│                     │ Prunes unavailable via `caps`. │ • Mode-agnostic extensibility.           │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
 │ 4. State Model &    │ Single source of truth. 4-tier │ • Atomic point-in-time snapshots (K,I,C,P│
 │    Persistence      │ properties (`machine`, `sys`,  │ • Sparse NVS overrides (pristine flash). │
@@ -107,8 +109,9 @@ To eliminate cross-file coupling and provide clear architectural homes for all c
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
 │ 5. Command          │ Line protocol decoder, client  │ • Canonical ASCII wire strings (`CMD.*`, │
 │    Dispatcher &     │ multiplexing, routing incoming │   `SETTINGS.*`).                         │
-│    Transport        │ commands, broadcasting deltas. │ • Transports (WebSocket, UART) are dumb  │
-│    (`transport/`)   │                                │   pipes feeding the Dispatcher.          │
+│    Transport        │ commands, broadcasting deltas. │ • Normalizes semantic terms (CHUCK/TAIL) │
+│    (`transport/`)   │ Ingress Staging Adapter for    │   to Cartesian signs (-1/+1).            │
+│                     │ simple clients; atomic cmds.   │ • Transports (WS, UART) feed Dispatcher. │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
 │ 6. Human-Machine    │ Hardware inputs (keypad, MPG,  │ • "Input is just an internal client."    │
 │    Interface (HMI)  │ joystick), Nextion display,    │ • Translates buttons/ticks into CMD.*    │

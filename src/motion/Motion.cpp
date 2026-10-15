@@ -6,8 +6,8 @@
 #include "Display.h"
 #include "WebServerModule.h"
 #include "SettingsService.h"
-#include "ModeRegistry.h"
-#include "composite/UnifiedGearboxMode.h"
+#include "modes/ModeRegistry.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 
 // Automation and Operation State
 long setupIndex = 0;
@@ -44,12 +44,17 @@ static long auxSafeDistance = 0;
 static long startOffset = 0;
 static bool timerAttached = false;
 
+VelocityFeedState velocityFeed;
+
 // Axis helpers
 Axis* getPitchAxis() {
   return (mode == LatheMode::FACE || mode == LatheMode::XGEAR) ? &x : &z;
 }
 
 Axis* getAsyncAxis() {
+  if (velocityFeed.axis != nullptr) {
+    return velocityFeed.axis;
+  }
   return &z;
 }
 
@@ -97,6 +102,67 @@ void resetGcodeState() {
   SettingsService::setMeasure(MeasureUnit::METRIC);
 }
 
+void onAsyncTimer();
+
+void initVelocityTimer() {
+  if (!timerAttached && async_timer != nullptr) {
+    timerAttachInterrupt(async_timer, &onAsyncTimer);
+    timerAttached = true;
+  }
+}
+
+bool startVelocityFeed(Axis* a, int32_t speedDuPerMin, int8_t direction, int32_t targetDistDu) {
+  if (!a || speedDuPerMin <= 0 || direction == 0) return false;
+
+  initVelocityTimer();
+
+  // Convert du/min to timer ticks
+  long stepsPerMin = (static_cast<int64_t>(speedDuPerMin) * a->motorSteps) / a->screwPitch;
+  long stepsPerSec = stepsPerMin / 60;
+  if (stepsPerSec <= 0) stepsPerSec = 1;
+
+  unsigned int timerLimit = min((long)65535, (long)(TIMER_FREQ / stepsPerSec) - 1);
+  if (timerLimit < 10) timerLimit = 10;
+
+  // Set hardware direction pin: positive coordinate travel -> true, negative -> false
+  setDir(a, direction > 0);
+
+  // Compute target position bounded by soft limits
+  if (targetDistDu > 0) {
+    long distSteps = (static_cast<int64_t>(targetDistDu) * a->motorSteps) / a->screwPitch;
+    if (direction > 0) {
+      long t = a->pos + distSteps;
+      velocityFeed.targetPos = (a->leftStop != LONG_MAX && t > a->leftStop) ? a->leftStop : t;
+    } else {
+      long t = a->pos - distSteps;
+      velocityFeed.targetPos = (a->rightStop != LONG_MIN && t < a->rightStop) ? a->rightStop : t;
+    }
+  } else {
+    // Continuous feed bounded by active soft limit
+    velocityFeed.targetPos = (direction > 0) ? a->leftStop : a->rightStop;
+  }
+
+  velocityFeed.axis = a;
+  velocityFeed.speedDuPerMin = speedDuPerMin;
+  velocityFeed.direction = direction;
+  velocityFeed.targetDistDu = targetDistDu;
+  velocityFeed.active = true;
+
+  timerAlarm(async_timer, timerLimit, true, 0);
+  timerWrite(async_timer, 0);
+  setAsyncTimerEnable(true);
+  return true;
+}
+
+void stopVelocityFeed() {
+  velocityFeed.active = false;
+  setAsyncTimerEnable(false);
+}
+
+bool isVelocityFeedActive() {
+  return velocityFeed.active;
+}
+
 static unsigned int getTimerLimit() {
   if (dupr == 0) {
     return 65535;
@@ -111,8 +177,42 @@ void updateAsyncTimerSettings() {
 }
 
 void IRAM_ATTR onAsyncTimer() {
+  if (!isOn) return;
+
+  // Modern Subsystem 2 Kinematic Velocity Feed
+  if (velocityFeed.active) {
+    Axis* a = velocityFeed.axis;
+    if (!a || a->movingManually) return;
+
+    int8_t dir = velocityFeed.direction;
+    if (dir > 0 && a->pos < velocityFeed.targetPos) {
+      if (a->pos <= a->motorPos) {
+        a->pos++;
+      }
+      a->motorPos++;
+      a->posGlobal++;
+    } else if (dir < 0 && a->pos > velocityFeed.targetPos) {
+      if (a->pos >= a->motorPos + a->backlashSteps) {
+        a->pos--;
+      }
+      a->motorPos--;
+      a->posGlobal--;
+    } else {
+      // Limit or target stroke reached
+      velocityFeed.active = false;
+      return;
+    }
+
+    DLOW(a->step);
+    a->stepStartUs = micros();
+    delayMicroseconds(10);
+    DHIGH(a->step);
+    return;
+  }
+
+  // Legacy fallback for LatheMode::ASYNC
   Axis* a = getAsyncAxis();
-  if (!isOn || a->movingManually || mode != LatheMode::ASYNC) {
+  if (a->movingManually || mode != LatheMode::ASYNC) {
     return;
   } else if (dupr > 0 && a->pos < a->leftStop) {
     if (a->pos <= a->motorPos) {

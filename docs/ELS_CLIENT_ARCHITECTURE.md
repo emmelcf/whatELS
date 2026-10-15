@@ -434,43 +434,57 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 
 ## 10. Canonical Protocol Command Reference (`CMD.*` & `SETTINGS.*`)
 
-The motion controller dispatcher responds to the following standardized command vocabulary across all transports:
+> **Architectural Standard (ADR 0002):** The core controller command surface is strictly **Rich-Client First & Atomic**. Clients maintain their own view/form state locally and dispatch complete, atomic motion intent. Fragmented modal setters are deprecated and quarantined in a transitional ingress adapter.
 
-### Motion & Cycle Commands
-* `CMD.on=1`: Starts current cycle or feed.
-* `CMD.on=0`: Stops current cycle or feed immediately.
-* `CMD.jogHold=<axis>,<dir>`: Starts continuous manual jog along `<axis>` (`Z` or `X`) in `<dir>` (`TAIL`, `CHUCK`, `INFEED`, `RETRACT`, `1`, `-1`).
+### 10.1 Canonical Rich Client Command Set (Core Surface)
+
+#### Motion & Cycle Execution
+* `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]`: Atomically initiates feed motion:
+  - `axis`: `'Z'` or `'X'`
+  - `sync`: `'sync'` (or `1`) for spindle-synchronized ($\text{mm/rev}$ / $\text{in/rev}$), `'async'` (or `0`) for time-based velocity ($\text{mm/min}$ / $\text{in/min}$)
+  - `feedRate`: strictly positive magnitude ($F > 0$)
+  - `dir`: Cartesian polarity (`-1` for $-Z$ chuck / $-X$ centerline, `+1` for $+Z$ tailstock / $+X$ retract)
+  - `dist`: optional stroke distance in mm (or `-1` for continuous feed to soft limit)
+* `CMD.stop` or `CMD.on=0`: Immediately stops all active motion with controlled deceleration.
+* `CMD.feedNudge=<+1|-1>`: Nudges live in-cut feed rate under chip load without halting motion.
+
+#### Manual Jogging & Positioning
+* `CMD.jogHold=<axis>,<dir>`: Starts continuous manual jog along `<axis>` (`Z` or `X`) in semantic direction (`CHUCK`, `TAIL`, `INFEED`, `RETRACT`, `-1`, `+1`).
 * `CMD.jogRelease=<axis>`: Stops manual jog along `<axis>` (or all axes if omitted).
 * `CMD.jogStep=<axis>,<dir>`: Executes a discrete single-step move of `moveStep` deci-microns in `<dir>`.
 * `CMD.jogStepDu=<du>`: Sets single-step increment size in deci-microns (e.g. `100` = $0.01\text{ mm}$).
+
+#### Coordinates & Universal Travel Limits
 * `CMD.axisZero=<axis>`: Zeroes machine coordinate origin for `<axis>` (`Z`, `X`, `Y`).
 * `CMD.axisPosDu=<axis>,<posDu>`: Sets absolute DRO position coordinate for `<axis>`.
-* `CMD.axisLimitDu=<axis>,<L|R>,<du>`: Programs hardware travel limit for `<axis>`.
+* `CMD.axisLimitDu=<axis>,<L|R>,<du>`: Programs software travel limit boundary for `<axis>`.
 * `CMD.axisClearLimit=<axis>,<L|R>`: Clears specified travel limit register.
 
-### Mode & Kinematics Commands
-* `CMD.mode=<modeId>`: Sets operational mode (`0`=GEAR, `1`=TURN, `2`=FACE, `3`=CONE, `4`=CUT, `5`=THREAD, `6`=SLOT, `7`=ELLIPSE, `8`=GCODE).
-* `CMD.feedRev`: Reverses feed direction (toggles sign of active pitch).
-* `CMD.feedDupr=<du>`: Sets feedrate in deci-microns per spindle revolution.
-* `CMD.feedMm=<mm>`: Sets feedrate/pitch in millimeters.
-* `CMD.feedTpi=<tpi>`: Sets threading pitch in threads per inch.
-* `CMD.feedInch=<inch>`: Sets threading pitch in decimal inches.
-* `CMD.feedStepDu=<du>`: Sets manual feed step size in deci-microns.
-* `CMD.feedStepCycle`: Cycles through standard feed step table entries.
-* `CMD.taperAngle=<deg>`: Sets taper angle in degrees.
-* `CMD.taperRatio=<ratioK>`: Sets taper ratio $1:K$.
-* `CMD.taperPreset=<id>,<deg>,<ratio>`: Loads predefined standard taper preset (Morse, Brown & Sharpe, etc.).
-
-### Settings & Configuration Commands
+### 10.2 Settings, Telemetry & Hydration
 * `SETTINGS.get` / `SETTINGS.get=*`: Returns all persistent machine and operational settings.
 * `SETTINGS.get=<key>`: Returns specific setting value.
 * `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
   - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
-
-### System & State Queries
 * `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
 * `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
 * `CMD.get=K,I,C,P`: Atomic snapshot hydration across requested domains.
+
+### 10.3 Quarantined & Deprecated Modal Commands (Transitional / Dumb Client Shim Only)
+
+> [!WARNING]
+> The following commands are **deprecated** in the core and quarantined in a compatibility ingress adapter. Modern rich clients (Web UI) **must not use these commands**. They exist temporarily to support memoryless dumb displays (Nextion) until those devices are migrated to a dedicated client translation shim outside the core.
+
+| Deprecated Command | Legacy Purpose | Replacement / Modern Equivalent |
+| :--- | :--- | :--- |
+| `CMD.on=1` | Staged feed start | Use atomic `CMD.startFeed=...` |
+| `CMD.gearAxis=<axis>` | Modal axis selection | Pass axis in `CMD.startFeed` |
+| `CMD.gearSync=<sync>` | Modal sync toggle | Pass sync in `CMD.startFeed` |
+| `CMD.gearDir=<dir>` | Modal direction toggle | Pass dir (`-1`/`+1`) in `CMD.startFeed` |
+| `CMD.feedMm=<mm>` | Modal feedrate staging | Pass rate in `CMD.startFeed` |
+| `CMD.feedDupr=<du>` | Modal pitch staging | Pass rate in `CMD.startFeed` |
+| `CMD.feedRev` | Pitch sign flip | Pass dir (`-1`/`+1`) in `CMD.startFeed` |
+| `@pitch:<val>`, `@feed:<val>` | Monolithic string injection | Use `CMD.startFeed` or `SETTINGS.set` |
+| `CMD.mode=<modeId>` (idle) | Setting idle tab in core | Client owns view state; core is `IDLE` |
 
 ---
 

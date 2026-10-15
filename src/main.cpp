@@ -22,6 +22,7 @@ void setup() {
 #endif
   delay(100);
   async_timer = timerBegin(TIMER_FREQ);
+  initVelocityTimer();
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
   DEBUG_PRINTLN("Mounting LittleFS...");
   Serial.flush();
@@ -193,7 +194,8 @@ void loop() {
     resetJoystickLatheFeedPosition();
   }
   IELSMode* activeMode = ModeRegistry::getActiveMode();
-  if (!isOn || (dupr == 0 && currentMode != LatheMode::SLOT) || spindlePosSync != 0) {
+  bool isAsyncRunning = (currentMode == LatheMode::ASYNC) || isVelocityFeedActive();
+  if (!isOn || (dupr == 0 && currentMode != LatheMode::SLOT && !isAsyncRunning) || spindlePosSync != 0) {
     if (currentMode == LatheMode::JOYSTICK && (!isOn || dupr == 0)) {
       resetJoystickLatheFeedPosition();
     }
@@ -201,11 +203,13 @@ void loop() {
       activeMode->stop(StopType::NORMAL_STOP);
     }
   } else if (activeMode && activeMode->getId() == ModeIds::GEARBOX &&
-             (currentMode == LatheMode::NORMAL || currentMode == LatheMode::XGEAR || currentMode == LatheMode::CONE)) {
+             (currentMode == LatheMode::NORMAL || currentMode == LatheMode::XGEAR || currentMode == LatheMode::CONE || currentMode == LatheMode::ASYNC)) {
     if (!activeMode->isRunning()) {
       activeMode->start();
     }
     activeMode->onMotionTick();
+  } else if (currentMode == LatheMode::ASYNC) {
+    // Stepping driven by async_timer interrupt
   } else if (currentMode == LatheMode::NORMAL) {
     modeGearbox(&z);
   } else if (currentMode == LatheMode::XGEAR) {

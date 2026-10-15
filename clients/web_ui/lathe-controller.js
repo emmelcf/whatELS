@@ -1115,7 +1115,7 @@
             state.gearDirX = (state.gearDirX === 'IN' ? 'OUT' : 'IN');
             setStatusMsg('X FEED DIRECTION: ' + (state.gearDirX==='IN'?'↑ TO CENTER (X−)':'↓ RETRACT (X+)'));
           }
-          render();
+          render(true);
         });
       }
 
@@ -1184,7 +1184,7 @@
         btnTaperSide.addEventListener('click', function(){
           state.gearTaperSide = state.gearTaperSide === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
           setStatusMsg('TAPER PROFILE: ' + (state.gearTaperSide==='EXTERNAL'?'EXTERNAL (OD TAPER)':'INTERNAL (ID BORE TAPER)'));
-          render();
+          render(true);
         });
       }
 
@@ -1193,7 +1193,7 @@
         btnTaperInvert.addEventListener('click', function(){
           state.gearTaperInvert = !state.gearTaperInvert;
           setStatusMsg('TAPER CONE SLOPE: ' + (state.gearTaperInvert ? 'INVERTED (TALLER AT TAILSTOCK)' : 'NORMAL (TALLER AT CHUCK)'));
-          render();
+          render(true);
         });
       }
       return;
@@ -1203,13 +1203,13 @@
       $('fld-turnType').addEventListener('click', function(){
         state.turnType = state.turnType === 'EXTERNAL' ? 'INTERNAL' : 'EXTERNAL';
         updateStatusMsg();
-        render();
+        render(true);
       });
       $('fld-turnDir').addEventListener('click', function(){
         state.turnDir = state.turnDir === 'CHUCK' ? 'TAIL' : 'CHUCK';
         recalcTurnLimits();
         updateStatusMsg();
-        render();
+        render(true);
       });
       $('fld-turnLen').addEventListener('click', function(){ openKeypad('turnLength', state.turnLength); });
       $('fld-turnDepth').addEventListener('click', function(){ openKeypad('turnTotalDepth', state.turnTotalDepth); });
@@ -1217,14 +1217,14 @@
       $('fld-turnPasses').addEventListener('click', function(){ openKeypad('turnPasses', state.turnPasses); });
       $('fld-turnRestore').addEventListener('click', function(){
         state.turnRestoreLimits = !state.turnRestoreLimits;
-        updateStatusMsg(); render();
+        updateStatusMsg(); render(true);
       });
     } else if(state.mode === 'FACING'){
       $('fld-faceDir').addEventListener('click', function(){
         state.faceDir = state.faceDir === 'CENTER' ? 'RETRACT' : 'CENTER';
         recalcFaceLimits();
         updateStatusMsg();
-        render();
+        render(true);
       });
       $('fld-faceStroke').addEventListener('click', function(){ openKeypad('faceStroke', state.faceStroke); });
       $('fld-faceDepth').addEventListener('click', function(){ openKeypad('faceTotalDepth', state.faceTotalDepth); });
@@ -1310,34 +1310,47 @@
   function buildInceptionBundle(){
     var bundle = [];
     if(state.mode === 'GEARBOX'){
-      bundle.push('CMD.mode=gearbox');
-      var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
-      bundle.push('CMD.gearAxis=' + ax);
-      bundle.push('CMD.gearSync=' + (state.gearboxMode === 'SYNC' ? 1 : 0));
-      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? 1 : -1) : (state.gearDirZ === 'FWD' ? 1 : -1);
-      bundle.push('CMD.gearDir=' + dirVal);
-      if(state.gearboxMode === 'SYNC'){
-        if(state.activeFeedAxis === 'Z+X'){
-          if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
-            var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-            bundle.push('CMD.taperPreset=' + state.gearTaperPresetIdx + ',' + p.angle + ',' + (1.0 / p.ratio));
-          } else if(state.gearTaperAuthMode === 'ANGLE'){
-            bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || 1.432));
-          } else {
-            var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-            bundle.push('CMD.taperRatio=' + rVal);
-          }
-          var taperPitch = state.gearPitchZ || 0.15;
-          bundle.push('CMD.feedMm=' + taperPitch);
-        } else if(state.gearThreadUnit === 'tpi'){
-          var tpiVal = state.gearPitchZ_tpi || +(25.4 / (state.gearPitchZ || 2.0)).toFixed(2);
-          bundle.push('CMD.feedTpi=' + tpiVal);
+      var ax = state.activeFeedAxis === 'X' ? 'X' : 'Z';
+      if(state.activeFeedAxis === 'Z+X'){
+        // Compound taper/cone mode
+        bundle.push('CMD.mode=cone');
+        if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
+          var p = TAPER_PRESETS[state.gearTaperPresetIdx];
+          bundle.push('CMD.taperPreset=' + state.gearTaperPresetIdx + ',' + p.angle + ',' + (1.0 / p.ratio));
+        } else if(state.gearTaperAuthMode === 'ANGLE'){
+          bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || 1.432));
         } else {
-          var p = (state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ;
-          if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-            bundle.push('CMD.feedMm=' + p);
-          }
+          var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
+          bundle.push('CMD.taperRatio=' + rVal);
         }
+        var taperPitch = state.gearPitchZ || 0.15;
+        bundle.push('CMD.feedMm=' + taperPitch);
+      } else {
+        // Canonical Atomic Motion Invocation (ADR 0001 & ADR 0002)
+        var isSync = (state.gearboxMode === 'SYNC');
+        var syncParam = isSync ? 'sync' : 'async';
+        // Cartesian polarity:
+        // Z: FWD is towards chuck (-Z = -1), REV is towards tailstock (+Z = +1)
+        // X: IN is towards centerline (-X = -1), OUT is retract (+X = +1)
+        var dirVal = (ax === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
+        
+        var feedRateDu = 1000;
+        if(isSync){
+          if(state.gearThreadUnit === 'tpi'){
+            var tpiVal = state.gearPitchZ_tpi || +(25.4 / (state.gearPitchZ || 2.0)).toFixed(2);
+            feedRateDu = Math.round(254000.0 / tpiVal);
+          } else {
+            var p = (ax === 'X') ? state.gearPitchX : state.gearPitchZ;
+            feedRateDu = Math.round((p || 0.1) * 10000.0);
+          }
+        } else {
+          // ASYNC velocity: convert mm/min to deci-microns/min
+          var speedMm = state.gearAsyncSpeed || 150;
+          feedRateDu = Math.round(speedMm * 10000.0);
+        }
+        
+        var distDu = (state.gearTargetDist && state.gearTargetDist > 0) ? Math.round(state.gearTargetDist * 10000.0) : -1;
+        bundle.push('CMD.startFeed=' + ax + ',' + syncParam + ',' + feedRateDu + ',' + dirVal + ',' + distDu);
       }
     } else if(state.mode === 'TURNING'){
       bundle.push('CMD.mode=turn');
@@ -1630,7 +1643,7 @@
     $('modeHead').classList.toggle('locked', state.runState === 'running');
 
     // Only rebuild modeBody DOM when mode or state parameters change, avoiding 10Hz DOM thrash
-    var currentModeKey = state.mode + '|' + state.runState + '|' + state.activeFeedAxis + '|' + state.gearFeedModeZ + '|' + state.gearboxMode + '|' + (state.gearTaperPresetIdx) + '|' + (state.gearTaperAuthVal) + '|' + (state.turnCurrentPass) + '|' + (state.faceCurrentPass) + '|' + (state.pitch) + '|' + (state.threadTpiVal);
+    var currentModeKey = state.mode + '|' + state.runState + '|' + state.activeFeedAxis + '|' + state.gearFeedModeZ + '|' + state.gearboxMode + '|' + state.gearDirZ + '|' + state.gearDirX + '|' + state.gearTaperSide + '|' + state.gearTaperInvert + '|' + state.turnDir + '|' + state.turnType + '|' + state.faceDir + '|' + (state.gearTaperPresetIdx) + '|' + (state.gearTaperAuthVal) + '|' + (state.turnCurrentPass) + '|' + (state.faceCurrentPass) + '|' + (state.pitch) + '|' + (state.threadTpiVal);
     if(forceModeRebuild || currentModeKey !== lastRenderedModeKey){
       lastRenderedModeKey = currentModeKey;
       $('modeBody').innerHTML = modeBodyHTML();
@@ -1712,7 +1725,7 @@
       var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
       window.nanoelsClient.setGearAxis(ax);
       window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
-      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? 1 : -1) : (state.gearDirZ === 'FWD' ? 1 : -1);
+      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
       window.nanoelsClient.setGearDir(dirVal);
       return;
     }
@@ -4177,25 +4190,28 @@
           state.perms = typeof data.perms === 'string' && data.perms.startsWith('0x') ? parseInt(data.perms, 16) : (parseInt(data.perms, 10) || 0);
         }
 
-        if(c && c.gearAxis !== undefined){
-          if(c.gearAxis === 'X') state.activeFeedAxis = 'X';
-          else if(c.gearAxis === 'ZX') state.activeFeedAxis = 'Z+X';
-          else state.activeFeedAxis = 'Z';
-        }
-        if(c && c.gearSync !== undefined){
-          state.gearboxMode = (c.gearSync && c.gearSync !== '0') ? 'SYNC' : 'ASYNC';
-        }
-        if(c && c.gearDir !== undefined){
-          var isFwd = (c.gearDir === 1 || c.gearDir === '1' || c.gearDir === 'FWD');
-          if(state.activeFeedAxis === 'X'){
-            state.gearDirX = isFwd ? 'IN' : 'OUT';
-          } else {
-            state.gearDirZ = isFwd ? 'FWD' : 'REV';
+        // 5. Controller Operating Mode Mapping & Idle Decoupling (ADR 0002 / ADR 0015)
+        var isLiveMotion = (state.runState === 'running');
+
+        // Only reflect gearbox axis, sync, and direction during live motion execution
+        if(isLiveMotion){
+          if(c && c.gearAxis !== undefined){
+            if(c.gearAxis === 'X') state.activeFeedAxis = 'X';
+            else if(c.gearAxis === 'ZX') state.activeFeedAxis = 'Z+X';
+            else state.activeFeedAxis = 'Z';
+          }
+          if(c && c.gearSync !== undefined){
+            state.gearboxMode = (c.gearSync && c.gearSync !== '0') ? 'SYNC' : 'ASYNC';
+          }
+          if(c && c.gearDir !== undefined){
+            var isFwd = (c.gearDir === -1 || c.gearDir === '-1' || c.gearDir === 'CHUCK' || c.gearDir === 'INFEED' || c.gearDir === 'FWD' || c.gearDir === 'IN' || c.gearDir === 'LEFT');
+            if(state.activeFeedAxis === 'X'){
+              state.gearDirX = isFwd ? 'IN' : 'OUT';
+            } else {
+              state.gearDirZ = isFwd ? 'FWD' : 'REV';
+            }
           }
         }
-
-        // 5. Controller Operating Mode Mapping (ADR 15: Idle Decoupling vs Active Motion)
-        var isLiveMotion = (state.runState === 'running');
         if(isLiveMotion || !state.hasHydratedMode){
           state.hasHydratedMode = true;
           var rawMode = (c && c.mode !== undefined) ? c.mode : data.mode;

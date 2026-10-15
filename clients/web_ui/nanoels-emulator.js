@@ -61,7 +61,7 @@ class NanoelsEmulator {
     this.perms = 15; // PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE
     this.gearAxis = 'Z';
     this.gearSync = true;
-    this.gearDir = 1;
+    this.gearDir = -1;
 
     // Pass cycle progression
     this.cycleStage = 0;
@@ -146,6 +146,35 @@ class NanoelsEmulator {
       const cmd = line.substring(4);
       if (cmd.startsWith('get=')) {
         this._emitDomainQuery(cmd);
+        return;
+      }
+      if (cmd.startsWith('startFeed=')) {
+        const parts = cmd.substring(10).split(',');
+        const ax = (parts[0] || 'Z').toUpperCase();
+        const sync = parts[1] === '1' || parts[1] === 'sync' || parts[1] === 'true';
+        const rate = parseFloat(parts[2]) || 1000;
+        const dir = parseInt(parts[3], 10) < 0 ? -1 : 1;
+        const dist = parts[4] ? parseFloat(parts[4]) : -1;
+
+        this.gearAxis = ax;
+        this.gearSync = sync;
+        this.gearDir = dir;
+        this.mode = sync ? (ax === 'X' ? 'XGEAR' : 'GEAR') : 'ASYNC';
+        if (sync) {
+          this.dupr = dir * Math.round(rate);
+        } else {
+          this.dupr = 0;
+          this.asyncSpeed = Math.round(rate);
+          this.asyncDir = dir;
+        }
+        this.isOn = true;
+        this.spindleRunning = sync;
+        this._lastTelemetryStr = '';
+        return;
+      }
+      if (cmd === 'stop') {
+        this.isOn = false;
+        this._lastTelemetryStr = '';
         return;
       }
       if (cmd.startsWith('feedDupr=')) {
@@ -256,7 +285,7 @@ class NanoelsEmulator {
         this.mode = 'GEARBOX';
       } else if (cmd.startsWith('gearDir=')) {
         const val = cmd.substring(8).toUpperCase();
-        this.gearDir = (val === 'CHUCK' || val === 'CENTER' || val === '1' || val === 'FWD') ? 1 : -1;
+        this.gearDir = (val === 'CHUCK' || val === 'CENTER' || val === 'IN' || val === 'FWD' || val === '-1' || val === '-') ? -1 : 1;
       } else if (cmd.startsWith('feedNudge=')) {
         const dir = (cmd[10] === '-' || parseInt(cmd.substring(10), 10) < 0) ? -1 : 1;
         this.dupr = Math.max(100, this.dupr + (dir * (this.feedStepDu || 500)));
@@ -507,6 +536,22 @@ class NanoelsEmulator {
       }
     }
 
+    // 4b. Asynchronous Velocity Feed Motion (ADR 0001 & ADR 0002)
+    if (this.isOn && this.mode === 'ASYNC') {
+      const speedDuPerMin = this.asyncSpeed || 1500000;
+      const dir = this.asyncDir || -1;
+      const duDelta = dir * (speedDuPerMin * (deltaMillis / 60000.0));
+      if (this.gearAxis === 'X') {
+        this.x += duDelta;
+        if (dir < 0 && this.xLeft !== null && this.x <= this.xLeft) { this.x = this.xLeft; this.isOn = false; }
+        if (dir > 0 && this.xRight !== null && this.x >= this.xRight) { this.x = this.xRight; this.isOn = false; }
+      } else {
+        this.z += duDelta;
+        if (dir < 0 && this.zLeft !== null && this.z <= this.zLeft) { this.z = this.zLeft; this.isOn = false; }
+        if (dir > 0 && this.zRight !== null && this.z >= this.zRight) { this.z = this.zRight; this.isOn = false; }
+      }
+    }
+
     // 5. Broadcast Periodic Telemetry (every ~100ms)
     this._broadcastTelemetry();
   }
@@ -622,7 +667,7 @@ class NanoelsEmulator {
              `K.perms=${this.perms || 15}\n` +
              `K.gearAxis=${this.gearAxis || 'Z'}\n` +
              `K.gearSync=${this.gearSync !== false ? 1 : 0}\n` +
-             `K.gearDir=${this.gearDir || 1}\n`;
+             `K.gearDir=${this.gearDir < 0 ? 'FWD' : 'REV'}\n`;
     }
     if (domainMask & 0x02) { // Intent (I)
       out += `I.thFmt=${this.thFmt}\n` +

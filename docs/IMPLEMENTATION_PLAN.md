@@ -128,17 +128,25 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 > **Objective:** Transition the motion engine from procedural functions in [`Motion.cpp`](../src/motion/Motion.cpp) into polymorphic, modular classes adhering to [`IELSMode`](./ELS_MODE_ARCHITECTURE.md#32-the-mode-interface-contract-ielsmode).
 
 ### Planned Conversations:
-* **Session 2.1: `IELSMode` Base Interface & `ModeRegistry` Framework**
-  - Implement base lifecycle: `init()`, `enter()`, `loop()`, `exit()`, `handleCommand()`, `getTelemetry()`, `isSafetyTripped()`.
-  - Create `ModeRegistry` to map `ModeId` to mode instances with hardware capability preconditions.
-* **Session 2.2: Extraction of Primitive Kinematic Kernels**
-  - Extract deterministic step math from `Motion.cpp`: `PrimGearZ` (leadscrew sync), `PrimGearX` (cross-slide sync), `PrimAsync` (timed feed), `PrimCone` (coordinated slope).
-* **Session 2.3: Unified Gearbox Composite Mode**
-  - Replace `MODE_NORMAL`, `MODE_XGEAR`, `MODE_ASYNC`, and `MODE_CONE` with `UnifiedGearboxMode`, orchestrating primitives based on operator axis selection.
-* **Session 2.4: Multi-Pass Machining Cycles (Turning, Facing, Threading)**
-  - Implement `TurnCycleMode`, `FaceCycleMode`, and `ThreadCycleMode` as clean state machines using the primitives, eliminating duplicated pass sequencing.
-* **Session 2.5: Supervisor & Legacy Input Adapter Refactoring**
-  - Route all mode activations from Nextion serial ([`Input.cpp`](../src/input/Input.cpp)) and Web UI through `ModeRegistry` and [`CommandDispatcher`](../src/web/CommandDispatcher.cpp).
+* **Session 2.1: `IELSMode` Base Interface & `ModeRegistry` Framework [COMPLETE]**
+  - Implement base lifecycle: `init()`, `enter()`, `loop()`, `exit()`, `start()`, `stop()`, `handleCommand()`, `getTelemetry()`.
+  - Create `ModeRegistry` to map operational `ModeId` to mode instances with hardware capability preconditions.
+* **Session 2.2: Kinematic Kernel Functions & Conversion Utilities (Subsystem 2) (ADR 0001)**
+  - Implement pure kinematic step functions in `motion/`: `stepSynchronized()`, `stepVelocity()`.
+  - Implement `MotionConversions.h`: Cartesian direction parsing (`semanticToDirection`), unit conversions (`mmToDu`, `feedMmPerMinToDu`).
+  - Modernize timer stepping (`onAsyncTimer`) to step active axis in coordinate polarity, strictly bounded by universal soft limits (`leftStop`, `rightStop`).
+* **Session 2.3: Consolidated Gearbox Operational Mode (`GearboxMode`) (ADR 0001)**
+  - Refactor `UnifiedGearboxMode` into a clean, unified `GearboxMode` directly invoking Subsystem 2 kinematic functions.
+  - Retire pseudo-mode wrapper classes (`GearZPrimitive`, `GearXPrimitive`, `AsyncPrimitive`).
+  - Implement G94/G95 "Feed is Feed" context and `startFeed(FeedRequest)` atomic invocation.
+* **Session 2.4: Command Dispatcher & Ingress Staging Adapter (Subsystem 5) (ADR 0001 & ADR 0002)**
+  - Implement canonical rich client commands: `CMD.startFeed=<A,S,F,D,[dist]>`, `CMD.stop`, `CMD.feedNudge`.
+  - Quarantine and isolate legacy drip-fed modal setters (`gearAxis`, `gearSync`, `gearDir`, `feedMm`) into a dedicated compatibility staging adapter.
+* **Session 2.5: Web UI Atomic Invocation Integration (Subsystem 6) (ADR 0001)**
+  - Update `clients/web_ui/lathe-controller.js` to dispatch `CMD.startFeed` atomically on START.
+  - Remove unnecessary intermediate drip-feeding during form editing.
+* **Session 2.6: Multi-Pass Machining Cycles (Turning, Facing, Threading)**
+  - Implement `TurnCycleMode`, `FaceCycleMode`, and `ThreadCycleMode` as clean state machines using Subsystem 2 kinematic functions directly.
 
 ---
 

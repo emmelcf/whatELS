@@ -372,7 +372,7 @@ class NanoelsService extends EventTarget {
     }
     this.sendRaw('CMD.on=1\n', 'START FEED / CYCLE');
   }
-  stopCycle()  { this.sendRaw('CMD.on=0\n', 'STOP FEED / CYCLE'); }
+  stopCycle()  { this.sendRaw('CMD.stop\n', 'STOP FEED / CYCLE'); }
 
   // Zero axes
   zeroAxis(axis) {

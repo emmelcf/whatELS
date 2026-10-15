@@ -390,100 +390,64 @@ In a lathe controller, safety depends on strictly governing what an operator or 
 
 The most critical innovation of this architecture is **Controller-Side Orchestration**. Instead of a monolithic mode attempting to handle every edge case, complex cycles simply instantiate and control child primitive modes through their standard `IELSMode` interface.
 
-### 4.1 Example: `UnifiedGearboxMode`
+### 4.1 `GearboxMode` (Electronic Gearbox Workspace)
 
-The **Unified Gearbox Mode** is a Composite Mode that unifies four primitive modes under one roof. The operator interacts with one cohesive screen, but the controller activates the appropriate underlying primitive:
+The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a single, cohesive Operational Mode (Subsystem 3). It unifies longitudinal leadscrew feeds, transverse cross-feeds, coordinated tapers, and motorized velocity traverses under one roof.
 
-```mermaid
-graph TD
-    subgraph Unified_Gearbox ["UnifiedGearboxMode (Composite)"]
-        SubModeSelector{"Sub-Mode Active?"}
-        Params["Shared Parameters:\nPitch, Feedrate, Direction, Stops"]
-    end
+#### 4.1.1 Architectural Tenets of the Gearbox Mode
 
-    subgraph Primitive_Children ["Internal Primitive Instances"]
-        P_GearZ["GearZ Primitive\n(Z leadscrew spindle-synced)"]
-        P_GearX["GearX Primitive\n(X cross-slide spindle-synced)"]
-        P_Async["AsyncFeed Primitive\n(Continuous mm/min velocity)"]
-        P_Cone["CoordinatedVector Primitive\nX & Z synchronized ratio"]
-    end
+1. **Kinematic Functions Instead of Pseudo-Modes:**
+   Time-based velocity stepping and spindle-geared stepping are **Kinematic Kernel Functions** (Subsystem 2), not separate `IELSMode` classes. `GearboxMode` simply invokes the appropriate kinematic function based on its configuration:
+   - When `sync == true`: Slaves motor steps to the spindle encoder (`stepSynchronized`).
+   - When `sync == false`: Slaves motor steps to the high-resolution hardware clock timer (`stepVelocity`).
+2. **"Feed is Feed" (G94 / G95 Standard):**
+   Feed rate magnitude is always positive ($F > 0$). The physical unit is naturally and intuitively defined by the active synchronization context:
+   - In **Synchronized Mode (`sync == true`)**: Feed per Spindle Revolution ($\text{mm/rev}$ or $\text{in/rev}$, canonical $\text{dupr}$).
+   - In **Asynchronous Mode (`sync == false`)**: Feed per Minute ($\text{mm/min}$ or $\text{in/min}$, canonical $\text{du/min}$).
+3. **Cartesian Coordinate Direction (-1 / +1):**
+   Direction is an explicit Cartesian coordinate sign, eliminating the ambiguity of terms like "forward" and "reverse":
+   - **Negative (`-1`)**: Decreasing coordinate ($\Delta \text{pos} < 0$, towards $-Z$ chuck or $-X$ centerline).
+   - **Positive (`+1`)**: Increasing coordinate ($\Delta \text{pos} > 0$, towards $+Z$ tailstock or $+X$ retract).
+   The ingress translation layer accepts operator semantic aliases (`CHUCK`/`TAIL`/`IN`/`OUT`) and immediately normalizes them to `-1` or `+1`.
+4. **Universal Soft Limits & Target Distances:**
+   Soft limits (`leftStop`, `rightStop`) are universal machine envelopes enforced in the Kinematic Kernel for all motion. When an optional `distance` is commanded:
+   - **Finite move**: Targets $P_{\text{target}} = P_0 + (\text{dir} \times \text{distance})$, clamped by the soft limit.
+   - **Continuous move (`distance == -1`)**: Targets the active soft limit itself.
+   Because the destination is known, the kinematic engine plans clean deceleration ramps ($d = v^2 / 2a$), smoothly gliding to a stop with zero mechanical shock.
 
-    Unified_Gearbox --> SubModeSelector
-    SubModeSelector -->|Z Lead| P_GearZ
-    SubModeSelector -->|X Lead| P_GearX
-    SubModeSelector -->|Continuous| P_Async
-    SubModeSelector -->|Diagonal/Taper| P_Cone
-
-    P_GearZ --> MotionHW["Motion Timers & Stepper Drivers"]
-    P_GearX --> MotionHW
-    P_Async --> MotionHW
-    P_Cone --> MotionHW
-```
-
-#### 4.1.1 The Four Composed Primitives
-
-1. **`GearZPrimitive` (Longitudinal Leadscrew Feed)**:
-   - Slaves $Z$ carriage motor steps directly to spindle encoder pulses via Bresenham fractional step accumulation.
-   - Respects $Z$ travel limits (`z_min`, `z_max`), feed direction (`feedDirZ`), and thread/feed pitches (`dupr`).
-
-   | Parameter Key | Type | Unit | Default | Range (Min / Max / Step) | Wire Command | Description |
-   | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-   | `pitch_dupr` | `INT32` | `dupr` | `1000` (0.1 mm) | `10` .. `500000` / `100` | `CMD.feedDupr=<du>`, `CMD.feedMm=<mm>`, `CMD.feedTpi=<tpi>` | Spindle-geared longitudinal feed pitch in deci-microns/rev. |
-
-2. **`GearXPrimitive` (Transverse Cross-Slide Feed)**:
-   - Slaves $X$ cross-slide motor steps to spindle encoder pulses.
-   - Respects $X$ travel limits (`x_min`, `x_max`) and cross-feed pitches (`xDupr`).
-
-   | Parameter Key | Type | Unit | Default | Range (Min / Max / Step) | Wire Command | Description |
-   | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-   | `pitch_dupr` | `INT32` | `dupr` | `500` (0.05 mm) | `10` .. `250000` / `50` | `CMD.feedDupr=<du>`, `CMD.feedMm=<mm>`, `CMD.feedInch=<in>` | Spindle-geared transverse cross-feed pitch in deci-microns/rev. |
-
-3. **`AsyncPrimitive` (Time-Based Velocity Feed / Rapid)**:
-   - Drives $Z$ or $X$ at a constant linear speed ($\text{mm/min}$ or $\text{in/min}$) via high-resolution hardware timer, completely decoupled from spindle rotation.
-   - Used for continuous power feeding or rapid moves when the spindle is stopped.
-
-   | Parameter Key | Type | Unit | Default | Range (Min / Max / Step) | Options / Wire Command | Description |
-   | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-   | `axis` | `ENUM` | — | `"Z"` | — | `"Z"`, `"X"` (`CMD.gearAxis=<Z\|X>`) | Target motion axis driven by high-resolution timer. |
-   | `speed` | `INT32` | `du/min` | `1500000` (150 mm/min) | `1000` .. `100000000` / `100000` | `CMD.asyncSpeed=<du>` | Linear cutting or traverse feed velocity in deci-microns/minute. |
-
-4. **`ConePrimitive` (Coordinated Synchronized Taper)**:
-   - Drives $Z$ and $X$ simultaneously in a fixed diametral ratio ($1:k$, half-angle $\alpha$, or standard Morse taper preset) slaved to the spindle.
-
-   | Parameter Key | Type | Unit | Default | Range (Min / Max / Step) | Wire Command | Description |
-   | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-   | `cone_ratio` | `FLOAT` | `ratio` | `0.050` (1:20) | `0.0001` .. `10.0` / `0.001` | `CMD.taperRatio=<val>`, `CMD.taperAngle=<deg>`, `CMD.taperPreset=<id>` | Coordinated diametral slope ratio ($K = \Delta X / \Delta Z$). |
-   | `pitch_dupr` | `INT32` | `dupr` | `1000` (0.1 mm) | `10` .. `500000` / `100` | `CMD.feedDupr=<du>`, `CMD.feedMm=<mm>` | Primary longitudinal synchronized feed rate in deci-microns/rev. |
-
-#### 4.1.2 Unified Gearbox Mode Parameter Specification
-
-The composite `UnifiedGearboxMode` exposes the unified parameter contract across all four primitives:
+#### 4.1.2 Gearbox Mode Parameter Contract
 
 | Parameter Key | Type | Unit | Default | Valid Range / Options | Wire Command | Description & Execution Semantics |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `axis` | `ENUM` | — | `"Z"` | `"Z"`, `"X"`, `"ZX"` | `CMD.gearAxis=<Z\|X\|ZX>` | Active motion axis. Selecting `"Z"` or `"X"` delegates to `GearZ`/`GearX` (or `Async`); `"ZX"` activates `ConePrimitive`. |
-| `sync` | `BOOL` | — | `true` | `true` (1), `false` (0) | `CMD.gearSync=<1\|0>` | Motion synchronizer source. `true`: Slaved to spindle encoder; `false`: Continuous timer velocity feed (`Async`). |
-| `dir` | `ENUM` | — | `"CHUCK"` | `"CHUCK"`, `"TAIL"`, `"CENTER"`, `"RETRACT"` | `CMD.gearDir=<dir>`, `CMD.feedDir=<dir>`, `CMD.feedRev` | Motion travel direction. Positive/forward feeds toward headstock/centerline; negative feeds toward tailstock/retract. |
-| `pitch_dupr` | `INT32` | `dupr` | `1000` | `10` .. `500000` | `CMD.feedDupr=`, `CMD.feedMm=`, `CMD.feedTpi=` | Spindle synchronized pitch setpoint (active when `sync == true`). |
-| `speed` | `INT32` | `du/min` | `1500000` | `1000` .. `100000000` | `CMD.asyncSpeed=` | Continuous velocity feed rate (active when `sync == false`). |
-| `cone_ratio` | `FLOAT` | `ratio` | `0.050` | `0.0001` .. `10.0` | `CMD.taperRatio=`, `CMD.taperAngle=`, `CMD.taperPreset=` | Diametral taper ratio (active when `axis == "ZX"`). |
-| `nudge` | `INT32` | `step` | `0` | `-1`, `+1` | `CMD.feedNudge=<+1\|-1>` | Live in-cut chip load trimmer. Increments/decrements feed by active `feedStepDu`. Permitted while `RUNNING`. |
+| `axis` | `ENUM` | — | `"Z"` | `"Z"`, `"X"`, `"ZX"` | `CMD.gearAxis=<Z\|X\|ZX>` | Active motion axis. `"Z"` (carriage), `"X"` (cross-slide), `"ZX"` (compound taper). |
+| `sync` | `BOOL` | — | `true` | `true` (1), `false` (0) | `CMD.gearSync=<1\|0>` | Synchronization source. `true`: Spindle encoder; `false`: Hardware velocity clock timer. |
+| `dir` | `INT8` | sign | `-1` | `-1`, `+1` | `CMD.gearDir=<-1\|+1>` | Cartesian coordinate direction. Ingress accepts `CHUCK`/`TAIL`/`IN`/`OUT` aliases. |
+| `feed` | `INT32` | canonical | `1000` | `10` .. `100000000` | `CMD.feedMm=`, `CMD.feedRate=` | Feed rate magnitude ($F > 0$). Interpreted as du/rev if sync; du/min if async. |
+| `distance` | `INT32` | `du` | `-1` | `-1` .. `100000000` | `CMD.feedDistMm=`, `CMD.feedDistDu=` | Stroke travel distance in deci-microns. `-1` = continuous feed to soft limit. |
+| `cone_ratio` | `FLOAT` | `ratio` | `0.050` | `0.0001` .. `10.0` | `CMD.taperRatio=`, `CMD.taperAngle=` | Diametral taper ratio (active when `axis == "ZX"`). |
+| `nudge` | `INT32` | `step` | `0` | `-1`, `+1` | `CMD.feedNudge=<+1\|-1>` | Live in-cut chip load trimmer. Permitted while `RUNNING`. |
 
-#### 4.1.3 Canonical Command Protocol:
-- **Mode Activation:** `CMD.mode=GEARBOX` (or `CMD.mode=gearbox`)
-- **Sub-Mode Selection:**
-  - `CMD.gearAxis=<Z|X|ZX>` (Carriage, Cross-slide, or Taper)
-  - `CMD.gearSync=<1|0>` (Spindle Synchronized vs. Time-based Velocity)
-  - `CMD.gearDir=<1|-1|CHUCK|TAIL|CENTER|RETRACT>`
-- **Feed Setpoints (reusing canonical Intent models):**
-  - `CMD.feedMm=<mm>` / `CMD.feedTpi=<tpi>` / `CMD.feedDupr=<dupr>`
-  - `CMD.asyncSpeed=<duPerMin>`
-  - `CMD.taperAngle=<deg>` / `CMD.taperRatio=<ratio>` / `CMD.taperPreset=<id>`
-- **Live In-Cut Interventions:**
-  - `CMD.feedNudge=<+1|-1>` (nudges feed rate by `feedStepDu` under chip load)
-  - `CMD.feedStepCycle` (cycles active feed step size: 0.01, 0.05, 0.10, 0.20 mm)
-- **Execution:**
-  - `CMD.on=1` (Engage feed) / `CMD.on=0` (Disengage / stop feed)
+#### 4.1.3 Dual Command Pathways: Atomic vs. Ingress Staging
+
+To support both advanced multi-client tablet UIs and simple hardware pendants, the Command Dispatcher provides two pathways into the exact same core API:
+
+##### 1. Atomic Motion Invocation (Rich Clients / Web UI / Macros)
+Dispatches the complete motion specification in a single atomic frame when engaging feed:
+```
+CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[distance]
+```
+* Example (Sync): `CMD.startFeed=Z,sync,0.15,-1` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously.
+* Example (Async): `CMD.startFeed=Z,async,150,-1,25.0` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
+
+##### 2. Ingress Staging Adapter (Dumb Clients / Pendants / Form Setters)
+Allows simple clients to update modal parameters one by one, staging them on Core 0 until engaged:
+- `CMD.gearAxis=<Z|X|ZX>`
+- `CMD.gearSync=<1|0>`
+- `CMD.gearDir=<-1|+1|CHUCK|TAIL|IN|OUT>`
+- `CMD.feedMm=<val>` (interpreted by active sync context)
+- `CMD.feedDistMm=<val>` (optional stroke length)
+- `CMD.on=1` $\to$ Packages staged parameters and calls `startFeed()`.
+- `CMD.on=0` $\to$ Halts motion immediately.
 
 #### 4.1.3 Delegation Implementation:
 ```cpp
