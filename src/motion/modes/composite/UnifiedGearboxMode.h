@@ -50,7 +50,8 @@ public:
     const char* getActiveAxis() const { return getActiveAxisStr(); }
     bool isSync() const { return m_isSync; }
     int8_t getDirection() const { return m_direction; }
-    bool isFeedDirForward() const { return m_direction < 0; }
+    bool isFeedDirTowardsChuck() const { return m_direction < 0; }
+    bool isFeedDirTowardsTail() const { return m_direction > 0; }
     int32_t getFeedRateDu() const { return m_feedRateDu; }
     int32_t getTargetDistDu() const { return m_targetDistDu; }
 

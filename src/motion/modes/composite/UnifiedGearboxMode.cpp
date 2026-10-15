@@ -53,8 +53,8 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
         // Stop velocity timer if running
         stopVelocityFeed();
 
-        // Configure sync spindle gearing
-        long signedDupr = direction * feedRateDu;
+        // Configure sync spindle gearing: Cartesian -1 (Chuck) maps to positive dupr
+        long signedDupr = -direction * feedRateDu;
         LatheMode latheMode = (axis == AXIS_X) ? LatheMode::XGEAR : LatheMode::NORMAL;
         setModeFromTask(latheMode);
         setFeedrateDupr(signedDupr, false);
@@ -63,8 +63,8 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
         return true;
     } else {
         // Velocity feed
-        setModeFromTask(LatheMode::ASYNC);
         dupr = 0;
+        setModeFromTask(LatheMode::ASYNC);
         setIsOnFromTask(true);
         bool ok = startVelocityFeed(a, feedRateDu, direction, targetDistDu);
         if (ok) {
@@ -116,7 +116,7 @@ bool UnifiedGearboxMode::setFeedRate(int32_t feedRateDu) {
     if (m_state == ModeState::RUNNING) {
         // Dynamic in-cut update
         if (m_isSync) {
-            setFeedrateDupr(m_direction * m_feedRateDu, false);
+            setFeedrateDupr(-m_direction * m_feedRateDu, false);
         } else {
             Axis* a = (m_axis == AXIS_X) ? &x : &z;
             startVelocityFeed(a, m_feedRateDu, m_direction, m_targetDistDu);

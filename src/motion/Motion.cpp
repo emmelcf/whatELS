@@ -124,22 +124,27 @@ bool startVelocityFeed(Axis* a, int32_t speedDuPerMin, int8_t direction, int32_t
   unsigned int timerLimit = min((long)65535, (long)(TIMER_FREQ / stepsPerSec) - 1);
   if (timerLimit < 10) timerLimit = 10;
 
-  // Set hardware direction pin: positive coordinate travel -> true, negative -> false
-  setDir(a, direction > 0);
-
-  // Compute target position bounded by soft limits
-  if (targetDistDu > 0) {
-    long distSteps = (static_cast<int64_t>(targetDistDu) * a->motorSteps) / a->screwPitch;
-    if (direction > 0) {
+  // Set hardware direction pin and compute target position bounded by soft limits:
+  // direction < 0: Cartesian negative (-Z chuck / -X center) -> setDir(true), target bounded by leftStop
+  // direction > 0: Cartesian positive (+Z tailstock / +X retract) -> setDir(false), target bounded by rightStop
+  if (direction < 0) {
+    setDir(a, true);
+    if (targetDistDu > 0) {
+      long distSteps = (static_cast<int64_t>(targetDistDu) * a->motorSteps) / a->screwPitch;
       long t = a->pos + distSteps;
       velocityFeed.targetPos = (a->leftStop != LONG_MAX && t > a->leftStop) ? a->leftStop : t;
     } else {
-      long t = a->pos - distSteps;
-      velocityFeed.targetPos = (a->rightStop != LONG_MIN && t < a->rightStop) ? a->rightStop : t;
+      velocityFeed.targetPos = a->leftStop;
     }
   } else {
-    // Continuous feed bounded by active soft limit
-    velocityFeed.targetPos = (direction > 0) ? a->leftStop : a->rightStop;
+    setDir(a, false);
+    if (targetDistDu > 0) {
+      long distSteps = (static_cast<int64_t>(targetDistDu) * a->motorSteps) / a->screwPitch;
+      long t = a->pos - distSteps;
+      velocityFeed.targetPos = (a->rightStop != LONG_MIN && t < a->rightStop) ? a->rightStop : t;
+    } else {
+      velocityFeed.targetPos = a->rightStop;
+    }
   }
 
   velocityFeed.axis = a;
@@ -185,13 +190,13 @@ void IRAM_ATTR onAsyncTimer() {
     if (!a || a->movingManually) return;
 
     int8_t dir = velocityFeed.direction;
-    if (dir > 0 && a->pos < velocityFeed.targetPos) {
+    if (dir < 0 && a->pos < velocityFeed.targetPos) {
       if (a->pos <= a->motorPos) {
         a->pos++;
       }
       a->motorPos++;
       a->posGlobal++;
-    } else if (dir < 0 && a->pos > velocityFeed.targetPos) {
+    } else if (dir > 0 && a->pos > velocityFeed.targetPos) {
       if (a->pos >= a->motorPos + a->backlashSteps) {
         a->pos--;
       }

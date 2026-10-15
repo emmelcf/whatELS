@@ -60,39 +60,61 @@ namespace MotionConversions {
 
   // --- Semantic Intent to Cartesian Polarity (-1 / +1) ---
 
+  struct DirectionMapping {
+    const char* token;
+    uint8_t     axisMask;  // 0x01 = Z, 0x02 = X, 0x03 = Any
+    int8_t      direction; // -1 (Chuck/Center) or +1 (Tail/Retract)
+  };
+
+  static const DirectionMapping DIRECTION_TABLE[] = {
+    // Z-Axis (Carriage)
+    { "CHUCK",   0x01, -1 },
+    { "LEFT",    0x01, -1 },
+    { "TAIL",    0x01, +1 },
+    { "RIGHT",   0x01, +1 },
+
+    // X-Axis (Cross-Slide)
+    { "CENTER",  0x02, -1 },
+    { "INFEED",  0x02, -1 },
+    { "IN",      0x02, -1 },
+    { "RETRACT", 0x02, +1 },
+    { "OUT",     0x02, +1 },
+  };
+
   /**
    * @brief Converts semantic human direction strings into Cartesian coordinate polarity.
    * - Negative (-1): Coordinate decreasing (-Z towards chuck, -X towards spindle centerline).
    * - Positive (+1): Coordinate increasing (+Z towards tailstock, +X retract away from cut).
+   * Note: Spindle terms FWD/REV are strictly rejected for axis feed motion.
    */
   inline int8_t semanticToDirection(AxisId axis, const char* str) {
     if (!str || !str[0]) return 0;
 
-    // Check direct numeric signs
-    if (strcmp(str, "-1") == 0 || strcmp(str, "-") == 0) return -1;
-    if (strcmp(str, "1") == 0 || strcmp(str, "+1") == 0 || strcmp(str, "+") == 0) return 1;
-
-    // Semantic directions
-    if (strcasecmp(str, "CHUCK") == 0 || strcasecmp(str, "INFEED") == 0 ||
-        strcasecmp(str, "IN") == 0 || strcasecmp(str, "LEFT") == 0 ||
-        strcasecmp(str, "FWD") == 0) {
-      return -1;
-    }
-    if (strcasecmp(str, "TAIL") == 0 || strcasecmp(str, "RETRACT") == 0 ||
-        strcasecmp(str, "OUT") == 0 || strcasecmp(str, "RIGHT") == 0 ||
-        strcasecmp(str, "REV") == 0) {
-      return 1;
+    // 1. Fast Path: Numeric coordinate sign (-1 or +1)
+    if (str[0] == '-' || str[0] == '+' || (str[0] >= '0' && str[0] <= '9')) {
+      int val = atoi(str);
+      if (val < 0) return -1;
+      if (val > 0) return 1;
+      return 0;
     }
 
-    return 0;
+    // 2. Data-driven Table Lookup for semantic terms
+    uint8_t mask = (axis == AXIS_X) ? 0x02 : 0x01;
+    for (const auto& entry : DIRECTION_TABLE) {
+      if ((entry.axisMask & mask) && strcasecmp(entry.token, str) == 0) {
+        return entry.direction;
+      }
+    }
+
+    return 0; // Unrecognized token (including banned FWD/REV)
   }
 
   /**
-   * @brief Converts Cartesian polarity into semantic human string for telemetry and logging.
+   * @brief Converts motion polarity into semantic human string for telemetry and logging.
    */
   inline const char* directionToSemantic(AxisId axis, int8_t dir) {
     if (axis == AXIS_X) {
-      return (dir < 0) ? "INFEED" : "RETRACT";
+      return (dir < 0) ? "CENTER" : "RETRACT";
     }
     return (dir < 0) ? "CHUCK" : "TAIL";
   }

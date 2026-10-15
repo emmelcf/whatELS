@@ -191,42 +191,116 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CANONICAL RICH CLIENT MOTION COMMANDS (ADR 0001 & ADR 0002)
     // =========================================================================
 
-    // CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]
+    // CMD.startFeed=<payload>
+    // Primary Key-Value: axis:<ax>,sync:<sync>,feed:<rate>,dir:<dir>,[dist:<dist>]
+    // Legacy Positional: <axis>,<sync>,<feedRate>,<dir>,[dist]
     if (cmdLen >= 10 && strncasecmp(cmd, "startFeed=", 10) == 0) {
       const char* p = cmd + 10;
-      char axisToken[8] = {0};
-      char syncToken[16] = {0};
-      char rateToken[32] = {0};
-      char dirToken[16] = {0};
-      char distToken[32] = {0};
-
-      int parsed = sscanf(p, "%7[^,],%15[^,],%31[^,],%15[^,],%31s",
-                          axisToken, syncToken, rateToken, dirToken, distToken);
-      if (parsed < 4) {
-        if (reply) *reply = "ERR:CMD.startFeed requires <axis>,<sync>,<feedRate>,<dir>,[dist]\n";
-        return false;
-      }
-
-      AxisId axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
-      bool isSync = (strcasecmp(syncToken, "1") == 0 || strcasecmp(syncToken, "sync") == 0 || strcasecmp(syncToken, "true") == 0);
-      int8_t dir = MotionConversions::semanticToDirection(axis, dirToken);
-      if (dir == 0) {
-        dir = (atoi(dirToken) < 0) ? -1 : 1;
-      }
-
+      AxisId axis = AXIS_Z;
+      bool isSync = true;
       int32_t feedRateDu = 0;
-      if (strchr(rateToken, '.')) {
-        feedRateDu = MotionConversions::mmToDu(atof(rateToken));
-      } else {
-        feedRateDu = atol(rateToken);
-      }
-
+      int8_t dir = 0;
       int32_t distDu = -1;
-      if (parsed >= 5 && distToken[0] && strcmp(distToken, "-1") != 0) {
-        if (strchr(distToken, '.')) {
-          distDu = MotionConversions::mmToDu(atof(distToken));
+      bool hasFeed = false;
+      bool hasDir = false;
+
+      // Check if Key-Value syntax (contains ':')
+      if (strchr(p, ':') != nullptr) {
+        const char* cur = p;
+        while (*cur) {
+          while (*cur == ' ' || *cur == ',') cur++;
+          if (!*cur) break;
+
+          // Parse key
+          char key[16] = {0};
+          size_t kIdx = 0;
+          while (*cur && *cur != ':' && *cur != '=' && *cur != ',' && kIdx < sizeof(key) - 1) {
+            key[kIdx++] = *cur++;
+          }
+          if (*cur != ':' && *cur != '=') {
+            while (*cur && *cur != ',') cur++;
+            continue;
+          }
+          cur++; // Skip ':' or '='
+
+          // Parse value (handling optional double quotes)
+          char val[64] = {0};
+          size_t vIdx = 0;
+          if (*cur == '"') {
+            cur++; // Skip opening quote
+            while (*cur && *cur != '"' && vIdx < sizeof(val) - 1) {
+              val[vIdx++] = *cur++;
+            }
+            if (*cur == '"') cur++; // Skip closing quote
+          } else {
+            while (*cur && *cur != ',' && vIdx < sizeof(val) - 1) {
+              val[vIdx++] = *cur++;
+            }
+          }
+
+          // Map key to parameter
+          if (strcasecmp(key, "axis") == 0 || strcasecmp(key, "a") == 0) {
+            axis = MotionConversions::parseAxisId(val, AXIS_Z);
+          } else if (strcasecmp(key, "sync") == 0 || strcasecmp(key, "s") == 0) {
+            isSync = (strcasecmp(val, "1") == 0 || strcasecmp(val, "sync") == 0 || strcasecmp(val, "true") == 0);
+          } else if (strcasecmp(key, "feed") == 0 || strcasecmp(key, "rate") == 0 || strcasecmp(key, "f") == 0) {
+            if (strchr(val, '.')) {
+              feedRateDu = MotionConversions::mmToDu(atof(val));
+            } else {
+              feedRateDu = atol(val);
+            }
+            hasFeed = (feedRateDu > 0);
+          } else if (strcasecmp(key, "dir") == 0 || strcasecmp(key, "d") == 0) {
+            dir = MotionConversions::semanticToDirection(axis, val);
+            hasDir = (dir != 0);
+          } else if (strcasecmp(key, "dist") == 0) {
+            if (strchr(val, '.')) {
+              distDu = MotionConversions::mmToDu(atof(val));
+            } else {
+              distDu = atol(val);
+            }
+          }
+        }
+
+        if (!hasFeed || !hasDir) {
+          if (reply) *reply = "ERR:CMD.startFeed requires feed:<rate> and dir:<dir>\n";
+          return false;
+        }
+      } else {
+        // Fallback: Positional CSV <axis>,<sync>,<feedRate>,<dir>,[dist]
+        char axisToken[8] = {0};
+        char syncToken[16] = {0};
+        char rateToken[32] = {0};
+        char dirToken[16] = {0};
+        char distToken[32] = {0};
+
+        int parsed = sscanf(p, "%7[^,],%15[^,],%31[^,],%15[^,],%31s",
+                            axisToken, syncToken, rateToken, dirToken, distToken);
+        if (parsed < 4) {
+          if (reply) *reply = "ERR:CMD.startFeed requires axis:<axis>,sync:<sync>,feed:<rate>,dir:<dir>,[dist:<dist>]\n";
+          return false;
+        }
+
+        axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
+        isSync = (strcasecmp(syncToken, "1") == 0 || strcasecmp(syncToken, "sync") == 0 || strcasecmp(syncToken, "true") == 0);
+        dir = MotionConversions::semanticToDirection(axis, dirToken);
+        if (dir == 0) {
+          if (reply) *reply = "ERR:CMD.startFeed invalid direction\n";
+          return false;
+        }
+
+        if (strchr(rateToken, '.')) {
+          feedRateDu = MotionConversions::mmToDu(atof(rateToken));
         } else {
-          distDu = atol(distToken);
+          feedRateDu = atol(rateToken);
+        }
+
+        if (parsed >= 5 && distToken[0] && strcmp(distToken, "-1") != 0) {
+          if (strchr(distToken, '.')) {
+            distDu = MotionConversions::mmToDu(atof(distToken));
+          } else {
+            distDu = atol(distToken);
+          }
         }
       }
 
@@ -523,7 +597,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
       if (gb) {
         gb->setDirection(val);
-        if (reply) *reply = String("OK:CMD.gearDir=") + (gb->getDirection() < 0 ? "-1" : "1") + "\n";
+        if (reply) *reply = String("OK:CMD.gearDir=") + (gb->getDirection() > 0 ? "1" : "-1") + "\n";
         return true;
       }
       return false;

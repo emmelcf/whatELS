@@ -2,6 +2,7 @@
 #include "MachineModel.h"
 #include "modes/ModeRegistry.h"
 #include "modes/composite/UnifiedGearboxMode.h"
+#include "motion/MotionConversions.h"
 
 static unsigned long lastTelemetryHash = 0;
 
@@ -34,7 +35,7 @@ static void serializeKinematics(String* out, const KinematicsState& k) {
   if (gb) {
     *out += "K.gearAxis=" + String(gb->getActiveAxis()) + "\n";
     *out += "K.gearSync=" + String(gb->isSync() ? 1 : 0) + "\n";
-    *out += "K.gearDir=" + String(gb->isFeedDirForward() ? "FWD" : "REV") + "\n";
+    *out += "K.gearDir=" + String(MotionConversions::directionToSemantic(gb->getAxis(), gb->getDirection())) + "\n";
   }
 }
 
