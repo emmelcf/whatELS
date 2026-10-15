@@ -355,7 +355,23 @@ class NanoelsService extends EventTarget {
   }
 
   // Cycle Start / Stop
-  startCycle() { this.sendRaw('CMD.on=1\n', 'START FEED / CYCLE'); }
+  startCycle(bundle) {
+    if (bundle) {
+      if (Array.isArray(bundle)) {
+        for (const cmd of bundle) {
+          if (!cmd) continue;
+          this.sendRaw(cmd.endsWith('\n') ? cmd : cmd + '\n', '', true);
+        }
+      } else if (typeof bundle === 'string') {
+        const lines = bundle.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed) this.sendRaw(trimmed + '\n', '', true);
+        }
+      }
+    }
+    this.sendRaw('CMD.on=1\n', 'START FEED / CYCLE');
+  }
   stopCycle()  { this.sendRaw('CMD.on=0\n', 'STOP FEED / CYCLE'); }
 
   // Zero axes

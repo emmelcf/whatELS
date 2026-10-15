@@ -24,6 +24,8 @@ The **NanoELS Web UI** is the primary rich client interface for the NanoELS elec
    Preferences like Metric vs. Imperial (`measure`) and Diameter vs. Radius (`dia`) are managed purely within the client store. Toggling display formats causes zero network traffic and zero cross-client side effects.
 4. **Isomorphic Simulator & Hardware Parity:**  
    The client integrates an in-browser physics emulator (`nanoels-emulator.js`) that mirrors ESP32 kinematics and wire protocol, allowing 100% offline development and testing without physical lathe hardware.
+5. **Zero-Idle Network Traffic & Atomic Inception at START (ADR 15):**  
+   While the lathe is stationary and idle (`runState === 'stopped'`), all conversational wizard setup, mode selection, Gearbox axis toggles, feed direction, and pitch adjustments are **strictly client-local presentation state**. The client emits zero mode or parameter packets while idle, eliminating cross-client interference, telemetry echo, and radio saturation. Physical motion is engaged exclusively through an atomic inception bundle dispatched upon tapping `START FEED` / `START CYCLE`. Feature shoulder limits (Turning, Facing) are staged locally and transmitted to the controller's hardware registers upon `START`, where they persist following cycle completion.
 
 ---
 
@@ -129,7 +131,22 @@ The controller continuously broadcasts operational state and safety permissions 
 * **`K.gearSync`:** Spindle synchronization state (`1` for spindle-slaved leadscrew, `0` for continuous async velocity feed).
 * **`K.gearDir`:** Motion travel direction forward (`1`) vs reverse (`-1`).
 
-Bidirectional synchronization occurs automatically: if an external hardware handwheel or Nextion panel alters the active axis or sync state, the Web UI immediately reflects the change in its active tab and badges without state divergence.
+Bidirectional synchronization occurs automatically: if an external hardware handwheel or Nextion panel alters the active axis or sync state while running, the Web UI immediately reflects the change in its active tab and badges without state divergence.
+
+### 4.4 Zero-Idle Decoupling, Atomic Cycle Inception & Limit Persistence (ADR 15)
+To prevent cross-client state collisions and network saturation when multiple interfaces (Nextion, Web UI, DRO tablet) are connected:
+1. **Idle State Autonomy (`state.runState === 'stopped'`):**
+   * Mode switches, wizard navigation, Gearbox axis selection ($Z$, $X$, $ZX$), synchronization toggles, and pitch/speed adjustments are 100% client-local.
+   * Zero wire commands are emitted during parameter setup while idle.
+   * Inbound `K.mode` or `K.gear*` telemetry while idle does not hijack the operator's active drafting screen.
+2. **Atomic Cycle Inception (`START`):**
+   * Physical motion is engaged exclusively by tapping `START FEED` or `START CYCLE`.
+   * The client bundles all required cycle parameters into an atomic command stream:
+     - **Gearbox Inception:** `CMD.mode=gearbox\nCMD.gearAxis=<axis>\nCMD.gearSync=<sync>\nCMD.gearDir=<dir>\nCMD.dupr=<pitchDu>\nCMD.on=1\n`
+     - **Canned Cycle Inception (Turning/Facing/Threading):** Staged shoulder limits (`CMD.axisLimitDu=...`), cycle geometry, pass parameters, and `CMD.on=1\n`.
+3. **Hardware Limit Persistence:**
+   * Canned cycle shoulder limits (calculated in Turning and Facing wizards) are transmitted to the controller's hardware registers (`z.leftStop`, `z.rightStop`, `x.leftStop`, `x.rightStop`) upon cycle inception.
+   * **Persistence Invariant:** Upon cycle completion or manual `STOP`, limits **persist indefinitely** in the controller's hardware registers. They are never automatically cleared or reverted by the client, maintaining physical crash protection until explicitly reconfigured or cleared by the operator.
 
 ---
 

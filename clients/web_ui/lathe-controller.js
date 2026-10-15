@@ -1083,7 +1083,6 @@
         btnSync.addEventListener('click', function(){
           if(state.runState === 'running') return;
           state.gearboxMode = state.gearboxMode === 'SYNC' ? 'ASYNC' : 'SYNC';
-          if(window.nanoelsClient) window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
           updateStatusMsg(); render();
         });
       }
@@ -1101,12 +1100,6 @@
           } else {
             state.activeFeedAxis = 'Z';
           }
-          var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
-          if(window.nanoelsClient) {
-            window.nanoelsClient.setGearAxis(ax);
-            window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
-          }
-          syncPitchToController();
           updateStatusMsg(); render();
         });
       }
@@ -1117,11 +1110,9 @@
           if(state.runState === 'running') return;
           if(state.activeFeedAxis === 'Z' || state.activeFeedAxis === 'Z+X'){
             state.gearDirZ = (state.gearDirZ === 'FWD' ? 'REV' : 'FWD');
-            if(window.nanoelsClient) window.nanoelsClient.setGearDir(state.gearDirZ === 'FWD' ? 1 : -1);
             setStatusMsg('Z FEED DIRECTION: ' + (state.gearDirZ==='FWD'?'← TO CHUCK (Z−)':'→ TO TAIL (Z+)'));
           } else {
             state.gearDirX = (state.gearDirX === 'IN' ? 'OUT' : 'IN');
-            if(window.nanoelsClient) window.nanoelsClient.setGearDir(state.gearDirX === 'IN' ? 1 : -1);
             setStatusMsg('X FEED DIRECTION: ' + (state.gearDirX==='IN'?'↑ TO CENTER (X−)':'↓ RETRACT (X+)'));
           }
           render();
@@ -1316,6 +1307,96 @@
   }
 
   // Universal Runstack: Binary START / STOP (matches NanoELS hardware state machine)
+  function buildInceptionBundle(){
+    var bundle = [];
+    if(state.mode === 'GEARBOX'){
+      bundle.push('CMD.mode=gearbox');
+      var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
+      bundle.push('CMD.gearAxis=' + ax);
+      bundle.push('CMD.gearSync=' + (state.gearboxMode === 'SYNC' ? 1 : 0));
+      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? 1 : -1) : (state.gearDirZ === 'FWD' ? 1 : -1);
+      bundle.push('CMD.gearDir=' + dirVal);
+      if(state.gearboxMode === 'SYNC'){
+        if(state.activeFeedAxis === 'Z+X'){
+          if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
+            var p = TAPER_PRESETS[state.gearTaperPresetIdx];
+            bundle.push('CMD.taperPreset=' + state.gearTaperPresetIdx + ',' + p.angle + ',' + (1.0 / p.ratio));
+          } else if(state.gearTaperAuthMode === 'ANGLE'){
+            bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || 1.432));
+          } else {
+            var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
+            bundle.push('CMD.taperRatio=' + rVal);
+          }
+          var taperPitch = state.gearPitchZ || 0.15;
+          bundle.push('CMD.feedMm=' + taperPitch);
+        } else if(state.gearThreadUnit === 'tpi'){
+          var tpiVal = state.gearPitchZ_tpi || +(25.4 / (state.gearPitchZ || 2.0)).toFixed(2);
+          bundle.push('CMD.feedTpi=' + tpiVal);
+        } else {
+          var p = (state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ;
+          if(p !== undefined && p !== null && !isNaN(p) && p > 0){
+            bundle.push('CMD.feedMm=' + p);
+          }
+        }
+      }
+    } else if(state.mode === 'TURNING'){
+      bundle.push('CMD.mode=turn');
+      if(state.zMin !== null && state.zMin !== undefined){
+        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
+      }
+      if(state.zMax !== null && state.zMax !== undefined){
+        bundle.push('CMD.axisLimitDu=Z,0,' + Math.round(state.zMax * 10000.0));
+      }
+      if(state.xMinDia !== null && state.xMinDia !== undefined){
+        var radMm = (state.xRep === 'diameter') ? state.xMinDia / 2.0 : state.xMinDia;
+        bundle.push('CMD.axisLimitDu=X,1,' + Math.round(radMm * 10000.0));
+      }
+      if(state.turnPitch){
+        bundle.push('CMD.feedMm=' + state.turnPitch);
+      }
+    } else if(state.mode === 'FACING'){
+      bundle.push('CMD.mode=face');
+      if(state.xMinDia !== null && state.xMinDia !== undefined){
+        var radMm = (state.xRep === 'diameter') ? state.xMinDia / 2.0 : state.xMinDia;
+        bundle.push('CMD.axisLimitDu=X,1,' + Math.round(radMm * 10000.0));
+      }
+      if(state.zMin !== null && state.zMin !== undefined){
+        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
+      }
+      if(state.facePitch){
+        bundle.push('CMD.feedMm=' + state.facePitch);
+      }
+    } else if(state.mode === 'THREADING'){
+      bundle.push('CMD.mode=thread');
+      if(state.threadUnit === 'tpi'){
+        var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
+        bundle.push('CMD.feedTpi=' + tpi);
+      } else {
+        bundle.push('CMD.feedMm=' + (state.pitch || 1.5));
+      }
+      if(state.zMin !== null && state.zMin !== undefined){
+        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
+      }
+      if(state.zMax !== null && state.zMax !== undefined){
+        bundle.push('CMD.axisLimitDu=Z,0,' + Math.round(state.zMax * 10000.0));
+      }
+    } else if(state.mode === 'TAPER'){
+      bundle.push('CMD.mode=cone');
+      bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || state.taperAngle || 1.432));
+      bundle.push('CMD.feedMm=' + (state.gearPitchZ || state.taperPitch || 0.15));
+    } else {
+      var modeMap = {
+        'JOYSTICK': 'JOYSTICK',
+        'CUTOFF': 'CUT',
+        'SLOTTING': 'SLOT',
+        'SPHERE': 'ELLIPSE'
+      };
+      var m = modeMap[state.mode] || state.mode.toLowerCase();
+      bundle.push('CMD.mode=' + m);
+    }
+    return bundle;
+  }
+
   var runstackBound = false;
   function renderRunstack(){
     if(!runstackBound){
@@ -1325,21 +1406,15 @@
         runstackBound = true;
 
         bRun.addEventListener('click', function(){
-          if(window.nanoelsClient){
-            window.nanoelsClient.startCycle();
-          }
-          if(window.Alpine && Alpine.store('machine')){
-            Alpine.store('machine').isOn = true;
-          }
           if(state.runState === 'stopped'){
-            // Cache limits if opt-in restoration is active
-            if(state.mode === 'TURNING' && state.turnRestoreLimits && state.turnSavedZMin === null && state.turnSavedZMax === null){
-              state.turnSavedZMin = state.zMin;
-              state.turnSavedZMax = state.zMax;
-            } else if(state.mode === 'FACING' && state.faceRestoreLimits && state.faceSavedXMin === null && state.faceSavedXMax === null){
-              state.faceSavedXMin = state.xMinDia;
-              state.faceSavedXMax = state.xMaxDia;
-            } else if(state.mode === 'THREADING'){
+            var bundle = buildInceptionBundle();
+            if(window.nanoelsClient){
+              window.nanoelsClient.startCycle(bundle);
+            }
+            if(window.Alpine && Alpine.store('machine')){
+              Alpine.store('machine').isOn = true;
+            }
+            if(state.mode === 'THREADING'){
               if(state.threadSkimVerify){
                 state.threadSkimStage = 'SKIMMING';
                 state.threadCurrentPass = 0;
@@ -1383,20 +1458,7 @@
       Alpine.store('machine').isOn = false;
     }
     
-    // Auto-restore limit if opt-in was active
-    if(state.mode === 'TURNING' && state.turnRestoreLimits && (state.turnSavedZMin !== null || state.turnSavedZMax !== null)){
-      state.zMin = state.turnSavedZMin;
-      state.zMax = state.turnSavedZMax;
-      state.turnSavedZMin = null;
-      state.turnSavedZMax = null;
-      setStatusMsg('TURNING ENDED: RESTORED Z LIMITS');
-    } else if(state.mode === 'FACING' && state.faceRestoreLimits && (state.faceSavedXMin !== null || state.faceSavedXMax !== null)){
-      state.xMinDia = state.faceSavedXMin;
-      state.xMaxDia = state.faceSavedXMax;
-      state.faceSavedXMin = null;
-      state.faceSavedXMax = null;
-      setStatusMsg('FACING ENDED: RESTORED X LIMITS');
-    }
+    // Limits persist in hardware registers and UI - no automatic restoration
 
     state.turnCurrentPass = 1;
     state.faceCurrentPass = 1;
@@ -1630,6 +1692,7 @@
     $('modeOverlay').classList.add('show');
   });
   function syncModeToController(targetMode){
+    if(state.runState !== 'running') return; // Zero wire traffic while idle!
     if(!window.nanoelsClient) return;
     var modeMap = {
       'GEARBOX': 'GEARS',
@@ -1659,20 +1722,20 @@
   }
 
   function syncPitchToController(targetPitch){
-    if(!window.nanoelsClient) return;
+    var isRunning = (state.runState === 'running');
 
     // 1. Threading Mode
     if(state.mode === 'THREADING'){
       if(state.threadUnit === 'tpi'){
         var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
-        window.nanoelsClient.setFeedTpi(tpi);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedTpi(tpi);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpi;
         }
       } else {
         var pMm = targetPitch || state.pitch || 1.5;
-        window.nanoelsClient.setFeedMm(pMm);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(pMm);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = pMm;
@@ -1685,7 +1748,7 @@
     if(state.mode === 'TAPER' || (state.mode === 'GEARBOX' && state.activeFeedAxis === 'Z+X')){
       if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
         var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-        window.nanoelsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = state.gearTaperPresetIdx;
           Alpine.store('machine').tpMode = 2;
@@ -1693,7 +1756,7 @@
           Alpine.store('machine').coneRatio = p.ratio;
         }
       } else if(state.gearTaperAuthMode === 'ANGLE'){
-        window.nanoelsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 1;
@@ -1702,7 +1765,7 @@
         }
       } else {
         var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-        window.nanoelsClient.setTaperRatio(rVal);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperRatio(rVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 0;
@@ -1711,7 +1774,7 @@
         }
       }
       var taperPitch = targetPitch || state.gearPitchZ || 0.15;
-      window.nanoelsClient.setFeedMm(taperPitch);
+      if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(taperPitch);
       return;
     }
 
@@ -1720,7 +1783,7 @@
       if(state.gearboxMode === 'ASYNC') return;
       if(state.gearThreadUnit === 'tpi'){
         var tpiVal = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
-        window.nanoelsClient.setFeedTpi(tpiVal);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedTpi(tpiVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpiVal;
@@ -1729,7 +1792,7 @@
       }
       var p = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
       if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-        window.nanoelsClient.setFeedMm(p);
+        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(p);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = p;
@@ -1747,7 +1810,7 @@
       }
     }
     if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-      window.nanoelsClient.setFeedMm(p);
+      if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(p);
       if(window.Alpine && Alpine.store('machine')){
         Alpine.store('machine').thFmt = 0;
         Alpine.store('machine').thPitch = p;
