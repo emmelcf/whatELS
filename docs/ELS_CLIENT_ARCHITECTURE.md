@@ -438,13 +438,13 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 
 ### 10.1 Canonical Rich Client Command Set (Core Surface)
 
-#### Motion & Cycle Execution
-* `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]`: Atomically initiates feed motion:
-  - `axis`: `'Z'` or `'X'`
+* `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<dist>]`: Atomically initiates feed motion via Key-Value pairs (or legacy positional CSV `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]`):
+  - Values containing special characters (`:`, `,`) may be enclosed in double quotes (e.g. `key:"value"`).
+  - `axis`: `'Z'`, `'X'`, or `'ZX'`
   - `sync`: `'sync'` (or `1`) for spindle-synchronized ($\text{mm/rev}$ / $\text{in/rev}$), `'async'` (or `0`) for time-based velocity ($\text{mm/min}$ / $\text{in/min}$)
-  - `feedRate`: strictly positive magnitude ($F > 0$)
-  - `dir`: Cartesian polarity (`-1` for $-Z$ chuck / $-X$ centerline, `+1` for $+Z$ tailstock / $+X$ retract)
-  - `dist`: optional stroke distance in mm (or `-1` for continuous feed to soft limit)
+  - `feed`: strictly positive magnitude ($F > 0$, float mm or integer du)
+  - `dir`: Cartesian polarity (`-1` for $-Z$ chuck / $-X$ centerline, `+1` for $+Z$ tailstock / $+X$ retract). The Ingress Translation Layer also accepts lathe operator semantics (`CHUCK`/`TAIL` for $Z$; `CENTER`/`RETRACT` or `IN`/`OUT` for $X$). `FWD`/`REV` are strictly banned for feed motion (reserved exclusively for spindle rotation).
+  - `dist`: optional stroke distance in mm or du (or `-1` for continuous feed to soft limit)
 * `CMD.stop` or `CMD.on=0`: Immediately stops all active motion with controlled deceleration.
 * `CMD.feedNudge=<+1|-1>`: Nudges live in-cut feed rate under chip load without halting motion.
 
@@ -479,7 +479,7 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 | `CMD.on=1` | Staged feed start | Use atomic `CMD.startFeed=...` |
 | `CMD.gearAxis=<axis>` | Modal axis selection | Pass axis in `CMD.startFeed` |
 | `CMD.gearSync=<sync>` | Modal sync toggle | Pass sync in `CMD.startFeed` |
-| `CMD.gearDir=<dir>` | Modal direction toggle | Pass dir (`-1`/`+1`) in `CMD.startFeed` |
+| `CMD.gearDir=<dir>` | Modal direction toggle | Pass dir (`-1`/`+1`, `CHUCK`/`TAIL`/`CENTER`/`RETRACT`) in `CMD.startFeed` |
 | `CMD.feedMm=<mm>` | Modal feedrate staging | Pass rate in `CMD.startFeed` |
 | `CMD.feedDupr=<du>` | Modal pitch staging | Pass rate in `CMD.startFeed` |
 | `CMD.feedRev` | Pitch sign flip | Pass dir (`-1`/`+1`) in `CMD.startFeed` |

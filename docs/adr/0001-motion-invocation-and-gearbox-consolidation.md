@@ -73,24 +73,51 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
   * When `sync == false`: Feed per Minute ($\text{mm/min}$ or $\text{in/min}$, canonical $\text{du/min}$).
 * Display labels reflect the context (`mm/rev` vs. `mm/min`).
 
-### 4.3 Cartesian Coordinate Polarity (-1 / +1)
-* "Forward" and "Reverse" are removed from the Core Model.
-* Direction is strictly a Cartesian coordinate sign:
-  * **Negative (`-1`)**: Decreasing coordinate ($\Delta \text{pos} < 0$, towards $-Z$ chuck or $-X$ centerline).
-  * **Positive (`+1`)**: Increasing coordinate ($\Delta \text{pos} > 0$, towards $+Z$ tailstock or $+X$ retract).
-* The Ingress layer (`MotionConversions`) normalizes human semantic terms (`CHUCK`/`TAIL`/`IN`/`OUT`) to `-1` or `+1`.
+### 4.3 Standard DRO Cartesian Coordinate Polarity (-1 / +1)
+* "Forward" and "Reverse" are removed from axis carriage feed motion entirely:
+  * On a lathe, `FWD` and `REV` designate **Spindle Rotation** (Forward/CCW vs. Reverse/CW) and electrical VFD relays. Using them for axis carriage feed creates dangerous operator confusion and tool crash hazards. They are strictly banned from axis motion commands, kinematics, and telemetry.
+* Motion direction is formalized into standard machine tool / DRO Cartesian coordinate signs:
+  * **Negative Coordinate Feed (`-1`)**: Feed toward decreasing coordinates ($\Delta \text{pos} < 0$).
+    * On $Z$ (longitudinal carriage): Feeds **toward the Chuck** ($-Z$).
+    * On $X$ (transverse cross-slide): Feeds **toward the Spindle Centerline** ($-X$, infeed/plunge).
+    * Kinematic bounding: Bounded by `leftStop` (Chuck limit / Infeed limit).
+    * Hardware DIR: Pin logic driven to advance carriage toward the chuck or cross-slide toward centerline.
+    * Synchronous gearing: Positive pitch calculation (`+feedRateDu`) driving carriage toward chuck.
+  * **Positive Coordinate Feed (`+1`)**: Feed toward increasing coordinates ($\Delta \text{pos} > 0$).
+    * On $Z$ (longitudinal carriage): Feeds **away toward Tailstock** ($+Z$).
+    * On $X$ (transverse cross-slide): Feeds **outward away from Centerline** ($+X$, retract).
+    * Kinematic bounding: Bounded by `rightStop` (Tailstock limit / Retract limit).
+    * Hardware DIR: Pin logic driven to advance carriage toward tailstock or cross-slide toward operator retract.
+    * Synchronous gearing: Negative pitch calculation (`-feedRateDu`) driving carriage toward tailstock.
 
-### 4.4 Motion Intent (Target Distance) & Universal Safety Envelope
+### 4.4 Architectural Layer Separation of Concerns
+* **Core Motion Engine (`Motion.cpp`):**
+  * Stateless, generic, and coordinate-driven.
+  * Knows **only** pure axes ($Z, X$), signed numeric coordinate direction (`-1` vs. `+1`), feed rate magnitude ($F > 0$), and machine coordinate limits (`leftStop`, `rightStop`).
+  * Has **zero** knowledge or string references to lathe parts ("CHUCK", "TAIL", "CENTER", "RETRACT").
+* **Client Translation Layer (`ICommandTranslator` / Ingress / `CommandDispatcher` / `MotionConversions`):**
+  * Sits between external clients and the Core Engine.
+  * Translates incoming client commands—accepting both pure Cartesian signs (`-1`, `+1`) and lathe operator semantics (`CHUCK`/`TAIL` for $Z$; `CENTER`/`RETRACT` or `IN`/`OUT` for $X$)—into the Core's pure numeric `-1` or `+1`.
+* **Outbound Telemetry Serializer (`RichClientAdapter.cpp`):**
+  * Projects core state to connected displays, serializing active direction into lathe semantics (`K.gearDir=CHUCK`, `K.gearDir=TAIL`) or numeric signs (`-1`/`+1`).
+* **Presentation Layer / Touch UI (`lathe-controller.js`):**
+  * Operator touch view controller.
+  * Renders unambiguous lathe directional labels (`← CHUCK (Z−)` vs `→ TAIL (Z+)`, `↑ TO CENTER (X−)` vs `↓ RETRACT (X+)`).
+  * Maintains client-local form state while idle and dispatches atomic motion intent upon `START`.
+
+### 4.5 Motion Intent (Target Distance) & Universal Safety Envelope
 * Soft limits (`leftStop`, `rightStop`) are universal machine bounds enforced in the Kinematic Kernel for all motion regimes.
 * Motion commands accept an optional **Target Distance** (with `-1` for continuous feed):
   * **Finite move**: Targets $P_{\text{target}} = P_0 + (\text{dir} \times \text{distance})$, clamped by the soft limit.
   * **Continuous move**: Targets the active soft limit itself.
 * Because the target boundary is known, the kinematic engine calculates deceleration ramps ($d = v^2 / 2a$), smoothly gliding to a stop without missed steps.
 
-### 4.5 Dual Command Pathways & Ingress Staging Adapter
-* **Atomic Motion Invocation (Canonical Rich Client API)**:
-  `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[distance]`
-  Transmits the entire motion specification in a single atomic frame upon feed engagement.
+### 4.6 Dual Command Pathways & Ingress Staging Adapter
+* **Atomic Motion Invocation (Canonical Rich Client Key-Value API)**:
+  `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]`
+  * **Order-Independent & Extensible:** Parameters are parsed as Key-Value pairs, allowing any order and clean optional arguments without comma placeholder tricks.
+  * **Quoting & Delimiter Safety:** Values containing special characters (`:`, `,`) can be enclosed in quotes (e.g. `key:"value"`), guaranteeing tokenizer safety.
+  * **Positional Fallback:** For backwards compatibility with simple hardware pendants, positional CSV syntax (`CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[distance]`) is also recognized.
 * **Ingress Staging Adapter (Transitional / Dumb Client Support)**:
   Modal setters (`CMD.gearAxis=`, `CMD.gearSync=`, `CMD.gearDir=`, `CMD.on=1`) are isolated in a clearly delineated compatibility section in `CommandDispatcher.cpp` for legacy clients, keeping the core path pristine.
 

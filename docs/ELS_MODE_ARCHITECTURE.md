@@ -408,7 +408,7 @@ The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a sing
    Direction is an explicit Cartesian coordinate sign, eliminating the ambiguity of terms like "forward" and "reverse":
    - **Negative (`-1`)**: Decreasing coordinate ($\Delta \text{pos} < 0$, towards $-Z$ chuck or $-X$ centerline).
    - **Positive (`+1`)**: Increasing coordinate ($\Delta \text{pos} > 0$, towards $+Z$ tailstock or $+X$ retract).
-   The ingress translation layer accepts operator semantic aliases (`CHUCK`/`TAIL`/`IN`/`OUT`) and immediately normalizes them to `-1` or `+1`.
+   The ingress translation layer accepts operator semantic aliases (`CHUCK`/`TAIL` for $Z$, `CENTER`/`RETRACT` or `IN`/`OUT` for $X$) and immediately normalizes them to `-1` or `+1`. The core motion engine operates strictly on pure coordinate signs (`-1`, `+1`). `FWD` and `REV` are strictly banned for axis motion (reserved exclusively for spindle rotation).
 4. **Universal Soft Limits & Target Distances:**
    Soft limits (`leftStop`, `rightStop`) are universal machine envelopes enforced in the Kinematic Kernel for all motion. When an optional `distance` is commanded:
    - **Finite move**: Targets $P_{\text{target}} = P_0 + (\text{dir} \times \text{distance})$, clamped by the soft limit.
@@ -421,7 +421,7 @@ The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a sing
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `axis` | `ENUM` | — | `"Z"` | `"Z"`, `"X"`, `"ZX"` | `CMD.gearAxis=<Z\|X\|ZX>` | Active motion axis. `"Z"` (carriage), `"X"` (cross-slide), `"ZX"` (compound taper). |
 | `sync` | `BOOL` | — | `true` | `true` (1), `false` (0) | `CMD.gearSync=<1\|0>` | Synchronization source. `true`: Spindle encoder; `false`: Hardware velocity clock timer. |
-| `dir` | `INT8` | sign | `-1` | `-1`, `+1` | `CMD.gearDir=<-1\|+1>` | Cartesian coordinate direction. Ingress accepts `CHUCK`/`TAIL`/`IN`/`OUT` aliases. |
+| `dir` | `INT8` | sign | `-1` | `-1`, `+1` | `CMD.gearDir=<-1\|+1>` | Cartesian coordinate direction. Ingress accepts `CHUCK`/`TAIL`/`CENTER`/`RETRACT` aliases. Axis feed never uses `FWD`/`REV`. |
 | `feed` | `INT32` | canonical | `1000` | `10` .. `100000000` | `CMD.feedMm=`, `CMD.feedRate=` | Feed rate magnitude ($F > 0$). Interpreted as du/rev if sync; du/min if async. |
 | `distance` | `INT32` | `du` | `-1` | `-1` .. `100000000` | `CMD.feedDistMm=`, `CMD.feedDistDu=` | Stroke travel distance in deci-microns. `-1` = continuous feed to soft limit. |
 | `cone_ratio` | `FLOAT` | `ratio` | `0.050` | `0.0001` .. `10.0` | `CMD.taperRatio=`, `CMD.taperAngle=` | Diametral taper ratio (active when `axis == "ZX"`). |
@@ -434,16 +434,17 @@ To support both advanced multi-client tablet UIs and simple hardware pendants, t
 ##### 1. Atomic Motion Invocation (Rich Clients / Web UI / Macros)
 Dispatches the complete motion specification in a single atomic frame when engaging feed:
 ```
-CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[distance]
+CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]
 ```
-* Example (Sync): `CMD.startFeed=Z,sync,0.15,-1` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously.
-* Example (Async): `CMD.startFeed=Z,async,150,-1,25.0` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
+* Example (Sync): `CMD.startFeed=axis:Z,sync:1,feed:0.15,dir:CHUCK` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously.
+* Example (Async): `CMD.startFeed=axis:Z,sync:0,feed:150,dir:CHUCK,dist:25.0` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
+*(Note: Positional CSV `CMD.startFeed=Z,sync,0.15,-1` is also supported for legacy/dumb hardware pendants).*
 
 ##### 2. Ingress Staging Adapter (Dumb Clients / Pendants / Form Setters)
 Allows simple clients to update modal parameters one by one, staging them on Core 0 until engaged:
 - `CMD.gearAxis=<Z|X|ZX>`
 - `CMD.gearSync=<1|0>`
-- `CMD.gearDir=<-1|+1|CHUCK|TAIL|IN|OUT>`
+- `CMD.gearDir=<-1|+1|CHUCK|TAIL|CENTER|RETRACT|IN|OUT>`
 - `CMD.feedMm=<val>` (interpreted by active sync context)
 - `CMD.feedDistMm=<val>` (optional stroke length)
 - `CMD.on=1` $\to$ Packages staged parameters and calls `startFeed()`.

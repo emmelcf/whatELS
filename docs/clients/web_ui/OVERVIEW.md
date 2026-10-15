@@ -129,7 +129,7 @@ The controller continuously broadcasts operational state and safety permissions 
 * **`K.perms`:** The active mode's live runtime permission bitmask (`LivePermissionFlags`). When a cut is active (`RUNNING`), `$store.machine.perms` dictates which controls remain live (e.g., `PERM_LIVE_FEED_TRIM` keeps feed nudge $[−]/[+]$ active) and which are locked and dimmed (axis selection, sync toggling, mode switching, limit editing).
 * **`K.gearAxis`:** The authoritative active leadscrew axis (`'Z'` or `'X'`).
 * **`K.gearSync`:** Spindle synchronization state (`1` for spindle-slaved leadscrew, `0` for continuous async velocity feed).
-* **`K.gearDir`:** Motion travel direction forward (`1`) vs reverse (`-1`).
+* **`K.gearDir`:** Motion travel coordinate direction: decreasing/chuck (`-1` / `CHUCK`) vs increasing/tailstock (`+1` / `TAIL`).
 
 Bidirectional synchronization occurs automatically: if an external hardware handwheel or Nextion panel alters the active axis or sync state while running, the Web UI immediately reflects the change in its active tab and badges without state divergence.
 
@@ -142,7 +142,7 @@ To prevent cross-client state collisions and network saturation when multiple in
 2. **Atomic Cycle Inception (`START`):**
    * Physical motion is engaged exclusively by tapping `START FEED` or `START CYCLE`.
    * The client bundles all required cycle parameters into an atomic command stream:
-     - **Gearbox Inception:** `CMD.mode=gearbox\nCMD.gearAxis=<axis>\nCMD.gearSync=<sync>\nCMD.gearDir=<dir>\nCMD.dupr=<pitchDu>\nCMD.on=1\n`
+     - **Gearbox Inception (Atomic ADR 0001/0002):** `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]\n` (or legacy staged fallback: `CMD.gearAxis=<axis>\nCMD.gearSync=<sync>\nCMD.gearDir=<dir>\nCMD.dupr=<pitchDu>\nCMD.on=1\n`)
      - **Canned Cycle Inception (Turning/Facing/Threading):** Staged shoulder limits (`CMD.axisLimitDu=...`), cycle geometry, pass parameters, and `CMD.on=1\n`.
 3. **Hardware Limit Persistence:**
    * Canned cycle shoulder limits (calculated in Turning and Facing wizards) are transmitted to the controller's hardware registers (`z.leftStop`, `z.rightStop`, `x.leftStop`, `x.rightStop`) upon cycle inception.

@@ -55,7 +55,7 @@ The core controller command surface is strictly rationalized around atomic inten
 
 | Command Category | Wire Syntax | Description & Semantics |
 | :--- | :--- | :--- |
-| **Atomic Feed Motion** | `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]` | Atomically validates and initiates continuous or targeted feed motion. |
+| **Atomic Feed Motion** | `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<rate>,dir:<dir>,[dist:<dist>]` | Atomically validates and initiates continuous or targeted feed motion via Key-Value pairs (or positional fallback). |
 | **Motion Stop** | `CMD.stop` or `CMD.on=0` | Immediately stops all in-flight motion with controlled deceleration. |
 | **Manual Jogging** | `CMD.jogHold=<axis>,<dir>`<br>`CMD.jogRelease=<axis>`<br>`CMD.jogStep=<axis>,<dir>` | Direct real-time manual positioning. |
 | **Dynamic In-Cut Nudge** | `CMD.feedNudge=<+1\|-1>` | Adjusts active feedrate under chip load. |
@@ -96,7 +96,7 @@ For clients that lack local state retention (such as the Nextion LCD or simple s
 +─────────────────────────────────────────────────────────────────────────+
 | Modern Rich Clients (Web UI, Touch DRO, Tablets)                       |
 | - Owns view state, tabs, form validation                                |
-| - Dispatches atomic commands: CMD.startFeed=<Z,sync,150,-1>            |
+| - Dispatches atomic commands: CMD.startFeed=axis:Z,sync:1,feed:150,dir:CHUCK |
 +─────────────────────────────────────────────────────────────────────────+
                                     │
                                     ▼
