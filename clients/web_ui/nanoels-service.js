@@ -616,7 +616,7 @@ class NanoelsService extends EventTarget {
               if (key === 'perms' && typeof val === 'string' && (val.startsWith('0x') || val.startsWith('0X'))) {
                 this.canonical[key] = parseInt(val, 16);
               } else if (key === 'gearDir') {
-                this.canonical[key] = (val === 'FWD' || val === '1' || val === 1) ? 1 : -1;
+                this.canonical[key] = (val === 'CHUCK' || val === 'CENTER' || val === 'INFEED' || val === '-1' || val === -1) ? -1 : 1;
               } else {
                 const num = parseFloat(val);
                 if (!isNaN(num)) {

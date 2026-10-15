@@ -149,19 +149,42 @@ class NanoelsEmulator {
         return;
       }
       if (cmd.startsWith('startFeed=')) {
-        const parts = cmd.substring(10).split(',');
-        const ax = (parts[0] || 'Z').toUpperCase();
-        const sync = parts[1] === '1' || parts[1] === 'sync' || parts[1] === 'true';
-        const rate = parseFloat(parts[2]) || 1000;
-        const dir = parseInt(parts[3], 10) < 0 ? -1 : 1;
-        const dist = parts[4] ? parseFloat(parts[4]) : -1;
+        const payload = cmd.substring(10);
+        let ax = 'Z';
+        let sync = true;
+        let rate = 1000;
+        let dir = -1;
+        let dist = -1;
+
+        if (payload.includes(':')) {
+          const pairs = payload.split(',');
+          for (const pair of pairs) {
+            const [k, v] = pair.split(':');
+            if (!k || !v) continue;
+            const key = k.trim().toLowerCase();
+            const val = v.trim().replace(/^"|"$/g, '');
+            if (key === 'axis' || key === 'a') ax = val.toUpperCase();
+            else if (key === 'sync' || key === 's') sync = (val === '1' || val === 'sync' || val === 'true');
+            else if (key === 'feed' || key === 'rate' || key === 'f') rate = parseFloat(val) || 1000;
+            else if (key === 'dir' || key === 'd') {
+              dir = (val === 'CHUCK' || val === 'CENTER' || val === 'INFEED' || val === '-1' || parseInt(val, 10) < 0) ? -1 : 1;
+            } else if (key === 'dist') dist = parseFloat(val) || -1;
+          }
+        } else {
+          const parts = payload.split(',');
+          ax = (parts[0] || 'Z').toUpperCase();
+          sync = parts[1] === '1' || parts[1] === 'sync' || parts[1] === 'true';
+          rate = parseFloat(parts[2]) || 1000;
+          dir = (parts[3] === 'CHUCK' || parts[3] === 'CENTER' || parts[3] === 'INFEED' || parts[3] === '-1' || parseInt(parts[3], 10) < 0) ? -1 : 1;
+          dist = parts[4] ? parseFloat(parts[4]) : -1;
+        }
 
         this.gearAxis = ax;
         this.gearSync = sync;
         this.gearDir = dir;
         this.mode = sync ? (ax === 'X' ? 'XGEAR' : 'GEAR') : 'ASYNC';
         if (sync) {
-          this.dupr = dir * Math.round(rate);
+          this.dupr = (dir < 0 ? 1 : -1) * Math.round(rate);
         } else {
           this.dupr = 0;
           this.asyncSpeed = Math.round(rate);
@@ -285,7 +308,7 @@ class NanoelsEmulator {
         this.mode = 'GEARBOX';
       } else if (cmd.startsWith('gearDir=')) {
         const val = cmd.substring(8).toUpperCase();
-        this.gearDir = (val === 'CHUCK' || val === 'CENTER' || val === 'IN' || val === 'FWD' || val === '-1' || val === '-') ? -1 : 1;
+        this.gearDir = (val === 'CHUCK' || val === 'CENTER' || val === 'IN' || val === '-1' || val === -1) ? -1 : 1;
       } else if (cmd.startsWith('feedNudge=')) {
         const dir = (cmd[10] === '-' || parseInt(cmd.substring(10), 10) < 0) ? -1 : 1;
         this.dupr = Math.max(100, this.dupr + (dir * (this.feedStepDu || 500)));
@@ -667,7 +690,7 @@ class NanoelsEmulator {
              `K.perms=${this.perms || 15}\n` +
              `K.gearAxis=${this.gearAxis || 'Z'}\n` +
              `K.gearSync=${this.gearSync !== false ? 1 : 0}\n` +
-             `K.gearDir=${this.gearDir < 0 ? 'FWD' : 'REV'}\n`;
+             `K.gearDir=${this.gearDir < 0 ? (this.gearAxis === 'X' ? 'CENTER' : 'CHUCK') : (this.gearAxis === 'X' ? 'RETRACT' : 'TAIL')}\n`;
     }
     if (domainMask & 0x02) { // Intent (I)
       out += `I.thFmt=${this.thFmt}\n` +

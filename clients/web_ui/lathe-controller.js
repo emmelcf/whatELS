@@ -1326,13 +1326,13 @@
         var taperPitch = state.gearPitchZ || 0.15;
         bundle.push('CMD.feedMm=' + taperPitch);
       } else {
-        // Canonical Atomic Motion Invocation (ADR 0001 & ADR 0002)
+        // Key-Value Atomic Motion Invocation (ADR 0001 & ADR 0002)
         var isSync = (state.gearboxMode === 'SYNC');
-        var syncParam = isSync ? 'sync' : 'async';
-        // Cartesian polarity:
-        // Z: FWD is towards chuck (-Z = -1), REV is towards tailstock (+Z = +1)
-        // X: IN is towards centerline (-X = -1), OUT is retract (+X = +1)
-        var dirVal = (ax === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
+        var syncParam = isSync ? '1' : '0';
+        // Cartesian direction semantics:
+        // Z: CHUCK (-1), TAIL (+1)
+        // X: CENTER (-1), RETRACT (+1)
+        var dirSemantic = (ax === 'X') ? (state.gearDirX === 'IN' ? 'CENTER' : 'RETRACT') : (state.gearDirZ === 'FWD' ? 'CHUCK' : 'TAIL');
         
         var feedRateDu = 1000;
         if(isSync){
@@ -1349,8 +1349,11 @@
           feedRateDu = Math.round(speedMm * 10000.0);
         }
         
-        var distDu = (state.gearTargetDist && state.gearTargetDist > 0) ? Math.round(state.gearTargetDist * 10000.0) : -1;
-        bundle.push('CMD.startFeed=' + ax + ',' + syncParam + ',' + feedRateDu + ',' + dirVal + ',' + distDu);
+        var cmd = 'CMD.startFeed=axis:' + ax + ',sync:' + syncParam + ',feed:' + feedRateDu + ',dir:' + dirSemantic;
+        if(state.gearTargetDist && state.gearTargetDist > 0){
+          cmd += ',dist:' + Math.round(state.gearTargetDist * 10000.0);
+        }
+        bundle.push(cmd);
       }
     } else if(state.mode === 'TURNING'){
       bundle.push('CMD.mode=turn');
@@ -4204,11 +4207,11 @@
             state.gearboxMode = (c.gearSync && c.gearSync !== '0') ? 'SYNC' : 'ASYNC';
           }
           if(c && c.gearDir !== undefined){
-            var isFwd = (c.gearDir === -1 || c.gearDir === '-1' || c.gearDir === 'CHUCK' || c.gearDir === 'INFEED' || c.gearDir === 'FWD' || c.gearDir === 'IN' || c.gearDir === 'LEFT');
+            var isChuck = (c.gearDir === -1 || c.gearDir === '-1' || c.gearDir === 'CHUCK' || c.gearDir === 'CENTER' || c.gearDir === 'INFEED' || c.gearDir === 'IN' || c.gearDir === 'LEFT');
             if(state.activeFeedAxis === 'X'){
-              state.gearDirX = isFwd ? 'IN' : 'OUT';
+              state.gearDirX = isChuck ? 'IN' : 'OUT';
             } else {
-              state.gearDirZ = isFwd ? 'FWD' : 'REV';
+              state.gearDirZ = isChuck ? 'FWD' : 'REV';
             }
           }
         }
