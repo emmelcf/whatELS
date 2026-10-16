@@ -170,8 +170,8 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Slice 1: HAL & TelemetryMailbox** | `COMPLETE` | 2026-10-15 | `ec2753b` | PlatformIO | Zero warnings, zero errors |
 | **Slice 2: Kinematic Kernel & Math** | `COMPLETE` | 2026-10-15 | `5720c53` | PlatformIO + Unit Test | Zero warnings, zero errors. KIN-01, KIN-02, KIN-03, KIN-05 verified. |
-| **Slice 3: MotionEngine Core Loop** | `READY` | - | - | - | Ready for Conversation 3 |
-| **Slice 4: Mode Contract Decoupling** | `PENDING` | - | - | - | Awaiting Slice 3 completion |
+| **Slice 3: MotionEngine Core Loop** | `COMPLETE` | 2026-10-15 | `06db3a1` | PlatformIO + Unit Test | Zero warnings, zero errors. CONC-02 flash lockout, TrajectoryPlanner, and Core 1 task verified. |
+| **Slice 4: Mode Contract Decoupling** | `READY` | - | - | - | Ready for Conversation 4 |
 
 ---
 
@@ -217,12 +217,22 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
   - Marked real-time kinematic calculations (`findNextEnforcedLimit`, `computeIdealSyncSteps`, `stepsToDu`, `duToSteps`, `getWorkpieceCoordDu`) with `IRAM_ATTR` for zero-jitter execution on Core 1.
 
 #### Slice 3 Execution Log
-*(To be completed at the end of Conversation 3)*
-- **Date Completed:** 
-- **Commit:** 
-- **Files Created / Modified:** 
-- **PlatformIO Verification Result:** 
-- **Key Architectural Decisions & Deviations:** 
+- **Date Completed:** 2026-10-15
+- **Commit:** `06db3a1`
+- **Files Created / Modified:**
+  - `src/motion/contract/MotionCommandPacket.h`
+  - `src/motion/kernel/TrajectoryPlanner.h`
+  - `src/motion/kernel/TrajectoryPlanner.cpp`
+  - `src/motion/kernel/MotionEngine.h`
+  - `src/motion/kernel/MotionEngine.cpp`
+  - `src/core/SettingsService.cpp`
+  - `src/motion/kernel/SpindleSynchronizer.cpp` (cleaned up redundant `IRAM_ATTR` definitions)
+- **PlatformIO Verification Result:** `pio run -e esp32s3` passed cleanly (0 errors, 0 warnings). RAM: 18.9% (61,912 bytes), Flash: 20.2% (1,323,717 bytes). Unit test verified 100% pass on stopping distance calculations, sample margin safety, pre-cut entry RPM runway verification, and velocity profiling.
+- **Key Architectural Decisions & Deviations:**
+  - Implemented `[CONC-02]` in-motion flash write lockout in `SettingsService`: all NVS (`Preferences`) and LittleFS write paths (`set`, `reset`, `resetGroup`, `setPreset`, `saveCurrentAsPreset`, `deletePreset`, `setDefaultPreset`) check `MotionEngine::instance().isAnyAxisMoving()` and reject immediately with `ERR_MOTION_ACTIVE` to eliminate the 1–40 ms SPI flash cache stall on Core 1.
+  - Implemented `TrajectoryPlanner` real-time stopping distance calculation $d_{\text{stop}} = \text{ceil}((v_i^2 - v_{\text{end}}^2) / 2a) + \text{ceil}(0.5 \cdot v_i \cdot \Delta t)$ and pre-cut spindle runway verification $v_{\text{entry\_max}} = \sqrt{2 \cdot a \cdot D_{\text{remaining}}}$ with zero runtime allocations.
+  - Implemented `MotionEngine` singleton orchestrator managing dual axes, `SoftLimitTable` lookahead, `SpindleSynchronizer` gearing, lock-free inter-core `MotionCommandPacket` queue, Core 1 task lifecycle, and 50 Hz `TelemetryMailbox` state streaming.
+  - Resolved GCC `[-Wattributes]` section conflict warnings by placing `IRAM_ATTR` on class member declarations in headers.
 
 #### Slice 4 Execution Log
 *(To be completed at the end of Conversation 4)*
