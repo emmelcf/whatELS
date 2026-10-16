@@ -169,8 +169,8 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
 | Slice | Status | Target Date | Commit Hash | Verified By | Notes / Deviations |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Slice 1: HAL & TelemetryMailbox** | `COMPLETE` | 2026-10-15 | `ec2753b` | PlatformIO | Zero warnings, zero errors |
-| **Slice 2: Kinematic Kernel & Math** | `READY` | - | - | - | Ready for Conversation 2 |
-| **Slice 3: MotionEngine Core Loop** | `PENDING` | - | - | - | Awaiting Slice 2 completion |
+| **Slice 2: Kinematic Kernel & Math** | `COMPLETE` | 2026-10-15 | `5720c53` | PlatformIO + Unit Test | Zero warnings, zero errors. KIN-01, KIN-02, KIN-03, KIN-05 verified. |
+| **Slice 3: MotionEngine Core Loop** | `READY` | - | - | - | Ready for Conversation 3 |
 | **Slice 4: Mode Contract Decoupling** | `PENDING` | - | - | - | Awaiting Slice 3 completion |
 
 ---
@@ -197,12 +197,24 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
   - Zero modifications to `platformio.ini` required (`-I src` already provides access to `motion/hal/` and `motion/contract/`).
 
 #### Slice 2 Execution Log
-*(To be completed at the end of Conversation 2)*
-- **Date Completed:** 
-- **Commit:** 
-- **Files Created / Modified:** 
-- **PlatformIO Verification Result:** 
-- **Key Architectural Decisions & Deviations:** 
+- **Date Completed:** 2026-10-15
+- **Commit:** `5720c53`
+- **Files Created / Modified:**
+  - `src/motion/kernel/AxisGeometry.h`
+  - `src/motion/kernel/AxisState.h`
+  - `src/motion/kernel/SoftLimit.h`
+  - `src/motion/kernel/SoftLimitTable.h`
+  - `src/motion/kernel/SoftLimitTable.cpp`
+  - `src/motion/kernel/SpindleSynchronizer.h`
+  - `src/motion/kernel/SpindleSynchronizer.cpp`
+  - `platformio.ini` (added `-I src/motion/kernel` to build flags)
+- **PlatformIO Verification Result:** `pio run -e esp32s3` passed cleanly (0 errors, 0 warnings). RAM: 18.7% (61,120 bytes), Flash: 20.2% (1,322,253 bytes). Unit test verified 100% pass across Imperial round-trip conversions, soft-limit resting bypass prevention, and live pitch trim continuity.
+- **Key Architectural Decisions & Deviations:**
+  - Implemented `[KIN-05]` symmetric integer half-way rounding ($+ \text{den}/2$ for $\ge 0$, $-\text{den}/2$ for $< 0$) in `stepsToDu()` and `duToSteps()`, with division-by-zero guards.
+  - Implemented `[KIN-03]` multi-stop soft limit lookahead in `SoftLimitTable::findNextEnforcedLimit()`. When resting directly at an active limit (`currentSteps == stepPos`), remaining travel $D_{\text{remaining}} = 0$ is returned to block further motion in that direction unless explicit `allowPassThrough` override is commanded.
+  - Implemented `[KIN-02]` anchored 64-bit Bresenham accumulator in `SpindleSynchronizer` with `updatePitchLive()` to shift the anchor and enable live pitch trims (`CMD_FEED_NUDGE`) without historical multiplication jumps or step delta discontinuities.
+  - Implemented `[KIN-01]` continuous spindle phase accumulation in `SpindleSynchronizer::m_spindlePhasePulses` and `calculateModuloPhasePulses()` across deceleration, pauses, and dwell to guarantee exact thread re-locking without cross-threading upon carriage return or spindle reversal.
+  - Marked real-time kinematic calculations (`findNextEnforcedLimit`, `computeIdealSyncSteps`, `stepsToDu`, `duToSteps`, `getWorkpieceCoordDu`) with `IRAM_ATTR` for zero-jitter execution on Core 1.
 
 #### Slice 3 Execution Log
 *(To be completed at the end of Conversation 3)*
