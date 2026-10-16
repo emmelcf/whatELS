@@ -207,8 +207,8 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
 
 | Slice | Status | Target Date | Commit Hash | Verified By | Notes / Deviations |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Slice 1: Doc Hygiene & E2E Simulation Harness** | `PLANNED` | — | — | — | Clean docs, Mock HALs, and automated E2E tests |
-| **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `PLANNED` | — | — | — | GPTimer pulse generation, setup/hold timing guards |
+| **Slice 1: Doc Hygiene & E2E Simulation Harness** | `COMPLETE` | 2026-10-16 | `11dd2f6` | PlatformIO + E2E Harness | Zero warnings, zero errors. 100% pass on all 4 E2E test suites. |
+| **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `READY` | — | — | — | Ready for Conversation 2 |
 | **Slice 3: Core 1 Task Wiring & Live Telemetry** | `PLANNED` | — | — | — | MotionEngine task on Core 1, TelemetryMailbox -> WS |
 | **Slice 4: Mode Primitives Migration** | `PLANNED` | — | — | — | Async, GearX, GearZ, Cone migrated to MotionEngine |
 | **Slice 5: Legacy Motion Core Decommissioning** | `PLANNED` | — | — | — | Safe removal of Motion.cpp and Axis.cpp |
@@ -217,4 +217,27 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
 
 ### Detailed Session Logs
 
-*(Session logs will be populated at the conclusion of each slice by the active pair-programming agent)*
+#### Slice 1 Execution Log
+- **Date Completed:** 2026-10-16
+- **Commit:** `11dd2f6`
+- **Files Created / Modified:**
+  - `docs/motion/` (removed duplicate `phase1_argon_review.md` and `:Zone.Identifier`)
+  - `docs/archive/reviews/argon/README.md` (created review index documenting resolution of all findings in Phase 1)
+  - `src/motion/hal/MockStepperHAL.h` (test double recording pulse counts, directions, and pulse trains)
+  - `src/motion/hal/MockSpindleEncoderHAL.h` (test double simulating quadrature pulses, angular degrees, and RPM)
+  - `src/motion/contract/TelemetryMailbox.h` (guarded `esp_attr.h` for portable host compilation)
+  - `src/motion/kernel/MotionEngine.h` (added host command queue fallback and FreeRTOS type aliases)
+  - `src/motion/kernel/MotionEngine.cpp` (buffered command queue and step tracking loop in `SPINDLE_SYNC_GEARING`)
+  - `test/test_motion_e2e.cpp` (automated 4-suite integration test harness)
+- **Verification Results:**
+  - **Automated E2E Simulation Test:** Passed 100% across all 4 test suites:
+    1. *Spindle Sync Gearing:* 1 rev = 600 steps, 2 revs = 1200 steps with 0 step error / zero drift.
+    2. *Multi-Stop Shoulder Lookahead:* Halted cleanly at +50,000 du with `REASON_SOFT_LIMIT` (`SOFT_LIMIT_REACHED`).
+    3. *Live Pitch Trim:* Smooth slope change from 1.0 mm to 2.0 mm pitch without step jumps or position discontinuity.
+    4. *Inter-Core Command Queue:* Verified Core 0 queue buffering and Core 1 `onMotionTick()` drain and state transitions.
+  - **PlatformIO Target Compilation:** `pio run -e esp32s3` passed cleanly (0 errors, 0 warnings). RAM: 18.9% (61,920 bytes), Flash: 20.2% (1,325,997 bytes).
+- **Key Architectural Decisions & Deviations:**
+  - Created reusable `MockStepperHAL` and `MockSpindleEncoderHAL` test doubles under `src/motion/hal/` conforming to `IStepperHAL` and `ISpindleEncoderHAL`.
+  - Added clean fallback queue buffering in `MotionEngine` when running on host platforms without FreeRTOS (`std::queue<MotionCommandPacket>`), ensuring identical queuing semantics between host unit simulation and dual-core ESP32-S3 firmware.
+  - Updated `SPINDLE_SYNC_GEARING` step emission in `MotionEngine::onMotionTick()` to dispatch multi-pulse steps within each tick without lag.
+
