@@ -168,8 +168,8 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
 
 | Slice | Status | Target Date | Commit Hash | Verified By | Notes / Deviations |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Slice 1: HAL & TelemetryMailbox** | `PENDING` | - | - | - | Ready for Conversation 1 |
-| **Slice 2: Kinematic Kernel & Math** | `PENDING` | - | - | - | Awaiting Slice 1 completion |
+| **Slice 1: HAL & TelemetryMailbox** | `COMPLETE` | 2026-10-15 | `ec2753b` | PlatformIO | Zero warnings, zero errors |
+| **Slice 2: Kinematic Kernel & Math** | `READY` | - | - | - | Ready for Conversation 2 |
 | **Slice 3: MotionEngine Core Loop** | `PENDING` | - | - | - | Awaiting Slice 2 completion |
 | **Slice 4: Mode Contract Decoupling** | `PENDING` | - | - | - | Awaiting Slice 3 completion |
 
@@ -178,12 +178,23 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
 ### Detailed Session Logs
 
 #### Slice 1 Execution Log
-*(To be completed at the end of Conversation 1)*
-- **Date Completed:** 
-- **Commit:** 
-- **Files Created / Modified:** 
-- **PlatformIO Verification Result:** 
-- **Key Architectural Decisions & Deviations:** 
+- **Date Completed:** 2026-10-15
+- **Commit:** `ec2753b`
+- **Files Created / Modified:**
+  - `src/motion/hal/StepTimingConfig.h`
+  - `src/motion/hal/IStepperHAL.h`
+  - `src/motion/hal/ISpindleEncoderHAL.h`
+  - `src/motion/hal/Esp32SpindleEncoderHAL.h`
+  - `src/motion/hal/Esp32SpindleEncoderHAL.cpp`
+  - `src/motion/contract/TelemetryMailbox.h`
+  - `src/core/SettingsService.h` (guarded `AxisId` against redefinition)
+- **PlatformIO Verification Result:** `pio run -e esp32s3` passed cleanly (0 errors, 0 warnings). RAM: 18.7% (61,120 bytes), Flash: 20.2% (1,322,253 bytes).
+- **Key Architectural Decisions & Deviations:**
+  - Implemented `[HAL-01]` zero-loss 16-bit modular difference in `Esp32SpindleEncoderHAL::getPulseDelta()`; PCNT counter is never cleared during runtime.
+  - 500 ns PCNT glitch filter configured to reject industrial VFD PWM interference.
+  - Configured 4x quadrature decoding using dual PCNT channels per unit.
+  - Implemented `TelemetryMailbox` seqlock conforming to `[CONC-01]` and Section 3.1 of `CONCURRENCY_AND_TIMING.md` with explicit release/acquire thread fences.
+  - Zero modifications to `platformio.ini` required (`-I src` already provides access to `motion/hal/` and `motion/contract/`).
 
 #### Slice 2 Execution Log
 *(To be completed at the end of Conversation 2)*
