@@ -15,9 +15,9 @@ class TestSpindleSyncGearing1_5mm(HilTestCase):
         await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK")
         await self.client.wait_for(lambda s: s.is_on, description="feed engaged")
 
-        # 2. Inject 2 complete revolutions of spindle encoder pulses
-        ppr = self.client.state.encoder_ppr if self.client.state.encoder_ppr > 0 else 2400
-        two_revs = ppr * 2
+        # 2. Inject 2 complete revolutions of spindle encoder pulses (4x quadrature counts)
+        counts_per_rev = (self.client.state.encoder_ppr * 4) if self.client.state.encoder_ppr > 0 else 4800
+        two_revs = counts_per_rev * 2
         await self.client.send(f"CMD.simPulses={two_revs}")
 
         # 3. Wait for carriage coordinate to reach target position
@@ -42,9 +42,9 @@ class TestSpindleSyncGearingReverse(HilTestCase):
         await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL")
         await self.client.wait_for(lambda s: s.is_on, description="feed engaged")
 
-        # 2. Inject 1 revolution
-        ppr = self.client.state.encoder_ppr if self.client.state.encoder_ppr > 0 else 2400
-        await self.client.send(f"CMD.simPulses={ppr}")
+        # 2. Inject 1 revolution (4x quadrature counts)
+        counts_per_rev = (self.client.state.encoder_ppr * 4) if self.client.state.encoder_ppr > 0 else 4800
+        await self.client.send(f"CMD.simPulses={counts_per_rev}")
 
         # 3. Wait for coordinate
         expected_z = 10000

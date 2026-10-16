@@ -64,15 +64,21 @@ async def main_async() -> int:
         help="Case-insensitive test name filter",
     )
     parser.add_argument(
+        "--test",
+        default="",
+        help="Specific test name to run (exact or substring match)",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit machine-readable JSON output",
     )
     args = parser.parse_args()
 
-    test_classes = discover_test_classes(args.filter)
+    filter_term = args.test if args.test else args.filter
+    test_classes = discover_test_classes(filter_term)
     if not test_classes:
-        print(f"No test cases found matching filter: '{args.filter}'", file=sys.stderr)
+        print(f"No test cases found matching: '{filter_term}'", file=sys.stderr)
         return 1
 
     client = NanoElsClient(host=args.host, port=args.port)

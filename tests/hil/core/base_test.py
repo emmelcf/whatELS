@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 import time
+import traceback
 from typing import Any
 
 from .client import NanoElsClient
@@ -17,6 +18,8 @@ class TestResult:
     duration_s: float
     details: dict[str, Any] = field(default_factory=dict)
     error_message: str = ""
+    traceback: str = ""
+    state_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 class HilTestCase(ABC):
@@ -35,8 +38,10 @@ class HilTestCase(ABC):
         await self.client.send("CMD.stop")
         await self.client.send("CMD.simRpm=0")
         await self.client.send("CMD.simEncoder=1")
-        await self.client.send("CMD.axisLimitDu=Z,1,2147483647")
-        await self.client.send("CMD.axisLimitDu=Z,0,-2147483648")
+        await self.client.send("CMD.axisClearLimit=Z,1")
+        await self.client.send("CMD.axisClearLimit=Z,0")
+        await self.client.send("CMD.axisClearLimit=X,1")
+        await self.client.send("CMD.axisClearLimit=X,0")
         await self.client.send("CMD.axisZero=Z")
         await self.client.send("CMD.axisZero=X")
         await self.client.wait_for(
@@ -64,6 +69,8 @@ class HilTestCase(ABC):
         start_time = time.perf_counter()
         status = "PASS"
         error_msg = ""
+        tb = ""
+        state_snap: dict[str, Any] = {}
 
         try:
             await self.setup()
@@ -71,9 +78,33 @@ class HilTestCase(ABC):
         except AssertionError as e:
             status = "FAIL"
             error_msg = str(e)
+            tb = traceback.format_exc()
+            state_snap = {
+                "z_du": self.client.state.z_du,
+                "x_du": self.client.state.x_du,
+                "rpm": self.client.state.rpm,
+                "turns": self.client.state.turns,
+                "is_on": self.client.state.is_on,
+                "mode": self.client.state.mode,
+                "estop": self.client.state.estop,
+                "z_left_du": self.client.state.z_left_du,
+                "z_right_du": self.client.state.z_right_du,
+            }
         except Exception as e:
             status = "ERROR"
             error_msg = f"{type(e).__name__}: {str(e)}"
+            tb = traceback.format_exc()
+            state_snap = {
+                "z_du": self.client.state.z_du,
+                "x_du": self.client.state.x_du,
+                "rpm": self.client.state.rpm,
+                "turns": self.client.state.turns,
+                "is_on": self.client.state.is_on,
+                "mode": self.client.state.mode,
+                "estop": self.client.state.estop,
+                "z_left_du": self.client.state.z_left_du,
+                "z_right_du": self.client.state.z_right_du,
+            }
         finally:
             try:
                 await self.teardown()
@@ -81,6 +112,7 @@ class HilTestCase(ABC):
                 if status == "PASS":
                     status = "ERROR"
                     error_msg = f"Teardown error: {td_err}"
+                    tb = traceback.format_exc()
 
         duration = time.perf_counter() - start_time
         return TestResult(
@@ -89,4 +121,6 @@ class HilTestCase(ABC):
             duration_s=round(duration, 3),
             details=self.details,
             error_message=error_msg,
+            traceback=tb,
+            state_snapshot=state_snap,
         )

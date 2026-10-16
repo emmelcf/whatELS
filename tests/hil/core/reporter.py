@@ -60,10 +60,41 @@ def print_terminal_report(results: list[TestResult], target: str) -> None:
     )
     if failed == 0 and errors == 0:
         print(f"{BOLD}{summary_color}RESULT: ALL TESTS PASSED (Exit code: 0){RESET}")
+        print("=" * 80)
+        print()
     else:
         print(f"{BOLD}{summary_color}RESULT: TEST SUITE FAILED (Exit code: 1){RESET}")
-    print("=" * 80)
-    print()
+        print("=" * 80)
+        print()
+
+        # Detailed, completely untruncated failures and diagnostics
+        print(f"{BOLD}{RED}" + "=" * 80 + f"{RESET}")
+        print(f"{BOLD}{RED}                          FAILURES & DIAGNOSTICS{RESET}")
+        print(f"{BOLD}{RED}" + "=" * 80 + f"{RESET}")
+
+        for r in results:
+            if r.status in ("FAIL", "ERROR"):
+                badge = f"{RED}[FAIL]{RESET}" if r.status == "FAIL" else f"{YELLOW}[ERROR]{RESET}"
+                print()
+                print(f"{badge} {BOLD}{r.name}{RESET} ({r.duration_s:.2f}s)")
+                print(f"{BOLD}Error:{RESET} {r.error_message}")
+
+                if r.state_snapshot:
+                    print(f"{BOLD}Controller State at Failure:{RESET}")
+                    state_items = [f"  {k} = {v}" for k, v in r.state_snapshot.items()]
+                    print("\n".join(state_items))
+
+                if r.details:
+                    print(f"{BOLD}Test Details:{RESET}")
+                    detail_items = [f"  {k} = {v}" for k, v in r.details.items()]
+                    print("\n".join(detail_items))
+
+                if r.traceback:
+                    print(f"{BOLD}Traceback:{RESET}")
+                    print(r.traceback.rstrip())
+
+                print("-" * 80)
+        print()
 
 
 def emit_json_report(results: list[TestResult], target: str) -> None:
@@ -83,6 +114,8 @@ def emit_json_report(results: list[TestResult], target: str) -> None:
                 "duration_s": r.duration_s,
                 "details": r.details,
                 "error": r.error_message,
+                "traceback": r.traceback,
+                "state_snapshot": r.state_snapshot,
             }
             for r in results
         ],
