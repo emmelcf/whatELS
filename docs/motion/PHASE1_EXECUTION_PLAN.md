@@ -171,7 +171,7 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
 | **Slice 1: HAL & TelemetryMailbox** | `COMPLETE` | 2026-10-15 | `ec2753b` | PlatformIO | Zero warnings, zero errors |
 | **Slice 2: Kinematic Kernel & Math** | `COMPLETE` | 2026-10-15 | `5720c53` | PlatformIO + Unit Test | Zero warnings, zero errors. KIN-01, KIN-02, KIN-03, KIN-05 verified. |
 | **Slice 3: MotionEngine Core Loop** | `COMPLETE` | 2026-10-15 | `06db3a1` | PlatformIO + Unit Test | Zero warnings, zero errors. CONC-02 flash lockout, TrajectoryPlanner, and Core 1 task verified. |
-| **Slice 4: Mode Contract Decoupling** | `READY` | - | - | - | Ready for Conversation 4 |
+| **Slice 4: Mode Contract Decoupling** | `COMPLETE` | 2026-10-15 | `0fb6fb8` | PlatformIO + Unit Test | Zero warnings, zero errors. SAFE-01 default-deny gatekeeper, KIN-04 dual-axis taper, and UnifiedGearboxMode migration verified. |
 
 ---
 
@@ -235,9 +235,38 @@ We are executing Slice 4 of Phase 1 (Mode Contract Decoupling & Integration) per
   - Resolved GCC `[-Wattributes]` section conflict warnings by placing `IRAM_ATTR` on class member declarations in headers.
 
 #### Slice 4 Execution Log
-*(To be completed at the end of Conversation 4)*
-- **Date Completed:** 
-- **Commit:** 
-- **Files Created / Modified:** 
-- **PlatformIO Verification Result:** 
-- **Key Architectural Decisions & Deviations:** 
+- **Date Completed:** 2026-10-15
+- **Commit:** `0fb6fb8`
+- **Files Created / Modified:**
+  - `src/motion/contract/MotionCommands.h` (created)
+  - `src/motion/modes/IELSMode.h`
+  - `src/motion/modes/composite/UnifiedGearboxMode.h`
+  - `src/motion/modes/composite/UnifiedGearboxMode.cpp`
+  - `src/motion/kernel/MotionEngine.h`
+  - `src/motion/kernel/MotionEngine.cpp`
+  - `src/motion/kernel/AxisState.h`
+  - `src/motion/modes/ModeRegistry.cpp`
+  - `src/motion/modes/primitives/AsyncPrimitive.h` / `.cpp`
+  - `src/motion/modes/primitives/ConePrimitive.h` / `.cpp`
+  - `src/motion/modes/primitives/GearXPrimitive.h` / `.cpp`
+  - `src/motion/modes/primitives/GearZPrimitive.h` / `.cpp`
+  - `src/main.cpp`
+- **PlatformIO Verification Result:** `pio run -e esp32s3` passed cleanly (0 errors, 0 warnings). RAM: 18.9% (61,920 bytes), Flash: 20.2% (1,325,997 bytes). Unit test verified 100% pass across all 7 verification categories.
+- **Key Architectural Decisions & Deviations:**
+  - Decoupled `IELSMode` from low-level motion ISRs: removed `onSpindlePulse()`, `onMotionTick()`, and `onLimitReached()`; inherited from `IMotionEventListener` (`onMotionHalted`, `onSpindleSyncAcquired`, `onMotionTelemetry`).
+  - Implemented `[SAFE-01]` default-deny in `IELSMode::canExecuteCommand()`: full configuration commands are only permitted in `IDLE` or `COMPLETED`; `RUNNING` and `ARMED` strictly whitelist declared live operations; `PAUSED` allows feed resume / nudge / cycle; `RETRACTING` and `FAULT` reject all non-stop commands.
+  - Implemented `[KIN-04]` compound dual-axis taper parameters (`enableSecondaryAxis`, `secondaryAxis`, `secondaryRatioNum`, `secondaryRatioDen`) in `SpindleSyncParams` and `VelocityFeedParams`.
+  - Migrated `UnifiedGearboxMode` to act purely as an orchestrator commanding `MotionEngine::engageSpindleSync()` and `engageVelocityFeed()`, receiving `onMotionHalted()` callbacks for soft limits and stop events with zero motor step math in mode code.
+  - Resolved Xtensa literal pool placement relocation error in `.iram1` section by marking `stepsToDu`, `duToSteps`, and `getWorkpieceCoordDu` in `AxisState.h` with `__attribute__((always_inline))`.
+  - Injected `MotionEngine*` into `IELSMode::onEnter(MotionEngine* engine)` with safe fallback to `MotionEngine::instance()`.
+
+---
+
+### Phase 1 Completion Summary
+
+With Slice 4 complete, **Phase 1 of the Modular Motion Engine Architecture is 100% finished**:
+1. **Layer 1 (HAL):** Zero-loss 16-bit modular PCNT sampling (`[HAL-01]`), 500 ns glitch filtering, lock-free `TelemetryMailbox` seqlock (`[CONC-01]`).
+2. **Layer 2 (Kinematic Kernel):** 64-bit anchored Bresenham fractional accumulator (`[KIN-02]`), phase preservation across dwells and spindle reversals (`[KIN-01]`), multi-stop soft limits drum with resting bypass prevention (`[KIN-03]`), and symmetric integer half-way rounding (`[KIN-05]`).
+3. **Core 1 Real-Time Loop:** Trajectory planning with stopping distance calculation and entry RPM runway checks, in-motion NVS flash cache lockout (`[CONC-02]`), and lock-free inter-core command ringbuffer.
+4. **Layer 3 (Mode Integration):** Clean decoupling of modes from motion ISRs, default-deny safety gatekeeper (`[SAFE-01]`), dual-axis compound taper parameters (`[KIN-04]`), and migration of `UnifiedGearboxMode`.
+ 
