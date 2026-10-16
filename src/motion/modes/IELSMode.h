@@ -132,6 +132,10 @@ struct ModeManifest {
     const ParamDescriptor* params;
 };
 
+#include "../contract/MotionCommands.h"
+
+class MotionEngine; // Forward declaration
+
 // -----------------------------------------------------------------------------
 // 3. Telemetry Serialization Forward Declaration
 // -----------------------------------------------------------------------------
@@ -148,7 +152,7 @@ public:
 // 4. Abstract Mode Interface: IELSMode
 // -----------------------------------------------------------------------------
 
-class IELSMode {
+class IELSMode : public IMotionEventListener {
 public:
     virtual ~IELSMode() = default;
 
@@ -167,47 +171,68 @@ public:
     virtual bool validateParams(char* errBuf, size_t errBufLen) const = 0;
 
     // --- 3. Lifecycle Hooks ---
-    virtual void onEnter() = 0;
+    virtual void onEnter(MotionEngine* engine = nullptr) = 0;
     virtual void onExit() = 0;
 
     // --- 4. Execution State Machine Control ---
     virtual bool start() = 0;
     virtual void stop(StopType stopType) = 0;
+    virtual bool pause() { stop(StopType::FEED_HOLD); return true; }
     virtual bool resume() = 0;
 
     virtual ModeState getState() const = 0;
     virtual bool isRunning() const = 0;
 
-    // --- 5. In-Motion Safety Contract & Gatekeeper ---
+    // --- 5. In-Motion Safety Contract & Gatekeeper [SAFE-01] ---
     virtual uint32_t getLivePermissions() const = 0;
 
     virtual bool canExecuteCommand(CommandId cmd, ModeState state) const {
-        // Stop and E-Stop are inviolable and universally permitted in all states
-        if (cmd == CommandId::CMD_STOP || cmd == CommandId::CMD_ESTOP) return true;
+        // 1. Stop and E-Stop are inviolable and universally permitted in ALL states
+        if (cmd == CommandId::CMD_STOP || cmd == CommandId::CMD_ESTOP) {
+            return true;
+        }
 
-        if (state == ModeState::RUNNING) {
-            if (cmd == CommandId::CMD_FEED_HOLD) return (getLivePermissions() & PERM_FEED_HOLD) != 0;
-            if (cmd == CommandId::CMD_FEED_NUDGE) return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
-            if (cmd == CommandId::CMD_STEP_CYCLE) return (getLivePermissions() & PERM_LIVE_STEP_CYCLE) != 0;
+        // 2. Full configuration is ONLY permitted when stationary in IDLE or COMPLETED
+        if (state == ModeState::IDLE || state == ModeState::COMPLETED) {
+            return true;
+        }
+
+        // 3. During active cutting (RUNNING) or waiting for sync trigger (ARMED)
+        if (state == ModeState::RUNNING || state == ModeState::ARMED) {
+            if (cmd == CommandId::CMD_FEED_HOLD)    return (getLivePermissions() & PERM_FEED_HOLD) != 0;
+            if (cmd == CommandId::CMD_FEED_NUDGE)   return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
+            if (cmd == CommandId::CMD_STEP_CYCLE)   return (getLivePermissions() & PERM_LIVE_STEP_CYCLE) != 0;
             if (cmd == CommandId::CMD_RPM_OVERRIDE) return (getLivePermissions() & PERM_LIVE_RPM_OVERRIDE) != 0;
-            // Structural modifications (axis, direction, mode swap, pitch rewrite) are strictly locked
-            return false;
+            return false; // Lock out all other commands
         }
 
+        // 4. During Feed Hold (PAUSED)
         if (state == ModeState::PAUSED) {
-            if (cmd == CommandId::CMD_FEED_RESUME) return true;
-            if (cmd == CommandId::CMD_FEED_NUDGE) return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
-            if (cmd == CommandId::CMD_STEP_CYCLE) return (getLivePermissions() & PERM_LIVE_STEP_CYCLE) != 0;
+            if (cmd == CommandId::CMD_FEED_RESUME)  return true;
+            if (cmd == CommandId::CMD_FEED_NUDGE)   return (getLivePermissions() & PERM_LIVE_FEED_TRIM) != 0;
+            if (cmd == CommandId::CMD_STEP_CYCLE)   return (getLivePermissions() & PERM_LIVE_STEP_CYCLE) != 0;
             return false;
         }
 
-        return true; // All configuration commands permitted when IDLE/STOPPED
+        // 5. During RETRACTING or FAULT: strictly reject all non-stop commands (default-deny)
+        return false;
     }
 
-    // --- 6. Real-Time Kinematic Hooks (Core 1 Motion Task / Interrupts) ---
-    virtual void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) = 0;
-    virtual void onMotionTick() = 0;
-    virtual void onLimitReached(uint8_t axisId, bool isHighLimit) = 0;
+    // --- 6. Layer 2 Motion Event Listener Callbacks (IMotionEventListener) ---
+    void onMotionHalted(
+        AxisId axis,
+        MotionHaltReason reason,
+        int32_t haltedPosSteps,
+        int32_t haltedCoordDu,
+        const SoftLimit* triggeredLimit) override {}
+
+    void onSpindleSyncAcquired(AxisId axis) override {}
+
+    void onMotionTelemetry(
+        int32_t zCoordDu,
+        int32_t xCoordDu,
+        uint32_t currentRpm,
+        bool isMoving) override {}
 
     // --- 7. Telemetry & Progress Serialization ---
     virtual void writeTelemetry(TelemetryWriter& writer) const = 0;

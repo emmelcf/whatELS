@@ -34,7 +34,7 @@ struct AxisState {
  * @brief Converts raw motor steps to canonical deci-microns (du) with symmetric integer rounding [KIN-05].
  * @details 1 du = 0.0001 mm = 0.1 um.
  */
-inline int32_t IRAM_ATTR stepsToDu(const AxisGeometry& geom, int32_t steps) {
+inline __attribute__((always_inline)) int32_t stepsToDu(const AxisGeometry& geom, int32_t steps) {
   if (geom.motorStepsPerRev == 0) return 0;
   int64_t num = static_cast<int64_t>(steps) * geom.screwPitchDu;
   int64_t den = geom.motorStepsPerRev;
@@ -44,7 +44,7 @@ inline int32_t IRAM_ATTR stepsToDu(const AxisGeometry& geom, int32_t steps) {
 /**
  * @brief Converts canonical deci-microns (du) to raw motor steps with symmetric integer rounding [KIN-05].
  */
-inline int32_t IRAM_ATTR duToSteps(const AxisGeometry& geom, int32_t du) {
+inline __attribute__((always_inline)) int32_t duToSteps(const AxisGeometry& geom, int32_t du) {
   if (geom.screwPitchDu == 0) return 0;
   int64_t num = static_cast<int64_t>(du) * geom.motorStepsPerRev;
   int64_t den = geom.screwPitchDu;
@@ -54,6 +54,6 @@ inline int32_t IRAM_ATTR duToSteps(const AxisGeometry& geom, int32_t du) {
 /**
  * @brief Calculates the workpiece coordinate in canonical deci-microns (du) taking origin offset into account.
  */
-inline int32_t IRAM_ATTR getWorkpieceCoordDu(const AxisState& axis) {
+inline __attribute__((always_inline)) int32_t getWorkpieceCoordDu(const AxisState& axis) {
   return stepsToDu(axis.geometry, axis.posSteps + axis.originSteps);
 }

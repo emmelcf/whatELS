@@ -20,6 +20,7 @@
 #include "hal/ISpindleEncoderHAL.h"
 #include "contract/TelemetryMailbox.h"
 #include "contract/MotionCommandPacket.h"
+#include "contract/MotionCommands.h"
 
 enum class MotionMode : uint8_t {
   STOPPED = 0,
@@ -75,11 +76,18 @@ public:
   // Motion Execution APIs
   bool startVelocityFeed(const FeedParameters& params);
   bool startSpindleSync(const FeedParameters& params);
+  bool engageVelocityFeed(const VelocityFeedParams& params);
+  bool engageSpindleSync(const SpindleSyncParams& params);
   bool startJog(AxisId axis, int8_t direction, int32_t stepDu);
   void stop(AxisId axis, bool emergency = false);
+  void stopWithReason(AxisId axis, MotionHaltReason reason);
   void stopAll(bool emergency = false);
   void pauseFeedHold(AxisId axis);
   void resumeFeedHold(AxisId axis);
+
+  // Event Listener Registration
+  void setEventListener(IMotionEventListener* listener) { m_listener = listener; }
+  IMotionEventListener* getEventListener() const { return m_listener; }
 
   // Status & Telemetry
   bool isMoving(AxisId axis) const;
@@ -122,6 +130,7 @@ private:
   IStepperHAL*        m_stepperHal;
   ISpindleEncoderHAL* m_encoderHal;
   TelemetryMailbox    m_telemetryMailbox;
+  IMotionEventListener* m_listener = nullptr;
 
   MotionMode          m_activeMode[NUM_AXES] = { MotionMode::STOPPED, MotionMode::STOPPED };
   bool                m_isMoving[NUM_AXES]   = { false, false };

@@ -207,7 +207,6 @@ void loop() {
     if (!activeMode->isRunning()) {
       activeMode->start();
     }
-    activeMode->onMotionTick();
   } else if (currentMode == LatheMode::ASYNC) {
     // Stepping driven by async_timer interrupt
   } else if (currentMode == LatheMode::NORMAL) {

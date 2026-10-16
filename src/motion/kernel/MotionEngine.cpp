@@ -163,6 +163,45 @@ bool MotionEngine::startJog(AxisId axis, int8_t direction, int32_t stepDu) {
   return true;
 }
 
+bool MotionEngine::engageVelocityFeed(const VelocityFeedParams& params) {
+  FeedParameters feed;
+  feed.axis                = params.axis;
+  feed.direction           = params.direction;
+  feed.speedDuPerMin       = params.feedRateDuPerMin;
+  feed.targetDistDu        = params.targetDistDu;
+  feed.enableSecondaryAxis = params.enableSecondaryAxis;
+  feed.secondaryAxis       = params.secondaryAxis;
+  feed.secondaryRatioNum   = params.secondaryRatioNum;
+  feed.secondaryRatioDen   = params.secondaryRatioDen;
+  return startVelocityFeed(feed);
+}
+
+bool MotionEngine::engageSpindleSync(const SpindleSyncParams& params) {
+  FeedParameters feed;
+  feed.axis                = params.axis;
+  feed.direction           = params.direction;
+  feed.pitchDupr           = params.pitchDupr;
+  feed.targetDistDu        = params.targetDistDu;
+  feed.enableSecondaryAxis = params.enableSecondaryAxis;
+  feed.secondaryAxis       = params.secondaryAxis;
+  feed.secondaryRatioNum   = params.secondaryRatioNum;
+  feed.secondaryRatioDen   = params.secondaryRatioDen;
+  return startSpindleSync(feed);
+}
+
+void MotionEngine::stopWithReason(AxisId axis, MotionHaltReason reason) {
+  size_t idx = axisIdx(axis);
+  int32_t haltedSteps = m_axes[idx].posSteps;
+  int32_t haltedDu    = getWorkpieceCoordDu(m_axes[idx]);
+  const SoftLimit* lim = m_limits[idx].findNextEnforcedLimit(m_axes[idx].posSteps, m_direction[idx]);
+
+  stop(axis, reason == MotionHaltReason::ESTOP);
+
+  if (m_listener) {
+    m_listener->onMotionHalted(axis, reason, haltedSteps, haltedDu, lim);
+  }
+}
+
 void MotionEngine::stop(AxisId axis, bool emergency) {
   size_t idx = axisIdx(axis);
   m_activeMode[idx] = MotionMode::STOPPED;
@@ -384,7 +423,10 @@ void MotionEngine::onMotionTick() {
 
     if (remainingSteps <= 0) {
       // Limit or target reached!
-      stop(axis, false);
+      MotionHaltReason reason = (lim && std::abs(lim->stepPos - m_axes[idx].posSteps) <= 0)
+                                    ? MotionHaltReason::SOFT_LIMIT_REACHED
+                                    : MotionHaltReason::TARGET_DISTANCE_REACHED;
+      stopWithReason(axis, reason);
       continue;
     }
 
@@ -419,7 +461,7 @@ void MotionEngine::onMotionTick() {
         float dt = 0.001f;
         int32_t cmdVel = m_planners[idx].updateVelocity(remainingSteps, dt);
         if (m_planners[idx].isFinished() || cmdVel <= 0) {
-          stop(axis, false);
+          stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
         } else if (m_stepperHal) {
           m_stepperHal->setDirection(axis, dir);
           m_stepperHal->pulseStep(axis);
@@ -435,7 +477,7 @@ void MotionEngine::onMotionTick() {
         }
         m_axes[idx].posSteps += dir;
         if (m_axes[idx].posSteps == m_targetStep[idx]) {
-          stop(axis, false);
+          stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
         }
         break;
       }
@@ -473,4 +515,8 @@ void MotionEngine::publishTelemetrySnapshot() {
   snapshot.sequenceNumber  = ++m_telemetrySeqNumber;
 
   m_telemetryMailbox.publish(snapshot);
+
+  if (m_listener) {
+    m_listener->onMotionTelemetry(snapshot.zCoordDu, snapshot.xCoordDu, snapshot.spindleRpm, snapshot.isMoving);
+  }
 }

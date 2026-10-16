@@ -56,7 +56,8 @@ bool GearZPrimitive::validateParams(char* errBuf, size_t errBufLen) const {
     return true;
 }
 
-void GearZPrimitive::onEnter() {
+void GearZPrimitive::onEnter(MotionEngine* engine) {
+    (void)engine;
     m_state = ModeState::IDLE;
 }
 
@@ -105,7 +106,7 @@ void GearZPrimitive::onLimitReached(uint8_t axisId, bool isHighLimit) {
 }
 
 void GearZPrimitive::writeTelemetry(TelemetryWriter& writer) const {
-    writer.writeKeyValue("z_pos", z.pos);
+    writer.writeKeyValue("z_pos", static_cast<int32_t>(z.pos));
     writer.writeKeyValue("dupr", (int32_t)dupr);
     writer.writeKeyValue("state", (int32_t)m_state);
 }

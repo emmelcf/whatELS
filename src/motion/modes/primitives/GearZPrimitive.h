@@ -1,7 +1,9 @@
 #pragma once
 
-#include "IELSMode.h"
+#include "../IELSMode.h"
 #include "Axis.h"
+
+class MotionEngine;
 
 class GearZPrimitive : public IELSMode {
 private:
@@ -29,7 +31,7 @@ public:
     bool validateParams(char* errBuf, size_t errBufLen) const override;
 
     // --- Lifecycle Hooks ---
-    void onEnter() override;
+    void onEnter(MotionEngine* engine = nullptr) override;
     void onExit() override;
 
     // --- Execution State Machine Control ---
@@ -41,9 +43,9 @@ public:
     bool isRunning() const override { return m_state == ModeState::RUNNING; }
 
     // --- Kinematics ---
-    void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) override;
-    void onMotionTick() override;
-    void onLimitReached(uint8_t axisId, bool isHighLimit) override;
+    void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm);
+    void onMotionTick();
+    void onLimitReached(uint8_t axisId, bool isHighLimit);
 
     // --- Telemetry ---
     void writeTelemetry(TelemetryWriter& writer) const override;

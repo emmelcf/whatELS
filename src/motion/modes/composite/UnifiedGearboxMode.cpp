@@ -1,5 +1,6 @@
 #include "UnifiedGearboxMode.h"
 #include "../../Motion.h"
+#include "../../kernel/MotionEngine.h"
 #include <climits>
 
 static const ParamDescriptor GEARBOX_PARAMS[] = {
@@ -41,40 +42,47 @@ const ModeManifest& UnifiedGearboxMode::getManifest() const {
 bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction, int32_t targetDistDu) {
     if (feedRateDu <= 0 || direction == 0) return false;
 
+    if (!m_engine) {
+        m_engine = &MotionEngine::instance();
+    }
+    m_engine->setEventListener(this);
+
     m_axis = axis;
     m_isSync = sync;
     m_feedRateDu = feedRateDu;
     m_direction = direction;
     m_targetDistDu = targetDistDu;
 
-    Axis* a = (axis == AXIS_X) ? &x : &z;
-
+    bool ok = false;
     if (m_isSync) {
-        // Stop velocity timer if running
-        stopVelocityFeed();
-
-        // Configure sync spindle gearing: Cartesian -1 (Chuck) maps to positive dupr
-        long signedDupr = -direction * feedRateDu;
-        LatheMode latheMode = (axis == AXIS_X) ? LatheMode::XGEAR : LatheMode::NORMAL;
-        setModeFromTask(latheMode);
-        setFeedrateDupr(signedDupr, false);
-        setIsOnFromTask(true);
-        m_state = ModeState::RUNNING;
-        return true;
+        SpindleSyncParams params;
+        params.axis = axis;
+        params.direction = direction;
+        params.pitchDupr = feedRateDu;
+        params.targetDistDu = targetDistDu;
+        params.respectSoftLimits = true;
+        ok = m_engine->engageSpindleSync(params);
     } else {
-        // Velocity feed
-        dupr = 0;
-        setModeFromTask(LatheMode::ASYNC);
-        setIsOnFromTask(true);
-        bool ok = startVelocityFeed(a, feedRateDu, direction, targetDistDu);
-        if (ok) {
-            m_state = ModeState::RUNNING;
-        } else {
-            setIsOnFromTask(false);
-            m_state = ModeState::IDLE;
-        }
-        return ok;
+        VelocityFeedParams params;
+        params.axis = axis;
+        params.direction = direction;
+        params.feedRateDuPerMin = feedRateDu;
+        params.targetDistDu = targetDistDu;
+        params.respectSoftLimits = true;
+        ok = m_engine->engageVelocityFeed(params);
     }
+
+    if (ok) {
+        m_state = ModeState::RUNNING;
+        setIsOnFromTask(true);
+        if (m_isSync) {
+            setFeedrateDupr(-direction * feedRateDu, false);
+        }
+    } else {
+        m_state = ModeState::IDLE;
+        setIsOnFromTask(false);
+    }
+    return ok;
 }
 
 bool UnifiedGearboxMode::setActiveAxis(const char* axisStr) {
@@ -114,12 +122,20 @@ bool UnifiedGearboxMode::setFeedRate(int32_t feedRateDu) {
     if (feedRateDu <= 0) return false;
     m_feedRateDu = feedRateDu;
     if (m_state == ModeState::RUNNING) {
-        // Dynamic in-cut update
+        if (!m_engine) m_engine = &MotionEngine::instance();
         if (m_isSync) {
+            MotionCommandPacket pkt;
+            pkt.type = MotionCommandPacket::Type::UPDATE_FEED_PITCH;
+            pkt.axis = m_axis;
+            pkt.pitchDupr = m_feedRateDu;
+            m_engine->postCommand(pkt);
             setFeedrateDupr(-m_direction * m_feedRateDu, false);
         } else {
-            Axis* a = (m_axis == AXIS_X) ? &x : &z;
-            startVelocityFeed(a, m_feedRateDu, m_direction, m_targetDistDu);
+            MotionCommandPacket pkt;
+            pkt.type = MotionCommandPacket::Type::UPDATE_VELOCITY;
+            pkt.axis = m_axis;
+            pkt.speedDuMin = m_feedRateDu;
+            m_engine->postCommand(pkt);
         }
     }
     return true;
@@ -188,12 +204,17 @@ bool UnifiedGearboxMode::validateParams(char* errBuf, size_t errBufLen) const {
     return true;
 }
 
-void UnifiedGearboxMode::onEnter() {
+void UnifiedGearboxMode::onEnter(MotionEngine* engine) {
+    m_engine = engine ? engine : &MotionEngine::instance();
+    m_engine->setEventListener(this);
     m_state = ModeState::IDLE;
 }
 
 void UnifiedGearboxMode::onExit() {
     stop(StopType::NORMAL_STOP);
+    if (m_engine && m_engine->getEventListener() == this) {
+        m_engine->setEventListener(nullptr);
+    }
     m_state = ModeState::IDLE;
 }
 
@@ -202,8 +223,8 @@ bool UnifiedGearboxMode::start() {
 }
 
 void UnifiedGearboxMode::stop(StopType stopType) {
-    if (!m_isSync) {
-        stopVelocityFeed();
+    if (m_engine) {
+        m_engine->stop(m_axis, stopType == StopType::EMERGENCY_IMMEDIATE);
     }
     setIsOnFromTask(false);
     if (stopType == StopType::FEED_HOLD) {
@@ -220,23 +241,26 @@ bool UnifiedGearboxMode::resume() {
     return false;
 }
 
-void UnifiedGearboxMode::onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) {
-    // Spindle pulses for synchronous feed are driven in Core 1 ISR
-}
-
-void UnifiedGearboxMode::onMotionTick() {
-    if (m_state == ModeState::RUNNING) {
-        if (!m_isSync) {
-            if (!isVelocityFeedActive()) {
-                // Velocity feed reached soft limit or target stroke
-                stop(StopType::NORMAL_STOP);
-            }
+void UnifiedGearboxMode::onMotionHalted(
+    AxisId axis,
+    MotionHaltReason reason,
+    int32_t haltedPosSteps,
+    int32_t haltedCoordDu,
+    const SoftLimit* triggeredLimit) {
+    if (axis == m_axis) {
+        setIsOnFromTask(false);
+        if (reason == MotionHaltReason::FEED_HOLD) {
+            m_state = ModeState::PAUSED;
+        } else {
+            m_state = ModeState::IDLE;
         }
     }
 }
 
-void UnifiedGearboxMode::onLimitReached(uint8_t axisId, bool isHighLimit) {
-    stop(StopType::NORMAL_STOP);
+void UnifiedGearboxMode::onSpindleSyncAcquired(AxisId axis) {
+    if (axis == m_axis && m_state == ModeState::ARMED) {
+        m_state = ModeState::RUNNING;
+    }
 }
 
 void UnifiedGearboxMode::writeTelemetry(TelemetryWriter& writer) const {

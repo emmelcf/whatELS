@@ -86,7 +86,8 @@ bool AsyncPrimitive::validateParams(char* errBuf, size_t errBufLen) const {
     return true;
 }
 
-void AsyncPrimitive::onEnter() {
+void AsyncPrimitive::onEnter(MotionEngine* engine) {
+    (void)engine;
     m_state = ModeState::IDLE;
 }
 

@@ -74,7 +74,8 @@ bool ConePrimitive::validateParams(char* errBuf, size_t errBufLen) const {
     return true;
 }
 
-void ConePrimitive::onEnter() {
+void ConePrimitive::onEnter(MotionEngine* engine) {
+    (void)engine;
     m_state = ModeState::IDLE;
 }
 
@@ -158,8 +159,8 @@ void ConePrimitive::onLimitReached(uint8_t axisId, bool isHighLimit) {
 }
 
 void ConePrimitive::writeTelemetry(TelemetryWriter& writer) const {
-    writer.writeKeyValue("z_pos", z.pos);
-    writer.writeKeyValue("x_pos", x.pos);
+    writer.writeKeyValue("z_pos", static_cast<int32_t>(z.pos));
+    writer.writeKeyValue("x_pos", static_cast<int32_t>(x.pos));
     writer.writeKeyValue("cone_ratio", coneRatio, 4);
     writer.writeKeyValue("state", (int32_t)m_state);
 }

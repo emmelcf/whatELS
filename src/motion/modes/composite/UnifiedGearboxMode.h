@@ -18,6 +18,8 @@ private:
     int32_t   m_feedRateDu = 1000;     // Canonical magnitude: dupr if sync, du/min if async
     int32_t   m_targetDistDu = -1;     // Stroke distance in du (-1 = continuous to soft limit)
 
+    MotionEngine* m_engine = nullptr;
+
 public:
     UnifiedGearboxMode();
     ~UnifiedGearboxMode() override = default;
@@ -62,7 +64,7 @@ public:
     bool validateParams(char* errBuf, size_t errBufLen) const override;
 
     // --- Lifecycle Hooks ---
-    void onEnter() override;
+    void onEnter(MotionEngine* engine = nullptr) override;
     void onExit() override;
 
     // --- Execution State Machine Control ---
@@ -73,10 +75,14 @@ public:
     ModeState getState() const override { return m_state; }
     bool isRunning() const override { return m_state == ModeState::RUNNING; }
 
-    // --- Kinematics ---
-    void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) override;
-    void onMotionTick() override;
-    void onLimitReached(uint8_t axisId, bool isHighLimit) override;
+    // --- Layer 2 Motion Event Listener Callbacks ---
+    void onMotionHalted(
+        AxisId axis,
+        MotionHaltReason reason,
+        int32_t haltedPosSteps,
+        int32_t haltedCoordDu,
+        const SoftLimit* triggeredLimit) override;
+    void onSpindleSyncAcquired(AxisId axis) override;
 
     // --- Telemetry ---
     void writeTelemetry(TelemetryWriter& writer) const override;

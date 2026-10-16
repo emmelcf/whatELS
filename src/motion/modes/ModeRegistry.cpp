@@ -1,4 +1,5 @@
 #include "ModeRegistry.h"
+#include "../kernel/MotionEngine.h"
 #include <ArduinoJson.h>
 
 IELSMode* ModeRegistry::s_modes[ModeRegistry::MAX_MODES] = { nullptr };
@@ -69,7 +70,7 @@ bool ModeRegistry::activateMode(ModeId id) {
     }
 
     s_activeMode = target;
-    s_activeMode->onEnter();
+    s_activeMode->onEnter(&MotionEngine::instance());
     return true;
 }
 
