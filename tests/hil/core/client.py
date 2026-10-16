@@ -47,9 +47,21 @@ class NanoElsClient:
     """Asynchronous WebSocket client connecting to ws://<host>:81/canonical."""
 
     def __init__(self, host: str = "nanoels.local", port: int = 81):
-        self.host = host
+        # Normalize in case a full URI like 'ws://nanoels.local:81' or 'http://...' was passed
+        clean_host = host.replace("http://", "").replace("https://", "").replace("ws://", "").replace("wss://", "")
+        if "/" in clean_host:
+            clean_host = clean_host.split("/")[0]
+        if ":" in clean_host:
+            parts = clean_host.split(":")
+            clean_host = parts[0]
+            try:
+                port = int(parts[1])
+            except ValueError:
+                pass
+
+        self.host = clean_host
         self.port = port
-        self.uri = f"ws://{host}:{port}/canonical"
+        self.uri = f"ws://{clean_host}:{port}/canonical"
         self.state = ControllerState()
         self._ws = None
         self._rx_task: asyncio.Task | None = None

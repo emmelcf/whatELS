@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import importlib
 import inspect
+import os
 from pathlib import Path
 import pkgutil
 import sys
@@ -48,8 +49,8 @@ async def main_async() -> int:
     parser = argparse.ArgumentParser(description="NanoELS Hardware-in-the-Loop Test Runner")
     parser.add_argument(
         "--host",
-        default="nanoels.local",
-        help="Controller IP/Hostname (default: nanoels.local)",
+        default=os.environ.get("NANOELS_HOST", os.environ.get("NANOELS_URL", "ws://nanoels.local:81")),
+        help="Controller IP/Hostname or WebSocket URL (default: ws://nanoels.local:81)",
     )
     parser.add_argument(
         "--port",
