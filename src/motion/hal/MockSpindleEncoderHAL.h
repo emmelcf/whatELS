@@ -44,6 +44,10 @@ public:
     return m_accumulatedPulses;
   }
 
+  int32_t getCountsPerSpindleRev() const override {
+    return static_cast<int32_t>(m_nativePpr) * 4;
+  }
+
   uint32_t getFilteredRpm() const override {
     return m_filteredRpm;
   }

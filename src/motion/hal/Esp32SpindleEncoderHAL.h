@@ -25,6 +25,7 @@ public:
 
   int32_t getPulseDelta() override;
   int64_t getAccumulatedPulses() const override;
+  int32_t getCountsPerSpindleRev() const override { return static_cast<int32_t>(m_countsPerSpindleRev); }
   uint32_t getFilteredRpm() const override;
   float getAngleDegrees() const override;
   bool hasIndexSynced() const override;

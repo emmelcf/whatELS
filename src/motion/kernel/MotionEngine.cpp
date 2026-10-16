@@ -119,7 +119,8 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
   m_activeMode[idx] = MotionMode::SPINDLE_SYNC_GEARING;
   m_direction[idx]  = (params.direction > 0) ? 1 : -1;
 
-  m_sync[idx].engage(m_accumulatedSpindlePulses, m_axes[idx].posSteps, params.pitchDupr);
+  int32_t signedPitch = m_direction[idx] * std::abs(params.pitchDupr);
+  m_sync[idx].engage(m_accumulatedSpindlePulses, m_axes[idx].posSteps, signedPitch);
 
   if (params.targetDistDu > 0) {
     m_hasTarget[idx]  = true;
@@ -145,7 +146,7 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
       int8_t secDir = (params.secondaryRatioNum >= 0) ? 1 : -1;
       m_activeMode[sIdx] = MotionMode::SPINDLE_SYNC_GEARING;
       m_direction[sIdx]  = secDir;
-      m_sync[sIdx].engage(m_accumulatedSpindlePulses, m_axes[sIdx].posSteps, secPitch);
+      m_sync[sIdx].engage(m_accumulatedSpindlePulses, m_axes[sIdx].posSteps, secDir * secPitch);
       m_feedHold[sIdx] = false;
       m_isMoving[sIdx] = true;
       m_hasTarget[sIdx] = false;
@@ -377,7 +378,8 @@ void MotionEngine::processCommandPacket(const MotionCommandPacket& pkt) {
     }
     case MotionCommandPacket::Type::UPDATE_FEED_PITCH: {
       size_t idx = axisIdx(pkt.axis);
-      m_sync[idx].updatePitchLive(m_accumulatedSpindlePulses, pkt.pitchDupr);
+      int32_t signedPitch = m_direction[idx] * std::abs(pkt.pitchDupr);
+      m_sync[idx].updatePitchLive(m_accumulatedSpindlePulses, signedPitch);
       break;
     }
     case MotionCommandPacket::Type::ZERO_AXIS: {
@@ -474,7 +476,9 @@ void MotionEngine::onMotionTick() {
 
     switch (m_activeMode[idx]) {
       case MotionMode::SPINDLE_SYNC_GEARING: {
-        int32_t effectivePpr = 4096; // Standard 1024 PPR 4x quadrature
+        int32_t effectivePpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
+                                   ? m_encoderHal->getCountsPerSpindleRev()
+                                   : 4096;
         int32_t idealStep = m_sync[idx].computeIdealSyncSteps(
             m_accumulatedSpindlePulses,
             m_axes[idx].geometry.motorStepsPerRev,

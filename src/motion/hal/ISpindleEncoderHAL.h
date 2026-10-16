@@ -42,6 +42,11 @@ public:
   virtual int64_t getAccumulatedPulses() const = 0;
 
   /**
+   * @brief Returns total 4x quadrature counts per physical spindle revolution.
+   */
+  virtual int32_t getCountsPerSpindleRev() const { return 4096; }
+
+  /**
    * @brief Returns filtered real-time spindle rotational speed in RPM.
    * @details Computed via hardware timer delta with low-pass jitter filtering.
    */
