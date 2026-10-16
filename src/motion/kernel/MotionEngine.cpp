@@ -273,10 +273,15 @@ bool MotionEngine::postCommand(const MotionCommandPacket& packet) {
   if (m_cmdQueue) {
     return xQueueSend(m_cmdQueue, &packet, 0) == pdPASS;
   }
-#endif
-
   processCommandPacket(packet);
   return true;
+#else
+  if (m_cmdQueue.size() < CMD_QUEUE_DEPTH) {
+    m_cmdQueue.push(packet);
+    return true;
+  }
+  return false;
+#endif
 }
 
 bool MotionEngine::startTask(UBaseType_t priority, BaseType_t coreId) {
@@ -387,6 +392,12 @@ void MotionEngine::onMotionTick() {
       break;
     }
   }
+#else
+  for (int i = 0; i < 4 && !m_cmdQueue.empty(); ++i) {
+    MotionCommandPacket pkt = m_cmdQueue.front();
+    m_cmdQueue.pop();
+    processCommandPacket(pkt);
+  }
 #endif
 
   // 2. Hardware Spindle Sampling
@@ -446,13 +457,14 @@ void MotionEngine::onMotionTick() {
         }
 
         int32_t stepDiff = idealStep - m_axes[idx].posSteps;
-        if (stepDiff != 0) {
+        while (stepDiff != 0) {
           int8_t stepDir = (stepDiff > 0) ? 1 : -1;
           if (m_stepperHal) {
             m_stepperHal->setDirection(axis, stepDir);
             m_stepperHal->pulseStep(axis);
           }
           m_axes[idx].posSteps += stepDir;
+          stepDiff = idealStep - m_axes[idx].posSteps;
         }
         break;
       }

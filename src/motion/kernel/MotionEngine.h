@@ -7,6 +7,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
+#else
+#include <queue>
+using UBaseType_t = uint32_t;
+using BaseType_t = int32_t;
 #endif
 #ifndef IRAM_ATTR
 #define IRAM_ATTR
@@ -143,6 +147,8 @@ private:
 #if defined(ESP32) || defined(ARDUINO)
   QueueHandle_t       m_cmdQueue   = nullptr;
   TaskHandle_t        m_taskHandle = nullptr;
+#else
+  std::queue<MotionCommandPacket> m_cmdQueue;
 #endif
 
   std::atomic<bool>   m_emergencyStop{false};

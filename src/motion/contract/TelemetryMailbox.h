@@ -2,7 +2,12 @@
 #include <cstdint>
 #include <cstring>
 #include <atomic>
+#if defined(ESP32) || defined(ARDUINO)
 #include <esp_attr.h>
+#endif
+#ifndef IRAM_ATTR
+#define IRAM_ATTR
+#endif
 
 /**
  * @brief Snapshot of motion controller state passed from Core 1 to Core 0.
