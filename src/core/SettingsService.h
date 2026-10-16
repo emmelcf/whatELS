@@ -5,10 +5,13 @@
 #include "LatheProfile.h"
 #include "Motion.h"
 
+#ifndef HAVE_AXIS_ID
+#define HAVE_AXIS_ID
 enum AxisId : uint8_t {
   AXIS_Z = 0,
   AXIS_X = 1
 };
+#endif
 
 enum LimitDirection : uint8_t {
   LIMIT_LEFT_OR_UP    = 0, // Z left (chuck) or X infeed (up)
