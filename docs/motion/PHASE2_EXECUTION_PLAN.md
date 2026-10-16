@@ -209,8 +209,8 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Slice 1: Doc Hygiene & E2E Simulation Harness** | `COMPLETE` | 2026-10-16 | `11dd2f6` | PlatformIO + E2E Harness | Zero warnings, zero errors. 100% pass on all 4 E2E test suites. |
 | **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `COMPLETE` | 2026-10-16 | `ce21bce` | `pio run -e esp32s3` | Concrete GPTimer pulse train, nanosecond timing guards, non-blocking enable settling. |
-| **Slice 3: Core 1 Task Wiring & Live Telemetry** | `READY` | — | — | — | Ready for Conversation 3 (MotionEngine task on Core 1, TelemetryMailbox -> WS) |
-| **Slice 4: Mode Primitives Migration** | `PLANNED` | — | — | — | Async, GearX, GearZ, Cone migrated to MotionEngine |
+| **Slice 3: Core 1 Task Wiring & Live Telemetry** | `COMPLETE` | 2026-10-16 | `4a0e289` | `pio run -e esp32s3` + Web UI Preview | MotionEngine on Core 1 (prio 22), TelemetryMailbox seqlock bridge, 50 Hz WebSocket stream. |
+| **Slice 4: Mode Primitives Migration** | `READY` | — | — | — | Ready for Conversation 4 (Async, GearX, GearZ, Cone migrated to MotionEngine) |
 | **Slice 5: Legacy Motion Core Decommissioning** | `PLANNED` | — | — | — | Safe removal of Motion.cpp and Axis.cpp |
 
 ---
@@ -256,4 +256,24 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
   - Enforced `dirHoldTimeNs` in `setDirection()` and `dirSetupDelayNs` in `pulseStep()` using microsecond bounded delays (`esp_rom_delay_us`) to prevent drive edge miscounts during reversals.
   - Enforced non-blocking driver enable settling (`enableDelayMs`) via timestamp gate (`esp_timer_get_time()`) without blocking the caller.
   - Placed critical pulse emission paths and ISR callbacks in `IRAM_ATTR` for deterministic real-time execution.
+
+#### Slice 3 Execution Log
+- **Date Completed:** 2026-10-16
+- **Commit:** `4a0e289`
+- **Files Created / Modified:**
+  - `src/main.cpp` (initialized `Esp32StepperHAL` and `Esp32SpindleEncoderHAL`, injected into `MotionEngine`, configured axis geometries from `activeMachineProfile`, and launched `MotionEngine::startTask(22, 1)` on Core 1)
+  - `src/core/MachineModel.cpp` (bridged `MachineModel::captureKinematics()` and `publishMotionSnapshot()` to sample `TelemetryMailbox` seqlock directly, guaranteeing tear-free real-time position reads)
+  - `src/web/WebServerModule.cpp` (tuned telemetry push ceiling `MIN_PUSH_INTERVAL_MS` to 20 ms for 50 Hz push cadence)
+- **Verification Results:**
+  - **PlatformIO Target Compilation:** `pio run -e esp32s3` completed with `[SUCCESS]` (0 errors, 0 warnings).
+    - RAM: 19.0% (used 62,184 bytes from 327,680 bytes)
+    - Flash: 20.4% (used 1,334,197 bytes from 6,553,600 bytes)
+  - **Automated E2E Simulation Test:** Passed 100% across all 4 test suites with zero drift.
+  - **Web UI Verification:** 800×480 touch display layout previewed cleanly with zero console errors.
+- **Key Architectural Decisions & Deviations:**
+  - Initialized concrete HAL instances (`s_stepperHal`, `s_encoderHal`) in `main.cpp` using pins from `Config.h` and parameters from `activeMachineProfile`.
+  - Started `MotionEngine` pinned to Core 1 at priority 22 with 12 KB stack.
+  - Integrated lock-free seqlock read in `captureKinematics()` preserving precedence for physical DRO scale modes when enabled (`isZDroMode()` / `isXDroMode()`).
+  - Increased WebSocket telemetry dispatch cadence ceiling to 50 Hz (20 ms interval) while maintaining quiescence during machine idle.
+
 
