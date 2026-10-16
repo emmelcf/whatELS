@@ -101,12 +101,16 @@ struct AxisState {
 
 #### Canonical Conversion Primitives:
 ```cpp
-inline int32_t stepsToDu(const AxisGeometry& geom, int32_t steps) {
-  return static_cast<int32_t>((static_cast<int64_t>(steps) * geom.screwPitchDu) / geom.motorStepsPerRev);
+inline int32_t IRAM_ATTR stepsToDu(const AxisGeometry& geom, int32_t steps) {
+  int64_t num = static_cast<int64_t>(steps) * geom.screwPitchDu;
+  int64_t den = geom.motorStepsPerRev;
+  return static_cast<int32_t>((num >= 0 ? (num + den / 2) : (num - den / 2)) / den);
 }
 
-inline int32_t duToSteps(const AxisGeometry& geom, int32_t du) {
-  return static_cast<int32_t>((static_cast<int64_t>(du) * geom.motorStepsPerRev) / geom.screwPitchDu);
+inline int32_t IRAM_ATTR duToSteps(const AxisGeometry& geom, int32_t du) {
+  int64_t num = static_cast<int64_t>(du) * geom.motorStepsPerRev;
+  int64_t den = geom.screwPitchDu;
+  return static_cast<int32_t>((num >= 0 ? (num + den / 2) : (num - den / 2)) / den);
 }
 
 inline int32_t getWorkpieceCoordDu(const AxisState& axis) {
@@ -138,28 +142,36 @@ struct SoftLimit {
 };
 ```
 
-### 3.2 The `SoftLimitTable` Class
+### 3.2 The `SoftLimitTable` Class & Safe Lookahead (`[KIN-03]`)
 
 ```cpp
 class SoftLimitTable {
 public:
   static constexpr size_t MAX_LIMITS = 8;
-  static constexpr int32_t ADVANCE_DEADBAND_STEPS = 2; // Steps past stop to advance to next
+  static constexpr int32_t ADVANCE_DEADBAND_STEPS = 2; // Steps past stop to advance when overriding
 
   /**
    * @brief Queries the immediate next enforced soft limit strictly ahead in the motion path.
+   * @details If resting directly on an active limit (currentSteps == stepPos), motion in that
+   *          direction is BLOCKED (returns that limit with D_remaining = 0) unless allowPassThrough is true.
    * @param currentSteps Current axis position in raw motor steps.
    * @param direction Cartesian motion polarity (-1 toward Chuck/Center, +1 toward Tail/Retract).
+   * @param allowPassThrough Set true ONLY when operator explicitly commands a pass-through override.
    * @return Pointer to next active limit, or nullptr if path is completely unbounded.
    */
-  const SoftLimit* findNextEnforcedLimit(int32_t currentSteps, int8_t direction) const {
+  const SoftLimit* IRAM_ATTR findNextEnforcedLimit(
+      int32_t currentSteps,
+      int8_t direction,
+      bool allowPassThrough = false) const {
     const SoftLimit* candidate = nullptr;
+    const int32_t deadband = allowPassThrough ? ADVANCE_DEADBAND_STEPS : 0;
 
     if (direction < 0) {
-      // Negative travel: find closest enforced limit strictly below current position
+      // Negative travel: find closest enforced limit at or below current position threshold
       int32_t highestPosBelow = INT32_MIN;
+      int32_t threshold = currentSteps - deadband;
       for (size_t i = 0; i < MAX_LIMITS; ++i) {
-        if (m_limits[i].isEnforced() && (m_limits[i].stepPos < (currentSteps - ADVANCE_DEADBAND_STEPS))) {
+        if (m_limits[i].isEnforced() && (m_limits[i].stepPos <= threshold)) {
           if (m_limits[i].stepPos > highestPosBelow) {
             highestPosBelow = m_limits[i].stepPos;
             candidate = &m_limits[i];
@@ -167,10 +179,11 @@ public:
         }
       }
     } else if (direction > 0) {
-      // Positive travel: find closest enforced limit strictly above current position
+      // Positive travel: find closest enforced limit at or above current position threshold
       int32_t lowestPosAbove = INT32_MAX;
+      int32_t threshold = currentSteps + deadband;
       for (size_t i = 0; i < MAX_LIMITS; ++i) {
-        if (m_limits[i].isEnforced() && (m_limits[i].stepPos > (currentSteps + ADVANCE_DEADBAND_STEPS))) {
+        if (m_limits[i].isEnforced() && (m_limits[i].stepPos >= threshold)) {
           if (m_limits[i].stepPos < lowestPosAbove) {
             lowestPosAbove = m_limits[i].stepPos;
             candidate = &m_limits[i];
@@ -219,17 +232,17 @@ v_min|  ─────┘                                 └─────  (
      +───────────────────────────────────────────────────> Time (t)
 ```
 
-### 4.2 Real-Time Deceleration Window Calculation
+### 4.2 Real-Time Deceleration Window Calculation & Runway Safety
 At every step position $P_i$ during motion at velocity $v_i$:
 
-1. **Calculate stopping distance:**
-   $$d_{\text{stop}} = \frac{v_i^2 - v_{\text{end}}^2}{2a}$$
+1. **Calculate stopping distance with discrete sample margin:**
+   $$d_{\text{stop}} = \text{ceil}\left(\frac{v_i^2 - v_{\text{end}}^2}{2a}\right) + \text{ceil}(0.5 \cdot v_i \cdot \Delta t)$$
 2. **Query path clearance to the next soft limit:**
    $$D_{\text{remaining}} = \text{abs}(P_{\text{limit}} - P_i)$$
 3. **Deceleration Condition:**
    $$\text{If } D_{\text{remaining}} \le d_{\text{stop}}, \quad \text{transition from CRUISE to DECELERATION ramp!}$$
-
-This guarantees that the carriage glides smoothly into the shoulder stop, landing on the exact step coordinate at zero velocity without mechanical shock.
+4. **Pre-Cut Runway Verification:** Before engaging synchronous gearing or feed, verify that current spindle RPM does not exceed the maximum entry velocity allowable for the runway:
+   $$v_{\text{entry\_max}} = \sqrt{2 \cdot a \cdot D_{\text{remaining}}}$$
 
 ---
 
@@ -237,17 +250,54 @@ This guarantees that the carriage glides smoothly into the shoulder stop, landin
 
 In synchronized electronic leadscrew mode, carriage motion is geometrically locked to the rotating spindle.
 
-### 5.1 Fractional Bresenham Gearing Accumulator
-To prevent integer truncation drift over thousands of spindle revolutions, the gearing engine uses a 64-bit fractional accumulator:
+### 5.1 Anchored Bresenham Accumulator & Safe Live Trim (`[KIN-02]`)
+To prevent integer truncation drift over millions of revolutions while allowing instantaneous live pitch trims (`CMD_FEED_NUDGE`) without historical jumps, the synchronizer maintains an **anchor point** (`m_anchorPulses`, `m_anchorSteps`):
 
-$$\text{Target Position (Steps)} = \text{round}\left( \frac{\text{AccumulatedSpindlePulses} \times \text{MotorSteps} \times \text{PitchDupr}}{\text{ScrewPitchDu} \times \text{EncoderPPR}} \right)$$
+```cpp
+class SpindleSynchronizer {
+public:
+  void IRAM_ATTR engage(int64_t currentSpindlePulses, int32_t currentAxisSteps, int32_t pitchDupr) {
+    m_anchorPulses       = currentSpindlePulses;
+    m_anchorSteps        = currentAxisSteps;
+    m_currentTargetSteps = currentAxisSteps;
+    m_pitchDupr          = pitchDupr;
+  }
 
-### 5.2 Spindle Slip & Thread Phase Registration
-When the carriage reaches a soft limit shoulder during high-speed threading or turning:
-1. Stepping halts cleanly at the shoulder limit (`p = limit.stepPos`).
-2. Spindle pulses continue accumulating in the spindle encoder HAL.
-3. The synchronizer tracks **spindle modulo turns** relative to the resting position.
-4. When the operator reverses the spindle or disengages, the carriage retraces the exact thread helical path without jumping teeth or stripping threads.
+  // Safe live pitch trim (CMD_FEED_NUDGE) - updates incremental slope from current position
+  void IRAM_ATTR updatePitchLive(int64_t currentSpindlePulses, int32_t newPitchDupr) {
+    m_anchorSteps  = m_currentTargetSteps;
+    m_anchorPulses = currentSpindlePulses;
+    m_pitchDupr    = newPitchDupr;
+  }
+
+  // Computed on every Core 1 tick (even during decel ramp or shoulder dwell!)
+  int32_t IRAM_ATTR computeIdealSyncSteps(
+      int64_t accumulatedSpindlePulses,
+      int32_t motorStepsPerRev,
+      int32_t screwPitchDu,
+      int32_t effectiveEncoderEdgesPerRev) {
+    int64_t deltaPulses = accumulatedSpindlePulses - m_anchorPulses;
+    int64_t num = deltaPulses * static_cast<int64_t>(motorStepsPerRev) * static_cast<int64_t>(m_pitchDupr);
+    int64_t den = static_cast<int64_t>(screwPitchDu) * static_cast<int64_t>(effectiveEncoderEdgesPerRev);
+
+    int64_t stepOffset = (num >= 0) ? ((num + den / 2) / den) : ((num - den / 2) / den);
+    m_currentTargetSteps = m_anchorSteps + static_cast<int32_t>(stepOffset);
+    return m_currentTargetSteps;
+  }
+
+private:
+  int64_t m_anchorPulses       = 0;
+  int32_t m_anchorSteps        = 0;
+  int32_t m_currentTargetSteps = 0;
+  int32_t m_pitchDupr          = 0;
+};
+```
+
+### 5.2 Continuous Spindle Phase Accumulation & Shoulder Reversal (`[KIN-01]`)
+When the carriage decelerates into a soft limit shoulder or pauses in Feed Hold:
+1. Stepping decelerates along the safe acceleration envelope and halts at `p = limit.stepPos`.
+2. **Spindle encoder pulses continue accumulating uninterrupted in `m_spindlePhasePulses` throughout deceleration, pause, and resting dwell**.
+3. When the operator or canned cycle reverses spindle rotation or commands carriage return, the synchronizer tracks modulo thread phase so the tool locks back onto the exact original thread helix without stripped threads or cross-threading.
 
 ---
 
@@ -273,6 +323,12 @@ struct FeedParameters {
   int32_t speedDuPerMin;   // Commanded velocity (for async power feed)
   int32_t pitchDupr;       // Commanded thread lead (for spindle sync gearing)
   int32_t targetDistDu;    // Optional stroke distance (-1 = continuous to soft limit)
+
+  // Coordinated Dual-Axis / Taper Extension (for ZX Cones & NPT Taper Threads [KIN-04])
+  bool    enableSecondaryAxis = false;
+  AxisId  secondaryAxis       = AXIS_X;
+  int32_t secondaryRatioNum   = 0; // Radial delta in du (signed for taper direction)
+  int32_t secondaryRatioDen   = 1; // Axial delta in du (must be > 0)
 };
 
 class MotionEngine {

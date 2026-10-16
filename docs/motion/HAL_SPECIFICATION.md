@@ -48,15 +48,17 @@ Steppers and digital servo drives require strict adherence to minimum electrical
 
 ```cpp
 struct StepTimingConfig {
-  uint16_t dirSetupDelayUs  = 5;    // t_setup: Min time DIR pin must be stable before STEP rising edge
-  uint16_t dirHoldTimeUs    = 5;    // t_hold:  Min time DIR pin must be held after STEP active edge
-  uint16_t stepPulseWidthUs = 4;    // t_high:  Active STEP pulse duration (high or low)
-  uint16_t enableDelayMs    = 50;   // t_ena:   Settling time after ENA active before first step pulse
-  bool     invertStep       = false;// True = Active LOW pulse; False = Active HIGH pulse
-  bool     invertDir        = false;// True = Invert physical direction pin logic
-  bool     invertEnable     = false;// True = Active HIGH enable; False = Active LOW enable
+  uint32_t dirSetupDelayNs  = 5000;  // t_setup: Min time DIR pin must be stable before STEP rising edge (ns)
+  uint32_t dirHoldTimeNs    = 5000;  // t_hold:  Min time DIR pin must be held after STEP active edge (ns)
+  uint32_t stepPulseWidthNs = 2500;  // t_high:  Active STEP pulse duration (ns; typically 2.5 - 5.0 µs)
+  uint16_t enableDelayMs    = 50;    // t_ena:   Driver settling time after ENA active before first step pulse
+  bool     invertStep       = false; // True = Active LOW pulse; False = Active HIGH pulse
+  bool     invertDir        = false; // True = Invert physical direction pin logic
+  bool     invertEnable     = false; // True = Active HIGH enable; False = Active LOW enable
 };
 ```
+
+> **Non-Blocking Enable Arming Invariant:** `IStepperHAL::setEnabled(axis, true)` must never block the calling task for $50\text{ ms}$. Instead, the HAL latches `m_enableTimestampUs = esp_timer_get_time()`, and step pulse generation is gated until `enableDelayMs` has elapsed. Any pulse requests before the timeout are safely deferred.
 
 ### 2.2 The `IStepperHAL` Interface
 
@@ -159,6 +161,17 @@ The spindle encoder is the primary timing and synchronization source for the ent
 - Uses ESP32-S3 dedicated **Pulse Counter (PCNT)** hardware module to sample Phase A and Phase B quadrature signals without CPU interrupt overhead.
 - Supports $4\times$ quadrature decoding ($2\times$ or $4\times$ edge evaluation).
 - Optional Index pulse (Phase Z) hardware reset for single-point thread threading synchronization.
+- **Zero-Loss 16-Bit Native Modular Wrapping (`[HAL-01]`):**
+  - **Never clear the hardware PCNT counter** (`pcnt_unit_clear_count()`) during operation. Clearing the register introduces a $\approx 0.5\,\mu\text{s}$ blind window that permanently wipes out high-frequency ($204.8\text{ kHz}$) incoming encoder edges.
+  - The PCNT unit runs as a free-running 16-bit signed counter (`[-32768, +32767]`).
+  - Sampling computes the incremental delta using 16-bit two's complement modular subtraction:
+    ```cpp
+    int16_t current16 = static_cast<int16_t>(rawCount);
+    int16_t delta16   = static_cast<int16_t>(current16 - m_lastCount16);
+    m_lastCount16     = current16;
+    m_accumulatedPulses += delta16;
+    ```
+- **Hardware Glitch Filter:** Configured to $\approx 500\text{ ns}$ (40 APB clock cycles at 80 MHz) to reject industrial VFD PWM electrical interference without filtering valid $4.88\,\mu\text{s}$ edges.
 
 ### 3.2 The `ISpindleEncoderHAL` Interface
 
@@ -177,12 +190,22 @@ public:
    * @param pinIndex GPIO for Phase Z / Index pulse (-1 if not wired).
    * @param nativePpr Native pulses per revolution (e.g. 1024, 1200, 2048).
    * @param pulleyRatio Spindle-to-encoder pulley mechanical ratio (typically 1.0).
+   * @param encoderTeeth Rational gear teeth on encoder pulley (0 = use pulleyRatio float).
+   * @param spindleTeeth Rational gear teeth on spindle pulley (0 = use pulleyRatio float).
    */
-  virtual bool init(int pinA, int pinB, int pinIndex, uint16_t nativePpr, float pulleyRatio) = 0;
+  virtual bool init(
+      int pinA,
+      int pinB,
+      int pinIndex,
+      uint16_t nativePpr,
+      float pulleyRatio,
+      uint16_t encoderTeeth = 0,
+      uint16_t spindleTeeth = 0) = 0;
 
   /**
    * @brief Samples the delta pulses elapsed since the last read.
    * @details Called at high frequency (1 kHz - 10 kHz) in the motion control loop.
+   *          Uses native 16-bit signed modular subtraction without resetting the PCNT hardware.
    * @return Signed pulse delta (positive for forward/CCW, negative for reverse/CW).
    */
   virtual int32_t getPulseDelta() = 0;

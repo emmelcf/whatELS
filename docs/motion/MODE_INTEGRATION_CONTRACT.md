@@ -93,34 +93,55 @@ enum class MotionHaltReason : uint8_t {
 
 // Motion command parameters for Spindle-Synchronous Gearing
 struct SpindleSyncParams {
-  AxisId  axis;             // AXIS_Z or AXIS_X
-  int8_t  direction;        // -1 (Toward Chuck / Centerline), +1 (Toward Tail / Retract)
-  int32_t pitchDupr;        // Pitch / Lead in deci-microns per revolution (e.g. 20000 = 2.0 mm/rev)
-  int32_t maxRapidSpeedDuMin;// Maximum rapid velocity clamp during spindle sync
-  bool    respectSoftLimits;// True = halt automatically at nearest enforced limit
-  bool    syncIndex;        // True = wait for 1/rev index marker before initiating step pulses (Threading)
-  int32_t targetDistDu;     // Optional stroke limit (0 = continuous until stopped or limit reached)
+  AxisId  axis;                  // Primary axis (AXIS_Z or AXIS_X)
+  int8_t  direction;             // -1 (Toward Chuck / Centerline), +1 (Toward Tail / Retract)
+  int32_t pitchDupr;             // Primary axis lead in deci-microns per revolution (e.g. 20000 = 2.0 mm/rev)
+  int32_t maxRapidSpeedDuMin;    // Maximum rapid velocity clamp during spindle sync
+  bool    respectSoftLimits;     // True = halt automatically at nearest enforced limit
+  bool    syncIndex;             // True = wait for 1/rev index marker before initiating step pulses (Threading)
+  int32_t targetDistDu;          // Optional stroke limit (0 = continuous until stopped or limit reached)
+
+  // Coordinated Dual-Axis / Taper Extension (for ZX Cones & NPT Taper Threads [KIN-04])
+  bool    enableSecondaryAxis = false;
+  AxisId  secondaryAxis       = AXIS_X;
+  int32_t secondaryRatioNum   = 0; // Radial delta in du (signed for taper direction)
+  int32_t secondaryRatioDen   = 1; // Axial delta in du (must be > 0)
 };
 
 // Motion command parameters for Continuous / Profiled Velocity Feed
 struct VelocityFeedParams {
-  AxisId  axis;             // AXIS_Z or AXIS_X
-  int8_t  direction;        // -1 (Toward Chuck / Centerline), +1 (Toward Tail / Retract)
-  int32_t feedRateDuPerMin; // Velocity in deci-microns per minute (e.g. 1000000 = 100 mm/min)
-  float   accelMmSec2;      // Acceleration ramp rate (0.0 = use axis default)
-  bool    respectSoftLimits;// True = halt automatically at nearest enforced limit
-  int32_t targetDistDu;     // Optional stroke limit (0 = continuous until stopped or limit reached)
+  AxisId  axis;                  // Primary axis (AXIS_Z or AXIS_X)
+  int8_t  direction;             // -1 (Toward Chuck / Centerline), +1 (Toward Tail / Retract)
+  int32_t feedRateDuPerMin;      // Velocity in deci-microns per minute (e.g. 1000000 = 100 mm/min)
+  float   accelMmSec2;           // Acceleration ramp rate (0.0 = use axis default)
+  bool    respectSoftLimits;     // True = halt automatically at nearest enforced limit
+  int32_t targetDistDu;          // Optional stroke limit (0 = continuous until stopped or limit reached)
+
+  // Coordinated Dual-Axis / Taper Extension
+  bool    enableSecondaryAxis = false;
+  AxisId  secondaryAxis       = AXIS_X;
+  int32_t secondaryRatioNum   = 0;
+  int32_t secondaryRatioDen   = 1;
 };
 
 // Motion command parameters for Rapid Positioning & Multi-Pass Clearance
 struct StrokeParams {
-  AxisId  axis;
-  int32_t targetCoordDu;    // Absolute workpiece coordinate target in deci-microns
-  int32_t rapidSpeedDuMin;  // Rapid traverse rate (e.g. 2500000 = 250 mm/min)
-  float   accelMmSec2;      // Acceleration ramp rate
-  bool    respectSoftLimits;// True = enforce limits during stroke
+  AxisId  axis;                  // Primary axis
+  int32_t targetCoordDu;         // Absolute workpiece coordinate target in deci-microns
+  int32_t rapidSpeedDuMin;       // Rapid traverse rate (e.g. 2500000 = 250 mm/min)
+  float   accelMmSec2;           // Acceleration ramp rate
+  bool    respectSoftLimits;     // True = enforce limits during stroke
+
+  // Coordinated Dual-Axis Extension
+  bool    enableSecondaryAxis = false;
+  AxisId  secondaryAxis       = AXIS_X;
+  int32_t secondaryTargetCoordDu = 0;
 };
 ```
+
+> **Backlash Takeup Guarantee:** In multi-pass canned cycles (`executeStroke`), whenever an axis reverses direction, `MotionEngine` automatically injects `backlashSteps` motor pulses without incrementing `posSteps` before the cut begins, ensuring lost motion is eliminated prior to workpiece contact.
+
+> **Option A Execution Boundary:** `IELSMode` instances execute strictly on **Core 1** inside the high-priority real-time task loop. When `MotionEngine` halts at a shoulder limit (`SOFT_LIMIT_REACHED`), `IELSMode::onMotionHalted()` triggers tool retraction instantaneously with zero microsecond cross-core IPC delay. Core 0 communicates with `IELSMode` strictly via the lock-free command ringbuffer (`MotionCommandPacket`).
 
 ---
 

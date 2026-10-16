@@ -35,33 +35,51 @@ Core 0 (Network & Supervisory) must **never, under any circumstance, block, stal
 
 ## 2. Dual-Core Allocation & Task Architecture
 
+To achieve zero-jitter shoulder retraction and avoid cross-core lockouts, **Option A** is enforced: the `IELSMode` state machine executes directly on **Core 1** inside the real-time motion loop, while Core 0 handles supervisory, Web UI, and communications.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CORE 0: SUPERVISORY & HMI                       │
 │                                                                        │
 │   ┌───────────────────────┐  ┌───────────────────────┐                 │
-│   │   Web/WS Server Task  │  │   HMI / Mode Task     │                 │
-│   │   (Priority 3, 8KB)   │  │   (Priority 5, 8KB)   │                 │
+│   │   Web/WS Server Task  │  │   Command Router /    │                 │
+│   │   (Priority 3, 8KB)   │  │   HMI Dispatcher      │                 │
+│   │   • LwIP & WebSockets │  │   (Priority 5, 8KB)   │                 │
+│   │   • LittleFS/NVS I/O  │  │   • Validates intents │                 │
 │   └───────────┬───────────┘  └───────────┬───────────┘                 │
 │               │                          │                             │
-│               │ Broadcast 50Hz           │ Commands: Run, Stop, Limit  │
-│               ▼                          ▼                             │
+│               │ Read 50Hz Snapshot       │ Enqueue Operator Commands   │
+│               ▲                          ▼ (Run, Stop, Limit, Nudge)   │
 └───────────────┼──────────────────────────┼─────────────────────────────┘
                 │                          │
         Lock-Free Snapshot          Lock-Free Command
-        Mailbox (Core 1 -> Core 0)  Queue (Core 0 -> Core 1)
+        Mailbox (Core 1 -> Core 0)  Ringbuffer (Core 0 -> Core 1)
                 │                          │
 ┌───────────────┼──────────────────────────┼─────────────────────────────┘
-│               ▼                          ▼                             │
+│               │                          │
+│   ┌───────────┴──────────────────────────▼───────────┐                 │
+│   │   Core 1 Real-Time Motion & Mode Task            │                 │
+│   │   (Priority 22, 12KB Internal SRAM, IRAM_ATTR)   │                 │
+│   │                                                  │                 │
+│   │   ┌──────────────────────────────────────────┐   │                 │
+│   │   │   Layer 3: IELSMode State Machine        │   │                 │
+│   │   │   • Autonomous cycle orchestration       │   │                 │
+│   │   │   • Zero-latency shoulder stops/retracts │   │                 │
+│   │   └────────────────────┬─────────────────────┘   │                 │
+│   │                        │ Synchronous in-core     │                 │
+│   │                        ▼ method calls            │                 │
+│   │   ┌──────────────────────────────────────────┐   │                 │
+│   │   │   Layer 2: Kinematic Motion Engine       │   │                 │
+│   │   │   • 64-bit Bresenham Spindle Sync        │   │                 │
+│   │   │   • Trajectory Accel/Decel Lookahead     │   │                 │
+│   │   │   • SoftLimitTable stopping enforcement  │   │                 │
+│   │   └────────────────────┬─────────────────────┘   │                 │
+│   └────────────────────────┼─────────────────────────┘                 │
+│                            │                                           │
+│                            ▼                                           │
 │   ┌──────────────────────────────────────────────────┐                 │
-│   │         Motion Engine Core Task (Priority 22)    │                 │
-│   │         (Core 1, FreeRTOS Task, 1 kHz - 4 kHz)   │                 │
-│   └──────────────────────────┬───────────────────────┘                 │
-│                              │                                         │
-│                              ▼                                         │
-│   ┌──────────────────────────────────────────────────┐                 │
-│   │       ESP32-S3 Hardware Timer / PCNT ISRs        │                 │
-│   │       (Priority Level 3 / Level 5 Hardware ISR)  │                 │
+│   │   Layer 1: ESP32-S3 Hardware Timer / PCNT ISRs   │                 │
+│   │   (Priority Level 3 / Level 5 Hardware ISR)      │                 │
 │   └──────────────────────────────────────────────────┘                 │
 │                                                                        │
 │                        CORE 1: DETERMINISTIC MOTION                    │
@@ -77,11 +95,12 @@ Traditional mutexes (`std::mutex`, FreeRTOS `SemaphoreHandle_t`) are strictly pr
 Instead, inter-core data transfer uses two lock-free communication patterns:
 
 ### 3.1 Lock-Free State Mailbox (Core 1 $\to$ Core 0 Telemetry)
-To pass real-time coordinates, RPM, and motor state from Core 1 to the Web UI and display tasks on Core 0 without locking:
+To pass real-time coordinates, RPM, and motor state from Core 1 to the Web UI and display tasks on Core 0 without locking, a provably race-free seqlock is used. Explicit memory fences (`std::atomic_thread_fence`) prevent compiler and CPU memory reordering on the Xtensa LX7 dual-core pipeline:
 
 ```cpp
 #pragma once
 #include <cstdint>
+#include <cstring>
 #include <atomic>
 
 struct MotionTelemetrySnapshot {
@@ -90,7 +109,7 @@ struct MotionTelemetrySnapshot {
   int32_t  xPosSteps;        // Current cross-slide step position
   int32_t  xCoordDu;         // Workpiece coordinate in deci-microns
   uint32_t spindleRpm;       // Filtered RPM
-  int32_t  spindlePulses;    // Raw continuous spindle encoder pulses
+  int64_t  spindlePulses;    // Raw continuous spindle encoder pulses
   uint16_t motionMode;       // Active MotionMode enum
   bool     isMoving;         // Active stepping flag
   bool     isFeedHold;       // Pause flag
@@ -101,36 +120,47 @@ struct MotionTelemetrySnapshot {
 
 class TelemetryMailbox {
 public:
-  void publish(const MotionTelemetrySnapshot& snapshot) {
-    uint32_t seq = m_seq.load(std::memory_order_relaxed) + 1;
-    m_seq.store(seq, std::memory_order_release);
-    m_data = snapshot;
-    m_seq.store(seq + 1, std::memory_order_release);
+  void IRAM_ATTR publish(const MotionTelemetrySnapshot& snapshot) {
+    uint32_t seq = m_seq.load(std::memory_order_relaxed);
+    m_seq.store(seq + 1, std::memory_order_relaxed); // Mark odd (write in progress)
+
+    // Prevent compiler or CPU from reordering payload writes before (seq + 1) store
+    std::atomic_thread_fence(std::memory_order_release);
+
+    std::memcpy(const_cast<MotionTelemetrySnapshot*>(&m_data), &snapshot, sizeof(MotionTelemetrySnapshot));
+
+    // Ensure all payload bytes are globally visible before sequence counter is marked even
+    m_seq.store(seq + 2, std::memory_order_release);
   }
 
   bool read(MotionTelemetrySnapshot& outSnapshot) const {
-    for (int retries = 0; retries < 3; ++retries) {
+    for (int retries = 0; retries < 4; ++retries) {
       uint32_t seq1 = m_seq.load(std::memory_order_acquire);
-      if (seq1 & 1) continue; // Writer is currently updating the mailbox; spin retry
-      
-      outSnapshot = m_data;
-      
-      uint32_t seq2 = m_seq.load(std::memory_order_acquire);
+      if (seq1 & 1U) {
+        continue; // Writer active; spin retry
+      }
+
+      std::memcpy(&outSnapshot, const_cast<const MotionTelemetrySnapshot*>(&m_data), sizeof(MotionTelemetrySnapshot));
+
+      // Prevent payload reads from sinking below seq2 load
+      std::atomic_thread_fence(std::memory_order_acquire);
+
+      uint32_t seq2 = m_seq.load(std::memory_order_relaxed);
       if (seq1 == seq2) {
-        return true; // Successfully read clean snapshot with zero torn words
+        return true; // Guaranteed tear-free snapshot
       }
     }
     return false;
   }
 
 private:
-  std::atomic<uint32_t>    m_seq{0};
-  MotionTelemetrySnapshot  m_data{};
+  std::atomic<uint32_t>            m_seq{0};
+  volatile MotionTelemetrySnapshot m_data{};
 };
 ```
 
 ### 3.2 Lock-Free Command Queue (Core 0 $\to$ Core 1 Commands)
-When the operator presses a button or an `IELSMode` transitions state, commands are posted into a fixed-size FreeRTOS ringbuffer:
+When the operator presses a button on the Web UI or Nextion display, commands are validated and posted into a fixed-size FreeRTOS ringbuffer consumed by the Core 1 Mode/Motion task:
 
 ```cpp
 struct MotionCommandPacket {
@@ -149,16 +179,22 @@ struct MotionCommandPacket {
     ZERO_AXIS
   } type;
 
-  AxisId axis;
-  int8_t direction;
+  AxisId  axis;
+  int8_t  direction;
   int32_t pitchDupr;
   int32_t speedDuMin;
   int32_t targetCoordDu;
-  bool respectSoftLimits;
+  bool    respectSoftLimits;
+
+  // Secondary axis extension for compound tapers / cones
+  bool    enableSecondaryAxis;
+  AxisId  secondaryAxis;
+  int32_t secondaryRatioNum;
+  int32_t secondaryRatioDen;
 };
 ```
 - Core 1 consumes packets at the start of each motion service cycle.
-- High-priority Emergency Stop uses direct-to-task notification or hardware atomic flags to trigger instantaneous abort without waiting for the command queue.
+- High-priority Emergency Stop uses direct-to-task notification or hardware atomic flags to trigger instantaneous abort without waiting for queue processing.
 
 ---
 
@@ -168,8 +204,16 @@ struct MotionCommandPacket {
 - **Hardware Module:** ESP32-S3 dedicated **Pulse Counter (PCNT)** peripheral.
 - **Physical Rate:** At $3{,}000\text{ RPM}$ with a $1{,}024\text{ PPR}$ optical encoder ($4{,}096$ quadrature edges/rev):
   $$\text{Edge Rate} = \frac{3000}{60} \times 4096 = 204{,}800\text{ edges/second} \quad (4.88\,\mu\text{s per edge})$$
-- **CPU Offload:** The PCNT peripheral samples and counts edges directly in silicon. The CPU executes **zero interrupts per encoder pulse**.
-- **Sampling Cycle:** Core 1 polls the hardware 16-bit PCNT accumulator at **1 kHz - 4 kHz** ($250\,\mu\text{s} - 1000\,\mu\text{s}$ interval) using `pcnt_unit_get_count()`, accumulating pulses into a 64-bit continuous signed integer.
+- **Zero-Loss Sampling (Native 16-Bit Modulo Wrap):**
+  - **Never clear the hardware PCNT counter** (`pcnt_unit_clear_count()`), as clearing register causes an unrecoverable blind spot where $204.8\text{ kHz}$ pulses are dropped.
+  - Let the 16-bit signed hardware counter free-run and wrap natively:
+    ```cpp
+    int16_t current16 = static_cast<int16_t>(rawCount);
+    int16_t delta16   = static_cast<int16_t>(current16 - m_lastCount16);
+    m_lastCount16     = current16;
+    m_accumulatedPulses += delta16;
+    ```
+- **Glitch Filter:** Configure ESP32-S3 PCNT hardware glitch filter to $\approx 500\text{ ns}$ (40 APB clock cycles at 80 MHz) to reject industrial VFD switching noise without attenuating valid quadrature edges.
 
 ### 4.2 Stepper Pulse Generation Strategies
 
@@ -189,6 +233,17 @@ struct MotionCommandPacket {
 | Soft Limit Boundary Verification | $\le 5\,\mu\text{s}$ | $\pm 1\,\mu\text{s}$ |
 | **Total Real-Time Service Loop Time** | **$\le 35\,\mu\text{s}$** | **Loop Period: $250\,\mu\text{s}$ ($14\%$ CPU load on Core 1)** |
 
+### 4.4 ESP32-S3 SPI Flash Cache Freeze Mitigation (`[CONC-02]`)
+- **Shared Flash Bus Hazard:** When Core 0 writes to NVS (`Preferences`) or LittleFS, the ESP32-S3 hardware automatically disables the shared SPI flash instruction/data cache on **both cores** for 1 to 40 ms.
+- **Mandatory Protections:**
+  1. **Strict IRAM/DRAM Allocation:** All Core 1 ISR handlers, `MotionEngine` stepping methods, `SpindleSynchronizer`, and `SoftLimitTable` routines must be marked `IRAM_ATTR`. All kinematic state structs and lookup tables must reside in internal SRAM (`DRAM_ATTR`).
+  2. **In-Motion Flash Write Lockout:** `SettingsService::set()`, `reset()`, and LittleFS profile writes on Core 0 must immediately reject execution with `ERR_MOTION_ACTIVE` whenever `MotionEngine::isAnyAxisMoving()` is true:
+     ```cpp
+     if (MotionEngine::instance().isAnyAxisMoving()) {
+       return "ERR:SETTINGS=cannot write to NVS flash while motion is active\n";
+     }
+     ```
+
 ---
 
 ## 5. Failsafe Mechanisms & Watchdog Architecture
@@ -201,8 +256,9 @@ To protect machine and operator in the event of hardware or software hangs:
    - VFD spindle run relay is opened.
    - The microcontroller performs a safe reboot and writes a diagnostic panic log to RTC memory.
 
-2. **Decoupled Network Fault Isolation:**  
-   If WiFi drops, WebSocket disconnects, or Core 0 experiences an out-of-memory condition during browser activity:
-   - Core 1 continues executing the active feed, cycle, or thread without interruption.
-   - Limit stops remain 100% active and enforced on Core 1.
-   - The physical Emergency Stop button and limit switches are wired directly to Core 1 hardware interrupts.
+2. **Decoupled Network Fault Isolation & Wi-Fi Jog Lease Watchdog:**  
+   - If WiFi drops, WebSocket disconnects, or Core 0 experiences an out-of-memory condition during browser activity:
+     - Core 1 continues executing the active autonomous cycle or synchronized thread without interruption to its programmed stop.
+     - Limit stops remain 100% active and enforced on Core 1.
+     - The physical Emergency Stop button and limit switches are wired directly to Core 1 hardware interrupts.
+   - **Continuous Manual Jogging (`CMD.jogHold`):** Requires a 200 ms hardware lease watchdog on Core 1. If subsequent lease packets or `CMD.jogRelease` drop over Wi-Fi, Core 1 automatically halts jogging within $200\text{ ms}$ to prevent runaway carriage motion.
