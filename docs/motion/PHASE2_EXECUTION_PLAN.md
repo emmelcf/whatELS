@@ -210,8 +210,8 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
 | **Slice 1: Doc Hygiene & E2E Simulation Harness** | `COMPLETE` | 2026-10-16 | `11dd2f6` | PlatformIO + E2E Harness | Zero warnings, zero errors. 100% pass on all 4 E2E test suites. |
 | **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `COMPLETE` | 2026-10-16 | `ce21bce` | `pio run -e esp32s3` | Concrete GPTimer pulse train, nanosecond timing guards, non-blocking enable settling. |
 | **Slice 3: Core 1 Task Wiring & Live Telemetry** | `COMPLETE` | 2026-10-16 | `4a0e289` | `pio run -e esp32s3` + Web UI Preview | MotionEngine on Core 1 (prio 22), TelemetryMailbox seqlock bridge, 50 Hz WebSocket stream. |
-| **Slice 4: Mode Primitives Migration** | `READY` | — | — | — | Ready for Conversation 4 (Async, GearX, GearZ, Cone migrated to MotionEngine) |
-| **Slice 5: Legacy Motion Core Decommissioning** | `PLANNED` | — | — | — | Safe removal of Motion.cpp and Axis.cpp |
+| **Slice 4: Mode Primitives Migration** | `COMPLETE` | 2026-10-16 | `54ba844` | `pio run -e esp32s3` + E2E Harness | Async, GearZ, GearX, Cone migrated to MotionEngine orchestration; zero legacy busy loops. |
+| **Slice 5: Legacy Motion Core Decommissioning** | `READY` | — | — | — | Ready for Conversation 5 (Safe removal of Motion.cpp, Motion.h, Axis.cpp, Axis.h) |
 
 ---
 
@@ -275,5 +275,26 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
   - Started `MotionEngine` pinned to Core 1 at priority 22 with 12 KB stack.
   - Integrated lock-free seqlock read in `captureKinematics()` preserving precedence for physical DRO scale modes when enabled (`isZDroMode()` / `isXDroMode()`).
   - Increased WebSocket telemetry dispatch cadence ceiling to 50 Hz (20 ms interval) while maintaining quiescence during machine idle.
+
+#### Slice 4 Execution Log
+- **Date Completed:** 2026-10-16
+- **Commit:** `54ba844`
+- **Files Created / Modified:**
+  - `src/motion/kernel/MotionEngine.cpp` (enhanced `startSpindleSync()` to engage secondary axis synchronizer and step generator when `enableSecondaryAxis` is true)
+  - `src/motion/modes/primitives/AsyncPrimitive.h/.cpp` (refactored to command `MotionEngine::engageVelocityFeed()` without `async_timer` or legacy procedural loops)
+  - `src/motion/modes/primitives/GearZPrimitive.h/.cpp` (refactored to command `MotionEngine::engageSpindleSync()` for AXIS_Z without `Motion.h` globals)
+  - `src/motion/modes/primitives/GearXPrimitive.h/.cpp` (refactored to command `MotionEngine::engageSpindleSync()` for AXIS_X without `Motion.h` globals)
+  - `src/motion/modes/primitives/ConePrimitive.h/.cpp` (refactored to command `MotionEngine::engageSpindleSync()` with secondary axis taper ratio parameters)
+  - `src/motion/modes/ModeRegistry.cpp` (registered all 4 primitives in `ModeRegistry::initStandardModes()`)
+- **Verification Results:**
+  - **PlatformIO Target Compilation:** `pio run -e esp32s3` completed with `[SUCCESS]` (0 errors, 0 warnings).
+    - RAM: 19.0% (used 62,272 bytes from 327,680 bytes)
+    - Flash: 20.5% (used 1,341,249 bytes from 6,553,600 bytes)
+  - **Automated E2E Simulation Test:** All 4 test suites passed with 100% success.
+- **Key Architectural Decisions & Deviations:**
+  - Completely severed all 4 primitives from `Motion.h`, `Axis.h`, and procedural globals (`dupr`, `z`, `x`, `spindlePosAvg`, `stepToContinuous`).
+  - Reused `MotionConversions.h` for direction mapping and axis token parsing across all primitives.
+  - Implemented `onMotionHalted()` in all 4 primitives to handle automatic state transitions on soft limits (`SOFT_LIMIT_REACHED`) or stroke completions (`TARGET_DISTANCE_REACHED`).
+
 
 
