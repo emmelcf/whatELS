@@ -276,7 +276,7 @@ static void appendUiLine(String* response, const char* name, const String& value
   appendConfigLine(response, name, webSafeText(value));
 }
 
-static const unsigned long MIN_PUSH_INTERVAL_MS = 35; // ~28 Hz max rate ceiling
+static const unsigned long MIN_PUSH_INTERVAL_MS = 20; // 50 Hz push cadence ([CONC-01], Slice 3)
 static unsigned long lastPushMillis = 0;
 static MachineModel lastSentModel = {};
 static bool hasInitialSent = false;

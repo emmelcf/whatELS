@@ -6,6 +6,7 @@
 #include "Display.h"
 #include "DisplayModel.h"
 #include "SettingsService.h"
+#include "motion/kernel/MotionEngine.h"
 #include <limits.h>
 
 QueueHandle_t motionSnapshotQueue = NULL;
@@ -49,6 +50,28 @@ void publishMotionSnapshot() {
   snap.estop = emergencyStop != EstopCode::NONE;
   snap.dupr = dupr;
   snap.nextDupr = nextDuprFlag ? nextDupr : dupr;
+
+  // Lock-free Core 1 TelemetryMailbox overlay ([CONC-01], Slice 3)
+  MotionTelemetrySnapshot tSnap;
+  if (MotionEngine::instance().getTelemetryMailbox().read(tSnap)) {
+    if (!SettingsService::isZDroMode()) {
+      snap.zDu = tSnap.zCoordDu;
+    }
+    if (!SettingsService::isXDroMode()) {
+      snap.xDu = tSnap.xCoordDu;
+    }
+    if (tSnap.spindleRpm > 0 || snap.rpm == 0) {
+      snap.rpm = tSnap.spindleRpm;
+    }
+    if (tSnap.isMoving) {
+      snap.isOn = true;
+    }
+    if (ENCODER_STEPS_INT > 0 && tSnap.spindlePulses != 0) {
+      snap.turns = (float) tSnap.spindlePulses / (float) ENCODER_STEPS_INT;
+      snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo((long) tSnap.spindlePulses) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
+    }
+  }
+
   xQueueOverwrite(motionSnapshotQueue, &snap);
 }
 
@@ -72,26 +95,47 @@ KinematicsState MachineModel::captureKinematics() {
     k.estop = snap.estop;
     k.dupr = snap.dupr;
     k.nextDupr = snap.nextDupr;
-    return k;
+  } else {
+    // Fallback to direct read if queue not yet populated
+    k.zDu = getAxisCanonicalPosDu(&z);
+    k.xDu = getAxisCanonicalPosDu(&x);
+    k.zLeftDu = getAxisCanonicalStopDu(&z, true);
+    k.zRightDu = getAxisCanonicalStopDu(&z, false);
+    k.xUpDu = getAxisCanonicalStopDu(&x, true);
+    k.xDownDu = getAxisCanonicalStopDu(&x, false);
+    k.zDisabled = z.disabled;
+    k.xDisabled = x.disabled;
+    k.rpm = getApproxRpm();
+    k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
+    k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
+    k.mode = static_cast<int>(mode);
+    k.isOn = isOn;
+    k.estop = emergencyStop != EstopCode::NONE;
+    k.dupr = dupr;
+    k.nextDupr = nextDuprFlag ? nextDupr : dupr;
   }
 
-  // Fallback to direct read if queue not yet populated
-  k.zDu = getAxisCanonicalPosDu(&z);
-  k.xDu = getAxisCanonicalPosDu(&x);
-  k.zLeftDu = getAxisCanonicalStopDu(&z, true);
-  k.zRightDu = getAxisCanonicalStopDu(&z, false);
-  k.xUpDu = getAxisCanonicalStopDu(&x, true);
-  k.xDownDu = getAxisCanonicalStopDu(&x, false);
-  k.zDisabled = z.disabled;
-  k.xDisabled = x.disabled;
-  k.rpm = getApproxRpm();
-  k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
-  k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-  k.mode = static_cast<int>(mode);
-  k.isOn = isOn;
-  k.estop = emergencyStop != EstopCode::NONE;
-  k.dupr = dupr;
-  k.nextDupr = nextDuprFlag ? nextDupr : dupr;
+  // Guarantee tear-free, zero-latency Core 1 coordinates directly from TelemetryMailbox
+  MotionTelemetrySnapshot tSnap;
+  if (MotionEngine::instance().getTelemetryMailbox().read(tSnap)) {
+    if (!SettingsService::isZDroMode()) {
+      k.zDu = tSnap.zCoordDu;
+    }
+    if (!SettingsService::isXDroMode()) {
+      k.xDu = tSnap.xCoordDu;
+    }
+    if (tSnap.spindleRpm > 0 || k.rpm == 0) {
+      k.rpm = tSnap.spindleRpm;
+    }
+    if (tSnap.isMoving) {
+      k.isOn = true;
+    }
+    if (ENCODER_STEPS_INT > 0 && tSnap.spindlePulses != 0) {
+      k.turns = (float) tSnap.spindlePulses / (float) ENCODER_STEPS_INT;
+      k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo((long) tSnap.spindlePulses) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
+    }
+  }
+
   return k;
 }
 
