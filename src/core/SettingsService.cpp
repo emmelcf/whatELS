@@ -8,6 +8,7 @@
 #include "Debug.h"
 #include "SystemSchemaJson.h"
 #include "PersistentSetting.h"
+#include "motion/kernel/MotionEngine.h"
 
 static std::optional<float> _deadbandAngle;
 static std::optional<float> _deadbandTurns;
@@ -238,6 +239,12 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
     if (reply) *reply = "ERR:SETTINGS.preset=missing slug\n";
     return false;
   }
+
+  // [CONC-02] In-motion flash write lockout to protect Core 1 from SPI flash cache freeze
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.preset=ERR_MOTION_ACTIVE: cannot switch preset while motion is active\n";
+    return false;
+  }
   const LatheConfiguration* pPreset = findPresetBySlug(slug);
   if (!pPreset) {
     if (reply) *reply = "ERR:SETTINGS.preset=unknown preset slug: " + String(slug) + "\n";
@@ -295,6 +302,12 @@ bool SettingsService::applyPreset(const char* slug, String* reply) {
 }
 
 bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.preset.save=ERR_MOTION_ACTIVE: cannot save preset while motion is active\n";
+    return false;
+  }
+
   // If slug is omitted or "current", save in-place to the active profile slug
   const char* targetSlug = (slug && *slug != '\0' && strcasecmp(slug, "current") != 0) ? slug : activeMachineProfile.profileId;
 
@@ -331,6 +344,12 @@ bool SettingsService::deletePreset(const char* slug, String* reply) {
     if (reply) *reply = "ERR:SETTINGS.preset.delete=missing slug\n";
     return false;
   }
+
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.preset.delete=ERR_MOTION_ACTIVE: cannot delete preset while motion is active\n";
+    return false;
+  }
   if (isSystemCatalogProfile(slug)) {
     if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete system template: " + String(slug) + "\n";
     return false;
@@ -357,6 +376,12 @@ bool SettingsService::deletePreset(const char* slug, String* reply) {
 bool SettingsService::setDefaultPreset(const char* slug, String* reply) {
   if (!slug || *slug == '\0') {
     if (reply) *reply = "ERR:SETTINGS.preset.setDefault=missing slug\n";
+    return false;
+  }
+
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.preset.setDefault=ERR_MOTION_ACTIVE: cannot set default preset while motion is active\n";
     return false;
   }
   if (setDefaultCatalogProfileId(slug)) {
@@ -394,6 +419,12 @@ bool SettingsService::getSchema(const char* schemaName, String* reply) {
 
 bool SettingsService::reset(const char* key, String* reply) {
   if (!key || *key == '\0') return false;
+
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.reset=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    return false;
+  }
 
   auto reportOk = [&](const char* name) {
     if (reply) *reply = "OK:SETTINGS.reset=" + String(name) + "\n";
@@ -473,6 +504,12 @@ bool SettingsService::reset(const char* key, String* reply) {
 
 bool SettingsService::resetGroup(const char* group, String* reply) {
   if (!group || *group == '\0') return false;
+
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS.resetGroup=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    return false;
+  }
 
   if (strcasecmp(group, "machine") == 0) {
     return setPreset(activeMachineProfile.profileId, reply);
@@ -1347,6 +1384,12 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
 
 bool SettingsService::set(const char* keyVal, String* reply) {
   if (!keyVal || *keyVal == '\0') return false;
+
+  // [CONC-02] In-motion flash write lockout
+  if (MotionEngine::instance().isAnyAxisMoving()) {
+    if (reply) *reply = "ERR:SETTINGS=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    return false;
+  }
 
   const char* sep = strpbrk(keyVal, ",=");
   if (!sep) {

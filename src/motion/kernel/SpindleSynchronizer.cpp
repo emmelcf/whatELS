@@ -1,6 +1,6 @@
 #include "SpindleSynchronizer.h"
 
-void IRAM_ATTR SpindleSynchronizer::engage(int64_t currentSpindlePulses, int32_t currentAxisSteps, int32_t pitchDupr) {
+void SpindleSynchronizer::engage(int64_t currentSpindlePulses, int32_t currentAxisSteps, int32_t pitchDupr) {
   m_anchorPulses       = currentSpindlePulses;
   m_anchorSteps        = currentAxisSteps;
   m_currentTargetSteps = currentAxisSteps;
@@ -12,13 +12,13 @@ void SpindleSynchronizer::disengage() {
   m_engaged = false;
 }
 
-void IRAM_ATTR SpindleSynchronizer::updatePitchLive(int64_t currentSpindlePulses, int32_t newPitchDupr) {
+void SpindleSynchronizer::updatePitchLive(int64_t currentSpindlePulses, int32_t newPitchDupr) {
   m_anchorSteps  = m_currentTargetSteps;
   m_anchorPulses = currentSpindlePulses;
   m_pitchDupr    = newPitchDupr;
 }
 
-int32_t IRAM_ATTR SpindleSynchronizer::computeIdealSyncSteps(
+int32_t SpindleSynchronizer::computeIdealSyncSteps(
     int64_t accumulatedSpindlePulses,
     int32_t motorStepsPerRev,
     int32_t screwPitchDu,
@@ -37,7 +37,7 @@ int32_t IRAM_ATTR SpindleSynchronizer::computeIdealSyncSteps(
   return m_currentTargetSteps;
 }
 
-void IRAM_ATTR SpindleSynchronizer::updateSpindlePhase(int32_t deltaPulses) {
+void SpindleSynchronizer::updateSpindlePhase(int32_t deltaPulses) {
   m_spindlePhasePulses += deltaPulses;
 }
 
