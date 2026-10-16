@@ -55,11 +55,11 @@ This document serves as the **single authoritative specification** defining:
 ### 2.1 The Two Coordinate Domains
 1. **Machine Coordinate System (MCS):**
    * Physical hardware coordinates measured in **canonical deci-microns** ($10{,}000\text{ du} = 1.0\text{ mm}$).
-   * Origin ($Z=0, X=0$) can be referenced against chuck face or home limit switches.
-   * Motion limits (`zLeftDu`, `zRightDu`, `xUpDu`, `xDownDu`) are evaluated strictly in this domain.
+   * Physical machine crash limits and hard endstops protect absolute bed bounds in this domain.
 2. **Workpiece Coordinate System (WCS):**
    * Machinists think in terms of part dimensions (e.g. cutting a shoulder to $Z = -25.00\text{ mm}$, turning down to diameter $X = 20.00\text{ mm}$).
    * Set by touch-off zeroing (`CMD.axisZero=Z`, `CMD.axisZero=X`).
+   * Operator soft limits / electronic bed dogs (`SoftLimitTable`) are configured and enforced relative to the active workpiece zero.
 
 ### 2.2 Directional & Polarity Conventions
 To support diverse leadscrew thread directions (right-hand vs. left-hand) and operator preferences, polarity is configurable:

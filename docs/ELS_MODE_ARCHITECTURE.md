@@ -24,10 +24,10 @@ To solve these challenges, this architecture establishes eight governing tenets:
 
 1. **Controller Authority & Autonomous Orchestration:**  
    Motion execution, pass sequencing, and limit stops are strictly executed and orchestrated on the **controller MCU**. The client never streams real-time micro-coordinates over a network; it commands parametric cycles. If a client disconnects or lags, machine safety and execution determinism remain unaffected.
-2. **Atomic Primitives vs. Composite Orchestration:**  
-   The motion engine provides small, robust, deterministic **Primitive Modes** (e.g., spindle-synchronized gear step, velocity async step, coordinated vector step). Higher-level cycles (**Composite Modes**) compose and orchestrate these primitives rather than reinventing motor step math.
+2. **Kinematic Core Primitives vs. Mode Orchestration:**  
+   The motion subsystem provides deterministic, acceleration-profiled kinematic motion primitives (`engageSpindleSync`, `engageVelocityFeed`, `executeStroke`, `executeJog`) inside the authoritative **Motion Engine (Layer 2)**. Higher-level machining cycles (**Operating Modes, Layer 3**) orchestrate these primitives according to operator intent and canned cycle workflows rather than reinventing motor step math or implementing low-level timer ISRs.
 3. **Uniform Interface Contract:**  
-   Every mode (primitive or composite) implements an identical lifecycle, telemetry, and control interface (`IELSMode`). Modes can be nested, wrapped, or substituted transparently.
+   Every operating mode implements an identical lifecycle, telemetry, and control interface (`IELSMode`). Modes are pure orchestrators that listen to motion events (`IMotionEventListener`) and command `MotionEngine`.
 4. **Client Capability Handshake & Filtering:**  
    Clients register which modes they support. Simple clients can include/exclude modes, and the controller filters available operations accordingly.
 5. **Universal Safety Invariant:**  
@@ -57,29 +57,30 @@ graph TD
         SessionMgr["Client Registry & Capability Negotiator"]
     end
 
-    subgraph Controller_Core ["Controller Firmware (ESP32)"]
+    subgraph Controller_Core ["Controller Firmware (ESP32-S3)"]
         ModeRegistry["Mode Registry & Factory"]
         Supervisor["Motion Supervisor & Safety Interlocks"]
         
-        subgraph Composite_Modes ["Composite / Orchestrated Modes"]
-            UnifiedGearbox["Unified Gearbox Mode"]
+        subgraph Mode_Layer ["Layer 3: Mode Orchestration Layer (IELSMode)"]
+            UnifiedGearbox["Unified Gearbox Mode\n(Leadscrew, PowerFeed, Taper)"]
             TurnCycle["Multi-Pass Turning Cycle"]
             ThreadCycle["Multi-Pass Threading Cycle"]
             FaceCycle["Multi-Pass Facing Cycle"]
             CustomCycle["Advanced Cycles (Ball, Grooving, etc.)"]
         end
 
-        subgraph Primitive_Modes ["Atomic Primitive Modes (Kinematic Kernels)"]
-            GearZ["GearZ Primitive (Spindle Sync Z)"]
-            GearX["GearX Primitive (Spindle Sync X)"]
-            AsyncFeed["Async Primitive (Timed Velocity X/Z)"]
-            CoordVector["Coordinated Vector (Bresenham X+Z)"]
+        subgraph Motion_Core ["Layer 2: Kinematic Motion Engine (MotionEngine)"]
+            SoftLimits["SoftLimitTable\n(Multi-Stop Bed Dogs)"]
+            Trajectory["Trajectory Planner\n(Accel/Decel Stopping Window: d_stop = v^2/2a)"]
+            Bresenham["SpindleSynchronizer\n(64-bit Bresenham Fractional Gearing)"]
+            AxisState["AxisState Tracking\n(Deci-microns & Raw Motor Steps)"]
         end
 
-        subgraph Hardware_HAL ["Hardware Abstraction Layer (HAL)"]
-            StepperTimers["RMT / Timer Stepper Generators"]
-            EncoderISR["Quadrature Spindle Encoder ISR"]
-            LimitSwitches["Opto Limit & E-Stop Lines"]
+        subgraph Hardware_HAL ["Layer 1: Hardware Abstraction Layer (HAL)"]
+            IStepper["IStepperHAL\n(GPTimer / RMT Timed Pulse Trains)"]
+            ISpindle["ISpindleEncoderHAL\n(PCNT Hardware Counter & RPM Filter)"]
+            IDRO["IDROScaleHAL\n(Linear Glass Scales)"]
+            IEndstop["IEndstopHAL\n(Physical Endstops & E-Stop Line)"]
         end
     end
 
@@ -90,11 +91,14 @@ graph TD
     SessionMgr <--> Supervisor
 
     Supervisor <--> ModeRegistry
-    ModeRegistry --> Composite_Modes
-    Composite_Modes --> Primitive_Modes
-    Primitive_Modes --> StepperTimers
-    EncoderISR --> Primitive_Modes
-    LimitSwitches --> Supervisor
+    ModeRegistry --> Mode_Layer
+    Mode_Layer -->|Commands: Sync, Feed, Stroke| Motion_Core
+    Motion_Core -->|Events: onMotionHalted, onTelemetry| Mode_Layer
+    Motion_Core --> IStepper
+    ISpindle --> Motion_Core
+    IDRO --> Motion_Core
+    IEndstop --> Supervisor
+    IEndstop --> Motion_Core
 ```
 
 ---
@@ -109,22 +113,16 @@ typedef uint16_t ModeId;
 
 namespace ModeIds {
     constexpr ModeId NONE         = 0;
-    // Primitive Modes (10 - 49)
-    constexpr ModeId PRIM_GEAR_Z  = 10;
-    constexpr ModeId PRIM_GEAR_X  = 11;
-    constexpr ModeId PRIM_ASYNC_Z = 12;
-    constexpr ModeId PRIM_ASYNC_X = 13;
-    constexpr ModeId PRIM_CONE    = 14;
-    constexpr ModeId PRIM_RAPID   = 15;
 
-    // Composite / Operational Modes (50 - 99)
-    constexpr ModeId GEARBOX      = 50; // Orchestrates PRIM_GEAR_Z, PRIM_GEAR_X, PRIM_ASYNC, PRIM_CONE
-    constexpr ModeId TURNING      = 51; // Orchestrates PRIM_GEAR_Z/ASYNC + PRIM_RAPID
-    constexpr ModeId FACING       = 52; // Orchestrates PRIM_GEAR_X/ASYNC + PRIM_RAPID
-    constexpr ModeId THREADING    = 53; // Orchestrates PRIM_GEAR_Z (exact sync) + retraction
-    constexpr ModeId CUTOFF       = 54; // Orchestrates PRIM_ASYNC_X with pecking
+    // Operational Modes (50 - 99)
+    constexpr ModeId GEARBOX      = 50; // Unified Gearbox: Leadscrew, Cross-feed, Async feed, Taper
+    constexpr ModeId TURNING      = 51; // Multi-pass turning cycle
+    constexpr ModeId FACING       = 52; // Multi-pass facing cycle
+    constexpr ModeId THREADING    = 53; // Multi-pass threading cycle
+    constexpr ModeId CUTOFF       = 54; // Parting / cutoff cycle
     constexpr ModeId SLOTTING     = 55; // Spindle-locked broaching / slotting
     constexpr ModeId SPHERE       = 56; // Parametric contouring
+    constexpr ModeId CONE         = 57; // Standalone taper turning
 }
 
 // Mode Execution Status State Machine
@@ -283,8 +281,9 @@ Every mode in the controller implements this abstract, mode-agnostic interface. 
 
 ```cpp
 class TelemetryWriter; // Forward declaration for streaming telemetry buffer
+class MotionEngine;    // Forward declaration for Layer 2 Kinematic Engine
 
-class IELSMode {
+class IELSMode : public IMotionEventListener {
 public:
     virtual ~IELSMode() = default;
 
@@ -302,9 +301,9 @@ public:
     virtual bool getParam(const char* key, float& outVal) const = 0;
     virtual bool validateParams(char* errBuf, size_t errBufLen) const = 0;
 
-    // --- 3. Lifecycle Hooks ---
-    // Called when the mode becomes the selected active mode in the controller
-    virtual void onEnter() = 0;
+    // --- 3. Lifecycle & Engine Binding ---
+    // Injects the authoritative MotionEngine pointer upon activation
+    virtual void onEnter(MotionEngine* engine) = 0;
     
     // Called when another mode is selected or when controller resets
     virtual void onExit() = 0;
@@ -312,6 +311,7 @@ public:
     // --- 4. Execution State Machine Control ---
     virtual bool start() = 0;
     virtual void stop(StopType stopType) = 0;
+    virtual bool pause() = 0;
     virtual bool resume() = 0;
 
     virtual ModeState getState() const = 0;
@@ -344,15 +344,16 @@ public:
         return true; // All configuration commands permitted when IDLE/STOPPED
     }
 
-    // --- 6. Real-Time Kinematic Hooks (Executed in ISR / High-Priority Motion Task) ---
-    // Called on spindle encoder quadrature edges
-    virtual void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm) = 0;
+    // --- 6. Motion Event Callbacks (from IMotionEventListener) ---
+    // Dispatched by MotionEngine when motion completes, hits a limit, or faults
+    virtual void onMotionHalted(
+        AxisId axis,
+        MotionHaltReason reason,
+        int32_t haltedPosSteps,
+        int32_t haltedCoordDu,
+        const SoftLimit* triggeredLimit) override = 0;
 
-    // High-frequency task tick (velocity async, timer step math)
-    virtual void onMotionTick() = 0;
-
-    // Called when an axis trips a soft-stop or hardware limit
-    virtual void onLimitReached(uint8_t axisId, bool isHighLimit) = 0;
+    virtual void onSpindleSyncAcquired(AxisId axis) override {}
 
     // --- 7. Telemetry & Progress Serialization ---
     virtual void writeTelemetry(TelemetryWriter& writer) const = 0;
@@ -450,19 +451,19 @@ Allows simple clients to update modal parameters one by one, staging them on Cor
 - `CMD.on=1` $\to$ Packages staged parameters and calls `startFeed()`.
 - `CMD.on=0` $\to$ Halts motion immediately.
 
-#### 4.1.3 Delegation Implementation:
+#### 4.1.3 MotionEngine Integration Implementation:
 ```cpp
 class UnifiedGearboxMode : public IELSMode {
 private:
-    GearZPrimitive   m_gearZ;
-    GearXPrimitive   m_gearX;
-    AsyncPrimitive   m_asyncFeed;
-    ConePrimitive    m_cone;
-    
-    IELSMode*        m_activePrimitive = &m_gearZ; // Default to Z leadscrew
+    MotionEngine*    m_engine = nullptr;
     ModeState        m_state = ModeState::IDLE;
-    char             m_activeAxis = 'Z';
+    AxisId           m_activeAxis = AXIS_Z;
+    int8_t           m_direction = -1; // -1 = Chuck / Centerline, +1 = Tailstock / Retract
     bool             m_isSync = true;
+    int32_t          m_feedPitchDupr = 1000;    // 0.10 mm/rev in sync
+    int32_t          m_feedRateDuMin = 1000000; // 100 mm/min in async
+    int32_t          m_strokeDistDu = 0;        // 0 = continuous until stopped or soft limit reached
+    float            m_taperRatio = 0.050f;
 
 public:
     const ModeManifest& getManifest() const override;
@@ -475,84 +476,60 @@ public:
         return PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE;
     }
 
-    bool setParam(const char* key, float value) override {
-        if (strcmp(key, "sync") == 0) return setSync(value != 0.0f);
-        if (strcmp(key, "nudge") == 0) return nudgeFeed((int)value);
-        return m_activePrimitive->setParam(key, value);
+    void onEnter(MotionEngine* engine) override {
+        m_engine = engine;
+        m_state = ModeState::IDLE;
     }
 
-    bool setParam(const char* key, const char* strValue) override {
-        if (strcmp(key, "axis") == 0) return setActiveAxis(strValue);
-        if (strcmp(key, "dir") == 0) return setDirection(strValue);
-        return m_activePrimitive->setParam(key, strValue);
+    void onExit() override {
+        if (m_engine) m_engine->stopAll(false);
+        m_state = ModeState::IDLE;
     }
 
-    bool setActiveAxis(const char* axisStr) {
-        if (m_state == ModeState::RUNNING) return false; // In-motion safety lock!
-        if (m_activePrimitive) m_activePrimitive->onExit();
+    bool setParam(const char* key, float value) override;
+    bool setParam(const char* key, const char* strValue) override;
 
-        if (strcmp(axisStr, "X") == 0) {
-            m_activeAxis = 'X';
-            m_activePrimitive = &m_gearX;
-        } else if (strcmp(axisStr, "ZX") == 0) {
-            m_activeAxis = 'Z'; // compound
-            m_activePrimitive = &m_cone;
-        } else {
-            m_activeAxis = 'Z';
-            m_activePrimitive = m_isSync ? static_cast<IELSMode*>(&m_gearZ) : static_cast<IELSMode*>(&m_asyncFeed);
-        }
-        m_activePrimitive->onEnter();
-        return true;
-    }
-
-    bool setSync(bool sync) {
-        if (m_state == ModeState::RUNNING) return false; // In-motion safety lock!
-        m_isSync = sync;
-        return setActiveAxis(m_activeAxis == 'X' ? "X" : "Z");
-    }
-
-    bool nudgeFeed(int direction) {
-        if (!isRunning()) return false;
-        long step = getFeedStepDu();
-        long currentDupr = getThreadSetting().dupr;
-        long newDupr = currentDupr + (direction > 0 ? step : -step);
-        if (newDupr <= 0) return false;
-        return setFeedrateDupr(newDupr, true);
-    }
-
-    // Delegated execution hooks:
     bool start() override {
-        bool ok = m_activePrimitive->start();
-        if (ok) m_state = ModeState::RUNNING;
-        return ok;
+        if (!m_engine) return false;
+        if (m_isSync) {
+            SpindleSyncParams params{m_activeAxis, m_direction, m_feedPitchDupr, 2500000, true, false, m_strokeDistDu};
+            if (m_engine->engageSpindleSync(params)) {
+                m_state = ModeState::RUNNING;
+                return true;
+            }
+        } else {
+            VelocityFeedParams params{m_activeAxis, m_direction, m_feedRateDuMin, 0.0f, true, m_strokeDistDu};
+            if (m_engine->engageVelocityFeed(params)) {
+                m_state = ModeState::RUNNING;
+                return true;
+            }
+        }
+        return false;
     }
 
     void stop(StopType type) override {
-        m_activePrimitive->stop(type);
-        m_state = m_activePrimitive->getState();
+        if (!m_engine) return;
+        m_engine->stop(m_activeAxis, type == StopType::EMERGENCY_IMMEDIATE);
+        m_state = (type == StopType::FEED_HOLD) ? ModeState::PAUSED : ModeState::IDLE;
+    }
+
+    bool pause() override {
+        stop(StopType::FEED_HOLD);
+        return true;
     }
 
     bool resume() override {
-        bool ok = m_activePrimitive->resume();
-        if (ok) m_state = ModeState::RUNNING;
-        return ok;
+        return start();
     }
 
-    void onSpindlePulse(int32_t delta, uint32_t rpm) override {
-        if (m_state == ModeState::RUNNING) {
-            m_activePrimitive->onSpindlePulse(delta, rpm);
-        }
-    }
-
-    void onMotionTick() override {
-        if (m_state == ModeState::RUNNING) {
-            m_activePrimitive->onMotionTick();
-        }
-    }
-
-    void onLimitReached(uint8_t axisId, bool isHighLimit) override {
-        m_activePrimitive->onLimitReached(axisId, isHighLimit);
-        m_state = m_activePrimitive->getState();
+    // Motion Event Callbacks:
+    void onMotionHalted(
+        AxisId axis,
+        MotionHaltReason reason,
+        int32_t haltedPosSteps,
+        int32_t haltedCoordDu,
+        const SoftLimit* triggeredLimit) override {
+        m_state = (reason == MotionHaltReason::FEED_HOLD) ? ModeState::PAUSED : ModeState::IDLE;
     }
 
     void writeTelemetry(TelemetryWriter& writer) const override;
@@ -565,7 +542,7 @@ public:
 
 Consider a multi-pass turning cycle. A naive implementation attempts to handle stepper acceleration, limit checks, retraction, and rapid returns in one messy loop. 
 
-With the **Orchestrated Mode Architecture**, `TurningCycleMode` is a simple finite state machine (FSM) that commands child primitives sequentially:
+With the **Orchestrated Mode Architecture**, `TurningCycleMode` is a simple finite state machine (FSM) that commands the `MotionEngine` sequentially:
 
 ```mermaid
 stateDiagram-v2
@@ -573,16 +550,16 @@ stateDiagram-v2
     IDLE --> ARMED: Operator presses START
     ARMED --> CUTTING_PASS: Spindle synchronized / feed engaged
     
-    state "CUTTING_PASS (Delegates to GearZPrimitive)" as CUTTING_PASS
-    CUTTING_PASS --> RETRACT_TOOL: Left Z Stop reached
+    state "CUTTING_PASS (engine->engageSpindleSync)" as CUTTING_PASS
+    CUTTING_PASS --> RETRACT_TOOL: onMotionHalted (SOFT_LIMIT_REACHED at Chuck)
     
-    state "RETRACT_TOOL (Delegates to AsyncRapidPrimitive on X)" as RETRACT_TOOL
-    RETRACT_TOOL --> RAPID_RETURN: X backed off +0.5 mm
+    state "RETRACT_TOOL (engine->executeStroke on X)" as RETRACT_TOOL
+    RETRACT_TOOL --> RAPID_RETURN: onMotionHalted (X backed off +0.5 mm)
     
-    state "RAPID_RETURN (Delegates to AsyncRapidPrimitive on Z)" as RAPID_RETURN
-    RAPID_RETURN --> INFEED_NEXT: Returned to Right Z Start
+    state "RAPID_RETURN (engine->executeStroke on Z)" as RAPID_RETURN
+    RAPID_RETURN --> INFEED_NEXT: onMotionHalted (Returned to Right Z Start)
     
-    state "INFEED_NEXT (Advances X by depth-of-cut)" as INFEED_NEXT
+    state "INFEED_NEXT (engine->executeStroke on X)" as INFEED_NEXT
     INFEED_NEXT --> CUTTING_PASS: Passes remaining > 0
     INFEED_NEXT --> COMPLETED: Final pass finished
     
@@ -594,9 +571,9 @@ stateDiagram-v2
 ```
 
 #### Why this is superior:
-1. **Zero Duplicated Math:** The turning cycle doesn't need its own stepper timing or acceleration logic. It delegates the cut pass to `GearZPrimitive` and the retract/rapid moves to `AsyncRapidPrimitive`.
-2. **Reliable Limits:** If the operator hits Feed Hold during pass 4 of 6, `GearZPrimitive` pauses cleanly in microsecond sync. When resumed, `TurningCycleMode` continues with full pass tracking.
-3. **Firmware Integrity:** Even if a web browser controlling the lathe crashes, the cycle completes safely inside the MCU.
+1. **Zero Duplicated Math:** The turning cycle contains zero stepper timing, ISRs, or acceleration math. It commands `engageSpindleSync()` for cutting passes and `executeStroke()` for tool retract and rapid returns.
+2. **Deterministic Stopping & Soft Limits:** When approaching the chuck shoulder stop, `MotionEngine` automatically handles deceleration window lookahead ($d_{\text{stop}} = v_i^2 / 2a$), landing on the exact step coordinate without mechanical shock.
+3. **Firmware Integrity:** Even if a web browser controlling the lathe crashes or disconnects, the cycle completes safely inside the MCU.
 
 ---
 
@@ -703,11 +680,11 @@ Modes naturally organize into four distinct functional layers:
 
 ```mermaid
 graph TD
-    subgraph Layer_0 ["Layer 0: Kinematic Primitives"]
-        GearZ["GearZ Primitive\n(Pure spindle sync Z)"]
-        GearX["GearX Primitive\n(Pure spindle sync X)"]
-        AsyncX["AsyncX Primitive\n(Velocity retract/infeed X)"]
-        AsyncZ["AsyncZ Primitive\n(Rapid traverse Z)"]
+    subgraph Layer_0 ["Layer 0: MotionEngine Kinematic Primitives (C++ Kernel)"]
+        Sync["engageSpindleSync()\n(64-bit Bresenham Spindle Lock)"]
+        Feed["engageVelocityFeed()\n(Continuous / Decel Profiled Feed)"]
+        Stroke["executeStroke()\n(Trapezoidal Rapid Traverse & Infeed)"]
+        Jog["executeJog()\n(MPG Handwheel & Setup Jog)"]
     end
 
     subgraph Layer_1 ["Layer 1: Base Operational Modes (Human-Assisted)"]
@@ -716,7 +693,7 @@ graph TD
     end
 
     subgraph Layer_2 ["Layer 2: Automated Multi-Pass Cycles"]
-        ThreadAuto["AutoThreadingMode (Extends ManualThreadingMode)\nReq: SPINDLE + MOTOR_Z + MOTOR_X\n• Reuses ManualThreadingMode for cutting pass\n• Intercepts pass-end: commands AsyncX motor retraction\n• Commands AsyncZ rapid return\n• Automates compound 29.5° infeed passes"]
+        ThreadAuto["AutoThreadingMode (Extends ManualThreadingMode)\nReq: SPINDLE + MOTOR_Z + MOTOR_X\n• Automates multi-pass thread cycle\n• Automatic X motor retraction & Z rapid return\n• Compound 29.5° infeed passes"]
         TurnAuto["MultiPassTurningCycle (Extends SinglePassTurningMode)\nReq: SPINDLE + MOTOR_Z + MOTOR_X\n• Automates multi-pass roughing & finishing"]
     end
 
@@ -725,13 +702,13 @@ graph TD
         ThreadPickup["ThreadRepairPickupMode (Extends ManualThreadingMode)\nReq: SPINDLE + MOTOR_Z\n• Spindle angle phase-shifting to pick up existing threads"]
     end
 
-    GearZ --> ThreadManual
-    GearZ --> TurnManual
+    Sync --> ThreadManual
+    Sync --> TurnManual
     ThreadManual --> ThreadAuto
     ThreadManual --> ThreadPickup
     ThreadAuto --> ThreadTaper
-    AsyncX -.-> ThreadAuto
-    AsyncZ -.-> ThreadAuto
+    Stroke -.-> ThreadAuto
+    Stroke -.-> TurnAuto
     TurnManual --> TurnAuto
 ```
 
@@ -1033,20 +1010,24 @@ stateDiagram-v2
 
 To ensure machine execution determinism and establish the controller as the single source of truth, implementation proceeds strictly from the **Controller Motion Core outward**:
 
-### Phase 1: Controller Firmware C++ Core (`src/motion/modes/`)
-- [ ] **Slice 1.1: Core Interfaces & Kinematic Primitives:**
-  - Create `IELSMode.h` defining the abstract lifecycle, mode-agnostic parameter contract (`setParam`/`getParam`), runtime gatekeeper (`canExecuteCommand`), and `LivePermissionFlags`.
-  - Extract and encapsulate the 4 kinematic primitives: `GearZPrimitive` (spindle sync Z), `GearXPrimitive` (spindle sync X), `AsyncPrimitive` (time-based velocity), and `ConePrimitive` (coordinated ratio taper).
-- [ ] **Slice 1.2: `UnifiedGearboxMode` Composite & Mode Registry:**
-  - Implement `UnifiedGearboxMode` orchestrating the 4 primitives with sub-mode switching (`gearAxis`, `gearSync`, `gearDir`) and live in-cut chip load trim (`feedNudge`).
-  - Implement `ModeRegistry` managing static mode instances, active mode pointer, and lifecycle transitions (`onExit`/`onEnter`).
-- [ ] **Slice 1.3: Motion Loop & Safety Interlocks:**
-  - Update `main.cpp` motion loop to delegate active stepping directly through `ModeRegistry::getActiveMode()`, eliminating procedural switch-case ladders.
-  - Enforce `canExecuteCommand()` at the motion supervisor boundary, rejecting invalid commands during active cuts.
-- [ ] **Slice 1.4: Command Dispatcher & Mode Discovery:**
+### Phase 1: Controller Firmware C++ Core (`src/motion/`)
+- [ ] **Slice 1.1: Hardware Abstraction Layer (HAL):**
+  - Implement `IStepperHAL`, `ISpindleEncoderHAL` (PCNT), `IDROScaleHAL`, and `IEndstopHAL` in `src/motion/hal/`.
+  - Concrete drivers: `Esp32StepperHAL` (timed pulse trains) and `Esp32EncoderHAL` (hardware PCNT quadrature counting).
+- [ ] **Slice 1.2: Kinematic Motion Engine & Soft Limit Table:**
+  - Implement `AxisState` (deci-micron $\leftrightarrow$ motor step conversions, backlash compensation) and `SoftLimitTable` (multi-stop electronic bed dogs) in `src/motion/kernel/`.
+  - Implement `TrajectoryPlanner` (accel/decel stopping window lookahead $d_{\text{stop}} = v_i^2 / 2a$) and `SpindleSynchronizer` (64-bit Bresenham fractional accumulator).
+  - Implement `MotionEngine` orchestrating Layer 1 HAL peripherals with Layer 2 kinematics.
+- [ ] **Slice 1.3: Mode Integration Contract & Interfaces:**
+  - Implement `IMotionEventListener` and updated `IELSMode.h` receiving injected `MotionEngine*`.
+  - Implement lock-free `TelemetryMailbox` seqlock and inter-core command queues (`CONCURRENCY_AND_TIMING.md`).
+- [ ] **Slice 1.4: UnifiedGearboxMode & Mode Registry:**
+  - Implement `UnifiedGearboxMode` orchestrating leadscrew feed, cross-feed, async velocity feed, and tapers via `MotionEngine`.
+  - Implement `ModeRegistry` managing static mode instances, active mode pointer, and lifecycle transitions.
+- [ ] **Slice 1.5: Command Dispatcher & Telemetry Integration:**
   - Implement `MODE.discover` with capability filtering against `activeMachineProfile.capabilities`.
   - Wire canonical commands (`CMD.mode=GEARBOX`, `CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedNudge`) in `CommandDispatcher.cpp`.
-  - Broadcast `K.perms` in telemetry snapshots.
+  - Broadcast `K.perms` and lock-free telemetry snapshots over WebSocket.
 
 ### Phase 2: Web UI Client Integration (`clients/web_ui/`)
 - [ ] Update `lathe-controller.js` to natively command `mode: 'GEARBOX'` with axis/sync parameters directly to the controller, removing the client-side emulation mapping.

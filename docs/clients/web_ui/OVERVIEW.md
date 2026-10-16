@@ -121,7 +121,7 @@ handleIncomingMessage(line) {
 
 ### 4.2 Legacy Compatibility & Inbound Filtering Invariants
 1. **Filtering Legacy Diameter (`dia`):** Inbound telemetry containing `dia` or `isDiameterMode` (emitted by legacy controllers or physical Nextion LCDs) is explicitly **ignored**. Cross-slide display mode is strictly client-local.
-2. **Soft Limit Sanitization:** Unset limits (`LONG_MAX = 2147483647`, `LONG_MIN = -2147483648`) are sanitized before formatting to guarantee zero `NaN` or overflow displays on limit chips.
+2. **Soft Limit Sanitization:** Unset limits (`defined == false` or legacy `LONG_MAX`/`LONG_MIN`) are sanitized before formatting to guarantee zero `NaN` or overflow displays on limit chips.
 3. **Continuous Spindle Telemetry:** Floating-point spindle turns and angles are ingested directly into `$store.machine.turns` and `$store.machine.angle` without integer truncation.
 
 ### 4.3 Mode Telemetry & Dynamic In-Motion Permissions

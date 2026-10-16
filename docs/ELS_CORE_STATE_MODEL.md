@@ -167,10 +167,19 @@ enum DomainFlags : uint8_t {
 struct KinematicsState {
   long    zDu;          // Carriage longitudinal position in deci-microns
   long    xDu;          // Cross-slide transverse position in canonical radius deci-microns
-  long    zLeftDu;      // Chuck-side soft limit coordinate (LONG_MAX if unset)
-  long    zRightDu;     // Tailstock-side soft limit coordinate (LONG_MIN if unset)
-  long    xUpDu;        // Centerline-infeed soft limit coordinate (LONG_MAX if unset)
-  long    xDownDu;      // Retract soft limit coordinate (LONG_MIN if unset)
+  // Modern Soft Limits (Zero Magic Sentinels — Explicit Defined/Enabled Lifecycle)
+  int32_t zLeftDu;       // Left / Chuck-side soft limit coordinate in deci-microns
+  bool    zLeftDefined;  // True if left limit coordinate is set
+  bool    zLeftEnabled;  // True if left limit is actively enforced
+  int32_t zRightDu;      // Right / Tailstock-side soft limit coordinate in deci-microns
+  bool    zRightDefined; // True if right limit coordinate is set
+  bool    zRightEnabled; // True if right limit is actively enforced
+  int32_t xUpDu;         // Centerline infeed soft limit coordinate in deci-microns
+  bool    xUpDefined;    // True if infeed limit coordinate is set
+  bool    xUpEnabled;    // True if infeed limit is actively enforced
+  int32_t xDownDu;       // Retract soft limit coordinate in deci-microns
+  bool    xDownDefined;  // True if retract limit coordinate is set
+  bool    xDownEnabled;  // True if retract limit is actively enforced
   bool    zDisabled;    // True if Z axis stepper driver is powered down / disengaged
   bool    xDisabled;    // True if X axis stepper driver is powered down / disengaged
   int     rpm;          // Spindle speed in revolutions per minute
