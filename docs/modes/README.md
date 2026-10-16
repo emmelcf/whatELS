@@ -2,9 +2,9 @@
 ## Architecture, Kinematics, Execution FSMs & Deck Interaction Specifications
 
 > **Companion Architecture Documents:**
-> * For the general mode interface (`IELSMode`), execution FSM, composite cycles, and replacement vs. variant rules: see [`../ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md).
-> * For the central state model (`MachineModel`), invariants, and properties taxonomy: see [`../ELS_CORE_STATE_MODEL.md`](../ELS_CORE_STATE_MODEL.md).
-> * For the 800×480 Rich Touch HMI Profile (typography, layout, keypad, runstack safety): see [`../hmi/RICH_TOUCH_800X480.md`](../hmi/RICH_TOUCH_800X480.md).
+> * For the general mode interface (`IELSMode`), execution FSM, composite cycles, and replacement vs. variant rules: see [`./ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md).
+> * For the central state model (`MachineModel`), invariants, and properties taxonomy: see [`../state/ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md).
+> * For the 800×480 Rich Touch HMI Profile (typography, layout, keypad, runstack safety): see [`../clients/hmi/RICH_TOUCH_800X480.md`](../clients/hmi/RICH_TOUCH_800X480.md).
 
 ---
 

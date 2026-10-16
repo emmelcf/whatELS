@@ -201,37 +201,26 @@ To prevent architectural drift and maintain single-topic depth, all detailed imp
 ```
 NANOELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │
-├── 1. Core State & Concurrency Model
-│    └── ELS_CORE_STATE_MODEL.md
-│        (The 4 Domains: K Kinematic, I Intent, C Configuration, P Profile;
-│         Point-in-time atomic snapshots; Core 1 vs. Core 0 FreeRTOS concurrency)
+├── 1. Motion Core & Hardware Timing (Core 1)
+│    └── motion/ (HAL_SPECIFICATION.md, MOTION_ENGINE_SPECIFICATION.md,
+│                 CONCURRENCY_AND_TIMING.md, MODE_INTEGRATION_CONTRACT.md)
 │
-├── 2. Machine Profile, Presets & Schema Introspection
-│    └── LATHE_MACHINE_PROFILE.md
-│        (Physical geometry, capability bitmasks, decoupled spindle ratio,
-│         LittleFS catalog /presets/profiles.json, 3-tier fallback hierarchy,
-│         standard JSON Schema draft-07 introspection)
+├── 2. Core State & Settings Subsystems (Subsystems 3 & 4)
+│    └── state/ (ELS_CORE_STATE_MODEL.md, ELS_PROPERTIES_AND_SETTINGS.md,
+│                ELS_PRESET_CATALOG.md, TIER2_STATE_MAPPING.md)
 │
-├── 3. Operational Mode Engine & Kinematics
-│    └── ELS_MODE_ARCHITECTURE.md & modes/README.md
-│        (IELSMode lifecycle interface, mode registry, atomic motion primitives,
-│         unified gearbox, and canned cycle manifests)
+├── 3. Operational Mode Engine & Canned Cycles (Subsystem 5, Core 1)
+│    └── modes/ (ELS_MODE_ARCHITECTURE.md, README.md, cycle directories)
 │
-├── 4. Client Transport, Protocol & Multi-Client Safety
-│    └── ELS_CLIENT_ARCHITECTURE.md
-│        (3-tier transport pipeline, multi-channel WebSockets, wire line protocol,
-│         and the Zero-WiFi safety control plane mandate)
+├── 4. Machine Profile & Mechanics
+│    └── machine/ (LATHE_MACHINE_PROFILE.md)
 │
-├── 5. Properties, Settings & Persistence
-│    └── ELS_PROPERTIES_AND_SETTINGS.md
-│        (4-tier properties taxonomy, dynamic defaults vs. sparse NVS overrides,
-│         lock-free RAM cache, universal reset mechanics, legacy migration audit)
+├── 5. Client Transport, Protocol & Multi-Client Safety
+│    └── clients/ (ELS_CLIENT_ARCHITECTURE.md, hmi/, web_ui/)
 │
-└── 6. HMI Ergonomics & Client Implementations
-     ├── hmi/HMI_DESIGN_GUIDELINES.md (Universal ergonomics, Cartesian viewpoints)
-     ├── hmi/RICH_TOUCH_800X480.md (800×480 screen layout, hitboxes, keypad)
-     ├── clients/web_ui/OVERVIEW.md (Modern Alpine.js/Vanilla web client architecture)
-     └── clients/web_ui/INTERACTION_LEDGER.md (40-row UI gesture to wire command ledger)
+└── 6. Architecture Decision Records & Historical Archive
+     ├── adr/ (0001, 0002)
+     └── archive/ (reviews/argon/, ELS_DESIGN_NOTEBOOK.md, IMPLEMENTATION_PLAN_V1.md)
 ```
 
 ---
