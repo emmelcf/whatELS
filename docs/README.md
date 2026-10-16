@@ -32,6 +32,7 @@ docs/
 - **[`MOTION_ENGINE_SPECIFICATION.md`](./motion/MOTION_ENGINE_SPECIFICATION.md):** Layer 2 Kinematic Engine (`MotionEngine`, `SpindleSynchronizer`, `SoftLimitTable`, stopping distance window $d_{\text{stop}} = v^2/2a$, deci-micron units).
 - **[`CONCURRENCY_AND_TIMING.md`](./motion/CONCURRENCY_AND_TIMING.md):** Core 0/1 isolation, provably race-free `TelemetryMailbox` seqlock, flash cache freeze lockout, jitter budgets.
 - **[`MODE_INTEGRATION_CONTRACT.md`](./motion/MODE_INTEGRATION_CONTRACT.md):** Layer 2 $\to$ Layer 3 boundary contract, event listeners (`onMotionHalted`), dual-axis compound taper parameters.
+- **[`PHASE1_EXECUTION_PLAN.md`](./motion/PHASE1_EXECUTION_PLAN.md):** Phase 1 execution runbook dividing implementation into 4 slices, with starter kickoff prompts and living handover ledger.
 
 ### [Mode Orchestration (`docs/modes/`)](./modes/README.md)
 *Layer 3 Machining Cycles (Orchestrators running on Core 1).*

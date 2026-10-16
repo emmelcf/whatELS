@@ -67,6 +67,7 @@ The subsystem is architected into three strictly decoupled layers:
 | [`MOTION_ENGINE_SPECIFICATION.md`](./MOTION_ENGINE_SPECIFICATION.md) | **Layer 2:** Coordinate geometry in deci-microns (`du`), backlash compensation, multi-stop soft limit tables (sequential stepped shaft shoulders), continuous mechanical feed parity, CNC acceleration/deceleration profiling, and stopping distance window math ($d_{\text{stop}} = v^2 / 2a$). |
 | [`MODE_INTEGRATION_CONTRACT.md`](./MODE_INTEGRATION_CONTRACT.md) | **Layer 2 $\to$ 3 Interface:** Contract between `MotionEngine` and `IELSMode`. Eliminates low-level step math and ISRs from modes. Establishes command primitives (`engageSpindleSync`, `engageVelocityFeed`, `executeStroke`), event callbacks (`onMotionHalted`, `onSoftLimitReached`), and live in-motion feed trimming. |
 | [`CONCURRENCY_AND_TIMING.md`](./CONCURRENCY_AND_TIMING.md) | **Systems Architecture:** Dual-core task partitioning (Core 0 for UI/Network/Modes vs. Core 1 for deterministic motion execution). Lock-free atomic snapshot mailbox (`TelemetryMailbox`) and command queues. Real-time latency budgets ($\le 35\,\mu\text{s}$ per loop) and watchdog failsafe architecture. |
+| [`PHASE1_EXECUTION_PLAN.md`](./PHASE1_EXECUTION_PLAN.md) | **Execution Runbook & Ledger:** Multi-session implementation plan dividing Phase 1 into 4 slices, with acceptance criteria, starter prompts, and living handover ledger. |
 
 ---
 
