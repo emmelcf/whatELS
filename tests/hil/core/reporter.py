@@ -18,7 +18,7 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 
-def print_terminal_report(results: list[TestResult], host: str) -> None:
+def print_terminal_report(results: list[TestResult], target: str) -> None:
     """Prints a polished ANSI terminal table of test outcomes."""
     total = len(results)
     passed = sum(1 for r in results if r.status == "PASS")
@@ -29,7 +29,7 @@ def print_terminal_report(results: list[TestResult], host: str) -> None:
     print()
     print("=" * 80)
     print(f"{BOLD}{CYAN}                    NANOELS HARDWARE-IN-THE-LOOP TEST SUITE{RESET}")
-    print(f"Target: ws://{host}:81/canonical | Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Target: {target} | Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     print(f"{BOLD}{'TEST NAME':<34} {'STATUS':<9} {'DURATION':<10} {'DETAILS'}{RESET}")
     print("-" * 80)
@@ -66,11 +66,11 @@ def print_terminal_report(results: list[TestResult], host: str) -> None:
     print()
 
 
-def emit_json_report(results: list[TestResult], host: str) -> None:
+def emit_json_report(results: list[TestResult], target: str) -> None:
     """Emits structured JSON output to stdout for CI/CD and AI agent analysis."""
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "target": f"ws://{host}:81/canonical",
+        "target": target,
         "total": len(results),
         "passed": sum(1 for r in results if r.status == "PASS"),
         "failed": sum(1 for r in results if r.status == "FAIL"),

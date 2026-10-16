@@ -88,9 +88,9 @@ async def main_async() -> int:
             )
         ]
         if args.json:
-            emit_json_report(err_result, host=args.host)
+            emit_json_report(err_result, target=client.uri)
         else:
-            print_terminal_report(err_result, host=args.host)
+            print_terminal_report(err_result, target=client.uri)
         return 1
 
     results = []
@@ -103,9 +103,9 @@ async def main_async() -> int:
         await client.disconnect()
 
     if args.json:
-        emit_json_report(results, host=args.host)
+        emit_json_report(results, target=client.uri)
     else:
-        print_terminal_report(results, host=args.host)
+        print_terminal_report(results, target=client.uri)
 
     # Exit code: 0 if all tests passed, 1 if any failure/error
     all_passed = all(r.status == "PASS" for r in results)
