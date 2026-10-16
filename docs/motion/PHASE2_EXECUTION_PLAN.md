@@ -208,8 +208,8 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
 | Slice | Status | Target Date | Commit Hash | Verified By | Notes / Deviations |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Slice 1: Doc Hygiene & E2E Simulation Harness** | `COMPLETE` | 2026-10-16 | `11dd2f6` | PlatformIO + E2E Harness | Zero warnings, zero errors. 100% pass on all 4 E2E test suites. |
-| **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `READY` | — | — | — | Ready for Conversation 2 |
-| **Slice 3: Core 1 Task Wiring & Live Telemetry** | `PLANNED` | — | — | — | MotionEngine task on Core 1, TelemetryMailbox -> WS |
+| **Slice 2: Hardware Stepper Driver (Esp32StepperHAL)** | `COMPLETE` | 2026-10-16 | `ce21bce` | `pio run -e esp32s3` | Concrete GPTimer pulse train, nanosecond timing guards, non-blocking enable settling. |
+| **Slice 3: Core 1 Task Wiring & Live Telemetry** | `READY` | — | — | — | Ready for Conversation 3 (MotionEngine task on Core 1, TelemetryMailbox -> WS) |
 | **Slice 4: Mode Primitives Migration** | `PLANNED` | — | — | — | Async, GearX, GearZ, Cone migrated to MotionEngine |
 | **Slice 5: Legacy Motion Core Decommissioning** | `PLANNED` | — | — | — | Safe removal of Motion.cpp and Axis.cpp |
 
@@ -240,4 +240,20 @@ We are executing Slice 5 of Phase 2 (Legacy Motion Core Decommissioning) per `do
   - Created reusable `MockStepperHAL` and `MockSpindleEncoderHAL` test doubles under `src/motion/hal/` conforming to `IStepperHAL` and `ISpindleEncoderHAL`.
   - Added clean fallback queue buffering in `MotionEngine` when running on host platforms without FreeRTOS (`std::queue<MotionCommandPacket>`), ensuring identical queuing semantics between host unit simulation and dual-core ESP32-S3 firmware.
   - Updated `SPINDLE_SYNC_GEARING` step emission in `MotionEngine::onMotionTick()` to dispatch multi-pulse steps within each tick without lag.
+
+#### Slice 2 Execution Log
+- **Date Completed:** 2026-10-16
+- **Commit:** `ce21bce`
+- **Files Created / Modified:**
+  - `src/motion/hal/Esp32StepperHAL.h` (concrete `IStepperHAL` implementation with dual-axis hardware descriptors and `gptimer` callbacks)
+  - `src/motion/hal/Esp32StepperHAL.cpp` (hardware pulse generator with `gptimer` allocation, nanosecond timing guards, and non-blocking enable settling)
+- **Verification Results:**
+  - **PlatformIO Target Compilation:** `pio run -e esp32s3` completed with `[SUCCESS]` (0 errors, 0 warnings).
+    - RAM: 18.9% (used 61,920 bytes from 327,680 bytes)
+    - Flash: 20.2% (used 1,325,997 bytes from 6,553,600 bytes)
+- **Key Architectural Decisions & Deviations:**
+  - Configured independent ESP-IDF `gptimer` hardware peripherals per axis (1 MHz resolution, 1 tick = 1 µs) for hardware-timed asynchronous pulse trains.
+  - Enforced `dirHoldTimeNs` in `setDirection()` and `dirSetupDelayNs` in `pulseStep()` using microsecond bounded delays (`esp_rom_delay_us`) to prevent drive edge miscounts during reversals.
+  - Enforced non-blocking driver enable settling (`enableDelayMs`) via timestamp gate (`esp_timer_get_time()`) without blocking the caller.
+  - Placed critical pulse emission paths and ISR callbacks in `IRAM_ATTR` for deterministic real-time execution.
 
