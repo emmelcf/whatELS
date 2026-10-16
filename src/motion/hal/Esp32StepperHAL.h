@@ -74,7 +74,7 @@ public:
   /**
    * @brief Sets physical motion direction with hold-time guard enforcement.
    */
-  void IRAM_ATTR setDirection(AxisId axis, int8_t dir) override;
+  void setDirection(AxisId axis, int8_t dir) override;
 
   /**
    * @brief Returns current latched direction polarity.
@@ -94,7 +94,7 @@ public:
   /**
    * @brief Fires a single step pulse strictly enforcing setup and width timing.
    */
-  void IRAM_ATTR pulseStep(AxisId axis) override;
+  void pulseStep(AxisId axis) override;
 
   /**
    * @brief Starts an asynchronous GPTimer-driven pulse train.

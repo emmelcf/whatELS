@@ -1,5 +1,9 @@
 #include "DRO_Scale.h"
 #include <driver/pulse_cnt.h>
+#include "../core/Config.h"
+
+DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, X_SCALE_PULSES_PER_MM, 100);
+DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, Z_SCALE_PULSES_PER_MM, 100);
 
 bool IRAM_ATTR DRO_Scale::pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watch_event_data_t *edata, void *user_ctx) {
     DRO_Scale *scale = static_cast<DRO_Scale*>(user_ctx);

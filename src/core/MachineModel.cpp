@@ -1,55 +1,52 @@
 #include "MachineModel.h"
-#include "Axis.h"
 #include "Config.h"
-#include "Motion.h"
+#include "OperatorIntent.h"
 #include "Input.h"
 #include "Display.h"
 #include "DisplayModel.h"
 #include "SettingsService.h"
+#include "motion/DRO_Scale.h"
 #include "motion/kernel/MotionEngine.h"
 #include <limits.h>
 
 QueueHandle_t motionSnapshotQueue = NULL;
 
-static long getAxisCanonicalPosDu(Axis* a) {
-  if (a == &x && SettingsService::isXDroMode()) {
+static long getAxisCanonicalPosDu(AxisId a) {
+  if (a == AXIS_X && SettingsService::isXDroMode()) {
     return (long)round(xScale.getPosition() * 10000.0f);
-  } else if (a == &z && SettingsService::isZDroMode()) {
+  } else if (a == AXIS_Z && SettingsService::isZDroMode()) {
     return (long)round(zScale.getPosition() * 10000.0f);
   }
-  return getAxisPosDu(a);
+  return MotionEngine::instance().getAxisPositionDu(a);
 }
 
-static long getAxisCanonicalStopDu(Axis* a, bool isLeft) {
-  if (isLeft) {
-    if (a->leftStop == LONG_MAX) return LONG_MAX;
-    return stepsToDu(a, a->leftStop + a->originPos);
-  } else {
-    if (a->rightStop == LONG_MIN) return LONG_MIN;
-    return stepsToDu(a, a->rightStop + a->originPos);
-  }
+static long getAxisCanonicalStopDu(AxisId a, bool isLeft) {
+  const SoftLimitTable& limits = MotionEngine::instance().getSoftLimits(a);
+  const SoftLimit* lim = isLeft ? limits.getLeftLimit() : limits.getRightLimit();
+  if (!lim || !lim->isEnforced()) return isLeft ? LONG_MAX : LONG_MIN;
+  return lim->coordDu;
 }
 
 void publishMotionSnapshot() {
   if (!motionSnapshotQueue) return;
   StatusSnapshot snap;
   snap.timestamp = millis();
-  snap.zDu = getAxisCanonicalPosDu(&z);
-  snap.xDu = getAxisCanonicalPosDu(&x);
-  snap.zLeftDu = getAxisCanonicalStopDu(&z, true);
-  snap.zRightDu = getAxisCanonicalStopDu(&z, false);
-  snap.xUpDu = getAxisCanonicalStopDu(&x, true);
-  snap.xDownDu = getAxisCanonicalStopDu(&x, false);
-  snap.zDisabled = z.disabled;
-  snap.xDisabled = x.disabled;
+  snap.zDu = getAxisCanonicalPosDu(AXIS_Z);
+  snap.xDu = getAxisCanonicalPosDu(AXIS_X);
+  snap.zLeftDu = getAxisCanonicalStopDu(AXIS_Z, true);
+  snap.zRightDu = getAxisCanonicalStopDu(AXIS_Z, false);
+  snap.xUpDu = getAxisCanonicalStopDu(AXIS_X, true);
+  snap.xDownDu = getAxisCanonicalStopDu(AXIS_X, false);
+  snap.zDisabled = false;
+  snap.xDisabled = false;
   snap.rpm = getApproxRpm();
   snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
   snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-  snap.mode = static_cast<uint8_t>(mode);
-  snap.isOn = isOn;
+  snap.mode = static_cast<uint8_t>(SettingsService::getMode());
+  snap.isOn = SettingsService::isOn();
   snap.estop = emergencyStop != EstopCode::NONE;
-  snap.dupr = dupr;
-  snap.nextDupr = nextDuprFlag ? nextDupr : dupr;
+  snap.dupr = SettingsService::getThreadSetting().dupr;
+  snap.nextDupr = snap.dupr;
 
   // Lock-free Core 1 TelemetryMailbox overlay ([CONC-01], Slice 3)
   MotionTelemetrySnapshot tSnap;
@@ -97,22 +94,22 @@ KinematicsState MachineModel::captureKinematics() {
     k.nextDupr = snap.nextDupr;
   } else {
     // Fallback to direct read if queue not yet populated
-    k.zDu = getAxisCanonicalPosDu(&z);
-    k.xDu = getAxisCanonicalPosDu(&x);
-    k.zLeftDu = getAxisCanonicalStopDu(&z, true);
-    k.zRightDu = getAxisCanonicalStopDu(&z, false);
-    k.xUpDu = getAxisCanonicalStopDu(&x, true);
-    k.xDownDu = getAxisCanonicalStopDu(&x, false);
-    k.zDisabled = z.disabled;
-    k.xDisabled = x.disabled;
+    k.zDu = getAxisCanonicalPosDu(AXIS_Z);
+    k.xDu = getAxisCanonicalPosDu(AXIS_X);
+    k.zLeftDu = getAxisCanonicalStopDu(AXIS_Z, true);
+    k.zRightDu = getAxisCanonicalStopDu(AXIS_Z, false);
+    k.xUpDu = getAxisCanonicalStopDu(AXIS_X, true);
+    k.xDownDu = getAxisCanonicalStopDu(AXIS_X, false);
+    k.zDisabled = false;
+    k.xDisabled = false;
     k.rpm = getApproxRpm();
     k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
     k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-    k.mode = static_cast<int>(mode);
-    k.isOn = isOn;
+    k.mode = SettingsService::getMode();
+    k.isOn = SettingsService::isOn();
     k.estop = emergencyStop != EstopCode::NONE;
-    k.dupr = dupr;
-    k.nextDupr = nextDuprFlag ? nextDupr : dupr;
+    k.dupr = SettingsService::getThreadSetting().dupr;
+    k.nextDupr = k.dupr;
   }
 
   // Guarantee tear-free, zero-latency Core 1 coordinates directly from TelemetryMailbox
@@ -141,21 +138,20 @@ KinematicsState MachineModel::captureKinematics() {
 
 IntentState MachineModel::captureIntent() {
   IntentState i = {};
-  i.thread = currentThreadSetting;
-  i.taper = currentTaperSetting;
+  i.thread = SettingsService::getThreadSetting();
+  i.taper = SettingsService::getTaperSetting();
   i.feedStepDu = feedStepDu;
-  i.jogStepDu = moveStep;
-  long activeDupr = nextDuprFlag ? nextDupr : dupr;
-  i.feedReverse = (activeDupr < 0);
+  i.jogStepDu = SettingsService::getJogStepDu();
+  i.feedReverse = (i.thread.dupr < 0);
   return i;
 }
 
 CycleState MachineModel::captureCycle() {
   CycleState c = {};
-  c.turnPasses = turnPasses;
-  c.currentPass = opIndex;
-  c.setupIndex = setupIndex;
-  c.starts = starts;
+  c.turnPasses = SettingsService::getTurnPasses();
+  c.currentPass = 0;
+  c.setupIndex = 0;
+  c.starts = SettingsService::getStarts();
   return c;
 }
 
@@ -165,15 +161,15 @@ MachineProperties MachineModel::captureProperties() {
   p.capabilities = profile.capabilities;
   strncpy(p.presetId, profile.profileId, sizeof(p.presetId) - 1);
   p.presetId[sizeof(p.presetId) - 1] = '\0';
-  p.measure = static_cast<int>(measure);
+  p.measure = static_cast<int>(SettingsService::getMeasure());
   p.isDiameterMode = SettingsService::isDiameterMode();
   p.isAbsoluteMode = SettingsService::isAbsoluteMode();
   p.zDroActive = SettingsService::isZDroMode();
   p.xDroActive = SettingsService::isXDroMode();
-  p.screwZDu = (long)round(z.screwPitch);
-  p.screwXDu = (long)round(x.screwPitch);
-  p.motorStepsZ = (long)round(z.motorSteps);
-  p.motorStepsX = (long)round(x.motorSteps);
+  p.screwZDu = profile.zAxis.leadscrewPitchDu();
+  p.screwXDu = profile.xAxis.leadscrewPitchDu();
+  p.motorStepsZ = profile.zAxis.motorSteps();
+  p.motorStepsX = profile.xAxis.motorSteps();
   p.encoderPpr = (long)round(profile.spindle.effectivePpr());
   p.deadbandAngle = SettingsService::getDeadbandAngle();
   p.deadbandAngleAuto = SettingsService::isDeadbandAngleAuto();

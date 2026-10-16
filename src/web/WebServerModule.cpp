@@ -1,10 +1,9 @@
 #include "WebServerModule.h"
 #include "Config.h"
-#include "Axis.h"
 #include "Debug.h"
 #include "Input.h"
 #include "Display.h"
-#include "Motion.h"
+#include "core/OperatorIntent.h"
 #include "CommandDispatcher.h"
 #include "RichClientAdapter.h"
 #include "ClientEndpoint.h"
@@ -1008,7 +1007,7 @@ static void handleGcodeRemove() {
 }
 
 static bool machineConfigChangeBlocked() {
-  return isOn || tftUploadActive || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
+  return SettingsService::isOn() || tftUploadActive || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
 }
 
 
@@ -1174,7 +1173,7 @@ static bool startNextionTftUpload(long fileSize, long currentBaud) {
     setTftUploadError(String("error: unsupported Nextion baud ") + String(currentBaud), 400);
     return false;
   }
-  if (isOn) {
+  if (SettingsService::isOn()) {
     setTftUploadError("error: stop the controller before TFT upload", 409);
     return false;
   }
@@ -1325,7 +1324,7 @@ static bool startFirmwareUpload(size_t fileSize) {
     setFirmwareUploadError("error: wait for TFT upload to finish before firmware upload", 409);
     return false;
   }
-  if (isOn) {
+  if (SettingsService::isOn()) {
     setFirmwareUploadError("error: stop the controller before firmware upload", 409);
     return false;
   }

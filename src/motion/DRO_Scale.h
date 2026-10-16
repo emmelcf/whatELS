@@ -35,4 +35,7 @@ public:
     void setPosition(float desiredPosition); // Calculates and sets the new offset
 };
 
+extern DRO_Scale xScale;
+extern DRO_Scale zScale;
+
 #endif

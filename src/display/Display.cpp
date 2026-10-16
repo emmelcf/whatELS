@@ -1,11 +1,12 @@
 #include "Display.h"
 #include "Config.h"
-#include "Axis.h"
 #include "Input.h"
-#include "Motion.h"
 #include "WebServerModule.h"
 #include <Preferences.h>
 #include "SettingsService.h"
+#include "motion/kernel/MotionEngine.h"
+#include "motion/DRO_Scale.h"
+#include "core/OperatorIntent.h"
 
 // LCD Hash Tracking
 long lcdHashLine0 = LCD_HASH_INITIAL;
@@ -59,7 +60,7 @@ void updateDisplay() {
 
   DisplaySnapshot snapshot = getDisplaySnapshot(rpm, numpadResult, spindleStopped, pitchStatusDirection);
 
-  long newHashLine0 = isOn + spindlePosSync + static_cast<int>(mode) + static_cast<int>(measure) + dupr + starts;
+  long newHashLine0 = SettingsService::isOn() + spindlePosSync + SettingsService::getMode() + static_cast<int>(SettingsService::getMeasure()) + currentThreadSetting.dupr + SettingsService::getStarts();
   bool updateLine0 = forceNextionFullRefresh || (lcdHashLine0 != newHashLine0);
   if (updateLine0) {
     lcdHashLine0 = newHashLine0;
@@ -69,7 +70,7 @@ void updateDisplay() {
     setText("bMeasure", snapshot.measure);
   }
 
-  long newHashLine1 = moveStep + rpm + spindlePos + static_cast<int>(measure) + SettingsService::getSpindleDisplayMode() * 17 + (snapshot.spindleValColorGreen ? 300 : 0);
+  long newHashLine1 = moveStep + rpm + spindlePos + static_cast<int>(SettingsService::getMeasure()) + SettingsService::getSpindleDisplayMode() * 17 + (snapshot.spindleValColorGreen ? 300 : 0);
   bool updateLine1 = forceNextionFullRefresh || (lcdHashLine1 != newHashLine1);
   if (updateLine1) {
     lcdHashLine1 = newHashLine1;
@@ -88,12 +89,20 @@ void updateDisplay() {
     }
   }
 
+  const auto &zLimits = MotionEngine::instance().getSoftLimits(AXIS_Z);
+  const auto &xLimits = MotionEngine::instance().getSoftLimits(AXIS_X);
+  const SoftLimit* zLeft = zLimits.getLeftLimit();
+  const SoftLimit* zRight = zLimits.getRightLimit();
+  const SoftLimit* xLeft = xLimits.getLeftLimit();
+  const SoftLimit* xRight = xLimits.getRightLimit();
+  int32_t zPosDu = MotionEngine::instance().getAxisPositionDu(AXIS_Z);
+  int32_t xPosDu = MotionEngine::instance().getAxisPositionDu(AXIS_X);
   long newHashLine2 =
-    x.pos + x.originPos + x.disabled +
-    (x.leftStop == LONG_MAX ? 10007 : x.leftStop) - (x.rightStop == LONG_MIN ? -10007 : x.rightStop) +
-    z.pos + z.originPos + z.disabled +
-    (z.leftStop == LONG_MAX ? 20011 : z.leftStop) - (z.rightStop == LONG_MIN ? -20011 : z.rightStop) +
-    static_cast<int>(measure) + x.pos % 100 +
+    xPosDu +
+    (xLeft ? xLeft->coordDu : 10007) - (xRight ? xRight->coordDu : -10007) +
+    zPosDu +
+    (zLeft ? zLeft->coordDu : 20011) - (zRight ? zRight->coordDu : -20011) +
+    static_cast<int>(SettingsService::getMeasure()) + xPosDu % 100 +
     (snapshot.xIsDroActive ? (long)(xScale.getRawPosition() * 1000) : 0) +
     (snapshot.zIsDroActive ? (long)(zScale.getRawPosition() * 1000) : 0) +
     snapshot.isDiameterMode + snapshot.isAbsoluteMode + snapshot.xIsDroActive + snapshot.zIsDroActive;
@@ -160,12 +169,12 @@ void updateDisplay() {
   for (int i = 0; i < wifiStatus.length(); i++) {
     gcodeCommandHash += wifiStatus.charAt(i);
   }
-  long newHashLine3 = z.pos + (showAngle ? spindlePos : -1) + (showTacho ? rpm : -2) + static_cast<int>(measure) + (numpadResult > 0 ? numpadResult : -1) + static_cast<int>(mode) * 5 + dupr +
-      (mode == LatheMode::CONE ? round(coneRatio * 10000) : 0) + turnPasses + opIndex + setupIndex + gcodeProgramIndex + gcodeProgramCount + spindleStopped * 3 + (isOn ? 139 : -117) + (inNumpad ? 10 : 0) + (auxForward ? 17 : -31) +
-      (z.leftStop == LONG_MAX ? 123 : z.leftStop) + (z.rightStop == LONG_MIN ? 1234 : z.rightStop) +
-      (x.leftStop == LONG_MAX ? 1235 : x.leftStop) + (x.rightStop == LONG_MIN ? 123456 : x.rightStop) + gcodeCommandHash +
+  long newHashLine3 = zPosDu + (showAngle ? spindlePos : -1) + (showTacho ? rpm : -2) + static_cast<int>(SettingsService::getMeasure()) + (numpadResult > 0 ? numpadResult : -1) + SettingsService::getMode() * 5 + currentThreadSetting.dupr +
+      (static_cast<LatheMode>(SettingsService::getMode()) == LatheMode::CONE ? round(currentTaperSetting.coneRatio * 10000) : 0) + SettingsService::getTurnPasses() + opIndex + setupIndex + gcodeProgramIndex + gcodeProgramCount + spindleStopped * 3 + (SettingsService::isOn() ? 139 : -117) + (inNumpad ? 10 : 0) + (SettingsService::getAuxForward() ? 17 : -31) +
+      (zLeft ? zLeft->coordDu : 123) + (zRight ? zRight->coordDu : 1234) +
+      (xLeft ? xLeft->coordDu : 1235) + (xRight ? xRight->coordDu : 123456) + gcodeCommandHash +
       pitchStatusDirection * 149 +
-      (mode == LatheMode::JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + sysConfig.joystick.enabled * 19 + spindlePosSync * 151 : 0) + x.pos + x.originPos + z.pos;
+      (static_cast<LatheMode>(SettingsService::getMode()) == LatheMode::JOYSTICK ? joystickLatheDirectionZ * 97 + joystickLatheDirectionX * 101 + joystickLatheFeedSignZ * 131 + joystickLatheFeedSignX * 137 + joystickLatheRapid * 17 + sysConfig.joystick.enabled * 19 + spindlePosSync * 151 : 0) + xPosDu + zPosDu;
   bool updateLine3 = forceNextionFullRefresh || (lcdHashLine3 != newHashLine3);
   if (updateLine3) {
     lcdHashLine3 = newHashLine3;
@@ -195,9 +204,6 @@ void taskDisplay(void *param) {
     if (beepFlag) {
       beepFlag = false;
       beep();
-    }
-    if (abs(z.pendingPos) > z.estopSteps || abs(x.pendingPos) > x.estopSteps) {
-      setEmergencyStop(EstopCode::POS);
     }
     taskYIELD();
   }

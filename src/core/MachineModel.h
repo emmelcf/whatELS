@@ -4,7 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include "Config.h"
-#include "Motion.h"
+#include "OperatorIntent.h"
 
 // -----------------------------------------------------------------------------
 // Inter-Core Motion Snapshot (~64 Bytes Value-Semantic Transport)

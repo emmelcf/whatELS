@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <optional>
 #include "LatheProfile.h"
-#include "Motion.h"
+#include "OperatorIntent.h"
 
 #ifndef HAVE_AXIS_ID
 #define HAVE_AXIS_ID
@@ -135,3 +135,7 @@ public:
   // Synchronizes physical parameters into legacy globals for Core 1 compatibility
   static void syncLegacyGlobals();
 };
+
+extern long moveStep;
+extern bool showAngle;
+extern bool showTacho;

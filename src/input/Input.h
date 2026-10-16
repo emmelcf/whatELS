@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <PS2KeyAdvanced.h>
 #include "Config.h"
-#include "Axis.h"
+#include "motion/kernel/AxisId.h"
 
 // Keypad & button states
 extern bool buttonLeftPressed;
@@ -27,11 +27,16 @@ void resetNumpad();
 long numpadToDeciMicrons();
 float numpadToConeRatio();
 
-// Spindle timing
+// Spindle timing & globals
 extern unsigned long spindleEncTime;
 extern unsigned long spindleEncTimeDiffBulk;
 extern unsigned long spindleEncTimeAtIndex0;
 extern int spindleEncTimeIndex;
+extern long spindlePos;
+extern long spindlePosAvg;
+extern int spindlePosSync;
+extern long spindlePosGlobal;
+extern bool beepFlag;
 
 long spindleModulo(long value);
 void processSpindleCounter();
@@ -52,7 +57,7 @@ float spindleSimGetRpm();
 
 // Joystick State
 struct JoystickAxisState {
-  Axis* axis;
+  AxisId axisId;
   int pin;
   bool* enabled;
   bool* invert;
@@ -111,18 +116,10 @@ void cancelJoystickLatheSync();
 void resetJoystickLatheFeedPosition();
 void resetJoystickLatheFeed();
 void prepareJoystickLatheManualMove();
-bool isJoystickManualMove(Axis* a);
-bool isGearboxManualMove(Axis* a);
 bool isContinuousStep();
 bool isRapidManualMove();
 bool manualMovesAllowedWhenOn();
 bool manualMovesIgnoredWhenOn();
-int getJoystickManualDirection(Axis* a);
-long getJoystickManualSpeed(Axis* a);
-JoystickAxisState* getJoystickAxisState(Axis* a);
-volatile int* getJoystickPulseQueue(Axis* a);
-int getAndResetJoystickPulses(Axis* a);
-void addJoystickPulses(Axis* a, int delta);
 int getJoystickPitchStatusDirection();
 
 void adjustPitch(bool plus);

@@ -5,7 +5,6 @@
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include "Config.h"
-#include "Axis.h"
 
 struct CircleBuffer {
   char* buffer;

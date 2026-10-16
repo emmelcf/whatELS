@@ -256,6 +256,9 @@ enum class EstopCode : uint8_t {
   OFF_MANUAL_MOVE  = 5
 };
 
+extern EstopCode emergencyStop;
+void setEmergencyStop(EstopCode kind);
+
 // -----------------------------------------------------------------------------
 // Workshop Operator Preferences (Tier 3)
 // -----------------------------------------------------------------------------

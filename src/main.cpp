@@ -2,16 +2,15 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include "Config.h"
-#include "Axis.h"
 #include "Input.h"
 #include "Display.h"
-#include "Motion.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "Debug.h"
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
 #include "MachineModel.h"
+#include "core/OperatorIntent.h"
 #include "modes/ModeRegistry.h"
 #include "motion/hal/Esp32StepperHAL.h"
 #include "motion/hal/Esp32SpindleEncoderHAL.h"
@@ -27,8 +26,6 @@ void setup() {
   Serial.begin(DEBUG_UART_BAUD, SERIAL_8N1, DEBUG_UART_RX_PIN, DEBUG_UART_TX_PIN);
 #endif
   delay(100);
-  async_timer = timerBegin(TIMER_FREQ);
-  initVelocityTimer();
   DEBUG_PRINTLN("--- NanoEls H5 Starting ---");
   DEBUG_PRINTLN("Mounting LittleFS...");
   Serial.flush();
@@ -72,66 +69,20 @@ void setup() {
   DEBUG_PRINTLN("initJoystick...");
   initJoystick();
 
-
-
-  DEBUG_PRINTLN("initAxis Z/X...");
-  Serial.flush();
-  AxisPins zPins = { Z_ENA, Z_DIR, Z_STEP, Z_PULSE_A, Z_PULSE_B, PULSE_COUNTER_Z };
-  initAxis(&z, NAME_Z, true, false, activeMachineProfile.zAxis, sysConfig.mpg.zHandwheel.ppr, zPins);
-
-  AxisPins xPins = { X_ENA, X_DIR, X_STEP, X_PULSE_A, X_PULSE_B, PULSE_COUNTER_X };
-  initAxis(&x, NAME_X, true, false, activeMachineProfile.xAxis, sysConfig.mpg.xHandwheel.ppr, xPins);
-  DEBUG_PRINTLN("initAxis done.");
-  Serial.flush();
-
-  isOn = false;
-  dupr = 0;
-  motionMutex = xSemaphoreCreateMutex();
-  starts = 1;
-  turnPasses = 1;
-  coneRatio = 0.0f;
-  auxForward = true;
-
-  // Clean, deterministic boot state for physical axes (unreferenced / zero origin, no soft limits, enabled)
-  z.savedPos = z.pos = 0;
-  z.savedPosGlobal = z.posGlobal = 0;
-  z.savedOriginPos = z.originPos = 0;
-  z.savedMotorPos = z.motorPos = 0;
-  z.savedLeftStop = z.leftStop = LONG_MAX;
-  z.savedRightStop = z.rightStop = LONG_MIN;
-  z.savedDisabled = z.disabled = false;
-
-  x.savedPos = x.pos = 0;
-  x.savedPosGlobal = x.posGlobal = 0;
-  x.savedOriginPos = x.originPos = 0;
-  x.savedMotorPos = x.motorPos = 0;
-  x.savedLeftStop = x.leftStop = LONG_MAX;
-  x.savedRightStop = x.rightStop = LONG_MIN;
-  x.savedDisabled = x.disabled = false;
-
-  // Spindle phase & angle unreferenced until index/tick sync
-  savedSpindlePos = spindlePos = 0;
-  savedSpindlePosAvg = spindlePosAvg = 0;
-  savedSpindlePosSync = spindlePosSync = 0;
-  savedSpindlePosGlobal = spindlePosGlobal = 0;
+  spindlePos = 0;
+  spindlePosAvg = 0;
+  spindlePosSync = 0;
+  spindlePosGlobal = 0;
 
   // Always boot cleanly and safely into standard manual feed / DRO mode
   DEBUG_PRINTLN("Initializing ModeRegistry & standard modes...");
   ModeRegistry::initStandardModes();
 
-  DEBUG_PRINTLN("setModeFromLoop LatheMode::NORMAL...");
+  DEBUG_PRINTLN("Setting default mode LatheMode::NORMAL...");
   Serial.flush();
-  setModeFromLoop(LatheMode::NORMAL);
-  DEBUG_PRINTLN("setModeFromLoop done.");
+  SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
+  DEBUG_PRINTLN("Default mode configured.");
   Serial.flush();
-
-  // Initialize settings service and load operator preferences (Tiers 3 & 4)
-  SettingsService::init();
-
-  DEBUG_PRINTLN("Enabling stepper pins...");
-  Serial.flush();
-  if (!z.needsRest && !z.disabled) digitalWrite(z.ena, z.invertEnable ? LOW : HIGH);
-  if (!x.needsRest && !x.disabled) digitalWrite(x.ena, x.invertEnable ? LOW : HIGH);
 
   DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
@@ -159,22 +110,9 @@ void setup() {
   xTaskCreatePinnedToCore(taskKeypad, "taskKeypad", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   if (joystickUsable()) xTaskCreatePinnedToCore(taskJoystick, "taskJoystick", 4000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
 
-  DEBUG_PRINTLN("Starting delay before attachInterrupts...");
-  Serial.flush();
-  delay(1300);
-  DEBUG_PRINTLN("Creating taskAttachInterrupts...");
-  Serial.flush();
-  if (xTaskCreatePinnedToCore(taskAttachInterrupts, "taskAttachInterrupts", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */) == pdPASS) {
-    while (!pulseCountersReady) {
-      delay(1);
-    }
-  }
-  DEBUG_PRINTLN("pulseCountersReady! Creating display and motion tasks...");
+  DEBUG_PRINTLN("Creating taskDisplay...");
   Serial.flush();
   xTaskCreatePinnedToCore(taskDisplay, "taskDisplay", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  xTaskCreatePinnedToCore(taskMoveZ, "taskMoveZ", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  xTaskCreatePinnedToCore(taskMoveX, "taskMoveX", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  xTaskCreatePinnedToCore(taskGcode, "taskGcode", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
 
   // Initialize and wire MotionEngine to Core 1 ([CONC-01], Slice 3)
   DEBUG_PRINTLN("Initializing MotionEngine HAL and Core 1 Task...");
@@ -222,59 +160,35 @@ void setup() {
 
 void loop() {
   if (emergencyStop != EstopCode::NONE) {
+    vTaskDelay(pdMS_TO_TICKS(10));
     return;
   }
-  if (xSemaphoreTake(motionMutex, 1) != pdTRUE) {
-    return;
-  }
-  applySettings();
+
+  SettingsService::applyCore1PendingLatches();
   processSpindleCounter();
-  discountFullSpindleTurns();
-  LatheMode currentMode = mode;
+
+  LatheMode currentMode = static_cast<LatheMode>(SettingsService::getMode());
   if (currentMode == LatheMode::JOYSTICK && spindlePosSync != 0 && !joystickLatheFeedCommandActive()) {
     cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
   }
+
   IELSMode* activeMode = ModeRegistry::getActiveMode();
-  bool isAsyncRunning = (currentMode == LatheMode::ASYNC) || isVelocityFeedActive();
-  if (!isOn || (dupr == 0 && currentMode != LatheMode::SLOT && !isAsyncRunning) || spindlePosSync != 0) {
-    if (currentMode == LatheMode::JOYSTICK && (!isOn || dupr == 0)) {
-      resetJoystickLatheFeedPosition();
+  if (activeMode) {
+    bool isEngaged = SettingsService::isOn();
+    if (!isEngaged || (currentThreadSetting.dupr == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC) || spindlePosSync != 0) {
+      if (currentMode == LatheMode::JOYSTICK && (!isEngaged || currentThreadSetting.dupr == 0)) {
+        resetJoystickLatheFeedPosition();
+      }
+      if (activeMode->isRunning()) {
+        activeMode->stop(StopType::NORMAL_STOP);
+      }
+    } else {
+      if (!activeMode->isRunning()) {
+        activeMode->start();
+      }
     }
-    if (activeMode && activeMode->isRunning()) {
-      activeMode->stop(StopType::NORMAL_STOP);
-    }
-  } else if (activeMode && activeMode->getId() == ModeIds::GEARBOX &&
-             (currentMode == LatheMode::NORMAL || currentMode == LatheMode::XGEAR || currentMode == LatheMode::CONE || currentMode == LatheMode::ASYNC)) {
-    if (!activeMode->isRunning()) {
-      activeMode->start();
-    }
-  } else if (currentMode == LatheMode::ASYNC) {
-    // Stepping driven by async_timer interrupt
-  } else if (currentMode == LatheMode::NORMAL) {
-    modeGearbox(&z);
-  } else if (currentMode == LatheMode::XGEAR) {
-    modeGearbox(&x);
-  } else if (currentMode == LatheMode::JOYSTICK) {
-    modeJoystick();
-  } else if (currentMode == LatheMode::TURN) {
-    modeTurn(&z, &x);
-  } else if (currentMode == LatheMode::FACE) {
-    modeTurn(&x, &z);
-  } else if (currentMode == LatheMode::CUT) {
-    modeCut();
-  } else if (currentMode == LatheMode::SLOT) {
-    modeSlot();
-  } else if (currentMode == LatheMode::CONE) {
-    modeCone();
-  } else if (currentMode == LatheMode::THREAD) {
-    modeTurn(&z, &x);
-  } else if (currentMode == LatheMode::ELLIPSE) {
-    modeEllipse(&z, &x);
   }
-  moveAxis(&z);
-  moveAxis(&x);
-  xSemaphoreGive(motionMutex);
 
   static unsigned long lastSnapshotPublish = 0;
   unsigned long now = millis();
@@ -282,4 +196,6 @@ void loop() {
     lastSnapshotPublish = now;
     publishMotionSnapshot();
   }
+
+  vTaskDelay(pdMS_TO_TICKS(1));
 }

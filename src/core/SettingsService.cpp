@@ -1,7 +1,6 @@
 #include "SettingsService.h"
 #include "Config.h"
-#include "Axis.h"
-#include "Motion.h"
+#include "OperatorIntent.h"
 #include "Input.h"
 #include "Display.h"
 #include "WebServerModule.h"
@@ -9,6 +8,36 @@
 #include "SystemSchemaJson.h"
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
+
+ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
+TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
+long feedStepDu = FEED_STEPS_METRIC[1];
+bool showAngle = true;
+bool showTacho = true;
+bool savedShowAngle = true;
+bool savedShowTacho = true;
+MeasureUnit measure = MeasureUnit::METRIC;
+long moveStep = 1000;
+
+// Conversational Cycle & Pass State
+long setupIndex = 0;
+long opIndex = 0;
+bool opIndexAdvanceFlag = false;
+
+// Conversational G-code State
+String gcodeCommand = "";
+int gcodeProgramIndex = 0;
+int gcodeProgramCount = 0;
+String gcodeSaveName = "";
+String gcodeSaveValue = "";
+String gcodeProgram = "";
+int gcodeProgramCharIndex = 0;
+
+static int s_starts = 1;
+static int s_turnPasses = 1;
+static bool s_auxForward = true;
+static bool s_isOn = false;
+static LatheMode s_mode = LatheMode::NORMAL;
 
 static std::optional<float> _deadbandAngle;
 static std::optional<float> _deadbandTurns;
@@ -34,8 +63,7 @@ static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false
 });
 
 static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, static_cast<int>(MeasureUnit::METRIC), [](const int& val) {
-  operatorPrefs.measure = static_cast<MeasureUnit>(val);
-  ::setMeasure(static_cast<MeasureUnit>(val));
+  operatorPrefs.measure = measure = static_cast<MeasureUnit>(val);
   machineStatusForcePublish = true;
 });
 
@@ -176,25 +204,12 @@ void SettingsService::init() {
 
   syncLegacyGlobals();
 
-  // Synchronize Intent settings from active/restored globals
-  long absDu = abs(dupr);
-  if (measure == MeasureUnit::METRIC) {
+  // Initialize intent settings
+  long absDu = abs(currentThreadSetting.dupr);
+  if (absDu == 0) {
     currentThreadSetting.format = THREAD_METRIC;
-    currentThreadSetting.authorPitch = absDu / 10000.0f;
-  } else if (measure == MeasureUnit::TPI) {
-    currentThreadSetting.format = THREAD_TPI;
-    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
-  } else {
-    currentThreadSetting.format = THREAD_INCH;
-    currentThreadSetting.authorPitch = absDu / 254000.0f;
-  }
-  currentThreadSetting.dupr = dupr;
-
-  if (coneRatio > 0.0f) {
-    currentTaperSetting.modeType = TAPER_RATIO;
-    currentTaperSetting.authorVal = 1.0f / coneRatio;
-    currentTaperSetting.coneRatio = coneRatio;
-    currentTaperSetting.presetId = 0;
+    currentThreadSetting.authorPitch = 1.0f;
+    currentThreadSetting.dupr = 10000;
   }
 }
 
@@ -211,16 +226,6 @@ const char* SettingsService::getActivePresetSlug() {
 }
 
 void SettingsService::syncLegacyGlobals() {
-  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
-  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
-
-  if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
-    z.motorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
-  }
-  if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
-    x.motorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
-  }
-
   ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
   ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 }
@@ -705,69 +710,45 @@ bool SettingsService::setSpindleRatio(float ratio) {
 }
 
 
-static Axis* getAxisById(AxisId axis) {
-  switch (axis) {
-    case AXIS_Z: return &z;
-    case AXIS_X: return &x;
-    default:     return nullptr;
-  }
-}
-
 // --- Tier 2 / Category 1: Travel Stops & Boundaries ---
 bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
   if (limitDu == LONG_MAX || limitDu == LONG_MIN) {
     return clearAxisLimit(axis, dir);
   }
-  Axis* a = getAxisById(axis);
-  if (!a) return false;
-
-  long stopSteps = duToSteps(a, limitDu) - a->originPos;
-  if (dir == LIMIT_LEFT_OR_UP) {
-    a->nextLeftStop = stopSteps;
-    a->nextLeftStopFlag = true;
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  AxisGeometry geom;
+  if (axis == AXIS_Z) {
+    geom.screwPitchDu = activeMachineProfile.zAxis.leadscrewPitchDu();
+    geom.motorStepsPerRev = activeMachineProfile.zAxis.motorSteps();
   } else {
-    a->nextRightStop = stopSteps;
-    a->nextRightStopFlag = true;
+    geom.screwPitchDu = activeMachineProfile.xAxis.leadscrewPitchDu();
+    geom.motorStepsPerRev = activeMachineProfile.xAxis.motorSteps();
   }
+  int32_t stepPos = duToSteps(geom, limitDu);
+  MotionEngine::instance().getSoftLimits(axis).setLimit(slot, limitDu, stepPos, (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT", true);
 
   machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
-  Axis* a = getAxisById(axis);
-  if (!a) return false;
-
-  if (dir == LIMIT_LEFT_OR_UP) {
-    a->nextLeftStop = LONG_MAX;
-    a->nextLeftStopFlag = true;
-  } else {
-    a->nextRightStop = LONG_MIN;
-    a->nextRightStopFlag = true;
-  }
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  MotionEngine::instance().getSoftLimits(axis).clearLimit(slot);
 
   machineStatusForcePublish = true;
   return true;
 }
 
 long SettingsService::getAxisLimitDu(AxisId axis, LimitDirection dir) {
-  Axis* a = getAxisById(axis);
-  if (!a) return (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
-
-  if (dir == LIMIT_LEFT_OR_UP) {
-    long stop = a->nextLeftStopFlag ? a->nextLeftStop : a->leftStop;
-    if (stop == LONG_MAX) return LONG_MAX;
-    return stepsToDu(a, stop + a->originPos);
-  } else {
-    long stop = a->nextRightStopFlag ? a->nextRightStop : a->rightStop;
-    if (stop == LONG_MIN) return LONG_MIN;
-    return stepsToDu(a, stop + a->originPos);
-  }
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  const SoftLimit& lim = MotionEngine::instance().getSoftLimits(axis).getSlot(slot);
+  if (!lim.isEnforced()) return (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
+  return lim.coordDu;
 }
 
 // --- Tier 2 / Category 2: Pitch, Threading & Feed Intent ---
 bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+  if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duprVal = -abs(duprVal);
   }
   long absDu = abs(duprVal);
@@ -782,8 +763,6 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
     currentThreadSetting.authorPitch = absDu / 254000.0f;
   }
   currentThreadSetting.dupr = duprVal;
-  nextDupr = duprVal;
-  nextDuprFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -792,14 +771,12 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
 bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
   if (pitchMm <= 0.0f) return false;
   long duVal = (long)round(pitchMm * 10000.0f);
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+  if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
   currentThreadSetting.format = THREAD_METRIC;
   currentThreadSetting.authorPitch = pitchMm;
   currentThreadSetting.dupr = duVal;
-  nextDupr = duVal;
-  nextDuprFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -808,14 +785,12 @@ bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
 bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
   if (tpi <= 0.0f) return false;
   long duVal = (long)round(254000.0 / (double)tpi);
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+  if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
   currentThreadSetting.format = THREAD_TPI;
   currentThreadSetting.authorPitch = tpi;
   currentThreadSetting.dupr = duVal;
-  nextDupr = duVal;
-  nextDuprFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -824,25 +799,19 @@ bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
 bool SettingsService::setFeedrateInch(float pitchInch, bool preserveDirection) {
   if (pitchInch <= 0.0f) return false;
   long duVal = (long)round(pitchInch * 254000.0f);
-  if (preserveDirection && ((nextDuprFlag ? nextDupr : dupr) < 0)) {
+  if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
   currentThreadSetting.format = THREAD_INCH;
   currentThreadSetting.authorPitch = pitchInch;
   currentThreadSetting.dupr = duVal;
-  nextDupr = duVal;
-  nextDuprFlag = true;
 
   machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::reverseFeedDirection() {
-  long current = nextDuprFlag ? nextDupr : dupr;
-  long reversed = -current;
-  currentThreadSetting.dupr = reversed;
-  nextDupr = reversed;
-  nextDuprFlag = true;
+  currentThreadSetting.dupr = -currentThreadSetting.dupr;
 
   machineStatusForcePublish = true;
   return true;
@@ -881,15 +850,14 @@ bool SettingsService::cycleJogStep() {
 // --- Tier 2 / Category 3: Cycle & Geometry Parameters ---
 bool SettingsService::setStarts(int startsVal) {
   if (startsVal < 1 || startsVal > STARTS_MAX) return false;
-  nextStarts = startsVal;
-  nextStartsFlag = true;
+  s_starts = startsVal;
 
   machineStatusForcePublish = true;
   return true;
 }
 
 int SettingsService::getStarts() {
-  return nextStartsFlag ? nextStarts : starts;
+  return s_starts;
 }
 
 bool SettingsService::setTurnPasses(int passes) {
@@ -898,14 +866,14 @@ bool SettingsService::setTurnPasses(int passes) {
     beep();
     return false;
   }
-  turnPasses = passes;
+  s_turnPasses = passes;
 
   machineStatusForcePublish = true;
   return true;
 }
 
 int SettingsService::getTurnPasses() {
-  return turnPasses;
+  return s_turnPasses;
 }
 
 bool SettingsService::setTaperRatio(float ratioK) {
@@ -915,8 +883,6 @@ bool SettingsService::setTaperRatio(float ratioK) {
   currentTaperSetting.authorVal = ratioK;
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = 0;
-  nextConeRatio = cone;
-  nextConeRatioFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -930,8 +896,6 @@ bool SettingsService::setTaperAngle(float angleDeg) {
   currentTaperSetting.authorVal = angleDeg;
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = 0;
-  nextConeRatio = cone;
-  nextConeRatioFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -952,8 +916,6 @@ bool SettingsService::setTaperPreset(int presetIdx, float angleDeg, float ratioV
   currentTaperSetting.authorVal = author;
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = presetIdx;
-  nextConeRatio = cone;
-  nextConeRatioFlag = true;
 
   machineStatusForcePublish = true;
   return true;
@@ -964,14 +926,14 @@ TaperSetting SettingsService::getTaperSetting() {
 }
 
 bool SettingsService::setAuxForward(bool fwd) {
-  auxForward = fwd;
+  s_auxForward = fwd;
 
   machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::getAuxForward() {
-  return auxForward;
+  return s_auxForward;
 }
 
 // --- Tier 2 / Category 4: Display & Unit Modes ---
@@ -1045,26 +1007,27 @@ bool SettingsService::requestMode(int targetMode) {
   if (targetMode < static_cast<int>(LatheMode::NORMAL) || targetMode > static_cast<int>(LatheMode::SLOT)) {
     return false;
   }
-  nextMode = static_cast<LatheMode>(targetMode);
-  nextModeFlag = true;
+  s_mode = static_cast<LatheMode>(targetMode);
 
   machineStatusForcePublish = true;
   return true;
 }
 
 int SettingsService::getMode() {
-  return static_cast<int>(nextModeFlag ? nextMode : mode);
+  return static_cast<int>(s_mode);
 }
 
 bool SettingsService::requestIsOn(bool on) {
-  nextIsOn = on;
-  nextIsOnFlag = true;
+  s_isOn = on;
+  if (!on) {
+    MotionEngine::instance().stopAll();
+  }
   machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::isOn() {
-  return nextIsOnFlag ? nextIsOn : ::isOn;
+  return s_isOn || MotionEngine::instance().isAnyAxisMoving();
 }
 
 void SettingsService::triggerEstop(int estopCode) {
@@ -1082,7 +1045,7 @@ int SettingsService::getEstopCode() {
 }
 
 void SettingsService::applyCore1PendingLatches() {
-  applySettings();
+  // FreeRTOS Core 1 MotionEngine task samples parameters continuously
 }
 
 bool SettingsService::setJogStepDu(long du) {
@@ -1217,11 +1180,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.z.motorSteps") == 0 || strcasecmp(key, "motorStepsZ") == 0) {
-    appendSetting("machine.z.motorSteps", String((long)round(z.motorSteps)));
+    appendSetting("machine.z.motorSteps", String((long)round(activeMachineProfile.zAxis.motorSteps())));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.x.motorSteps") == 0 || strcasecmp(key, "motorStepsX") == 0) {
-    appendSetting("machine.x.motorSteps", String((long)round(x.motorSteps)));
+    appendSetting("machine.x.motorSteps", String((long)round(activeMachineProfile.xAxis.motorSteps())));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "machine.spindle.ppr") == 0 || strcasecmp(key, "encoderPpr") == 0) {
@@ -1342,8 +1305,8 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     appendSetting("machine.dim.spindleBore", String(activeMachineProfile.dimensions.spindleBoreDiameterMm, 1));
     appendSetting("machine.z.pitchDu", String(activeMachineProfile.zAxis.leadscrewPitchDu()));
     appendSetting("machine.x.pitchDu", String(activeMachineProfile.xAxis.leadscrewPitchDu()));
-    appendSetting("machine.z.motorSteps", String((long)round(z.motorSteps)));
-    appendSetting("machine.x.motorSteps", String((long)round(x.motorSteps)));
+    appendSetting("machine.z.motorSteps", String((long)round(activeMachineProfile.zAxis.motorSteps())));
+    appendSetting("machine.x.motorSteps", String((long)round(activeMachineProfile.xAxis.motorSteps())));
     appendSetting("machine.spindle.ppr", String(activeMachineProfile.spindle.encoder.ppr));
     appendSetting("machine.spindle.ratio", String(activeMachineProfile.spindle.pulleyRatio, 3));
     appendSetting("machine.spindle.effectivePpr", String(activeMachineProfile.spindle.effectivePpr(), 1));

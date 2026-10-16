@@ -1,6 +1,6 @@
 #include "UnifiedGearboxMode.h"
-#include "../../Motion.h"
 #include "../../kernel/MotionEngine.h"
+#include "../../../core/SettingsService.h"
 #include <climits>
 
 static const ParamDescriptor GEARBOX_PARAMS[] = {
@@ -74,13 +74,13 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
 
     if (ok) {
         m_state = ModeState::RUNNING;
-        setIsOnFromTask(true);
+        SettingsService::requestIsOn(true);
         if (m_isSync) {
-            setFeedrateDupr(-direction * feedRateDu, false);
+            SettingsService::setFeedrateDupr(-direction * feedRateDu, false);
         }
     } else {
         m_state = ModeState::IDLE;
-        setIsOnFromTask(false);
+        SettingsService::requestIsOn(false);
     }
     return ok;
 }
@@ -129,7 +129,7 @@ bool UnifiedGearboxMode::setFeedRate(int32_t feedRateDu) {
             pkt.axis = m_axis;
             pkt.pitchDupr = m_feedRateDu;
             m_engine->postCommand(pkt);
-            setFeedrateDupr(-m_direction * m_feedRateDu, false);
+            SettingsService::setFeedrateDupr(-m_direction * m_feedRateDu, false);
         } else {
             MotionCommandPacket pkt;
             pkt.type = MotionCommandPacket::Type::UPDATE_VELOCITY;
@@ -147,7 +147,7 @@ bool UnifiedGearboxMode::setFeedRateMm(float mm) {
 
 bool UnifiedGearboxMode::nudgeFeed(int direction) {
     if (!isRunning()) return false;
-    long step = getFeedStepDu();
+    long step = SettingsService::getJogStepDu();
     int32_t newRate = m_feedRateDu + (direction > 0 ? step : -step);
     if (newRate <= 0) return false;
     return setFeedRate(newRate);
@@ -226,7 +226,7 @@ void UnifiedGearboxMode::stop(StopType stopType) {
     if (m_engine) {
         m_engine->stop(m_axis, stopType == StopType::EMERGENCY_IMMEDIATE);
     }
-    setIsOnFromTask(false);
+    SettingsService::requestIsOn(false);
     if (stopType == StopType::FEED_HOLD) {
         m_state = ModeState::PAUSED;
     } else {
@@ -248,7 +248,7 @@ void UnifiedGearboxMode::onMotionHalted(
     int32_t haltedCoordDu,
     const SoftLimit* triggeredLimit) {
     if (axis == m_axis) {
-        setIsOnFromTask(false);
+        SettingsService::requestIsOn(false);
         if (reason == MotionHaltReason::FEED_HOLD) {
             m_state = ModeState::PAUSED;
         } else {

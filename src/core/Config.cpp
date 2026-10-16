@@ -1,9 +1,14 @@
 #include "Config.h"
-#include "Axis.h"
 #include "Input.h"
+#include "SettingsService.h"
 #include <LittleFS.h>
 #include "Debug.h"
 #include "PersistentSetting.h"
+
+EstopCode emergencyStop = EstopCode::NONE;
+void setEmergencyStop(EstopCode kind) {
+  emergencyStop = kind;
+}
 
 LatheConfiguration activeMachineProfile = {};
 
@@ -285,17 +290,7 @@ void loadMachineProfile() {
     activeMachineProfile.capabilities &= ~CAP_DRO_X;
   }
 
-  // Synchronize legacy globals for Core 1 compatibility
-  z.screwPitch = activeMachineProfile.zAxis.leadscrewPitchDu();
-  if (activeMachineProfile.zAxis.stepsPerMm > 0 && activeMachineProfile.zAxis.leadscrewPitchMm > 0) {
-    z.motorSteps = (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm);
-  }
-
-  x.screwPitch = activeMachineProfile.xAxis.leadscrewPitchDu();
-  if (activeMachineProfile.xAxis.stepsPerMm > 0 && activeMachineProfile.xAxis.leadscrewPitchMm > 0) {
-    x.motorSteps = (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm);
-  }
-
+  // Spindle encoder parameters
   ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
   ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
   printMachineProfileBanner();
@@ -518,15 +513,9 @@ void saveWifiConfig() {
 }
 
 void setMeasure(MeasureUnit value) {
-  if (measure == value) {
-    return;
-  }
-  measure = value;
-  operatorPrefs.measure = value;
-  moveStep = measure == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0];
-  operatorPrefs.jogStepDu = moveStep;
+  SettingsService::setMeasure(value);
 }
 
 void setMeasure(int value) {
-  setMeasure(static_cast<MeasureUnit>(value));
+  SettingsService::setMeasure(value);
 }

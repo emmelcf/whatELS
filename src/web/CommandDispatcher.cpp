@@ -1,6 +1,4 @@
 #include "CommandDispatcher.h"
-#include "Motion.h"
-#include "Axis.h"
 #include "Config.h"
 #include "Input.h"
 #include "MachineModel.h"
@@ -11,12 +9,8 @@
 #include "modes/ModeRegistry.h"
 #include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/MotionConversions.h"
-
-static Axis* parseAxis(char c) {
-  if (c == 'Z' || c == 'z') return &z;
-  if (c == 'X' || c == 'x') return &x;
-  return nullptr;
-}
+#include "motion/kernel/MotionEngine.h"
+#include "core/OperatorIntent.h"
 
 bool CommandDispatcher::dispatch(const char* payload, size_t length, String* reply, uint8_t clientId) {
   if (!payload || length == 0) return false;
@@ -328,7 +322,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       if (active && active->isRunning()) {
         active->stop(StopType::NORMAL_STOP);
       }
-      stopVelocityFeed();
+      MotionEngine::instance().stopAll();
       SettingsService::requestIsOn(false);
       if (reply) *reply = "OK:CMD.stop\n";
       return true;
@@ -341,25 +335,25 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.feedDupr=<du>
     if (cmdLen >= 9 && strncmp(cmd, "feedDupr=", 9) == 0) {
       long val = atol(cmd + 9);
-      setFeedrateDupr(val, false);
+      SettingsService::setFeedrateDupr(val, false);
       return true;
     }
     // CMD.feedMm=<mm>
     if (cmdLen >= 7 && strncmp(cmd, "feedMm=", 7) == 0) {
       float val = atof(cmd + 7);
-      setFeedrateMm(val, false);
+      SettingsService::setFeedrateMm(val, false);
       return true;
     }
     // CMD.feedTpi=<tpi>
     if (cmdLen >= 8 && strncmp(cmd, "feedTpi=", 8) == 0) {
       float val = atof(cmd + 8);
-      setFeedrateTpi(val, false);
+      SettingsService::setFeedrateTpi(val, false);
       return true;
     }
     // CMD.feedInch=<inch>
     if (cmdLen >= 9 && strncmp(cmd, "feedInch=", 9) == 0) {
       float val = atof(cmd + 9);
-      setFeedrateInch(val, false);
+      SettingsService::setFeedrateInch(val, false);
       return true;
     }
     // CMD.feedRev
@@ -369,13 +363,13 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (reply) *reply = "ERR:CMD.feedRev=locked during active motion\n";
         return false;
       }
-      reverseFeedDirection();
+      SettingsService::reverseFeedDirection();
       return true;
     }
     // CMD.feedStepDu=<du>
     if (cmdLen >= 11 && strncmp(cmd, "feedStepDu=", 11) == 0) {
       long val = atol(cmd + 11);
-      setFeedStepDu(val);
+      SettingsService::setJogStepDu(val);
       return true;
     }
     // CMD.feedStepCycle
@@ -385,7 +379,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (reply) *reply = "ERR:CMD.feedStepCycle=locked during active motion\n";
         return false;
       }
-      cycleFeedStep();
+      SettingsService::cycleJogStep();
       return true;
     }
     // CMD.jogStepDu=<du>
@@ -466,13 +460,13 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.taperRatio=<ratioK>
     if (cmdLen >= 11 && strncmp(cmd, "taperRatio=", 11) == 0) {
       float val = atof(cmd + 11);
-      setTaperRatio(val);
+      SettingsService::setTaperRatio(val);
       return true;
     }
     // CMD.taperAngle=<angleDeg>
     if (cmdLen >= 11 && strncmp(cmd, "taperAngle=", 11) == 0) {
       float val = atof(cmd + 11);
-      setTaperAngle(val);
+      SettingsService::setTaperAngle(val);
       return true;
     }
     // CMD.taperPreset=<presetId>,<angleDeg>,<ratioVal>
@@ -481,7 +475,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       float angleDeg = 0.0f;
       float ratioVal = 0.0f;
       sscanf(cmd + 12, "%d,%f,%f", &presetId, &angleDeg, &ratioVal);
-      setTaperPreset(presetId, angleDeg, ratioVal);
+      SettingsService::setTaperPreset(presetId, angleDeg, ratioVal);
       return true;
     }
     // CMD.axisZero=<axis>
@@ -491,31 +485,43 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (reply) *reply = "ERR:CMD.axisZero=locked during active motion\n";
         return false;
       }
-      Axis* a = parseAxis(cmd[9]);
-      if (a) setAxisZero(a);
-      return true;
+      char axChar = cmd[9];
+      if (axChar == 'Z' || axChar == 'z') {
+        MotionEngine::instance().zeroAxis(AXIS_Z);
+        return true;
+      } else if (axChar == 'X' || axChar == 'x') {
+        MotionEngine::instance().zeroAxis(AXIS_X);
+        return true;
+      }
+      return false;
     }
     // CMD.axisPosDu=<axis>,<posDu>
     if (cmdLen >= 10 && strncmp(cmd, "axisPosDu=", 10) == 0) {
-      Axis* a = parseAxis(cmd[10]);
-      if (a && cmd[11] == ',') {
+      char axChar = cmd[10];
+      if (cmd[11] == ',') {
         long du = atol(cmd + 12);
-        setAxisPositionDu(a, du);
-        return true;
+        if (axChar == 'Z' || axChar == 'z') {
+          MotionEngine::instance().setAxisPositionDu(AXIS_Z, du);
+          return true;
+        } else if (axChar == 'X' || axChar == 'x') {
+          MotionEngine::instance().setAxisPositionDu(AXIS_X, du);
+          return true;
+        }
       }
     }
     // CMD.axisLimitDu=<axis>,<left|right>,<limitDu>
     if (cmdLen >= 12 && strncmp(cmd, "axisLimitDu=", 12) == 0) {
       char ax = cmd[12];
-      Axis* a = parseAxis(ax);
       const char* p = strchr(cmd + 12, ',');
-      if (a && p) {
+      if (p) {
         p++;
         bool isLeft = (*p == 'L' || *p == 'l' || *p == '1' || *p == 'U' || *p == 'u');
         const char* p2 = strchr(p, ',');
         if (p2) {
           long du = atol(p2 + 1);
-          setAxisLimitDu(a, isLeft, du);
+          AxisId axisId = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
+          LimitDirection dir = isLeft ? LimitDirection::LIMIT_LEFT_OR_UP : LimitDirection::LIMIT_RIGHT_OR_DOWN;
+          SettingsService::setAxisLimitDu(axisId, dir, du);
           return true;
         }
       }
@@ -523,12 +529,13 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     // CMD.axisClearLimit=<axis>,<left|right>
     if (cmdLen >= 15 && strncmp(cmd, "axisClearLimit=", 15) == 0) {
       char ax = cmd[15];
-      Axis* a = parseAxis(ax);
       const char* p = strchr(cmd + 15, ',');
-      if (a && p) {
+      if (p) {
         p++;
         bool isLeft = (*p == 'L' || *p == 'l' || *p == '1' || *p == 'U' || *p == 'u');
-        clearAxisLimit(a, isLeft);
+        AxisId axisId = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
+        LimitDirection dir = isLeft ? LimitDirection::LIMIT_LEFT_OR_UP : LimitDirection::LIMIT_RIGHT_OR_DOWN;
+        SettingsService::clearAxisLimit(axisId, dir);
         return true;
       }
     }
@@ -554,7 +561,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       if (gb) {
         gb->setActiveAxis(axStr);
         if (gb->isSync()) {
-          setOperatingMode(targetLowLevelMode);
+          SettingsService::requestMode(targetLowLevelMode);
         }
         if (reply) *reply = String("OK:CMD.gearAxis=") + axStr + "\n";
         return true;
@@ -573,12 +580,12 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       if (gb) {
         gb->setSync(sync);
         if (!sync) {
-          setOperatingMode(static_cast<int>(LatheMode::ASYNC));
+          SettingsService::requestMode(static_cast<int>(LatheMode::ASYNC));
         } else {
           const char* curAx = gb->getActiveAxis();
-          if (strcasecmp(curAx, "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
-          else if (strcasecmp(curAx, "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
-          else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
+          if (strcasecmp(curAx, "X") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::XGEAR));
+          else if (strcasecmp(curAx, "ZX") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
+          else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
         }
         if (reply) *reply = String("OK:CMD.gearSync=") + (sync ? "1" : "0") + "\n";
         return true;
@@ -634,10 +641,10 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (targetBySlug->getId() == ModeIds::GEARBOX) {
           UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
           if (gb) {
-            if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
-            else if (strcasecmp(gb->getActiveAxis(), "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
-            else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
-            else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
+            if (!gb->isSync()) SettingsService::requestMode(static_cast<int>(LatheMode::ASYNC));
+            else if (strcasecmp(gb->getActiveAxis(), "X") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::XGEAR));
+            else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
+            else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
           }
         }
         if (reply) *reply = String("OK:CMD.mode=") + targetBySlug->getSlug() + "\n";
@@ -650,17 +657,17 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         ModeRegistry::activateMode(ModeIds::GEARBOX);
         UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
         if (gb) {
-          if (!gb->isSync()) setOperatingMode(static_cast<int>(LatheMode::ASYNC));
-          else if (strcasecmp(gb->getActiveAxis(), "X") == 0) setOperatingMode(static_cast<int>(LatheMode::XGEAR));
-          else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) setOperatingMode(static_cast<int>(LatheMode::CONE));
-          else setOperatingMode(static_cast<int>(LatheMode::NORMAL));
+          if (!gb->isSync()) SettingsService::requestMode(static_cast<int>(LatheMode::ASYNC));
+          else if (strcasecmp(gb->getActiveAxis(), "X") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::XGEAR));
+          else if (strcasecmp(gb->getActiveAxis(), "ZX") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
+          else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
         }
         if (reply) *reply = "OK:CMD.mode=gearbox\n";
         return true;
       }
 
       // Standard legacy mode IDs
-      setOperatingMode(m);
+      SettingsService::requestMode(m);
       if (reply) *reply = String("OK:CMD.mode=") + m + "\n";
       return true;
     }
@@ -688,7 +695,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         if (active && active->isRunning()) {
           active->stop(StopType::NORMAL_STOP);
         }
-        stopVelocityFeed();
+        MotionEngine::instance().stopAll();
         SettingsService::requestIsOn(false);
       } else {
         SettingsService::requestIsOn(true);
@@ -707,14 +714,14 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
   if (length >= 7 && (strncmp(payload, "@pitch:", 7) == 0 || strncmp(payload, "@pitch=", 7) == 0)) {
     float val = atof(payload + 7);
     if (abs(val) > 0.00001f) {
-      setFeedrateMm(val, false);
+      SettingsService::setFeedrateMm(val, false);
       return true;
     }
   }
   if (length >= 6 && (strncmp(payload, "@dupr:", 6) == 0 || strncmp(payload, "@dupr=", 6) == 0)) {
     long du = atol(payload + 6);
     if (du != 0) {
-      setFeedrateDupr(du, false);
+      SettingsService::setFeedrateDupr(du, false);
       return true;
     }
   }
