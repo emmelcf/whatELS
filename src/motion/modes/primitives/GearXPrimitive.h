@@ -1,13 +1,15 @@
 #pragma once
 
 #include "../IELSMode.h"
-#include "Axis.h"
-
-class MotionEngine;
+#include "../../kernel/MotionEngine.h"
 
 class GearXPrimitive : public IELSMode {
 private:
-    ModeState m_state = ModeState::IDLE;
+    MotionEngine* m_engine = nullptr;
+    ModeState     m_state = ModeState::IDLE;
+    int8_t        m_direction = -1; // -1 (Toward Centerline / Infeed), +1 (Retract)
+    int32_t       m_pitchDupr = 500; // Default 0.05 mm/rev (500 dupr)
+    int32_t       m_targetDistDu = -1; // -1 = continuous until limit or stop
 
 public:
     GearXPrimitive();
@@ -42,10 +44,13 @@ public:
     ModeState getState() const override { return m_state; }
     bool isRunning() const override { return m_state == ModeState::RUNNING; }
 
-    // --- Kinematics ---
-    void onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm);
-    void onMotionTick();
-    void onLimitReached(uint8_t axisId, bool isHighLimit);
+    // --- Motion Event Listener ---
+    void onMotionHalted(
+        AxisId axis,
+        MotionHaltReason reason,
+        int32_t haltedPosSteps,
+        int32_t haltedCoordDu,
+        const SoftLimit* triggeredLimit) override;
 
     // --- Telemetry ---
     void writeTelemetry(TelemetryWriter& writer) const override;

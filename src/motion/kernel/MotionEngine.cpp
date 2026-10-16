@@ -137,6 +137,25 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
     m_stepperHal->setDirection(params.axis, m_direction[idx]);
   }
 
+  if (params.enableSecondaryAxis) {
+    size_t sIdx = axisIdx(params.secondaryAxis);
+    int32_t den = (params.secondaryRatioDen > 0) ? params.secondaryRatioDen : 1;
+    int32_t secPitch = static_cast<int32_t>((static_cast<int64_t>(params.pitchDupr) * std::abs(params.secondaryRatioNum)) / den);
+    if (secPitch > 0) {
+      int8_t secDir = (params.secondaryRatioNum >= 0) ? 1 : -1;
+      m_activeMode[sIdx] = MotionMode::SPINDLE_SYNC_GEARING;
+      m_direction[sIdx]  = secDir;
+      m_sync[sIdx].engage(m_accumulatedSpindlePulses, m_axes[sIdx].posSteps, secPitch);
+      m_feedHold[sIdx] = false;
+      m_isMoving[sIdx] = true;
+      m_hasTarget[sIdx] = false;
+      if (m_stepperHal) {
+        m_stepperHal->setEnabled(params.secondaryAxis, true);
+        m_stepperHal->setDirection(params.secondaryAxis, secDir);
+      }
+    }
+  }
+
   return true;
 }
 

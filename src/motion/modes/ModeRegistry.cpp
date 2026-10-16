@@ -139,11 +139,23 @@ String ModeRegistry::serializeDiscoveryJson(uint32_t hardwareCapabilities, bool 
 }
 
 #include "composite/UnifiedGearboxMode.h"
+#include "primitives/AsyncPrimitive.h"
+#include "primitives/GearZPrimitive.h"
+#include "primitives/GearXPrimitive.h"
+#include "primitives/ConePrimitive.h"
 
 static UnifiedGearboxMode s_unifiedGearboxMode;
+static AsyncPrimitive     s_asyncPrimitive;
+static GearZPrimitive     s_gearZPrimitive;
+static GearXPrimitive     s_gearXPrimitive;
+static ConePrimitive      s_conePrimitive;
 
 void ModeRegistry::initStandardModes() {
     registerMode(&s_unifiedGearboxMode);
+    registerMode(&s_gearZPrimitive);
+    registerMode(&s_gearXPrimitive);
+    registerMode(&s_asyncPrimitive);
+    registerMode(&s_conePrimitive);
     activateMode(ModeIds::GEARBOX);
 }
 
