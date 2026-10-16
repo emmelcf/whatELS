@@ -30,9 +30,22 @@ public:
   bool hasIndexSynced() const override;
   void resetIndexSync() override;
 
+  // --- Simulation & Test Injection Hooks ---
+  void setSimulationActive(bool active) override;
+  bool isSimulationActive() const override;
+  void injectSimulatedPulses(int32_t delta) override;
+  void setSimulatedRpm(float rpm) override;
+
 private:
   static void IRAM_ATTR indexIsrHandler(void* arg);
   void updateRpmEstimate(int32_t delta, int64_t nowUs);
+
+  // Simulation mode state
+  std::atomic<bool>     m_simActive{false};
+  std::atomic<float>    m_simRpm{0.0f};
+  std::atomic<int32_t>  m_pendingSimPulses{0};
+  int64_t               m_lastSimTimeUs{0};
+  float                 m_simFraction{0.0f};
 
   pcnt_unit_handle_t    m_unit{nullptr};
   pcnt_channel_handle_t m_chanA{nullptr};

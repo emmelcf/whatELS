@@ -122,6 +122,25 @@ bool Esp32SpindleEncoderHAL::init(
 }
 
 int32_t IRAM_ATTR Esp32SpindleEncoderHAL::getPulseDelta() {
+  if (m_simActive.load(std::memory_order_relaxed)) {
+    int64_t nowUs = esp_timer_get_time();
+    float dt = (m_lastSimTimeUs > 0) ? static_cast<float>(nowUs - m_lastSimTimeUs) * 1e-6f : 0.0f;
+    m_lastSimTimeUs = nowUs;
+    if (dt > 0.05f) dt = 0.05f;
+
+    float rpm = m_simRpm.load(std::memory_order_relaxed);
+    float counts = (rpm / 60.0f) * m_countsPerSpindleRev * dt + m_simFraction;
+    int32_t delta = static_cast<int32_t>(counts);
+    m_simFraction = counts - static_cast<float>(delta);
+
+    int32_t manual = m_pendingSimPulses.exchange(0, std::memory_order_relaxed);
+    delta += manual;
+
+    m_accumulatedPulses += delta;
+    updateRpmEstimate(delta, nowUs);
+    return delta;
+  }
+
   if (!m_unit) {
     return 0;
   }
@@ -185,4 +204,34 @@ bool Esp32SpindleEncoderHAL::hasIndexSynced() const {
 
 void Esp32SpindleEncoderHAL::resetIndexSync() {
   m_hasIndexSynced.store(false, std::memory_order_relaxed);
+}
+
+void Esp32SpindleEncoderHAL::setSimulationActive(bool active) {
+  if (active && !m_simActive.load()) {
+    m_lastSimTimeUs = esp_timer_get_time();
+    m_simFraction = 0.0f;
+    m_pendingSimPulses.store(0);
+    m_simActive.store(true, std::memory_order_release);
+  } else if (!active && m_simActive.load()) {
+    m_simActive.store(false, std::memory_order_release);
+    m_simRpm.store(0.0f);
+    m_pendingSimPulses.store(0);
+    if (m_unit) {
+      int rawCount = 0;
+      pcnt_unit_get_count(m_unit, &rawCount);
+      m_lastCount16 = static_cast<int16_t>(rawCount);
+    }
+  }
+}
+
+bool Esp32SpindleEncoderHAL::isSimulationActive() const {
+  return m_simActive.load(std::memory_order_relaxed);
+}
+
+void Esp32SpindleEncoderHAL::injectSimulatedPulses(int32_t delta) {
+  m_pendingSimPulses.fetch_add(delta, std::memory_order_relaxed);
+}
+
+void Esp32SpindleEncoderHAL::setSimulatedRpm(float rpm) {
+  m_simRpm.store(rpm, std::memory_order_relaxed);
 }

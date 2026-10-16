@@ -671,19 +671,66 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       if (reply) *reply = String("OK:CMD.mode=") + m + "\n";
       return true;
     }
+
+    // CMD.simEncoder=<0|1>
+    if (cmdLen >= 11 && strncmp(cmd, "simEncoder=", 11) == 0) {
+      bool active = atoi(cmd + 11) != 0;
+      ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+      if (hal) hal->setSimulationActive(active);
+      MotionEngine::instance().touchSimHeartbeat();
+      if (reply) *reply = "OK:CMD.simEncoder\n";
+      return true;
+    }
+    // CMD.simPulses=<count>
+    if (cmdLen >= 10 && strncmp(cmd, "simPulses=", 10) == 0) {
+      int32_t pulses = atol(cmd + 10);
+      ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+      if (hal) hal->injectSimulatedPulses(pulses);
+      MotionEngine::instance().touchSimHeartbeat();
+      if (reply) *reply = "OK:CMD.simPulses\n";
+      return true;
+    }
+    // CMD.simRpm=<rpm>
+    if (cmdLen >= 7 && strncmp(cmd, "simRpm=", 7) == 0) {
+      float rpm = atof(cmd + 7);
+      ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+      if (hal) hal->setSimulatedRpm(rpm);
+      MotionEngine::instance().touchSimHeartbeat();
+      if (reply) *reply = "OK:CMD.simRpm\n";
+      return true;
+    }
+    // CMD.ping
+    if (cmdLen >= 4 && strncmp(cmd, "ping", 4) == 0) {
+      MotionEngine::instance().touchSimHeartbeat();
+      if (reply) *reply = "PONG\n";
+      return true;
+    }
 #if ENABLE_SPINDLE_SIM
     // CMD.spindleSim=<0|1>,<signedRpm>   (re-send every <=1s as a heartbeat while active)
     if (cmdLen >= 11 && strncmp(cmd, "spindleSim=", 11) == 0) {
       int active = atoi(cmd + 11);
       const char* p = strchr(cmd + 11, ',');
       float rpm = p ? atof(p + 1) : 0.0f;
+      ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+      if (hal) {
+        hal->setSimulationActive(active != 0);
+        hal->setSimulatedRpm(rpm);
+      }
+      MotionEngine::instance().touchSimHeartbeat();
       spindleSimSet(active != 0, rpm);
-      if (reply) *reply = String("SIM.spindle=") + (spindleSimIsActive() ? "1" : "0") + "," + String(spindleSimGetRpm(), 1) + "\n";
+      if (reply) *reply = String("SIM.spindle=") + (active != 0 ? "1" : "0") + "," + String(rpm, 1) + "\n";
       return true;
     }
     // CMD.spindleSimTurn=<signedDegrees>  (hand-rotate the chuck; ignored unless override active)
     if (cmdLen >= 15 && strncmp(cmd, "spindleSimTurn=", 15) == 0) {
-      spindleSimTurnDeg(atof(cmd + 15));
+      float deg = atof(cmd + 15);
+      ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+      if (hal) {
+        int32_t counts = lroundf(deg / 360.0f * (float) ENCODER_STEPS_INT);
+        hal->injectSimulatedPulses(counts);
+      }
+      MotionEngine::instance().touchSimHeartbeat();
+      spindleSimTurnDeg(deg);
       return true;
     }
 #endif

@@ -60,6 +60,24 @@ public:
     m_indexSynced = false;
   }
 
+  // --- Simulation & Test Injection Hooks ---
+
+  void setSimulationActive(bool active) override {
+    m_simulationActive = active;
+  }
+
+  bool isSimulationActive() const override {
+    return m_simulationActive;
+  }
+
+  void injectSimulatedPulses(int32_t delta) override {
+    injectPulses(delta);
+  }
+
+  void setSimulatedRpm(float rpm) override {
+    setFilteredRpm(rpm > 0.0f ? static_cast<uint32_t>(rpm) : 0);
+  }
+
   // --- Mock Injection & Control Helpers ---
 
   void reset() {
@@ -76,6 +94,7 @@ public:
     m_pinA = -1;
     m_pinB = -1;
     m_pinIndex = -1;
+    m_simulationActive = false;
   }
 
   /**
@@ -125,4 +144,5 @@ private:
   int      m_pinA{-1};
   int      m_pinB{-1};
   int      m_pinIndex{-1};
+  bool     m_simulationActive{false};
 };

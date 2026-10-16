@@ -117,6 +117,10 @@ public:
   // Dependency Injections
   void setStepperHAL(IStepperHAL* stepperHal) { m_stepperHal = stepperHal; }
   void setEncoderHAL(ISpindleEncoderHAL* encoderHal) { m_encoderHal = encoderHal; }
+  ISpindleEncoderHAL* getEncoderHAL() { return m_encoderHal; }
+
+  // Simulation Watchdog Touch
+  void touchSimHeartbeat();
 
 private:
   static inline size_t axisIdx(AxisId axis) {
@@ -135,6 +139,7 @@ private:
   ISpindleEncoderHAL* m_encoderHal;
   TelemetryMailbox    m_telemetryMailbox;
   IMotionEventListener* m_listener = nullptr;
+  std::atomic<uint32_t> m_lastSimHeartbeatMs{0};
 
   MotionMode          m_activeMode[NUM_AXES] = { MotionMode::STOPPED, MotionMode::STOPPED };
   bool                m_isMoving[NUM_AXES]   = { false, false };

@@ -61,4 +61,29 @@ public:
    * @brief Resets index synchronization latch, forcing re-sync on next passing marker.
    */
   virtual void resetIndexSync() = 0;
+
+  // --- Simulation & Test Injection Hooks ---
+
+  /**
+   * @brief Toggles virtual injection mode.
+   * @param active When true, getPulseDelta() serves injected virtual pulses instead of PCNT pins.
+   */
+  virtual void setSimulationActive(bool active) = 0;
+
+  /**
+   * @brief Checks if virtual injection mode is currently active.
+   */
+  virtual bool isSimulationActive() const = 0;
+
+  /**
+   * @brief Injects an exact discrete pulse delta.
+   * @param delta Signed pulse count.
+   */
+  virtual void injectSimulatedPulses(int32_t delta) = 0;
+
+  /**
+   * @brief Sets a constant simulated spindle RPM.
+   * @param rpm Signed rotational speed in RPM (+ forward / - reverse). 0.0 = stopped.
+   */
+  virtual void setSimulatedRpm(float rpm) = 0;
 };

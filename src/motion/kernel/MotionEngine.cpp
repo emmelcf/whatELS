@@ -421,6 +421,18 @@ void MotionEngine::onMotionTick() {
 
   // 2. Hardware Spindle Sampling
   if (m_encoderHal) {
+    if (m_encoderHal->isSimulationActive()) {
+#if defined(ESP_PLATFORM)
+      uint32_t nowMs = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+      uint32_t lastHb = m_lastSimHeartbeatMs.load(std::memory_order_relaxed);
+      if (lastHb > 0 && (nowMs - lastHb > 1500)) {
+        m_encoderHal->setSimulatedRpm(0.0f);
+        m_encoderHal->setSimulationActive(false);
+        stopAll(false);
+      }
+#endif
+    }
+
     int32_t delta = m_encoderHal->getPulseDelta();
     uint32_t rpm = m_encoderHal->getFilteredRpm();
     onSpindlePulse(delta, rpm);
@@ -551,3 +563,12 @@ void MotionEngine::publishTelemetrySnapshot() {
     m_listener->onMotionTelemetry(snapshot.zCoordDu, snapshot.xCoordDu, snapshot.spindleRpm, snapshot.isMoving);
   }
 }
+
+void MotionEngine::touchSimHeartbeat() {
+#if defined(ESP_PLATFORM)
+  m_lastSimHeartbeatMs.store(static_cast<uint32_t>(esp_timer_get_time() / 1000), std::memory_order_relaxed);
+#else
+  m_lastSimHeartbeatMs.store(1, std::memory_order_relaxed);
+#endif
+}
+
