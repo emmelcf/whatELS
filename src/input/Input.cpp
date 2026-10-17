@@ -16,14 +16,7 @@ static inline MeasureUnit currentMeasure() {
   return SettingsService::getMeasure();
 }
 
-// Keypad & button states
-bool buttonLeftPressed = false;
-bool buttonRightPressed = false;
-bool buttonUpPressed = false;
-bool buttonDownPressed = false;
-bool buttonOffPressed = false;
-bool buttonBackPressed = false;
-bool buttonForwardPressed = false;
+// Keypad state
 
 unsigned long keypadTimeUs = 0;
 PS2KeyAdvanced keyboard;
@@ -863,7 +856,6 @@ void processKeypadEvent() {
 
   // Off button always gets handled.
   if (keyCode == B_OFF) {
-    buttonOffPressed = isPress;
     if (isPress) buttonOnOffPress(false);
   }
 
@@ -881,14 +873,6 @@ void processKeypadEvent() {
     updateWebUiMoveWatchdog(byte(keyCode), isPress);
   }
 
-  // Keyboard may not send release event if another button is pressed before first one is released.
-  buttonLeftPressed = false;
-  buttonRightPressed = false;
-  buttonUpPressed = false;
-  buttonDownPressed = false;
-  buttonBackPressed = false;
-  buttonForwardPressed = false;
-
   // Setup wizard navigation.
   if (isPress && setupIndex == 2 && (keyCode == B_LEFT || keyCode == B_RIGHT)) {
     SettingsService::setAuxForward(!SettingsService::getAuxForward());
@@ -900,8 +884,6 @@ void processKeypadEvent() {
   } else if (isPress && currentLatheMode() == LatheMode::GCODE && setupIndex == 1 && keyCode == B_MINUS) {
     removeGcodeByName(getCurrentGcodeProgramName());
     return;
-  } else if (isWebUiMoveAction(byte(keyCode))) {
-    setMoveButtonPressed(byte(keyCode), isPress);
   }
 
   // For all other keys we have no "release" logic, except resetting held repeat.

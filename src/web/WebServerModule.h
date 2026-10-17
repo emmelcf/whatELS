@@ -87,7 +87,6 @@ void publishMachineStatus();
 bool queueWebUiEvent(byte actionCode, bool isPress);
 bool readWebUiEvent(WebUiEvent* event);
 bool isWebUiMoveAction(byte actionCode);
-void setMoveButtonPressed(byte actionCode, bool isPress);
 void releaseWebUiHeldMove();
 void requestWebUiMoveRelease();
 void processWebUiMoveFailsafe();

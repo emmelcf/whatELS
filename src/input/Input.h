@@ -5,15 +5,7 @@
 #include "Config.h"
 #include "motion/kernel/AxisId.h"
 
-// Keypad & button states
-extern bool buttonLeftPressed;
-extern bool buttonRightPressed;
-extern bool buttonUpPressed;
-extern bool buttonDownPressed;
-extern bool buttonOffPressed;
-extern bool buttonBackPressed;
-extern bool buttonForwardPressed;
-
+// Keypad state
 extern unsigned long keypadTimeUs;
 extern PS2KeyAdvanced keyboard;
 

@@ -1,7 +1,6 @@
 #include "WebServerModule.h"
 #include "Config.h"
 #include "Debug.h"
-#include "Input.h"
 #include "core/OperatorIntent.h"
 #include "CommandDispatcher.h"
 #include "core/TelemetrySerializer.h"
@@ -435,27 +434,7 @@ bool isWebUiMoveAction(byte actionCode) {
   return actionCode == B_LEFT || actionCode == B_RIGHT || actionCode == B_UP || actionCode == B_DOWN || actionCode == B_FORWARD || actionCode == B_BACK;
 }
 
-void setMoveButtonPressed(byte actionCode, bool isPress) {
-  if (actionCode == B_LEFT) {
-    buttonLeftPressed = isPress;
-  } else if (actionCode == B_RIGHT) {
-    buttonRightPressed = isPress;
-  } else if (actionCode == B_UP) {
-    buttonUpPressed = isPress;
-  } else if (actionCode == B_DOWN) {
-    buttonDownPressed = isPress;
-  } else if (actionCode == B_FORWARD) {
-    buttonForwardPressed = isPress;
-  } else if (actionCode == B_BACK) {
-    buttonBackPressed = isPress;
-  }
-}
-
 void releaseWebUiHeldMove() {
-  byte actionCode = webUiHeldMoveAction;
-  if (actionCode != 0) {
-    setMoveButtonPressed(actionCode, false);
-  }
   webUiHeldMoveAction = 0;
   webUiHeldMoveMillis = 0;
 }
