@@ -13,10 +13,10 @@ function registerMachineStore() {
     // -------------------------------------------------------------
     zDu: 0,
     xDu: 0,
-    zLeftDu: 2147483647,
-    zRightDu: -2147483648,
-    xUpDu: 2147483647,
-    xDownDu: -2147483648,
+    zLeftDu: null,
+    zRightDu: null,
+    xUpDu: null,
+    xDownDu: null,
     zDis: false,
     xDis: false,
     rpm: 0,
@@ -259,10 +259,12 @@ function registerMachineStore() {
         for (const k in c) {
           if (k === 'dia' || k === 'diameter') continue; // Decoupled: Diameter/Radius is purely client-local
           if (k in this && typeof this[k] !== 'function') {
-            if ((k === 'zRightDu' || k === 'xDownDu') && (c[k] === undefined || c[k] === null || isNaN(c[k]) || Number(c[k]) <= -2147483640)) {
-              this[k] = -2147483648;
-            } else if ((k === 'zLeftDu' || k === 'xUpDu') && (c[k] === undefined || c[k] === null || isNaN(c[k]) || Number(c[k]) >= 2147483640)) {
-              this[k] = 2147483647;
+            if (k === 'zLeftDu' || k === 'zRightDu' || k === 'xUpDu' || k === 'xDownDu') {
+              if (c[k] === undefined || c[k] === null || c[k] === 'undefined' || isNaN(Number(c[k]))) {
+                this[k] = null;
+              } else {
+                this[k] = Number(c[k]);
+              }
             } else {
               this[k] = c[k];
             }

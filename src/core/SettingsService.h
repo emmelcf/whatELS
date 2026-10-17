@@ -61,6 +61,7 @@ public:
   // --- Tier 2 / Category 1: Travel Stops & Boundaries ---
   static bool setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu);
   static bool clearAxisLimit(AxisId axis, LimitDirection dir);
+  static bool hasAxisLimit(AxisId axis, LimitDirection dir);
   static long getAxisLimitDu(AxisId axis, LimitDirection dir);
 
   // --- Tier 2 / Category 2: Pitch, Threading & Feed Intent ---

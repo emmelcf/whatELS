@@ -14,9 +14,17 @@ struct StatusSnapshot {
   int32_t  zDu;
   int32_t  xDu;
   int32_t  zLeftDu;
+  bool     zLeftDefined;
+  bool     zLeftEnabled;
   int32_t  zRightDu;
+  bool     zRightDefined;
+  bool     zRightEnabled;
   int32_t  xUpDu;
+  bool     xUpDefined;
+  bool     xUpEnabled;
   int32_t  xDownDu;
+  bool     xDownDefined;
+  bool     xDownEnabled;
   bool     zDisabled;
   bool     xDisabled;
   uint16_t rpm;
@@ -46,22 +54,30 @@ enum DomainFlags : uint8_t {
 uint8_t parseDomainQuery(const char* query);
 
 struct KinematicsState {
-  long zDu;
-  long xDu;
-  long zLeftDu;
-  long zRightDu;
-  long xUpDu;
-  long xDownDu;
-  bool zDisabled;
-  bool xDisabled;
-  int rpm;
-  float turns;
-  float angle;
-  int mode;
-  bool isOn;
-  bool estop;
-  long dupr;
-  long nextDupr;
+  long    zDu;
+  long    xDu;
+  int32_t zLeftDu;
+  bool    zLeftDefined;
+  bool    zLeftEnabled;
+  int32_t zRightDu;
+  bool    zRightDefined;
+  bool    zRightEnabled;
+  int32_t xUpDu;
+  bool    xUpDefined;
+  bool    xUpEnabled;
+  int32_t xDownDu;
+  bool    xDownDefined;
+  bool    xDownEnabled;
+  bool    zDisabled;
+  bool    xDisabled;
+  int     rpm;
+  float   turns;
+  float   angle;
+  int     mode;
+  bool    isOn;
+  bool    estop;
+  long    dupr;
+  long    nextDupr;
 };
 
 struct IntentState {

@@ -21,10 +21,10 @@ class ControllerState:
     is_moving: bool = False
     mode: int = 0
     estop: int = 0
-    z_left_du: int = 2147483647
-    z_right_du: int = -2147483648
-    x_up_du: int = 2147483647
-    x_down_du: int = -2147483648
+    z_left_du: int | None = None
+    z_right_du: int | None = None
+    x_up_du: int | None = None
+    x_down_du: int | None = None
     dupr: int = 0
     next_dupr: int = 0
 
@@ -211,13 +211,13 @@ class NanoElsClient:
             elif key == "K.estop":
                 self.state.estop = int(val)
             elif key == "K.zLeftDu":
-                self.state.z_left_du = 2147483647 if val == "2147483647" else int(val)
+                self.state.z_left_du = None if val == "undefined" else int(val)
             elif key == "K.zRightDu":
-                self.state.z_right_du = -2147483648 if val in ("-k", "-2147483648") else int(val)
+                self.state.z_right_du = None if val == "undefined" else int(val)
             elif key == "K.xUpDu":
-                self.state.x_up_du = 2147483647 if val == "2147483647" else int(val)
+                self.state.x_up_du = None if val == "undefined" else int(val)
             elif key == "K.xDownDu":
-                self.state.x_down_du = -2147483648 if val in ("-k", "-2147483648") else int(val)
+                self.state.x_down_du = None if val == "undefined" else int(val)
             elif key == "K.dupr":
                 self.state.dupr = int(val)
             elif key == "K.nextDupr":

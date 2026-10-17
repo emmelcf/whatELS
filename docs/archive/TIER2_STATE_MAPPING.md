@@ -1,12 +1,9 @@
 # NanoELS H5 — Tier 2 State Audit & Mapping Specification
 
-> **Status:** Authoritative Architectural Mapping & Audit  
-> **Target Version:** NanoELS H5 Modular Architecture  
-> **Author:** Antigravity & Emil  
-> **Date:** October 8, 2026  
-> **Location:** `docs/TIER2_STATE_MAPPING.md`  
-> **Referenced By:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](./ELS_PROPERTIES_AND_SETTINGS.md)  
-> **Strict Mandate:** Audit & Analysis Only — Zero C++ Firmware Mutations in this Step.
+> **STATUS: ARCHIVED / HISTORICAL MIGRATION LEDGER**  
+> **Notice:** This document served as a transitional audit on October 8, 2026, mapping legacy globals (`Axis.h`, `Config.h`, `Motion.h`) into the new architectural domains. It is preserved for historical reference only.  
+> **Living Source of Truth:** For current state model specifications, consult [`docs/state/ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md).  
+> **Strict Rule:** Zero magic sentinels (`LONG_MAX`, `LONG_MIN`). Unset limits are explicitly modeled as undefined.
 
 ---
 

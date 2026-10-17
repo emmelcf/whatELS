@@ -18,5 +18,5 @@ This directory contains the authoritative specifications for the NanoELS state m
 3. **[`ELS_PRESET_CATALOG.md`](./ELS_PRESET_CATALOG.md):**  
    - ROM-embedded factory machine configurations and lathe profiles.
 
-4. **[`TIER2_STATE_MAPPING.md`](./TIER2_STATE_MAPPING.md):**  
-   - Wire-level field mapping between internal C++ structs and JSON WebSocket / Serial tokens.
+4. **[`TIER2_STATE_MAPPING.md`](../archive/TIER2_STATE_MAPPING.md) (Archived):**  
+   - Historical audit and variable mapping ledger used during the monolithic-to-modular migration.

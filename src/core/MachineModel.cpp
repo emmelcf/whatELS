@@ -20,11 +20,18 @@ static long getAxisCanonicalPosDu(AxisId a) {
   return MotionEngine::instance().getAxisPositionDu(a);
 }
 
-static long getAxisCanonicalStopDu(AxisId a, bool isLeft) {
-  const SoftLimitTable& limits = MotionEngine::instance().getSoftLimits(a);
+static void populateAxisLimitState(AxisId axis, bool isLeft, int32_t& coordDu, bool& defined, bool& enabled) {
+  const SoftLimitTable& limits = MotionEngine::instance().getSoftLimits(axis);
   const SoftLimit* lim = isLeft ? limits.getLeftLimit() : limits.getRightLimit();
-  if (!lim || !lim->isEnforced()) return isLeft ? LONG_MAX : LONG_MIN;
-  return lim->coordDu;
+  if (lim && lim->defined) {
+    coordDu = lim->coordDu;
+    defined = true;
+    enabled = lim->enabled;
+  } else {
+    coordDu = 0;
+    defined = false;
+    enabled = false;
+  }
 }
 
 void publishMotionSnapshot() {
@@ -33,10 +40,10 @@ void publishMotionSnapshot() {
   snap.timestamp = millis();
   snap.zDu = getAxisCanonicalPosDu(AXIS_Z);
   snap.xDu = getAxisCanonicalPosDu(AXIS_X);
-  snap.zLeftDu = getAxisCanonicalStopDu(AXIS_Z, true);
-  snap.zRightDu = getAxisCanonicalStopDu(AXIS_Z, false);
-  snap.xUpDu = getAxisCanonicalStopDu(AXIS_X, true);
-  snap.xDownDu = getAxisCanonicalStopDu(AXIS_X, false);
+  populateAxisLimitState(AXIS_Z, true,  snap.zLeftDu,  snap.zLeftDefined,  snap.zLeftEnabled);
+  populateAxisLimitState(AXIS_Z, false, snap.zRightDu, snap.zRightDefined, snap.zRightEnabled);
+  populateAxisLimitState(AXIS_X, true,  snap.xUpDu,    snap.xUpDefined,    snap.xUpEnabled);
+  populateAxisLimitState(AXIS_X, false, snap.xDownDu,  snap.xDownDefined,  snap.xDownEnabled);
   snap.zDisabled = false;
   snap.xDisabled = false;
   snap.rpm = getApproxRpm();
@@ -79,9 +86,17 @@ KinematicsState MachineModel::captureKinematics() {
     k.zDu = snap.zDu;
     k.xDu = snap.xDu;
     k.zLeftDu = snap.zLeftDu;
+    k.zLeftDefined = snap.zLeftDefined;
+    k.zLeftEnabled = snap.zLeftEnabled;
     k.zRightDu = snap.zRightDu;
+    k.zRightDefined = snap.zRightDefined;
+    k.zRightEnabled = snap.zRightEnabled;
     k.xUpDu = snap.xUpDu;
+    k.xUpDefined = snap.xUpDefined;
+    k.xUpEnabled = snap.xUpEnabled;
     k.xDownDu = snap.xDownDu;
+    k.xDownDefined = snap.xDownDefined;
+    k.xDownEnabled = snap.xDownEnabled;
     k.zDisabled = snap.zDisabled;
     k.xDisabled = snap.xDisabled;
     k.rpm = snap.rpm;
@@ -96,10 +111,10 @@ KinematicsState MachineModel::captureKinematics() {
     // Fallback to direct read if queue not yet populated
     k.zDu = getAxisCanonicalPosDu(AXIS_Z);
     k.xDu = getAxisCanonicalPosDu(AXIS_X);
-    k.zLeftDu = getAxisCanonicalStopDu(AXIS_Z, true);
-    k.zRightDu = getAxisCanonicalStopDu(AXIS_Z, false);
-    k.xUpDu = getAxisCanonicalStopDu(AXIS_X, true);
-    k.xDownDu = getAxisCanonicalStopDu(AXIS_X, false);
+    populateAxisLimitState(AXIS_Z, true,  k.zLeftDu,  k.zLeftDefined,  k.zLeftEnabled);
+    populateAxisLimitState(AXIS_Z, false, k.zRightDu, k.zRightDefined, k.zRightEnabled);
+    populateAxisLimitState(AXIS_X, true,  k.xUpDu,    k.xUpDefined,    k.xUpEnabled);
+    populateAxisLimitState(AXIS_X, false, k.xDownDu,  k.xDownDefined,  k.xDownEnabled);
     k.zDisabled = false;
     k.xDisabled = false;
     k.rpm = getApproxRpm();
@@ -195,10 +210,18 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
 
   if (prev.kinematics.zDu != current.kinematics.zDu ||
       prev.kinematics.xDu != current.kinematics.xDu ||
-      prev.kinematics.zLeftDu != current.kinematics.zLeftDu ||
-      prev.kinematics.zRightDu != current.kinematics.zRightDu ||
-      prev.kinematics.xUpDu != current.kinematics.xUpDu ||
-      prev.kinematics.xDownDu != current.kinematics.xDownDu ||
+      prev.kinematics.zLeftDefined != current.kinematics.zLeftDefined ||
+      prev.kinematics.zLeftEnabled != current.kinematics.zLeftEnabled ||
+      (current.kinematics.zLeftDefined && prev.kinematics.zLeftDu != current.kinematics.zLeftDu) ||
+      prev.kinematics.zRightDefined != current.kinematics.zRightDefined ||
+      prev.kinematics.zRightEnabled != current.kinematics.zRightEnabled ||
+      (current.kinematics.zRightDefined && prev.kinematics.zRightDu != current.kinematics.zRightDu) ||
+      prev.kinematics.xUpDefined != current.kinematics.xUpDefined ||
+      prev.kinematics.xUpEnabled != current.kinematics.xUpEnabled ||
+      (current.kinematics.xUpDefined && prev.kinematics.xUpDu != current.kinematics.xUpDu) ||
+      prev.kinematics.xDownDefined != current.kinematics.xDownDefined ||
+      prev.kinematics.xDownEnabled != current.kinematics.xDownEnabled ||
+      (current.kinematics.xDownDefined && prev.kinematics.xDownDu != current.kinematics.xDownDu) ||
       prev.kinematics.zDisabled != current.kinematics.zDisabled ||
       prev.kinematics.xDisabled != current.kinematics.xDisabled ||
       prev.kinematics.rpm != current.kinematics.rpm ||

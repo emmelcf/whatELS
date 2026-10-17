@@ -44,7 +44,7 @@ docs/
 - **[`ELS_CORE_STATE_MODEL.md`](./state/ELS_CORE_STATE_MODEL.md):** The 4 canonical domains: Kinematics (`K`), Intent (`I`), Cycle (`C`), Properties (`P`). Change bitmasks and telemetry serialization.
 - **[`ELS_PROPERTIES_AND_SETTINGS.md`](./state/ELS_PROPERTIES_AND_SETTINGS.md):** 4-tier property taxonomy (`machine.*`, `sys.*`, `prefs.*`, `client.*`), sparse NVS overrides, flash lockout safety.
 - **[`ELS_PRESET_CATALOG.md`](./state/ELS_PRESET_CATALOG.md):** ROM factory defaults and machine presets.
-- **[`TIER2_STATE_MAPPING.md`](./state/TIER2_STATE_MAPPING.md):** Field-level wire serialization mappings between firmware and UI clients.
+- **[`TIER2_STATE_MAPPING.md`](./archive/TIER2_STATE_MAPPING.md) (Archived):** Historical audit and variable mapping ledger between legacy globals and canonical domains.
 
 ### [Machine Profile (`docs/machine/`)](./machine/LATHE_MACHINE_PROFILE.md)
 - **[`LATHE_MACHINE_PROFILE.md`](./machine/LATHE_MACHINE_PROFILE.md):** Physical machine iron parameters, leadscrew leads, motor microsteps, encoder PPR, travel boundaries.

@@ -76,6 +76,7 @@ public:
   // Soft Limit Table Management
   SoftLimitTable& getSoftLimits(AxisId axis);
   const SoftLimitTable& getSoftLimits(AxisId axis) const;
+  bool setSoftLimitDu(AxisId axis, size_t slot, int32_t coordDu, const char* label = nullptr, bool enable = true);
 
   // Motion Execution APIs
   bool startVelocityFeed(const FeedParameters& params);

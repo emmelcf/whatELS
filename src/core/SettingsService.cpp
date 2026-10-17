@@ -712,20 +712,9 @@ bool SettingsService::setSpindleRatio(float ratio) {
 
 // --- Tier 2 / Category 1: Travel Stops & Boundaries ---
 bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
-  if (limitDu == LONG_MAX || limitDu == LONG_MIN) {
-    return clearAxisLimit(axis, dir);
-  }
   size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
-  AxisGeometry geom;
-  if (axis == AXIS_Z) {
-    geom.screwPitchDu = activeMachineProfile.zAxis.leadscrewPitchDu();
-    geom.motorStepsPerRev = activeMachineProfile.zAxis.motorSteps();
-  } else {
-    geom.screwPitchDu = activeMachineProfile.xAxis.leadscrewPitchDu();
-    geom.motorStepsPerRev = activeMachineProfile.xAxis.motorSteps();
-  }
-  int32_t stepPos = duToSteps(geom, limitDu);
-  MotionEngine::instance().getSoftLimits(axis).setLimit(slot, limitDu, stepPos, (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT", true);
+  const char* label = (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT";
+  MotionEngine::instance().setSoftLimitDu(axis, slot, limitDu, label, true);
 
   machineStatusForcePublish = true;
   return true;
@@ -739,11 +728,15 @@ bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
   return true;
 }
 
+bool SettingsService::hasAxisLimit(AxisId axis, LimitDirection dir) {
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  return MotionEngine::instance().getSoftLimits(axis).getSlot(slot).isEnforced();
+}
+
 long SettingsService::getAxisLimitDu(AxisId axis, LimitDirection dir) {
   size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
   const SoftLimit& lim = MotionEngine::instance().getSoftLimits(axis).getSlot(slot);
-  if (!lim.isEnforced()) return (dir == LIMIT_LEFT_OR_UP) ? LONG_MAX : LONG_MIN;
-  return lim.coordDu;
+  return lim.isEnforced() ? lim.coordDu : 0;
 }
 
 // --- Tier 2 / Category 2: Pitch, Threading & Feed Intent ---

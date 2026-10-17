@@ -76,6 +76,12 @@ const SoftLimitTable& MotionEngine::getSoftLimits(AxisId axis) const {
   return m_limits[axisIdx(axis)];
 }
 
+bool MotionEngine::setSoftLimitDu(AxisId axis, size_t slot, int32_t coordDu, const char* label, bool enable) {
+  size_t idx = axisIdx(axis);
+  int32_t stepPos = duToSteps(m_axes[idx].geometry, coordDu) - m_axes[idx].originSteps;
+  return m_limits[idx].setLimit(slot, coordDu, stepPos, label, enable);
+}
+
 bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
   size_t idx = axisIdx(params.axis);
   if (params.direction == 0) return false;
