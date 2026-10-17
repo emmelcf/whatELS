@@ -13,6 +13,7 @@ import inspect
 import os
 from pathlib import Path
 import pkgutil
+import re
 import sys
 
 # Ensure local 'core' and 'suites' packages are resolvable
@@ -37,7 +38,7 @@ def discover_test_classes(filter_keyword: str = "") -> list[type[HilTestCase]]:
                 and issubclass(attr, HilTestCase)
                 and attr is not HilTestCase
             ):
-                if not filter_keyword or filter_keyword.lower() in attr.name.lower():
+                if not filter_keyword or re.search(filter_keyword, attr.name, re.IGNORECASE):
                     test_classes.append(attr)
 
     # Sort deterministically by name

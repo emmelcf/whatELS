@@ -467,101 +467,282 @@ def assert_halted(state: ControllerState, reason: str = ""):
 
 ---
 
-## 6. Concrete Test Suite Examples
+## 6. Authoritative Test Catalog & Real-Life Scenarios
 
-### 6.1 Suite 1: Spindle-Synchronized Gearing Accuracy (`test_gearing.py`)
+Every test in the NanoELS HIL suite verifies a specific physical machining behavior across the external WebSocket boundary (`ws://<ip>:81/canonical`). This catalog defines the real-life scenario, inbound parameters, simulation stimulus, and exact pass/fail criteria for each test case.
 
-**Objective:** Verify that commanding 1.500 mm pitch and injecting exactly 2 spindle revolutions advances the Z axis carriage by precisely `-30,000 du` (-3.000 mm) with zero drift.
+---
 
-```python
-# tests/hil/suites/test_gearing.py
+### 6.1 `gearbox_at_speed_z_feed` (Suite: `test_gearbox.py`)
 
-class TestSpindleSyncGearing1_5mm(HilTestCase):
-    name = "gearing_sync_1_5mm_pitch"
-    description = "Verify 1.5mm pitch travels exactly -30,000 du over 2 spindle revs"
+* **Real-Life Machining Scenario (Longitudinal Turning to Dimension):**  
+  The machinist turns on the spindle drive and lets the lathe stabilize at cutting speed ($600\text{ RPM}$). They touch off the tool on the workpiece outside diameter and engage electronic power feed towards the chuck to turn a cylindrical journal. When the carriage reaches the programmed $45.000\text{ mm}$ stroke length, the feed automatically disengages. The spindle continues spinning at $600\text{ RPM}$ so the cutting tool does not leave a dwell gouge mark or fracture in the cut. Once the tool has stopped, the machinist powers down the spindle.
 
-    async def run(self) -> None:
-        # 1. Engage Z-axis gearbox feed towards chuck at 1.500 mm (15,000 du)
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK")
-        await self.client.wait_for(lambda s: s.is_on, description="feed engaged")
+* **Objective:**  
+  Verify on-the-fly synchronized feed engagement while the spindle is already rotating at full speed, followed by automatic disengagement at target stroke distance with zero post-halt creep under continuous spindle rotation.
 
-        # 2. Inject 2 complete revolutions of spindle encoder pulses
-        ppr = self.client.state.encoder_ppr  # e.g. 2400 or 4096 counts/rev
-        two_revs = ppr * 2
-        await self.client.send(f"CMD.simPulses={two_revs}")
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:45000
+  CMD.simRpm=0
+  ```
 
-        # 3. Wait for the carriage coordinate to reflect completed motion
-        expected_z = -30000  # -3.000 mm
-        state = await self.client.wait_for(
-            lambda s: abs(s.z_du - expected_z) <= 5,
-            timeout_s=4.0,
-            description="carriage reached target position"
-        )
+* **Physical Simulation Stimulus:**  
+  Virtual spindle acceleration to $600\text{ RPM}$ ($10\text{ rev/sec}$), steady-state rotation during the $45.0\text{ mm}$ cut ($30\text{ spindle revs}$ at $1.500\text{ mm/rev}$), and continuous $600\text{ RPM}$ rotation during a $1.0\text{s}$ post-halt hold window.
 
-        # 4. Assert exact accuracy within +/- 1 du (0.1 micron)
-        assert_pos_du(state.z_du, expected_z, tolerance_du=1, axis="Z")
-```
+* **Lifecycle Sequence:**
+  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580` (spindle confirmed stable at speed).
+  2. Send `CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:45000`; wait for `s.is_on == True`.
+  3. Wait for `s.is_on == False` (controller disengages motion upon reaching $-45,000\text{ du}$).
+  4. **Anti-Creep Hold Window:** Maintain spindle spinning at $600\text{ RPM}$ for $1.0\text{s}$ post-halt.
+  5. Send `CMD.simRpm=0`; wait $300\text{ ms}$ for spindle spin-down.
 
-### 6.2 Suite 2: Soft Limit Shoulder Lookahead (`test_soft_limits.py`)
+* **Pass Criteria:**
+  - Carriage coordinate halts at $-45,000\text{ du} \pm 2\text{ du}$ ($\pm 0.2\ \mu\text{m}$).
+  - `s.is_on` transitions to `False` upon reaching target distance.
+  - Position remains completely stationary ($0\text{ du}$ drift) throughout the $1.0\text{s}$ hold window while the spindle continues spinning at $600\text{ RPM}$.
 
-**Objective:** Verify that when moving towards a defined soft stop at `-50,000 du`, the motion controller halts cleanly at the shoulder, transitions `K.on` to `0`, and does not overrun the stop.
+* **Fail Criteria:**
+  - Carriage overshoots past $-45,002\text{ du}$ or stops short ($>2\text{ du}$ error).
+  - Carriage creeps or advances while spindle continues spinning during the hold window.
+  - Controller fails to disengage motion within $6.0\text{s}$ timeout.
 
-```python
-# tests/hil/suites/test_soft_limits.py
+---
 
-class TestSoftLimitShoulderHalt(HilTestCase):
-    name = "soft_limit_shoulder_halt"
-    description = "Verify feed halts cleanly at -50,000 du soft limit when spinning continuously"
+### 6.2 `gearbox_at_speed_x_feed` (Suite: `test_gearbox.py`)
 
-    async def run(self) -> None:
-        # 1. Set Left soft stop at -50,000 du (-5.000 mm)
-        limit_du = -50000
-        await self.client.send(f"CMD.axisLimitDu=Z,1,{limit_du}")
-        await self.client.wait_for(lambda s: s.z_left_du == limit_du, description="limit set")
+* **Real-Life Machining Scenario (Facing to Workpiece Center):**  
+  The spindle is spinning at $600\text{ RPM}$. The machinist faces off the raw end of a part, feeding the cross-slide inward from the outside diameter towards workpiece centerline ($X = 0$). When the tool reaches the center, the cross-slide feed automatically trips out to prevent overrunning past center or loading the cross-slide leadscrew. The spindle continues spinning at $600\text{ RPM}$ while the cut is disengaged.
 
-        # 2. Start Z feed towards chuck at 1.000 mm pitch
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK")
-        await self.client.wait_for(lambda s: s.is_on, description="feed engaged")
+* **Objective:**  
+  Verify on-the-fly synchronized cross-slide feed engagement at operating speed, accurate $0.500\text{ mm/rev}$ pitch tracking on Axis X, and zero post-halt creep.
 
-        # 3. Spin virtual spindle continuously at 600 RPM
-        await self.client.send("CMD.simRpm=600")
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER,dist:15000
+  CMD.simRpm=0
+  ```
 
-        # 4. Wait for controller to automatically disengage motion on reaching limit
-        state = await self.client.wait_for(
-            lambda s: not s.is_on, 
-            timeout_s=8.0, 
-            description="auto-halt at soft limit"
-        )
+* **Physical Simulation Stimulus:**  
+  Virtual spindle at $600\text{ RPM}$ ($10\text{ rev/sec}$), steady-state rotation during the $15.0\text{ mm}$ cross-feed cut ($30\text{ revs}$ at $0.500\text{ mm/rev}$), and continuous $600\text{ RPM}$ during a $1.0\text{s}$ post-halt hold window.
 
-        # 5. Assert carriage is cleanly stopped at -50,000 du without overshoot
-        assert_halted(state, "soft limit reached")
-        assert_pos_du(state.z_du, limit_du, tolerance_du=2, axis="Z")
-```
+* **Lifecycle Sequence:**
+  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
+  2. Send `CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER,dist:15000`; wait for `s.is_on == True`.
+  3. Wait for `s.is_on == False` (controller auto-halts at $-15,000\text{ du}$).
+  4. **Anti-Creep Hold Window:** Hold spindle at $600\text{ RPM}$ for $1.0\text{s}$.
+  5. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
 
-### 6.3 Suite 3: Emergency Stop & Feed Hold Latency (`test_emergency.py`)
+* **Pass Criteria:**
+  - Cross-slide halts at $-15,000\text{ du} \pm 2\text{ du}$.
+  - Zero creep ($0\text{ du}$ drift) during the $1.0\text{s}$ post-halt hold window at $600\text{ RPM}$.
+  - `s.is_on` is `False`.
 
-**Objective:** Verify that `CMD.stop` halts active stepping and turns off `is_on` within <100 ms.
+* **Fail Criteria:**
+  - Cross-slide position error exceeds $\pm 2\text{ du}$.
+  - Cross-slide creeps past target while spindle rotates.
+  - Timeout exceeding $6.0\text{s}$.
 
-```python
-# tests/hil/suites/test_emergency.py
+---
 
-class TestStopCommandLatency(HilTestCase):
-    name = "stop_command_latency"
-    description = "Verify CMD.stop disengages active feed in under 100 ms"
+### 6.3 `gearbox_cold_start_ramp` (Suite: `test_gearbox.py`)
 
-    async def run(self) -> None:
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK")
-        await self.client.send("CMD.simRpm=600")
-        await self.client.wait_for(lambda s: s.is_on and s.is_moving, description="feed moving")
+* **Real-Life Machining Scenario (Threading Pass from Standstill / Foot-Brake Restart):**  
+  The machinist sets up an external single-point threading pass. With the spindle stopped ($0\text{ RPM}$), they engage electronic threading synchronization. They switch the motor switch ON, and the motor accelerates through its inertia curve to $600\text{ RPM}$. The electronic leadscrew must track the encoder pulses through every degree of the startup ramp, maintaining exact thread pitch synchronization without losing steps or cross-threading the existing thread groove.
 
-        t0 = time.perf_counter()
-        await self.client.send("CMD.stop")
-        state = await self.client.wait_for(lambda s: not s.is_on, timeout_s=1.0)
-        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+* **Objective:**  
+  Verify synchronized electronic gearing when motion is armed while stationary and the spindle accelerates through a dynamic velocity ramp.
 
-        assert elapsed_ms < 100.0, f"Stop took too long: {elapsed_ms:.1f} ms (must be <100 ms)"
-        assert not state.is_on, "Controller is still reporting active feed!"
-```
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK,dist:20000
+  CMD.simRpm=600
+  CMD.simRpm=0
+  ```
+
+* **Physical Simulation Stimulus:**  
+  Spindle begins at $0\text{ RPM}$, then accelerates to $600\text{ RPM}$ while feed is already engaged. Spindle continues spinning until $20.0\text{ mm}$ ($20\text{ revs}$ at $1.000\text{ mm/rev}$) is completed, followed by a $1.0\text{s}$ anti-creep hold at $600\text{ RPM}$.
+
+* **Lifecycle Sequence:**
+  1. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK,dist:20000`; wait for `s.is_on == True` at $0\text{ RPM}$.
+  2. Send `CMD.simRpm=600` (acceleration ramp begins).
+  3. Wait for `s.is_on == False` (auto-halt at $-20,000\text{ du}$).
+  4. Hold at $600\text{ RPM}$ for $1.0\text{s}$.
+  5. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
+
+* **Pass Criteria:**
+  - Carriage halts at $-20,000\text{ du} \pm 2\text{ du}$.
+  - Zero lost steps or pitch distortion during acceleration ramp.
+  - Zero creep during $1.0\text{s}$ post-halt hold window.
+
+* **Fail Criteria:**
+  - Coordinate mismatch $>2\text{ du}$.
+  - Motion fails to start on spindle acceleration.
+  - Timeout exceeding $6.0\text{s}$.
+
+---
+
+### 6.4 `gearbox_stop_command` (Suite: `test_gearbox.py`)
+
+* **Real-Life Machining Scenario (Operator Feed Hold on Tool Chatter):**  
+  While taking a heavy roughing cut at $600\text{ RPM}$, the operator notices severe tool chatter or poor chip curling and taps **STOP / FEED HOLD** on the touchscreen. The carriage leadscrew must stop instantly to prevent tool breakage, while the spindle continues spinning at full cutting speed so the workpiece does not stall or weld onto the carbide insert.
+
+* **Objective:**  
+  Verify that `CMD.stop` disengages physical stepping immediately ($<100\text{ ms}$) while the spindle continues spinning at full cutting speed, with zero post-stop carriage creep.
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
+  CMD.stop
+  CMD.simRpm=0
+  ```
+
+* **Physical Simulation Stimulus:**  
+  Continuous $600\text{ RPM}$ spindle rotation throughout the entire test, remaining at $600\text{ RPM}$ during both active cutting and after the stop command is received.
+
+* **Lifecycle Sequence:**
+  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
+  2. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL`; wait for `s.is_on == True`.
+  3. Send `CMD.stop` while spindle continues rotating.
+  4. Wait for `s.is_on == False` (halt confirmation).
+  5. Record halted position $Z_0$; settle for $500\text{ ms}$ while spindle continues turning at $600\text{ RPM}$.
+  6. Assert $Z_{500\text{ms}} == Z_0$.
+  7. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
+
+* **Pass Criteria:**
+  - `s.is_on` transitions to `False` in $<1.0\text{s}$.
+  - Post-halt carriage position is rock-solid ($Z_{500\text{ms}} == Z_0$, exactly $0\text{ du}$ drift) while spindle spins at $600\text{ RPM}$.
+
+* **Fail Criteria:**
+  - Carriage continues creeping after stop confirmation.
+  - `is_on` remains `True`.
+
+---
+
+### 6.5 `soft_limit_at_speed_chuck_halt` (Suite: `test_soft_limits.py`)
+
+* **Real-Life Machining Scenario (Turning up to Chuck / Shoulder Stop):**  
+  The machinist mounts a short workpiece in a 3-jaw chuck. To turn the entire length without crashing into the spinning chuck jaws, they set a virtual Left soft stop $5\text{ mm}$ in front of the chuck face ($-50.000\text{ mm}$). With the spindle running at $600\text{ RPM}$, they engage feed towards the chuck. The motion engine continuously evaluates lookahead distance, cleanly decelerates to a halt at the soft stop, and transitions to disengaged without striking the chuck jaws.
+
+* **Objective:**  
+  Verify soft limit lookahead enforcement, clean boundary deceleration, and zero overrun when feeding towards a Left boundary stop under continuous spindle rotation.
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,1,-50000
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
+  CMD.simRpm=0
+  CMD.axisClearLimit=Z,1
+  ```
+
+* **Physical Simulation Stimulus:**  
+  Continuous $600\text{ RPM}$ virtual spindle rotation throughout approach, boundary arrival, and a $1.0\text{s}$ post-halt dwell window.
+
+* **Lifecycle Sequence:**
+  1. Set Left limit at $-50,000\text{ du}$; wait for `s.z_left_du == -50000`.
+  2. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
+  3. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK`; wait for `s.is_on == True`.
+  4. Wait for `s.is_on == False` (automatic halt at soft shoulder).
+  5. **Anti-Creep Hold Window:** Hold at $600\text{ RPM}$ for $1.0\text{s}$.
+  6. Send `CMD.simRpm=0`; clear limit.
+
+* **Pass Criteria:**
+  - Carriage halts at $-50,000\text{ du} \pm 2\text{ du}$ without touching or overrunning past $-50,002\text{ du}$.
+  - Zero creep during $1.0\text{s}$ hold window at $600\text{ RPM}$.
+  - `s.is_on` is `False`.
+
+* **Fail Criteria:**
+  - Carriage overruns past $-50,002\text{ du}$ (simulated chuck crash).
+  - Controller fails to halt within $8.0\text{s}$.
+  - Carriage creeps past $-50,000\text{ du}$ during post-halt hold window.
+
+---
+
+### 6.6 `soft_limit_at_speed_tail_halt` (Suite: `test_soft_limits.py`)
+
+* **Real-Life Machining Scenario (Reverse Turning / Tailstock Crash Prevention):**  
+  The machinist is boring out an internal cavity or reverse-turning towards the tailstock. To prevent the carriage from colliding with the tailstock casting or running off the leadscrew threads at the end of the lathe bed, a Right soft stop is set at $+50.000\text{ mm}$. The carriage feeds in reverse at $600\text{ RPM}$ and halts cleanly at the boundary stop.
+
+* **Objective:**  
+  Verify soft limit enforcement and zero overrun in the positive travel direction ($+Z$, towards tailstock).
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,0,50000
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
+  CMD.simRpm=0
+  CMD.axisClearLimit=Z,0
+  ```
+
+* **Pass Criteria:**
+  - Carriage halts at $+50,000\text{ du} \pm 2\text{ du}$.
+  - Zero creep during $1.0\text{s}$ hold window at $600\text{ RPM}$.
+
+* **Fail Criteria:**
+  - Carriage overruns past $+50,002\text{ du}$.
+
+---
+
+### 6.7 `axis_zero_and_preset` (Suite: `test_coords_and_presets.py`)
+
+* **Real-Life Machining Scenario (Touch-Off on Part Face & Gauge Block Offset):**  
+  The operator edges up the tool to kiss the end face of a newly chucked workpiece. They tap `Ø Z` on the touch DRO, establishing the part zero origin ($Z = 0.000\text{ mm}$). Then, to calibrate cross-slide tool offset, they touch off against a $10.000\text{ mm}$ gauge block on the part diameter and use the DRO numeric preset modal to enter $+10.000\text{ mm}$ directly on the X axis.
+
+* **Objective:**  
+  Verify that coordinate presetting (`CMD.axisPosDu`) and coordinate zeroing (`CMD.axisZero`) update workpiece coordinates instantly and accurately on both axes with zero position bounce.
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisPosDu=Z,250000
+  CMD.axisZero=Z
+  CMD.axisPosDu=X,100000
+  CMD.axisZero=X
+  ```
+
+* **Lifecycle Sequence:**
+  1. Preset Z to $+250,000\text{ du}$ ($+25.000\text{ mm}$); verify `s.z_du == 250000`.
+  2. Zero Z; verify `s.z_du == 0`.
+  3. Preset X to $+100,000\text{ du}$ ($+10.000\text{ mm}$); verify `s.x_du == 100000`.
+  4. Zero X; verify `s.x_du == 0`.
+  5. **Settle Window:** Wait $300\text{ ms}$; verify both axes remain rock-solid at $0\text{ du}$.
+
+* **Pass Criteria:**
+  - Exact coordinate matching ($0\text{ du}$ error) on all presets and zeroes.
+  - Zero coordinate bounce or jitter after $300\text{ ms}$ settle window.
+
+* **Fail Criteria:**
+  - Coordinate does not update within $3.0\text{s}$.
+  - Position reports non-zero after `axisZero`.
+
+---
+
+### 6.8 `stop_command_latency` (Suite: `test_emergency.py`)
+
+* **Real-Life Machining Scenario (Deterministic Emergency Feed Interrupt):**  
+  During an active feed at $600\text{ RPM}$, the operator hits emergency stop / feed hold. For operator safety and machine protection, the motion engine must extinguish stepper pulses in under $100\text{ ms}$ (less than one single spindle revolution at $600\text{ RPM}$).
+
+* **Objective:**  
+  Measure the round-trip latency from dispatching `CMD.stop` to the moment physical stepping is terminated (`is_on == False`).
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
+  CMD.simRpm=600
+  CMD.stop
+  ```
+
+* **Pass Criteria:**
+  - Stop latency $T_{\text{elapsed}} < 100.0\text{ ms}$.
+  - Controller state reports `is_on == False`.
+
+* **Fail Criteria:**
+  - Stop latency exceeds $100.0\text{ ms}$.
+  - Controller remains in motion.
 
 ---
 
