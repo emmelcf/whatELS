@@ -4,6 +4,7 @@
 #include "WebServerModule.h"
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
+#include "web/CommandDispatcher.h"
 #include "core/OperatorIntent.h"
 #include "motion/kernel/MotionEngine.h"
 #include "motion/DRO_Scale.h"
@@ -632,7 +633,9 @@ int getJoystickPitchStatusDirection() {
 }
 
 static void setModeFromUi(LatheMode modeToSet) {
-  SettingsService::requestMode(static_cast<int>(modeToSet));
+  char cmd[32];
+  snprintf(cmd, sizeof(cmd), "CMD.mode=%d", static_cast<int>(modeToSet));
+  CommandDispatcher::dispatch(cmd, strlen(cmd));
 }
 
 static long normalizePitch(long pitch) {
@@ -718,11 +721,15 @@ void buttonOnOffPress(bool on) {
       gcodeProgram = readGcodeProgram(name);
       if (gcodeProgram.length() > 0) {
         gcodeProgram += '\n';
-        SettingsService::requestIsOn(true);
+        CommandDispatcher::dispatch("CMD.on=1", 8);
       }
     }
   } else {
-    SettingsService::requestIsOn(on);
+    if (on) {
+      CommandDispatcher::dispatch("CMD.on=1", 8);
+    } else {
+      CommandDispatcher::dispatch("CMD.stop", 8);
+    }
   }
 }
 
@@ -737,24 +744,30 @@ static void buttonMultistartPress() {
 }
 
 static void buttonLeftStopPress(AxisId a) {
-  LimitDirection dir = LimitDirection::LIMIT_LEFT_OR_UP;
   const auto& limits = MotionEngine::instance().getSoftLimits(a);
   if (limits.getLeftLimit()) {
-    SettingsService::clearAxisLimit(a, dir);
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "CMD.axisClearLimit=%c,LEFT", (a == AXIS_X) ? 'X' : 'Z');
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   } else {
     int32_t posDu = MotionEngine::instance().getAxisPositionDu(a);
-    SettingsService::setAxisLimitDu(a, dir, posDu);
+    char cmd[48];
+    snprintf(cmd, sizeof(cmd), "CMD.axisLimitDu=%c,LEFT,%ld", (a == AXIS_X) ? 'X' : 'Z', (long)posDu);
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   }
 }
 
 static void buttonRightStopPress(AxisId a) {
-  LimitDirection dir = LimitDirection::LIMIT_RIGHT_OR_DOWN;
   const auto& limits = MotionEngine::instance().getSoftLimits(a);
   if (limits.getRightLimit()) {
-    SettingsService::clearAxisLimit(a, dir);
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "CMD.axisClearLimit=%c,RIGHT", (a == AXIS_X) ? 'X' : 'Z');
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   } else {
     int32_t posDu = MotionEngine::instance().getAxisPositionDu(a);
-    SettingsService::setAxisLimitDu(a, dir, posDu);
+    char cmd[48];
+    snprintf(cmd, sizeof(cmd), "CMD.axisLimitDu=%c,RIGHT,%ld", (a == AXIS_X) ? 'X' : 'Z', (long)posDu);
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   }
 }
 
@@ -765,21 +778,18 @@ static void buttonDisplayPress() {
 }
 
 static void buttonMoveStepPress() {
-  SettingsService::cycleJogStep();
+  CommandDispatcher::dispatch("CMD.feedStepCycle", 17);
 }
 
 static void buttonMeasurePress() {
-  if (currentMeasure() == MeasureUnit::METRIC) {
-    SettingsService::setMeasure(MeasureUnit::INCH);
-  } else if (currentMeasure() == MeasureUnit::INCH) {
-    SettingsService::setMeasure(MeasureUnit::TPI);
-  } else {
-    SettingsService::setMeasure(MeasureUnit::METRIC);
-  }
+  int next = (static_cast<int>(currentMeasure()) + 1) % 3;
+  char cmd[32];
+  snprintf(cmd, sizeof(cmd), "CMD.measure=%d", next);
+  CommandDispatcher::dispatch(cmd, strlen(cmd));
 }
 
 static void buttonReversePress() {
-  SettingsService::reverseFeedDirection();
+  CommandDispatcher::dispatch("CMD.feedRev", 11);
 }
 
 static int wsKeycode = 0;
@@ -942,9 +952,9 @@ void processKeypadEvent() {
   } else if (keyCode == B_DISPL) {
     buttonDisplayPress();
   } else if (keyCode == B_X) {
-    MotionEngine::instance().zeroAxis(AXIS_X);
+    CommandDispatcher::dispatch("CMD.axisZero=X", 14);
   } else if (keyCode == B_Z) {
-    MotionEngine::instance().zeroAxis(AXIS_Z);
+    CommandDispatcher::dispatch("CMD.axisZero=Z", 14);
   } else if (keyCode == B_X_ENA) {
     // Motor enable toggle
   } else if (keyCode == B_Z_ENA) {
@@ -960,23 +970,21 @@ void processKeypadEvent() {
   } else if (keyCode == B_MODE_TURN) {
     setModeFromUi(LatheMode::TURN);
   } else if (keyCode == B_MODE) {
-    // Note for multi-page screens:
-    // For single-page screens like GeckoSub's screenset, tapping the Mode button cycles
-    // through the modes sequentially directly on the main screen:
     LatheMode curMode = currentLatheMode();
-    if (curMode == LatheMode::NORMAL) SettingsService::requestMode(static_cast<int>(LatheMode::XGEAR));
-    else if (curMode == LatheMode::XGEAR) SettingsService::requestMode(static_cast<int>(LatheMode::JOYSTICK));
-    else if (curMode == LatheMode::JOYSTICK) SettingsService::requestMode(static_cast<int>(LatheMode::TURN));
-    else if (curMode == LatheMode::TURN) SettingsService::requestMode(static_cast<int>(LatheMode::FACE));
-    else if (curMode == LatheMode::FACE) SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
-    else if (curMode == LatheMode::CONE) SettingsService::requestMode(static_cast<int>(LatheMode::CUT));
-    else if (curMode == LatheMode::CUT) SettingsService::requestMode(static_cast<int>(LatheMode::SLOT));
-    else if (curMode == LatheMode::SLOT) SettingsService::requestMode(static_cast<int>(LatheMode::THREAD));
-    else if (curMode == LatheMode::THREAD) SettingsService::requestMode(static_cast<int>(LatheMode::ELLIPSE));
-    else if (curMode == LatheMode::ELLIPSE) SettingsService::requestMode(static_cast<int>(LatheMode::GCODE));
-    else if (curMode == LatheMode::GCODE) SettingsService::requestMode(static_cast<int>(LatheMode::ASYNC));
-    else if (curMode == LatheMode::ASYNC) SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
-    else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
+    LatheMode nextMode = LatheMode::NORMAL;
+    if (curMode == LatheMode::NORMAL) nextMode = LatheMode::XGEAR;
+    else if (curMode == LatheMode::XGEAR) nextMode = LatheMode::JOYSTICK;
+    else if (curMode == LatheMode::JOYSTICK) nextMode = LatheMode::TURN;
+    else if (curMode == LatheMode::TURN) nextMode = LatheMode::FACE;
+    else if (curMode == LatheMode::FACE) nextMode = LatheMode::CONE;
+    else if (curMode == LatheMode::CONE) nextMode = LatheMode::CUT;
+    else if (curMode == LatheMode::CUT) nextMode = LatheMode::SLOT;
+    else if (curMode == LatheMode::SLOT) nextMode = LatheMode::THREAD;
+    else if (curMode == LatheMode::THREAD) nextMode = LatheMode::ELLIPSE;
+    else if (curMode == LatheMode::ELLIPSE) nextMode = LatheMode::GCODE;
+    else if (curMode == LatheMode::GCODE) nextMode = LatheMode::ASYNC;
+    else if (curMode == LatheMode::ASYNC) nextMode = LatheMode::NORMAL;
+    setModeFromUi(nextMode);
   } else if (keyCode == B_MODE_XGEAR) {
     setModeFromUi(LatheMode::XGEAR);
   } else if (keyCode == B_MODE_JOYSTICK) {
@@ -993,16 +1001,24 @@ void processKeypadEvent() {
     setModeFromUi(LatheMode::THREAD);
   } else if (keyCode == B_X_TOGGLE_DRO) {
     if (SettingsService::getActiveProfile().xAxis.hasDroScale) {
-      SettingsService::setXDroMode(!SettingsService::isXDroMode());
+      char cmd[32];
+      snprintf(cmd, sizeof(cmd), "SETTINGS.set=prefs.xDroActive=%d", SettingsService::isXDroMode() ? 0 : 1);
+      CommandDispatcher::dispatch(cmd, strlen(cmd));
     }
   } else if (keyCode == B_Z_TOGGLE_DRO) {
     if (SettingsService::getActiveProfile().zAxis.hasDroScale) {
-      SettingsService::setZDroMode(!SettingsService::isZDroMode());
+      char cmd[32];
+      snprintf(cmd, sizeof(cmd), "SETTINGS.set=prefs.zDroActive=%d", SettingsService::isZDroMode() ? 0 : 1);
+      CommandDispatcher::dispatch(cmd, strlen(cmd));
     }
   } else if (keyCode == B_DIA_RAD) {
-    SettingsService::setDiameterMode(!SettingsService::isDiameterMode());
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "SETTINGS.set=prefs.diaRad=%d", SettingsService::isDiameterMode() ? 0 : 1);
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   } else if (keyCode == B_ABS_INC) {
-    SettingsService::setAbsoluteMode(!SettingsService::isAbsoluteMode());
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "SETTINGS.set=prefs.absInc=%d", SettingsService::isAbsoluteMode() ? 0 : 1);
+    CommandDispatcher::dispatch(cmd, strlen(cmd));
   } else if (keyCode == B_SPINDLE_UNITS) {
     buttonDisplayPress();
   }
