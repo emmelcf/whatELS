@@ -52,25 +52,9 @@ JoystickAxisState joystickAxes[] = {
 const int JOYSTICK_AXIS_COUNT = sizeof(joystickAxes) / sizeof(joystickAxes[0]);
 
 portMUX_TYPE joystickPulseMux = portMUX_INITIALIZER_UNLOCKED;
-volatile bool joystickRapidPressed = false;
-volatile int joystickLatheDirectionZ = 0;
-volatile int joystickLatheDirectionX = 0;
-volatile bool joystickLatheRapid = false;
-volatile int joystickPitchAdjustDirection = 0;
-volatile int joystickPitchStatusDirection = 0;
-volatile unsigned long joystickPitchStatusMillis = 0;
+static bool joystickRapidPressed = false;
 bool joystickAvailable = false;
-float joystickPitchChangeFraction = 0;
 unsigned long joystickSampleTimeUs = 0;
-int joystickLatheFeedSignZ = 0;
-int joystickLatheFeedSignX = 0;
-long joystickLathePitchZ = 0;
-long joystickLathePitchX = 0;
-bool joystickLatheThreadLocked = false;
-int joystickLatheSyncAxis = 0;
-long joystickLatheSyncPitch = 0;
-bool joystickLatheRebaseZAfterSync = false;
-bool joystickLatheRebaseXAfterSync = false;
 bool joystickButtonRawPressed = false;
 bool joystickButtonPressed = false;
 bool joystickButtonToggleBlocked = false;
@@ -356,32 +340,8 @@ bool anyJoystickAxisEnabled() {
   return false;
 }
 
-void resetJoystickLatheFeedPosition() {
-  joystickLatheFeedSignZ = 0;
-  joystickLatheFeedSignX = 0;
-  joystickLathePitchZ = 0;
-  joystickLathePitchX = 0;
-  joystickLatheRebaseZAfterSync = false;
-  joystickLatheRebaseXAfterSync = false;
-}
-
 bool joystickUsable() {
   return sysConfig.joystick.enabled && joystickAvailable;
-}
-
-void prepareJoystickLatheManualMove() {
-  if (SettingsService::isOn() && currentLatheMode() == LatheMode::JOYSTICK) {
-    resetJoystickLatheFeedPosition();
-  }
-}
-
-bool isContinuousStep() {
-  if (!sysConfig.timing.enableContinuousMove) return false;
-  return SettingsService::getJogStepDu() == (currentMeasure() == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0]);
-}
-
-bool isRapidManualMove() {
-  return joystickUsable() && joystickRapidPressed;
 }
 
 static int joystickDirectionFromDeflection(float deflection) {
@@ -518,17 +478,17 @@ static bool updateJoystickButton(bool rawPressed, bool moveNeutral) {
     joystickButtonPressed = rawPressed;
     if (joystickButtonPressed) {
       joystickButtonPressMillis = now;
-      joystickButtonToggleBlocked = currentLatheMode() != LatheMode::JOYSTICK || !moveNeutral;
+      joystickButtonToggleBlocked = !moveNeutral;
     } else {
       bool shortClick = now - joystickButtonPressMillis <= sysConfig.joystick.buttonToggleMaxMs;
-      if (sysConfig.joystick.buttonTogglesOnOff && currentLatheMode() == LatheMode::JOYSTICK && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
+      if (sysConfig.joystick.buttonTogglesOnOff && moveNeutral && shortClick && !joystickButtonToggleBlocked) {
         buttonOnOffPress(!SettingsService::isOn());
       }
       joystickButtonToggleBlocked = false;
     }
   }
 
-  if (joystickButtonPressed && (currentLatheMode() != LatheMode::JOYSTICK || !moveNeutral || now - joystickButtonPressMillis > sysConfig.joystick.buttonToggleMaxMs)) {
+  if (joystickButtonPressed && (!moveNeutral || now - joystickButtonPressMillis > sysConfig.joystick.buttonToggleMaxMs)) {
     joystickButtonToggleBlocked = true;
   }
 
@@ -580,50 +540,7 @@ void initJoystick() {
   joystickAvailable = true;
 }
 
-void resetJoystickLatheFeed() {
-  resetJoystickLatheFeedPosition();
-  joystickLatheDirectionZ = 0;
-  joystickLatheDirectionX = 0;
-  joystickLatheRapid = false;
-  for (int i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
-    resetJoystickAxisMotion(&joystickAxes[i]);
-  }
-  joystickPitchAdjustDirection = 0;
-  joystickPitchStatusDirection = 0;
-  joystickPitchStatusMillis = 0;
-  joystickLatheThreadLocked = false;
-  joystickLatheSyncPitch = 0;
-  joystickPitchChangeFraction = 0;
-}
 
-bool joystickLatheFeedCommandActive() {
-  return SettingsService::isOn() && SettingsService::getThreadSetting().dupr != 0 && !joystickLatheRapid && (joystickLatheDirectionZ != 0 || joystickLatheDirectionX != 0);
-}
-
-bool manualMovesAllowedWhenOn() {
-  LatheMode m = currentLatheMode();
-  return m == LatheMode::NORMAL || m == LatheMode::XGEAR || m == LatheMode::ASYNC || m == LatheMode::CONE || m == LatheMode::JOYSTICK;
-}
-
-bool manualMovesIgnoredWhenOn() {
-  return currentLatheMode() == LatheMode::GCODE || isPassMode();
-}
-
-static bool joystickPitchAdjustmentAllowed() {
-  LatheMode m = currentLatheMode();
-  if (m == LatheMode::GCODE) return false;
-  if (!SettingsService::isOn()) return true;
-  return m != LatheMode::THREAD && m != LatheMode::ELLIPSE;
-}
-
-int getJoystickPitchStatusDirection() {
-  int direction = joystickPitchAdjustDirection;
-  if (direction != 0) return direction;
-  if (millis() - joystickPitchStatusMillis < sysConfig.joystick.pitchStatusHoldMs) {
-    return joystickPitchStatusDirection;
-  }
-  return 0;
-}
 
 static void setModeFromUi(LatheMode modeToSet) {
   char cmd[32];
@@ -955,8 +872,7 @@ void processKeypadEvent() {
     LatheMode curMode = currentLatheMode();
     LatheMode nextMode = LatheMode::NORMAL;
     if (curMode == LatheMode::NORMAL) nextMode = LatheMode::XGEAR;
-    else if (curMode == LatheMode::XGEAR) nextMode = LatheMode::JOYSTICK;
-    else if (curMode == LatheMode::JOYSTICK) nextMode = LatheMode::TURN;
+    else if (curMode == LatheMode::XGEAR) nextMode = LatheMode::TURN;
     else if (curMode == LatheMode::TURN) nextMode = LatheMode::FACE;
     else if (curMode == LatheMode::FACE) nextMode = LatheMode::CONE;
     else if (curMode == LatheMode::CONE) nextMode = LatheMode::CUT;
@@ -1030,20 +946,8 @@ void taskJoystick(void *param) {
     bool buttonPressed = updateJoystickButton(rawButtonPressed, moveNeutral);
     joystickRapidPressed = buttonPressed;
 
-    if (currentLatheMode() == LatheMode::JOYSTICK) {
-      bool manualJoystickMove = buttonPressed || !SettingsService::isOn();
-      joystickLatheDirectionZ = joystickZ->direction;
-      joystickLatheDirectionX = joystickX->direction;
-      joystickLatheRapid = buttonPressed && !moveNeutral;
-      updateJoystickManualAxis(joystickZ, manualJoystickMove, false, elapsedUs);
-      updateJoystickManualAxis(joystickX, manualJoystickMove, false, elapsedUs);
-    } else {
-      joystickLatheDirectionZ = 0;
-      joystickLatheDirectionX = 0;
-      joystickLatheRapid = false;
-      updateJoystickManualAxis(joystickZ, true, true, elapsedUs);
-      updateJoystickManualAxis(joystickX, true, true, elapsedUs);
-    }
+    updateJoystickManualAxis(joystickZ, true, true, elapsedUs);
+    updateJoystickManualAxis(joystickX, true, true, elapsedUs);
 
     DELAY(sysConfig.joystick.sampleIntervalMs);
   }

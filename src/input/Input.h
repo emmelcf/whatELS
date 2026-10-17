@@ -41,49 +41,8 @@ enum JoystickAxisIndex {
 };
 
 
-extern JoystickAxisState joystickAxes[];
-extern const int JOYSTICK_AXIS_COUNT;
-
-extern portMUX_TYPE joystickPulseMux;
-extern volatile bool joystickRapidPressed;
-extern volatile int joystickLatheDirectionZ;
-extern volatile int joystickLatheDirectionX;
-extern volatile bool joystickLatheRapid;
-extern volatile int joystickPitchAdjustDirection;
-extern volatile int joystickPitchStatusDirection;
-extern volatile unsigned long joystickPitchStatusMillis;
-extern bool joystickAvailable;
-extern float joystickPitchChangeFraction;
-extern unsigned long joystickSampleTimeUs;
-extern int joystickLatheFeedSignZ;
-extern int joystickLatheFeedSignX;
-extern long joystickLathePitchZ;
-extern long joystickLathePitchX;
-extern bool joystickLatheThreadLocked;
-extern int joystickLatheSyncAxis;
-extern long joystickLatheSyncPitch;
-extern bool joystickLatheRebaseZAfterSync;
-extern bool joystickLatheRebaseXAfterSync;
-extern bool joystickButtonRawPressed;
-extern bool joystickButtonPressed;
-extern bool joystickButtonToggleBlocked;
-extern unsigned long joystickButtonRawChangeMillis;
-extern unsigned long joystickButtonPressMillis;
-extern String joystickStartupWarning;
-
 void initJoystick();
 bool joystickUsable();
-bool joystickAxisEnabled(JoystickAxisState* joystickAxis);
-bool anyJoystickAxisEnabled();
-bool joystickLatheFeedCommandActive();
-void resetJoystickLatheFeedPosition();
-void resetJoystickLatheFeed();
-void prepareJoystickLatheManualMove();
-bool isContinuousStep();
-bool isRapidManualMove();
-bool manualMovesAllowedWhenOn();
-bool manualMovesIgnoredWhenOn();
-int getJoystickPitchStatusDirection();
 
 void adjustPitch(bool plus);
 void buttonPlusMinusPress(bool plus);
