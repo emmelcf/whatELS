@@ -7,17 +7,17 @@
 static unsigned long lastTelemetryHash = 0;
 
 static void serializeKinematics(String* out, const KinematicsState& k) {
-  *out += "K.zDu=" + String(k.zDu) + "\n";
-  *out += "K.xDu=" + String(k.xDu) + "\n";
-  *out += "K.zLeftDu=" + (k.zLeftDefined && k.zLeftEnabled ? String(k.zLeftDu) : "undefined") + "\n";
-  *out += "K.zRightDu=" + (k.zRightDefined && k.zRightEnabled ? String(k.zRightDu) : "undefined") + "\n";
-  *out += "K.xUpDu=" + (k.xUpDefined && k.xUpEnabled ? String(k.xUpDu) : "undefined") + "\n";
-  *out += "K.xDownDu=" + (k.xDownDefined && k.xDownEnabled ? String(k.xDownDu) : "undefined") + "\n";
-  *out += "K.zDis=" + String(k.zDisabled ? 1 : 0) + "\n";
-  *out += "K.xDis=" + String(k.xDisabled ? 1 : 0) + "\n";
-  *out += "K.rpm=" + String(k.rpm) + "\n";
-  *out += "K.turns=" + String(k.turns, 2) + "\n";
-  *out += "K.angle=" + String(k.angle, 2) + "\n";
+  *out += "K.zDu=" + String(k.z.posDu) + "\n";
+  *out += "K.xDu=" + String(k.x.posDu) + "\n";
+  *out += "K.zLeftDu=" + (k.z.limits.leftOrUpDu.has_value() ? String(*k.z.limits.leftOrUpDu) : "undefined") + "\n";
+  *out += "K.zRightDu=" + (k.z.limits.rightOrDownDu.has_value() ? String(*k.z.limits.rightOrDownDu) : "undefined") + "\n";
+  *out += "K.xUpDu=" + (k.x.limits.leftOrUpDu.has_value() ? String(*k.x.limits.leftOrUpDu) : "undefined") + "\n";
+  *out += "K.xDownDu=" + (k.x.limits.rightOrDownDu.has_value() ? String(*k.x.limits.rightOrDownDu) : "undefined") + "\n";
+  *out += "K.zDis=" + String(k.z.disabled ? 1 : 0) + "\n";
+  *out += "K.xDis=" + String(k.x.disabled ? 1 : 0) + "\n";
+  *out += "K.rpm=" + String(k.spindle.rpm) + "\n";
+  *out += "K.turns=" + String(k.spindle.turns, 2) + "\n";
+  *out += "K.angle=" + String(k.spindle.angle, 2) + "\n";
   IELSMode* activeMode = ModeRegistry::getActiveMode();
   int modeId = activeMode ? activeMode->getId() : k.mode;
   *out += "K.mode=" + String(modeId) + "\n";
@@ -78,42 +78,6 @@ static void serializeProperties(String* out, const MachineProperties& p) {
   *out += "P.dbAngleAuto=" + String(p.deadbandAngleAuto ? 1 : 0) + "\n";
   *out += "P.dbTurns=" + String(p.deadbandTurns, 4) + "\n";
   *out += "P.dbTurnsAuto=" + String(p.deadbandTurnsAuto ? 1 : 0) + "\n";
-}
-
-static void serializeLegacyM(String* out, const MachineModel& m) {
-  *out += "M.mode=" + String(m.kinematics.mode) + "\n";
-  *out += "M.on=" + String(m.kinematics.isOn ? 1 : 0) + "\n";
-  *out += "M.estop=" + String(m.kinematics.estop ? 1 : 0) + "\n";
-  *out += "M.dupr=" + String(m.kinematics.dupr) + "\n";
-  *out += "M.nextDupr=" + String(m.kinematics.nextDupr) + "\n";
-  *out += "M.thFmt=" + String((int)m.intent.thread.format) + "\n";
-  *out += "M.thPitch=" + String(m.intent.thread.authorPitch, 4) + "\n";
-  *out += "M.tpMode=" + String((int)m.intent.taper.modeType) + "\n";
-  *out += "M.tpVal=" + String(m.intent.taper.authorVal, 4) + "\n";
-  *out += "M.coneRatio=" + String(m.intent.taper.coneRatio, 6) + "\n";
-  *out += "M.tpPreset=" + String(m.intent.taper.presetId) + "\n";
-  *out += "M.feedStepDu=" + String(m.intent.feedStepDu) + "\n";
-  *out += "M.jogStepDu=" + String(m.intent.jogStepDu) + "\n";
-  *out += "M.measure=" + String(m.properties.measure) + "\n";
-  *out += "M.zDu=" + String(m.kinematics.zDu) + "\n";
-  *out += "M.xDu=" + String(m.kinematics.xDu) + "\n";
-  *out += "M.zLeftDu=" + (m.kinematics.zLeftDefined && m.kinematics.zLeftEnabled ? String(m.kinematics.zLeftDu) : "undefined") + "\n";
-  *out += "M.zRightDu=" + (m.kinematics.zRightDefined && m.kinematics.zRightEnabled ? String(m.kinematics.zRightDu) : "undefined") + "\n";
-  *out += "M.xUpDu=" + (m.kinematics.xUpDefined && m.kinematics.xUpEnabled ? String(m.kinematics.xUpDu) : "undefined") + "\n";
-  *out += "M.xDownDu=" + (m.kinematics.xDownDefined && m.kinematics.xDownEnabled ? String(m.kinematics.xDownDu) : "undefined") + "\n";
-  *out += "M.zDis=" + String(m.kinematics.zDisabled ? 1 : 0) + "\n";
-  *out += "M.xDis=" + String(m.kinematics.xDisabled ? 1 : 0) + "\n";
-  *out += "M.dia=" + String(m.properties.isDiameterMode ? 1 : 0) + "\n";
-  *out += "M.abs=" + String(m.properties.isAbsoluteMode ? 1 : 0) + "\n";
-  *out += "M.zDro=" + String(m.properties.zDroActive ? 1 : 0) + "\n";
-  *out += "M.xDro=" + String(m.properties.xDroActive ? 1 : 0) + "\n";
-  *out += "M.rpm=" + String(m.kinematics.rpm) + "\n";
-  *out += "M.turns=" + String(m.kinematics.turns, 2) + "\n";
-  *out += "M.angle=" + String(m.kinematics.angle, 2) + "\n";
-  *out += "M.starts=" + String(m.cycle.starts) + "\n";
-  *out += "M.passes=" + String(m.cycle.turnPasses) + "\n";
-  *out += "M.opIdx=" + String(m.cycle.currentPass) + "\n";
-  *out += "M.setupIdx=" + String(m.cycle.setupIndex) + "\n";
 }
 
 String RichClientAdapter::buildTelemetry(const MachineModel& m, uint8_t domainMask) {

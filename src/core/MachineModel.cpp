@@ -1,15 +1,7 @@
 #include "MachineModel.h"
-#include "Config.h"
-#include "OperatorIntent.h"
-#include "Input.h"
-#include "Display.h"
-#include "DisplayModel.h"
 #include "SettingsService.h"
 #include "motion/DRO_Scale.h"
 #include "motion/kernel/MotionEngine.h"
-#include <limits.h>
-
-QueueHandle_t motionSnapshotQueue = NULL;
 
 static long getAxisCanonicalPosDu(AxisId a) {
   if (a == AXIS_X && SettingsService::isXDroMode()) {
@@ -20,133 +12,61 @@ static long getAxisCanonicalPosDu(AxisId a) {
   return MotionEngine::instance().getAxisPositionDu(a);
 }
 
-static void populateAxisLimitState(AxisId axis, bool isLeft, int32_t& coordDu, bool& defined, bool& enabled) {
+static AxisLimits getAxisLimits(AxisId axis) {
+  AxisLimits lims;
   const SoftLimitTable& limits = MotionEngine::instance().getSoftLimits(axis);
-  const SoftLimit* lim = isLeft ? limits.getLeftLimit() : limits.getRightLimit();
-  if (lim && lim->defined) {
-    coordDu = lim->coordDu;
-    defined = true;
-    enabled = lim->enabled;
-  } else {
-    coordDu = 0;
-    defined = false;
-    enabled = false;
+  const SoftLimit* leftOrUp = limits.getLeftLimit();
+  if (leftOrUp && leftOrUp->isEnforced()) {
+    lims.leftOrUpDu = leftOrUp->coordDu;
   }
-}
-
-void publishMotionSnapshot() {
-  if (!motionSnapshotQueue) return;
-  StatusSnapshot snap;
-  snap.timestamp = millis();
-  snap.zDu = getAxisCanonicalPosDu(AXIS_Z);
-  snap.xDu = getAxisCanonicalPosDu(AXIS_X);
-  populateAxisLimitState(AXIS_Z, true,  snap.zLeftDu,  snap.zLeftDefined,  snap.zLeftEnabled);
-  populateAxisLimitState(AXIS_Z, false, snap.zRightDu, snap.zRightDefined, snap.zRightEnabled);
-  populateAxisLimitState(AXIS_X, true,  snap.xUpDu,    snap.xUpDefined,    snap.xUpEnabled);
-  populateAxisLimitState(AXIS_X, false, snap.xDownDu,  snap.xDownDefined,  snap.xDownEnabled);
-  snap.zDisabled = false;
-  snap.xDisabled = false;
-  snap.rpm = getApproxRpm();
-  snap.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
-  snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-  snap.mode = static_cast<uint8_t>(SettingsService::getMode());
-  snap.isOn = SettingsService::isOn();
-  snap.estop = emergencyStop != EstopCode::NONE;
-  snap.dupr = SettingsService::getThreadSetting().dupr;
-  snap.nextDupr = snap.dupr;
-
-  // Lock-free Core 1 TelemetryMailbox overlay ([CONC-01], Slice 3)
-  MotionTelemetrySnapshot tSnap;
-  if (MotionEngine::instance().getTelemetryMailbox().read(tSnap)) {
-    if (!SettingsService::isZDroMode()) {
-      snap.zDu = tSnap.zCoordDu;
-    }
-    if (!SettingsService::isXDroMode()) {
-      snap.xDu = tSnap.xCoordDu;
-    }
-    if (tSnap.spindleRpm > 0 || snap.rpm == 0) {
-      snap.rpm = tSnap.spindleRpm;
-    }
-    if (tSnap.isMoving) {
-      snap.isOn = true;
-    }
-    if (ENCODER_STEPS_INT > 0 && tSnap.spindlePulses != 0) {
-      snap.turns = (float) tSnap.spindlePulses / (float) ENCODER_STEPS_INT;
-      snap.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo((long) tSnap.spindlePulses) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-    }
+  const SoftLimit* rightOrDown = limits.getRightLimit();
+  if (rightOrDown && rightOrDown->isEnforced()) {
+    lims.rightOrDownDu = rightOrDown->coordDu;
   }
-
-  xQueueOverwrite(motionSnapshotQueue, &snap);
+  return lims;
 }
 
 KinematicsState MachineModel::captureKinematics() {
-  KinematicsState k = {};
-  StatusSnapshot snap;
-  if (motionSnapshotQueue && xQueuePeek(motionSnapshotQueue, &snap, 0) == pdTRUE) {
-    k.zDu = snap.zDu;
-    k.xDu = snap.xDu;
-    k.zLeftDu = snap.zLeftDu;
-    k.zLeftDefined = snap.zLeftDefined;
-    k.zLeftEnabled = snap.zLeftEnabled;
-    k.zRightDu = snap.zRightDu;
-    k.zRightDefined = snap.zRightDefined;
-    k.zRightEnabled = snap.zRightEnabled;
-    k.xUpDu = snap.xUpDu;
-    k.xUpDefined = snap.xUpDefined;
-    k.xUpEnabled = snap.xUpEnabled;
-    k.xDownDu = snap.xDownDu;
-    k.xDownDefined = snap.xDownDefined;
-    k.xDownEnabled = snap.xDownEnabled;
-    k.zDisabled = snap.zDisabled;
-    k.xDisabled = snap.xDisabled;
-    k.rpm = snap.rpm;
-    k.turns = snap.turns;
-    k.angle = snap.angle;
-    k.mode = snap.mode;
-    k.isOn = snap.isOn;
-    k.estop = snap.estop;
-    k.dupr = snap.dupr;
-    k.nextDupr = snap.nextDupr;
-  } else {
-    // Fallback to direct read if queue not yet populated
-    k.zDu = getAxisCanonicalPosDu(AXIS_Z);
-    k.xDu = getAxisCanonicalPosDu(AXIS_X);
-    populateAxisLimitState(AXIS_Z, true,  k.zLeftDu,  k.zLeftDefined,  k.zLeftEnabled);
-    populateAxisLimitState(AXIS_Z, false, k.zRightDu, k.zRightDefined, k.zRightEnabled);
-    populateAxisLimitState(AXIS_X, true,  k.xUpDu,    k.xUpDefined,    k.xUpEnabled);
-    populateAxisLimitState(AXIS_X, false, k.xDownDu,  k.xDownDefined,  k.xDownEnabled);
-    k.zDisabled = false;
-    k.xDisabled = false;
-    k.rpm = getApproxRpm();
-    k.turns = (ENCODER_STEPS_INT > 0) ? ((float) spindlePos / (float) ENCODER_STEPS_INT) : 0.0f;
-    k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo(spindlePos) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
-    k.mode = SettingsService::getMode();
-    k.isOn = SettingsService::isOn();
-    k.estop = emergencyStop != EstopCode::NONE;
-    k.dupr = SettingsService::getThreadSetting().dupr;
-    k.nextDupr = k.dupr;
-  }
+  KinematicsState k;
+  MotionEngine& engine = MotionEngine::instance();
 
-  // Guarantee tear-free, zero-latency Core 1 coordinates directly from TelemetryMailbox
+  // 1. Physical Axis Dynamics
+  k.z.posDu = getAxisCanonicalPosDu(AXIS_Z);
+  k.z.limits = getAxisLimits(AXIS_Z);
+  k.z.disabled = false;
+
+  k.x.posDu = getAxisCanonicalPosDu(AXIS_X);
+  k.x.limits = getAxisLimits(AXIS_X);
+  k.x.disabled = false;
+
+  // 2. Real-Time Core 1 Overlay from Lock-Free TelemetryMailbox ([CONC-01])
   MotionTelemetrySnapshot tSnap;
-  if (MotionEngine::instance().getTelemetryMailbox().read(tSnap)) {
+  bool hasMailbox = engine.getTelemetryMailbox().read(tSnap);
+  if (hasMailbox) {
     if (!SettingsService::isZDroMode()) {
-      k.zDu = tSnap.zCoordDu;
+      k.z.posDu = tSnap.zCoordDu;
     }
     if (!SettingsService::isXDroMode()) {
-      k.xDu = tSnap.xCoordDu;
+      k.x.posDu = tSnap.xCoordDu;
     }
-    if (tSnap.spindleRpm > 0 || k.rpm == 0) {
-      k.rpm = tSnap.spindleRpm;
-    }
-    if (tSnap.isMoving) {
-      k.isOn = true;
-    }
-    if (ENCODER_STEPS_INT > 0 && tSnap.spindlePulses != 0) {
-      k.turns = (float) tSnap.spindlePulses / (float) ENCODER_STEPS_INT;
-      k.angle = (ENCODER_STEPS_FLOAT > 0) ? ((float) spindleModulo((long) tSnap.spindlePulses) * 360.0f / ENCODER_STEPS_FLOAT) : 0.0f;
+    k.spindle.rpm = tSnap.spindleRpm;
+
+    const LatheConfiguration& profile = SettingsService::getActiveProfile();
+    int ppr = (int)round(profile.spindle.effectivePpr() * 2.0f);
+    if (ppr > 0) {
+      k.spindle.turns = (float)tSnap.spindlePulses / (float)ppr;
+      int64_t moduloPulses = tSnap.spindlePulses % ppr;
+      if (moduloPulses < 0) moduloPulses += ppr;
+      k.spindle.angle = (float)moduloPulses * 360.0f / (float)ppr;
     }
   }
+
+  // 3. Motion State & Mode
+  k.mode = static_cast<uint8_t>(SettingsService::getMode());
+  k.isOn = SettingsService::isOn() || (hasMailbox && tSnap.isMoving);
+  k.estop = SettingsService::getEstopCode() != 0;
+  k.dupr = SettingsService::getThreadSetting().dupr;
+  k.nextDupr = k.dupr;
 
   return k;
 }
@@ -208,25 +128,11 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
   float angleThreshold = SettingsService::getDeadbandAngle();
   float turnsThreshold = SettingsService::getDeadbandTurns();
 
-  if (prev.kinematics.zDu != current.kinematics.zDu ||
-      prev.kinematics.xDu != current.kinematics.xDu ||
-      prev.kinematics.zLeftDefined != current.kinematics.zLeftDefined ||
-      prev.kinematics.zLeftEnabled != current.kinematics.zLeftEnabled ||
-      (current.kinematics.zLeftDefined && prev.kinematics.zLeftDu != current.kinematics.zLeftDu) ||
-      prev.kinematics.zRightDefined != current.kinematics.zRightDefined ||
-      prev.kinematics.zRightEnabled != current.kinematics.zRightEnabled ||
-      (current.kinematics.zRightDefined && prev.kinematics.zRightDu != current.kinematics.zRightDu) ||
-      prev.kinematics.xUpDefined != current.kinematics.xUpDefined ||
-      prev.kinematics.xUpEnabled != current.kinematics.xUpEnabled ||
-      (current.kinematics.xUpDefined && prev.kinematics.xUpDu != current.kinematics.xUpDu) ||
-      prev.kinematics.xDownDefined != current.kinematics.xDownDefined ||
-      prev.kinematics.xDownEnabled != current.kinematics.xDownEnabled ||
-      (current.kinematics.xDownDefined && prev.kinematics.xDownDu != current.kinematics.xDownDu) ||
-      prev.kinematics.zDisabled != current.kinematics.zDisabled ||
-      prev.kinematics.xDisabled != current.kinematics.xDisabled ||
-      prev.kinematics.rpm != current.kinematics.rpm ||
-      fabsf(prev.kinematics.turns - current.kinematics.turns) > turnsThreshold ||
-      fabsf(prev.kinematics.angle - current.kinematics.angle) > angleThreshold ||
+  if (prev.kinematics.z != current.kinematics.z ||
+      prev.kinematics.x != current.kinematics.x ||
+      prev.kinematics.spindle.rpm != current.kinematics.spindle.rpm ||
+      fabsf(prev.kinematics.spindle.turns - current.kinematics.spindle.turns) > turnsThreshold ||
+      fabsf(prev.kinematics.spindle.angle - current.kinematics.spindle.angle) > angleThreshold ||
       prev.kinematics.mode != current.kinematics.mode ||
       prev.kinematics.isOn != current.kinematics.isOn ||
       prev.kinematics.estop != current.kinematics.estop ||

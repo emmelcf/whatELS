@@ -1,8 +1,8 @@
 # NanoELS Phase 2 — End-to-End Motion Integration, Stepper HAL & Legacy Decommissioning Plan
 
-> **Status:** Living Execution Ledger & Multi-Conversation Runbook  
+> **Status:** Completed & Archived Historical Runbook  
 > **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Core 1 Real-Time Wiring), Subsystem 3 (Mode Migration & Legacy Retirement)  
-> **Location:** `docs/motion/PHASE2_EXECUTION_PLAN.md`  
+> **Location:** `docs/archive/PHASE2_EXECUTION_PLAN.md`  
 > **Platform:** ESP32-S3 (PlatformIO `pio run -e esp32s3`)
 
 ---

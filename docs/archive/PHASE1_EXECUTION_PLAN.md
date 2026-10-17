@@ -1,8 +1,8 @@
 # NanoELS Phase 1 — Motion Core Implementation Plan & Execution Ledger
 
-> **Status:** Living Execution Ledger & Multi-Conversation Runbook  
+> **Status:** Completed & Archived Historical Runbook  
 > **Target Subsystems:** Subsystem 1 (HAL & Hardware Timing), Subsystem 2 (Kinematic Motion Engine), Subsystem 3 (Mode Contract)  
-> **Location:** `docs/motion/PHASE1_EXECUTION_PLAN.md`  
+> **Location:** `docs/archive/PHASE1_EXECUTION_PLAN.md`  
 > **Platform:** ESP32-S3 (PlatformIO `pio run -e esp32s3`)
 
 ---

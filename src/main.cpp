@@ -9,7 +9,6 @@
 #include "Debug.h"
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
-#include "MachineModel.h"
 #include "core/OperatorIntent.h"
 #include "modes/ModeRegistry.h"
 #include "motion/hal/Esp32StepperHAL.h"
@@ -86,9 +85,6 @@ void setup() {
 
   DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
-
-  motionSnapshotQueue = xQueueCreate(1, sizeof(StatusSnapshot));
-  publishMotionSnapshot();
 
   if (sysConfig.wifi.enabled) {
     webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
@@ -188,13 +184,6 @@ void loop() {
         activeMode->start();
       }
     }
-  }
-
-  static unsigned long lastSnapshotPublish = 0;
-  unsigned long now = millis();
-  if (now - lastSnapshotPublish >= 20) { // 50 Hz inter-core snapshot cadence
-    lastSnapshotPublish = now;
-    publishMotionSnapshot();
   }
 
   vTaskDelay(pdMS_TO_TICKS(1));

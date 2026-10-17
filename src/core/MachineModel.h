@@ -6,39 +6,7 @@
 #include "Config.h"
 #include "OperatorIntent.h"
 
-// -----------------------------------------------------------------------------
-// Inter-Core Motion Snapshot (~64 Bytes Value-Semantic Transport)
-// -----------------------------------------------------------------------------
-struct StatusSnapshot {
-  uint32_t timestamp;
-  int32_t  zDu;
-  int32_t  xDu;
-  int32_t  zLeftDu;
-  bool     zLeftDefined;
-  bool     zLeftEnabled;
-  int32_t  zRightDu;
-  bool     zRightDefined;
-  bool     zRightEnabled;
-  int32_t  xUpDu;
-  bool     xUpDefined;
-  bool     xUpEnabled;
-  int32_t  xDownDu;
-  bool     xDownDefined;
-  bool     xDownEnabled;
-  bool     zDisabled;
-  bool     xDisabled;
-  uint16_t rpm;
-  float    turns;
-  float    angle;
-  uint8_t  mode;
-  bool     isOn;
-  bool     estop;
-  int32_t  dupr;
-  int32_t  nextDupr;
-};
-
-extern QueueHandle_t motionSnapshotQueue;
-void publishMotionSnapshot();
+#include <optional>
 
 // Domain Bitmasks for Machine Model
 enum DomainFlags : uint8_t {
@@ -53,31 +21,51 @@ enum DomainFlags : uint8_t {
 // Domain helper: parses queries like "K,I", "kinematics,intent", "ALL", "P", etc. into bitmask
 uint8_t parseDomainQuery(const char* query);
 
+// -----------------------------------------------------------------------------
+// Domain Models: Kinematics (Structured Internals)
+// -----------------------------------------------------------------------------
+
+struct AxisLimits {
+  std::optional<int32_t> leftOrUpDu;     // std::nullopt when not defined or disabled
+  std::optional<int32_t> rightOrDownDu;  // std::nullopt when not defined or disabled
+
+  bool operator==(const AxisLimits& other) const {
+    return leftOrUpDu == other.leftOrUpDu && rightOrDownDu == other.rightOrDownDu;
+  }
+  bool operator!=(const AxisLimits& other) const { return !(*this == other); }
+};
+
+struct AxisKinematics {
+  int32_t    posDu{0};
+  AxisLimits limits{};
+  bool       disabled{false};
+
+  bool operator==(const AxisKinematics& other) const {
+    return posDu == other.posDu && limits == other.limits && disabled == other.disabled;
+  }
+  bool operator!=(const AxisKinematics& other) const { return !(*this == other); }
+};
+
+struct SpindleKinematics {
+  uint16_t rpm{0};
+  float    turns{0.0f};
+  float    angle{0.0f};
+
+  bool operator==(const SpindleKinematics& other) const {
+    return rpm == other.rpm && turns == other.turns && angle == other.angle;
+  }
+  bool operator!=(const SpindleKinematics& other) const { return !(*this == other); }
+};
+
 struct KinematicsState {
-  long    zDu;
-  long    xDu;
-  int32_t zLeftDu;
-  bool    zLeftDefined;
-  bool    zLeftEnabled;
-  int32_t zRightDu;
-  bool    zRightDefined;
-  bool    zRightEnabled;
-  int32_t xUpDu;
-  bool    xUpDefined;
-  bool    xUpEnabled;
-  int32_t xDownDu;
-  bool    xDownDefined;
-  bool    xDownEnabled;
-  bool    zDisabled;
-  bool    xDisabled;
-  int     rpm;
-  float   turns;
-  float   angle;
-  int     mode;
-  bool    isOn;
-  bool    estop;
-  long    dupr;
-  long    nextDupr;
+  AxisKinematics    z{};
+  AxisKinematics    x{};
+  SpindleKinematics spindle{};
+  uint8_t           mode{0};
+  bool              isOn{false};
+  bool              estop{false};
+  int32_t           dupr{0};
+  int32_t           nextDupr{0};
 };
 
 struct IntentState {

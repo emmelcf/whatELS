@@ -19,3 +19,10 @@ This directory contains preserved historical working notes, early procedural dra
 ## 2. Early Working Notes & Procedural Drafts
 - **[`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md):** Exploratory design notes, early trade-offs, and conceptual brainstorming during initial project formation.
 - **[`IMPLEMENTATION_PLAN_V1.md`](./IMPLEMENTATION_PLAN_V1.md):** Early sequential implementation checklist preceding the modular 6-subsystem architecture.
+
+---
+
+## 3. Completed Phase Implementation Runbooks
+- **[`PHASE1_EXECUTION_PLAN.md`](./PHASE1_EXECUTION_PLAN.md):** Phase 1 execution runbook (HAL contracts, kinematic math primitives, MotionEngine core, mode contract decoupling). Completed and verified.
+- **[`PHASE2_EXECUTION_PLAN.md`](./PHASE2_EXECUTION_PLAN.md):** Phase 2 execution runbook (automated simulation test harness, Esp32StepperHAL hardware driver, Core 1 motion task wiring, mode primitives migration, legacy motion core decommissioning). Completed and verified.
+

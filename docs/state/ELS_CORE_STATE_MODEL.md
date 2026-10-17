@@ -162,34 +162,49 @@ enum DomainFlags : uint8_t {
 
 ### 4.2 Domain Struct Definitions
 
-#### Domain 'K': Kinematics State
+#### Domain 'K': Kinematics State (Structured Internals)
 ```cpp
+struct AxisLimits {
+  std::optional<int32_t> leftOrUpDu;     // std::nullopt when not defined or disabled
+  std::optional<int32_t> rightOrDownDu;  // std::nullopt when not defined or disabled
+
+  bool operator==(const AxisLimits& other) const {
+    return leftOrUpDu == other.leftOrUpDu && rightOrDownDu == other.rightOrDownDu;
+  }
+  bool operator!=(const AxisLimits& other) const { return !(*this == other); }
+};
+
+struct AxisKinematics {
+  int32_t    posDu{0};       // Workpiece coordinate in canonical deci-microns (10,000 du = 1.0 mm)
+  AxisLimits limits{};       // Modern Soft Limits (std::optional, Zero Magic Sentinels)
+  bool       disabled{false}; // True if stepper driver is powered down / disengaged
+
+  bool operator==(const AxisKinematics& other) const {
+    return posDu == other.posDu && limits == other.limits && disabled == other.disabled;
+  }
+  bool operator!=(const AxisKinematics& other) const { return !(*this == other); }
+};
+
+struct SpindleKinematics {
+  uint16_t rpm{0};          // Spindle speed in revolutions per minute
+  float    turns{0.0f};     // Cumulative continuous spindle revolutions (signed)
+  float    angle{0.0f};     // Spindle angular position in degrees [0.0°, 360.0°)
+
+  bool operator==(const SpindleKinematics& other) const {
+    return rpm == other.rpm && turns == other.turns && angle == other.angle;
+  }
+  bool operator!=(const SpindleKinematics& other) const { return !(*this == other); }
+};
+
 struct KinematicsState {
-  long    zDu;          // Carriage longitudinal position in deci-microns
-  long    xDu;          // Cross-slide transverse position in canonical radius deci-microns
-  // Modern Soft Limits (Zero Magic Sentinels — Explicit Defined/Enabled Lifecycle)
-  int32_t zLeftDu;       // Left / Chuck-side soft limit coordinate in deci-microns
-  bool    zLeftDefined;  // True if left limit coordinate is set
-  bool    zLeftEnabled;  // True if left limit is actively enforced
-  int32_t zRightDu;      // Right / Tailstock-side soft limit coordinate in deci-microns
-  bool    zRightDefined; // True if right limit coordinate is set
-  bool    zRightEnabled; // True if right limit is actively enforced
-  int32_t xUpDu;         // Centerline infeed soft limit coordinate in deci-microns
-  bool    xUpDefined;    // True if infeed limit coordinate is set
-  bool    xUpEnabled;    // True if infeed limit is actively enforced
-  int32_t xDownDu;       // Retract soft limit coordinate in deci-microns
-  bool    xDownDefined;  // True if retract limit coordinate is set
-  bool    xDownEnabled;  // True if retract limit is actively enforced
-  bool    zDisabled;    // True if Z axis stepper driver is powered down / disengaged
-  bool    xDisabled;    // True if X axis stepper driver is powered down / disengaged
-  int     rpm;          // Spindle speed in revolutions per minute
-  float   turns;        // Cumulative continuous spindle revolutions (signed)
-  float   angle;        // Spindle angular position in degrees [0.0°, 360.0°)
-  int     mode;         // Active operational ModeId (0: Gear, 1: Turn, 2: Face, etc.)
-  bool    isOn;         // True if synchronized motion / cycle is actively driving axes
-  bool    estop;        // True if emergency stop or hardware fault is tripped
-  long    dupr;         // Active leadscrew feedrate in deci-microns per spindle rev
-  long    nextDupr;     // Staged feedrate for seamless next-pass / next-cycle transition
+  AxisKinematics    z{};        // Longitudinal Z carriage kinematics & stops
+  AxisKinematics    x{};        // Transverse X cross-slide kinematics & stops
+  SpindleKinematics spindle{};  // Spindle rotary dynamics
+  uint8_t           mode{0};    // Active operational ModeId (0: Gear, 1: Turn, 50: Gearbox, etc.)
+  bool              isOn{false}; // True if motion / cycle is actively driving axes
+  bool              estop{false}; // True if emergency stop or hardware fault is tripped
+  int32_t           dupr{0};    // Active leadscrew feedrate in deci-microns per spindle rev
+  int32_t           nextDupr{0}; // Staged feedrate for seamless next-pass transition
 };
 ```
 
@@ -306,34 +321,32 @@ To prevent memory corruption and priority inversion on dual-core ESP32 microcont
   - Captures immutable `StatusSnapshot` at instant t0
 ```
 
-### 5.2 Immutable Value-Semantic `StatusSnapshot` (~64 Bytes)
+### 5.2 Lock-Free Inter-Core Telemetry (`TelemetryMailbox`)
 Passing a floating pointer or live reference to the mutable motion model from Core 1 to Core 0 results in temporal tearing (e.g. reading a spindle angle that corresponds to a different carriage step pulse).
 
-Instead, the system captures an immutable value-semantic `StatusSnapshot` struct frozen in time:
+Instead of maintaining a parallel queue or copying structs multiple times across tasks, the system implements a **lock-free seqlock mailbox** (`TelemetryMailbox` per `[CONC-01]`):
 
 ```cpp
-struct StatusSnapshot {
-  uint32_t timestamp;      // Millisecond hardware uptime timestamp
-  uint32_t changedFields;  // Bitmask of which fields mutated in this snapshot
-
-  // Canonical Kinematics frozen at instant t0
-  int32_t  zDu;
-  int32_t  xDu;
-  int32_t  zLeftDu;
-  int32_t  zRightDu;
-  int32_t  xUpDu;
-  int32_t  xDownDu;
-  uint16_t rpm;
-  float    turns;
-  float    angle;
-  uint8_t  mode;
-  bool     isOn;
-  bool     estop;
-  int32_t  dupr;
+// src/motion/contract/TelemetryMailbox.h
+struct MotionTelemetrySnapshot {
+  int32_t  zPosSteps;        // Current leadscrew step position
+  int32_t  zCoordDu;         // Workpiece coordinate in deci-microns
+  int32_t  xPosSteps;        // Current cross-slide step position
+  int32_t  xCoordDu;         // Workpiece coordinate in deci-microns
+  uint32_t spindleRpm;       // Filtered RPM
+  int64_t  spindlePulses;    // Raw continuous spindle encoder pulses
+  uint16_t motionMode;       // Active MotionMode enum
+  bool     isMoving;         // Active stepping flag
+  bool     isFeedHold;       // Pause flag
+  uint8_t  activeLimitSlot;  // Limit currently being approached or rested on (0 if none)
+  int32_t  distToLimitDu;    // Remaining distance to stop
+  uint32_t sequenceNumber;   // Monotonic sequence tag for atomic consistency
 };
 ```
 
-* Because the snapshot is compact (~64 bytes) and passed by value or const-reference, it can be pushed directly into a FreeRTOS queue (`xQueueSend`) without mutex contention with real-time stepper pulse ISRs.
+* **Zero Lock Contention:** Core 1 motion tasks publish to `TelemetryMailbox` with memory fences on every tick without ever blocking on FreeRTOS queues or Core 0 memory.
+* **Tear-Free Direct Sampling:** Core 0 supervisory tasks (`MachineModel::captureKinematics()`, `WebServerModule`) sample directly from `TelemetryMailbox` via atomic sequence validation. If a write is in progress, it retries lock-free.
+* **Single Source of Truth:** Core 0 captures canonical `KinematicsState` directly from this mailbox and active axis configuration without maintaining parallel redundant snapshot queues.
 
 ---
 
