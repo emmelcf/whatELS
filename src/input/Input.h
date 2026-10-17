@@ -27,33 +27,6 @@ void resetNumpad();
 long numpadToDeciMicrons();
 float numpadToConeRatio();
 
-// Spindle timing & globals
-extern unsigned long spindleEncTime;
-extern unsigned long spindleEncTimeDiffBulk;
-extern unsigned long spindleEncTimeAtIndex0;
-extern int spindleEncTimeIndex;
-extern long spindlePos;
-extern long spindlePosAvg;
-extern int spindlePosSync;
-extern long spindlePosGlobal;
-
-long spindleModulo(long value);
-void processSpindleCounter();
-
-// Dev spindle encoder simulation (set to 0 to compile it out of release builds).
-#ifndef ENABLE_SPINDLE_SIM
-#define ENABLE_SPINDLE_SIM 1
-#endif
-#ifndef SPINDLE_SIM_TIMEOUT_MS
-#define SPINDLE_SIM_TIMEOUT_MS 2000  // heartbeat watchdog: revert to real encoder if silent
-#endif
-#if ENABLE_SPINDLE_SIM
-void spindleSimSet(bool active, float rpm);
-void spindleSimTurnDeg(float deg);
-bool spindleSimIsActive();
-float spindleSimGetRpm();
-#endif
-
 // Joystick State
 struct JoystickAxisState {
   AxisId axisId;
@@ -111,7 +84,6 @@ bool joystickUsable();
 bool joystickAxisEnabled(JoystickAxisState* joystickAxis);
 bool anyJoystickAxisEnabled();
 bool joystickLatheFeedCommandActive();
-void cancelJoystickLatheSync();
 void resetJoystickLatheFeedPosition();
 void resetJoystickLatheFeed();
 void prepareJoystickLatheManualMove();

@@ -67,10 +67,7 @@ void setup() {
   DEBUG_PRINTLN("initJoystick...");
   initJoystick();
 
-  spindlePos = 0;
-  spindlePosAvg = 0;
-  spindlePosSync = 0;
-  spindlePosGlobal = 0;
+
 
   // Always boot cleanly and safely into standard manual feed / DRO mode
   DEBUG_PRINTLN("Initializing ModeRegistry & standard modes...");
@@ -154,19 +151,13 @@ void loop() {
   }
 
   SettingsService::applyCore1PendingLatches();
-  processSpindleCounter();
 
   LatheMode currentMode = static_cast<LatheMode>(SettingsService::getMode());
-  if (currentMode == LatheMode::JOYSTICK && spindlePosSync != 0 && !joystickLatheFeedCommandActive()) {
-    cancelJoystickLatheSync();
-    resetJoystickLatheFeedPosition();
-  }
-
   IELSMode* activeMode = ModeRegistry::getActiveMode();
   if (activeMode) {
     bool isEngaged = SettingsService::isOn();
     long duprVal = SettingsService::getThreadSetting().dupr;
-    if (!isEngaged || (duprVal == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC) || spindlePosSync != 0) {
+    if (!isEngaged || (duprVal == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC)) {
       if (currentMode == LatheMode::JOYSTICK && (!isEngaged || duprVal == 0)) {
         resetJoystickLatheFeedPosition();
       }

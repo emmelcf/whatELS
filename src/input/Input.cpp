@@ -32,16 +32,6 @@ bool inNumpad = false;
 int numpadDigits[20] = {0};
 int numpadIndex = 0;
 
-// Spindle timing & globals
-unsigned long spindleEncTime = 0;
-unsigned long spindleEncTimeDiffBulk = 0;
-unsigned long spindleEncTimeAtIndex0 = 0;
-int spindleEncTimeIndex = 0;
-long spindlePos = 0;
-long spindlePosAvg = 0;
-int spindlePosSync = 0;
-long spindlePosGlobal = 0;
-
 static bool isPassMode(LatheMode m) {
   return m == LatheMode::TURN || m == LatheMode::FACE || m == LatheMode::CUT || m == LatheMode::THREAD || m == LatheMode::ELLIPSE || m == LatheMode::SLOT;
 }
@@ -360,148 +350,6 @@ bool processNumpad(int keyCode) {
   return inNumpad;
 }
 
-// Spindle functions
-static inline int getSpindleEffectivePpr2x() {
-  int ppr = (int)round(SettingsService::getActiveProfile().spindle.effectivePpr() * 2.0f);
-  return (ppr > 0) ? ppr : 2400;
-}
-
-long spindleModulo(long value) {
-  int ppr = getSpindleEffectivePpr2x();
-  value = value % ppr;
-  if (value < 0) {
-    value += ppr;
-  }
-  return value;
-}
-
-#if ENABLE_SPINDLE_SIM
-// ---------------------------------------------------------------------------
-// Dev spindle simulation (driven by CMD.spindleSim / CMD.spindleSimTurn).
-// Replaces the real encoder count source while active; everything downstream
-// of the count delta (spindlePos, RPM timing, sync) is untouched.
-// ---------------------------------------------------------------------------
-static volatile bool spindleSimActive = false;
-static volatile float spindleSimRpm = 0.0f;          // signed; + = same direction as encoder counts up
-static volatile long spindleSimManualCounts = 0;     // pending hand-rotation counts
-static volatile unsigned long spindleSimHeartbeatMs = 0;
-static bool spindleSimResync = false;                // re-sync the PCNT baseline when leaving override
-static unsigned long spindleSimLastMicros = 0;
-static float spindleSimFraction = 0.0f;
-
-void spindleSimSet(bool active, float rpm) {
-  spindleSimRpm = rpm;
-  spindleSimHeartbeatMs = millis();
-  if (active && !spindleSimActive) {
-    spindleSimLastMicros = micros();
-    spindleSimFraction = 0.0f;
-    spindleSimManualCounts = 0;
-  }
-  if (!active && spindleSimActive) {
-    spindleSimResync = true;
-  }
-  spindleSimActive = active;
-}
-
-void spindleSimTurnDeg(float deg) {
-  if (!spindleSimActive) return;
-  long counts = lroundf(deg / 360.0f * (float) getSpindleEffectivePpr2x());
-  __atomic_fetch_add(&spindleSimManualCounts, counts, __ATOMIC_RELAXED);
-  spindleSimHeartbeatMs = millis();
-}
-
-bool spindleSimIsActive() { return spindleSimActive; }
-float spindleSimGetRpm() { return spindleSimActive ? spindleSimRpm : 0.0f; }
-
-static int spindleSimNextDelta() {
-  unsigned long nowUs = micros();
-  float dt = (float)(nowUs - spindleSimLastMicros) * 1e-6f;
-  spindleSimLastMicros = nowUs;
-  if (dt > 0.1f) dt = 0.1f;
-  if (millis() - spindleSimHeartbeatMs > SPINDLE_SIM_TIMEOUT_MS) {
-    // Visualizer went away: hand control back to the real encoder.
-    spindleSimActive = false;
-    spindleSimRpm = 0.0f;
-    spindleSimResync = true;
-    return 0;
-  }
-  float counts = spindleSimRpm / 60.0f * (float) getSpindleEffectivePpr2x() * dt + spindleSimFraction;
-  int delta = (int) counts;            // truncate toward zero, carry the remainder
-  spindleSimFraction = counts - (float) delta;
-  long pending = __atomic_load_n(&spindleSimManualCounts, __ATOMIC_RELAXED);
-  if (pending != 0) {
-    // Spread hand rotation over ~20 ms so ~30-50 Hz updates look smooth.
-    float k = dt / 0.02f;
-    if (k > 1.0f) k = 1.0f;
-    long take = lroundf((float) pending * k);
-    if (take == 0) take = pending > 0 ? 1 : -1;
-    if (labs(take) > labs(pending)) take = pending;
-    __atomic_fetch_sub(&spindleSimManualCounts, take, __ATOMIC_RELAXED);
-    delta += (int) take;
-  }
-  return delta;
-}
-#endif
-
-void processSpindleCounter() {
-  int delta = 0;
-#if ENABLE_SPINDLE_SIM
-  if (spindleSimActive) {
-    delta = spindleSimNextDelta();
-    if (delta == 0) {
-      return;
-    }
-  } else
-#endif
-  {
-    // Read spindle pulses from MotionEngine telemetry
-    MotionTelemetrySnapshot tSnap;
-    if (MotionEngine::instance().getTelemetryMailbox().read(tSnap)) {
-      static int64_t lastPulses = 0;
-      static bool initialized = false;
-      if (!initialized) {
-        lastPulses = tSnap.spindlePulses;
-        initialized = true;
-      }
-      delta = static_cast<int>(tSnap.spindlePulses - lastPulses);
-      lastPulses = tSnap.spindlePulses;
-    }
-    if (delta == 0) {
-      return;
-    }
-  }
-
-  unsigned long microsNow = micros();
-  int effectivePpr = getSpindleEffectivePpr2x();
-  if (spindleEncTimeIndex >= effectivePpr) {
-    spindleEncTimeDiffBulk = microsNow - spindleEncTimeAtIndex0;
-    spindleEncTimeAtIndex0 = microsNow;
-    spindleEncTimeIndex = 0;
-  }
-  spindleEncTimeIndex += abs(delta);
-
-  spindlePos += delta;
-  spindlePosGlobal += delta;
-  if (spindlePosGlobal > effectivePpr) {
-    spindlePosGlobal -= effectivePpr;
-  } else if (spindlePosGlobal < 0) {
-    spindlePosGlobal += effectivePpr;
-  }
-  if (spindlePos > spindlePosAvg) {
-    spindlePosAvg = spindlePos;
-  } else if (spindlePos < spindlePosAvg - ENCODER_BACKLASH) {
-    spindlePosAvg = spindlePos + ENCODER_BACKLASH;
-  }
-  spindleEncTime = microsNow;
-
-  if (spindlePosSync != 0) {
-    spindlePosSync += delta;
-    if (spindlePosSync % effectivePpr == 0) {
-      spindlePosSync = 0;
-    }
-  }
-}
-
 // Joystick implementation
 bool joystickAxisEnabled(JoystickAxisState* joystickAxis) {
   return joystickAxis->enabled == nullptr || *joystickAxis->enabled;
@@ -523,22 +371,12 @@ void resetJoystickLatheFeedPosition() {
   joystickLatheRebaseXAfterSync = false;
 }
 
-void cancelJoystickLatheSync() {
-  if (currentLatheMode() == LatheMode::JOYSTICK) {
-    spindlePosSync = 0;
-    joystickLatheSyncPitch = 0;
-    joystickLatheRebaseZAfterSync = false;
-    joystickLatheRebaseXAfterSync = false;
-  }
-}
-
 bool joystickUsable() {
   return sysConfig.joystick.enabled && joystickAvailable;
 }
 
 void prepareJoystickLatheManualMove() {
   if (SettingsService::isOn() && currentLatheMode() == LatheMode::JOYSTICK) {
-    cancelJoystickLatheSync();
     resetJoystickLatheFeedPosition();
   }
 }

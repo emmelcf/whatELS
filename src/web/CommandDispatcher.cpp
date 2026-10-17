@@ -1,6 +1,5 @@
 #include "CommandDispatcher.h"
 #include "Config.h"
-#include "Input.h"
 #include "MachineModel.h"
 #include "core/TelemetrySerializer.h"
 #include "WebServerModule.h"
@@ -717,7 +716,6 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         hal->setSimulatedRpm(rpm);
       }
       MotionEngine::instance().touchSimHeartbeat();
-      spindleSimSet(active != 0, rpm);
       if (reply) *reply = String("SIM.spindle=") + (active != 0 ? "1" : "0") + "," + String(rpm, 1) + "\n";
       return true;
     }
@@ -731,7 +729,6 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
         hal->injectSimulatedPulses(counts);
       }
       MotionEngine::instance().touchSimHeartbeat();
-      spindleSimTurnDeg(deg);
       return true;
     }
 #endif
