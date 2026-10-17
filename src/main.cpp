@@ -2,7 +2,6 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include "Config.h"
-#include "Input.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "Debug.h"
@@ -64,8 +63,7 @@ void setup() {
   pinMode(X_ENA, OUTPUT);
   DHIGH(X_STEP);
 
-  DEBUG_PRINTLN("initJoystick...");
-  initJoystick();
+
 
 
 
@@ -82,22 +80,7 @@ void setup() {
   DEBUG_PRINTLN("LittleFS mounted.");
   Serial.flush();
 
-  if (sysConfig.wifi.enabled) {
-    webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
-  }
 
-
-#if ENABLE_USB_KEYBOARD
-  initUsbKeyboard();
-#endif
-
-  DEBUG_PRINTLN("keyboard.begin()...");
-  Serial.flush();
-  keyboard.begin(KEY_DATA, KEY_CLOCK);
-  DEBUG_PRINTLN("Creating keypad task...");
-  Serial.flush();
-  xTaskCreatePinnedToCore(taskKeypad, "taskKeypad", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
-  if (joystickUsable()) xTaskCreatePinnedToCore(taskJoystick, "taskJoystick", 4000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
 
 
   // Initialize and wire MotionEngine to Core 1 ([CONC-01], Slice 3)

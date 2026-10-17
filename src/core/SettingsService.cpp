@@ -941,7 +941,7 @@ bool SettingsService::requestIsOn(bool on) {
 }
 
 bool SettingsService::isOn() {
-  return s_isOn || MotionEngine::instance().isAnyAxisMoving();
+  return s_isOn;
 }
 
 void SettingsService::triggerEstop(int estopCode) {

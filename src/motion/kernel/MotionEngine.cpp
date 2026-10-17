@@ -168,16 +168,21 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
 
 bool MotionEngine::startJog(AxisId axis, int8_t direction, int32_t stepDu) {
   size_t idx = axisIdx(axis);
-  if (direction == 0 || stepDu <= 0) return false;
+  if (direction == 0) return false;
+  if (m_isMoving[idx]) return false; // Kinematic state invariant: axis is currently moving
 
   m_activeMode[idx] = MotionMode::MANUAL_JOG;
   m_direction[idx]  = (direction > 0) ? 1 : -1;
 
-  int32_t jogSteps  = duToSteps(m_axes[idx].geometry, stepDu);
-  if (jogSteps < 1) jogSteps = 1;
+  if (stepDu > 0) {
+    int32_t jogSteps  = duToSteps(m_axes[idx].geometry, stepDu);
+    if (jogSteps < 1) jogSteps = 1;
+    m_hasTarget[idx]  = true;
+    m_targetStep[idx] = m_axes[idx].posSteps + m_direction[idx] * jogSteps;
+  } else {
+    m_hasTarget[idx]  = false;
+  }
 
-  m_hasTarget[idx]  = true;
-  m_targetStep[idx] = m_axes[idx].posSteps + m_direction[idx] * jogSteps;
   m_feedHold[idx]   = false;
   m_isMoving[idx]   = true;
 
@@ -529,7 +534,7 @@ void MotionEngine::onMotionTick() {
           m_stepperHal->pulseStep(axis);
         }
         m_axes[idx].posSteps += dir;
-        if (m_axes[idx].posSteps == m_targetStep[idx]) {
+        if (m_hasTarget[idx] && m_axes[idx].posSteps == m_targetStep[idx]) {
           stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
         }
         break;

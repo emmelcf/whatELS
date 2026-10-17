@@ -491,6 +491,59 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 | `@pitch:<val>`, `@feed:<val>` | Monolithic string injection | Use `CMD.startFeed` or `SETTINGS.set` |
 | `CMD.mode=<modeId>` (idle) | Setting idle tab in core | Client owns view state; core is `IDLE` |
 
+### 10.4 Subsystem 5 Command Dispatcher Architecture: Single-Gate Router & Axis-Aware Safety
+
+To prevent security bypasses, race conditions, and code duplication across command handlers, `CommandDispatcher` (`src/web/CommandDispatcher.cpp`) is structured as a **Single-Gate Command Router**:
+
+```
+Client Payload (e.g. "CMD.jogStep=X,TAIL\n")
+       │
+       ▼
+┌────────────────────────────────────────────────────────┐
+│ 1. Tokenizer                                           │
+│    Splits string into commandName ("jogStep")          │
+│    and clean arguments ("X,TAIL")                      │
+└──────────────────────┬─────────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────────┐
+│ 2. Command Route Lookup (COMMAND_ROUTES table)         │
+│    Matches name -> CommandRoute { name, CommandId, fn }│
+│    Extracts target AxisId from arguments               │
+└──────────────────────┬─────────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────────┐
+│ 3. THE SINGLE GATE (In-Motion Safety Gatekeeper)       │
+│    if (route.id != CommandId::CMD_NONE) {              │
+│      if (!active->canExecuteCommand(route.id,          │
+│                                     active->getState(),│
+│                                     targetAxis)) {     │
+│        return "ERR:Command locked during active motion"│
+│      }                                                 │
+│    }                                                   │
+└──────────────────────┬─────────────────────────────────┘
+                       │
+                       ▼ (Permitted)
+┌────────────────────────────────────────────────────────┐
+│ 4. Dedicated Handler Execution (e.g. handleJogStep)    │
+│    Zero safety boilerplate inside handlers             │
+│    Posts motion packets to Core 1 via m_cmdQueue       │
+└────────────────────────────────────────────────────────┘
+```
+
+#### Key Architectural Properties:
+1. **Pure Command Names & Automated Parsing:**
+   The routing table stores pure command identifiers without hardcoded `=` delimiters. Handlers receive clean, pre-trimmed argument strings with zero magic character offsets.
+2. **Centralized Gatekeeping (`[SAFE-01]`):**
+   No modifying command can execute unless it explicitly clears `active->canExecuteCommand(CommandId, ModeState, AxisId)`. Handlers contain only business logic, making accidental safety omissions impossible.
+3. **Axis-Aware Policy (Lathe Infeed Ergonomics):**
+   `IELSMode::canExecuteCommand` takes `AxisId targetAxis`. In `UnifiedGearboxMode`, when longitudinal carriage feed is active on $Z$, manual jogging on the idle cross-slide ($X$) is **explicitly permitted** so the machinist can adjust depth of cut or back off. Jogging the active feed axis ($Z$) remains strictly locked out.
+4. **Inter-Core Queueing (Core 0 $\to$ Core 1):**
+   All motion initiation (`CMD.startFeed`, `CMD.jogStep`, `CMD.jogHold`, `CMD.jogRelease`, `CMD.stop`) dispatches via FreeRTOS `m_cmdQueue` using `MotionCommandPacket`. Direct cross-core mutations of kinematic registers from `taskWiFi` are strictly prohibited.
+5. **Kinematic State Invariants (Layer 2):**
+   `MotionEngine` enforces hardware invariants independently of policy: if an axis is physically moving (`m_isMoving[axis] == true`), any new conflicting move on that axis is rejected (`return false`).
+
 ---
 
 ## 11. Summary & Cross-References

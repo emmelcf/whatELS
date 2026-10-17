@@ -18,14 +18,6 @@ extern CircleBuffer inBuffer;
 extern CircleBuffer outBuffer;
 extern volatile bool webBuffersReady;
 
-extern QueueHandle_t webUiEventQueue;
-extern volatile int webUiEventPendingCount;
-extern portMUX_TYPE webUiEventMux;
-extern const int WEB_UI_EVENT_QUEUE_LENGTH;
-extern const unsigned long WEB_UI_MOVE_TIMEOUT_MS;
-extern volatile byte webUiHeldMoveAction;
-extern volatile unsigned long webUiHeldMoveMillis;
-extern volatile bool webUiMoveReleaseRequested;
 
 enum ClientChannel : uint8_t {
   CHANNEL_NONE      = 0,
@@ -84,15 +76,7 @@ bool webUiIsConnected();
 void queueWebSocketText(const String& text);
 void publishMachineStatus();
 
-bool queueWebUiEvent(byte actionCode, bool isPress);
-bool readWebUiEvent(WebUiEvent* event);
-bool isWebUiMoveAction(byte actionCode);
-void releaseWebUiHeldMove();
 void requestWebUiMoveRelease();
-void processWebUiMoveFailsafe();
-void updateWebUiMoveWatchdog(byte actionCode, bool isPress);
-void publishKeyboardEvent(byte physicalCode, byte actionCode, bool isPress);
-bool shouldConsumeKeyboardCapture(byte physicalCode, bool isPress);
 
 int getGcodeProgramCount();
 String getCurrentGcodeProgramName();

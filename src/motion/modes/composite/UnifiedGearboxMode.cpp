@@ -271,3 +271,17 @@ void UnifiedGearboxMode::writeTelemetry(TelemetryWriter& writer) const {
     writer.writeKeyValue("target_dist", m_targetDistDu);
     writer.writeKeyValue("state", static_cast<int32_t>(m_state));
 }
+
+bool UnifiedGearboxMode::canExecuteCommand(CommandId cmd, ModeState state, AxisId targetAxis) const {
+    if (cmd == CommandId::CMD_JOG) {
+        if (state == ModeState::RUNNING || state == ModeState::ARMED) {
+            // In single-axis feed, manual jog is permitted on the idle axis (e.g. X cross-slide while Z feeds)
+            if (targetAxis != m_axis) {
+                return true;
+            }
+            return false; // Deny jog on active feed axis
+        }
+    }
+    return IELSMode::canExecuteCommand(cmd, state, targetAxis);
+}
+

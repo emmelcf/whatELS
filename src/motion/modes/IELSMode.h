@@ -62,7 +62,8 @@ enum LivePermissionFlags : uint32_t {
 
 // Canonical Controller Command Identifiers for In-Motion Safety Validation
 enum class CommandId : uint8_t {
-    CMD_STOP = 0,             // Normal deceleration stop (universally permitted)
+    CMD_NONE = 0,             // Unrestricted / Read-only / Query
+    CMD_STOP,                 // Normal deceleration stop (universally permitted)
     CMD_ESTOP,                // Immediate emergency stop (universally permitted)
     CMD_RUN,                  // Engage / start motion
     CMD_FEED_HOLD,            // Temporary pause / feed hold
@@ -77,7 +78,8 @@ enum class CommandId : uint8_t {
     CMD_SET_PITCH,            // Major pitch / lead re-specification
     CMD_SET_LIMIT,            // Adjust axis limit stops
     CMD_ZERO_AXIS,            // Zero out DRO coordinate
-    CMD_SWITCH_MODE           // Change operating mode
+    CMD_SWITCH_MODE,          // Change operating mode
+    CMD_JOG                   // Manual jog move
 };
 
 // Stop actions
@@ -186,7 +188,8 @@ public:
     // --- 5. In-Motion Safety Contract & Gatekeeper [SAFE-01] ---
     virtual uint32_t getLivePermissions() const = 0;
 
-    virtual bool canExecuteCommand(CommandId cmd, ModeState state) const {
+    virtual bool canExecuteCommand(CommandId cmd, ModeState state, AxisId targetAxis = AXIS_Z) const {
+        (void)targetAxis;
         // 1. Stop and E-Stop are inviolable and universally permitted in ALL states
         if (cmd == CommandId::CMD_STOP || cmd == CommandId::CMD_ESTOP) {
             return true;

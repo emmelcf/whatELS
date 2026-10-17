@@ -30,6 +30,8 @@ class TestSpindleSyncGearing1_5mm(HilTestCase):
 
         # 4. Assert accuracy within +/- 2 du
         assert_pos_du(state.z_du, expected_z, tolerance_du=2, axis="Z")
+        await self.client.send("CMD.stop")
+        await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
         self.details = {"expected_z_du": expected_z, "actual_z_du": state.z_du, "error_du": abs(state.z_du - expected_z)}
 
 
@@ -56,4 +58,6 @@ class TestSpindleSyncGearingReverse(HilTestCase):
 
         # 4. Assert accuracy
         assert_pos_du(state.z_du, expected_z, tolerance_du=2, axis="Z")
+        await self.client.send("CMD.stop")
+        await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
         self.details = {"expected_z_du": expected_z, "actual_z_du": state.z_du, "error_du": abs(state.z_du - expected_z)}

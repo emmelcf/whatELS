@@ -13,18 +13,11 @@
 #include <Preferences.h>
 #include <ESPmDNS.h>
 
+#include "motion/kernel/MotionEngine.h"
+
 CircleBuffer inBuffer = {};
 CircleBuffer outBuffer = {};
 volatile bool webBuffersReady = false;
-
-QueueHandle_t webUiEventQueue = NULL;
-volatile int webUiEventPendingCount = 0;
-portMUX_TYPE webUiEventMux = portMUX_INITIALIZER_UNLOCKED;
-const int WEB_UI_EVENT_QUEUE_LENGTH = 16;
-const unsigned long WEB_UI_MOVE_TIMEOUT_MS = 600;
-volatile byte webUiHeldMoveAction = 0;
-volatile unsigned long webUiHeldMoveMillis = 0;
-volatile bool webUiMoveReleaseRequested = false;
 
 ClientSession clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
 uint8_t activeChannelMask = CHANNEL_NONE;
@@ -324,154 +317,12 @@ void publishMachineStatus() {
   }
 }
 
-static bool isWebUiActionCode(byte actionCode) {
-  for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    if (keyboardBindings[i].actionCode == actionCode) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static bool parseWebUiStateToken(const String& token, bool* isPress) {
-  if (token == "1" || token == "p" || token == "press" || token == "down") {
-    *isPress = true;
-    return true;
-  }
-  if (token == "0" || token == "r" || token == "release" || token == "up") {
-    *isPress = false;
-    return true;
-  }
-  return false;
-}
-
-static bool parseWebUiEventCommand(uint8_t* payload, size_t length, WebUiEvent* event, String* error) {
-  size_t start = 0;
-  while (start < length && payload[start] <= 32) start++;
-  size_t end = length;
-  while (end > start && payload[end - 1] <= 32) end--;
-  if (start >= end || payload[start] != '@') return false;
-
-  size_t i = start + 1;
-  long actionCode = 0;
-  bool hasActionCode = false;
-  while (i < end && payload[i] >= '0' && payload[i] <= '9') {
-    hasActionCode = true;
-    actionCode = actionCode * 10 + (payload[i] - '0');
-    if (actionCode > 255) {
-      *error = "web action code must be 1..255";
-      return true;
-    }
-    i++;
-  }
-
-  if (!hasActionCode) {
-    *error = "missing web action code";
-    return true;
-  }
-  if (actionCode < 1 || !isWebUiActionCode(byte(actionCode))) {
-    *error = String("unknown web action code ") + String(actionCode);
-    return true;
-  }
-
-  if (i >= end) {
-    *error = "missing web action state";
-    return true;
-  }
-
-  char separator = char(payload[i]);
-  if (separator != ':' && separator != '=' && separator != ',') {
-    *error = "expected @action:state";
-    return true;
-  }
-  i++;
-  if (i >= end) {
-    *error = "missing web action state";
-    return true;
-  }
-
-  bool isPress = true;
-  String state = "";
-  while (i < end) {
-    state += char(payload[i]);
-    i++;
-  }
-  state.trim();
-  state.toLowerCase();
-  if (!parseWebUiStateToken(state, &isPress)) {
-    *error = String("unknown web action state ") + state;
-    return true;
-  }
-
-  event->actionCode = byte(actionCode);
-  event->isPress = isPress;
-  return true;
-}
-
-bool queueWebUiEvent(byte actionCode, bool isPress) {
-  if (webUiEventQueue == NULL) return false;
-  WebUiEvent event = { actionCode, isPress };
-  bool queued = xQueueSend(webUiEventQueue, &event, 0) == pdTRUE;
-  if (queued) {
-    portENTER_CRITICAL(&webUiEventMux);
-    webUiEventPendingCount = webUiEventPendingCount + 1;
-    portEXIT_CRITICAL(&webUiEventMux);
-  }
-  return queued;
-}
-
-bool readWebUiEvent(WebUiEvent* event) {
-  if (webUiEventQueue == NULL || webUiEventPendingCount <= 0) return false;
-  bool received = xQueueReceive(webUiEventQueue, event, 0) == pdTRUE;
-  portENTER_CRITICAL(&webUiEventMux);
-  if (received && webUiEventPendingCount > 0) webUiEventPendingCount = webUiEventPendingCount - 1;
-  else if (!received) webUiEventPendingCount = 0;
-  portEXIT_CRITICAL(&webUiEventMux);
-  return received;
-}
-
-bool isWebUiMoveAction(byte actionCode) {
-  return actionCode == B_LEFT || actionCode == B_RIGHT || actionCode == B_UP || actionCode == B_DOWN || actionCode == B_FORWARD || actionCode == B_BACK;
-}
-
-void releaseWebUiHeldMove() {
-  webUiHeldMoveAction = 0;
-  webUiHeldMoveMillis = 0;
-}
-
 void requestWebUiMoveRelease() {
-  if (webUiHeldMoveAction == 0 && webUiEventPendingCount <= 0) return;
-  webUiMoveReleaseRequested = true;
-  queueWebUiEvent(B_LEFT, false);
-  queueWebUiEvent(B_RIGHT, false);
-  queueWebUiEvent(B_UP, false);
-  queueWebUiEvent(B_DOWN, false);
-  queueWebUiEvent(B_FORWARD, false);
-  queueWebUiEvent(B_BACK, false);
-}
-
-void processWebUiMoveFailsafe() {
-  if (webUiMoveReleaseRequested) {
-    webUiMoveReleaseRequested = false;
-    releaseWebUiHeldMove();
-  } else if (webUiHeldMoveAction != 0 && millis() - webUiHeldMoveMillis > WEB_UI_MOVE_TIMEOUT_MS) {
-    releaseWebUiHeldMove();
-    queueWebSocketText("WEBUI.warning=move released after lost heartbeat\n");
-  }
-}
-
-void updateWebUiMoveWatchdog(byte actionCode, bool isPress) {
-  if (!isWebUiMoveAction(actionCode)) return;
-  if (isPress) {
-    webUiHeldMoveAction = actionCode;
-    webUiHeldMoveMillis = millis();
-  } else if (webUiHeldMoveAction == actionCode) {
-    releaseWebUiHeldMove();
-  }
+  MotionEngine::instance().stopAll();
 }
 
 static bool handleWebUiEventCommand(uint8_t num, uint8_t* payload, size_t length) {
-  // First, delegate to CanonicalCommandTranslator for sanitized parsing and canonical dispatch
+  // Delegate to CanonicalCommandTranslator for sanitized parsing and canonical dispatch
   CanonicalCommandTranslator translator(num);
   String reply = "";
   if (translator.translateAndDispatch((const char*)payload, length, &reply)) {
@@ -488,29 +339,7 @@ static bool handleWebUiEventCommand(uint8_t num, uint8_t* payload, size_t length
     }
     return true;
   }
-
-  // Next, try parsing as physical/virtual button event
-  WebUiEvent event = {};
-  String error = "";
-  if (!parseWebUiEventCommand(payload, length, &event, &error)) {
-    return false;
-  }
-  if (error.length() > 0) {
-    webSocket.sendTXT(num, String("WEBUI.error=") + error + "\n");
-    return true;
-  }
-  if (!queueWebUiEvent(event.actionCode, event.isPress)) {
-    webSocket.sendTXT(num, "WEBUI.error=event queue full\n");
-  }
-  return true;
-}
-
-void publishKeyboardEvent(byte physicalCode, byte actionCode, bool isPress) {
-  String line = String("KEY.") + (isPress ? "press=" : "release=") + String(physicalCode) + "\n";
-  line += "KEY.action=";
-  line += keyboardActionLabel(actionCode);
-  line += "\n";
-  queueWebSocketText(line);
+  return false;
 }
 
 static void startKeyboardCapture() {

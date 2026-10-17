@@ -35,6 +35,8 @@ public:
         return PERM_FEED_HOLD | PERM_LIVE_FEED_TRIM | PERM_LIVE_STEP_CYCLE | PERM_LIVE_RPM_OVERRIDE;
     }
 
+    bool canExecuteCommand(CommandId cmd, ModeState state, AxisId targetAxis = AXIS_Z) const override;
+
     // --- Atomic Motion Invocation (ADR 0001 / ADR 0002) ---
     bool startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction, int32_t targetDistDu = -1);
 
