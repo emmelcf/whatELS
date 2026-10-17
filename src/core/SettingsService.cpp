@@ -1,23 +1,13 @@
 #include "SettingsService.h"
 #include "Config.h"
 #include "OperatorIntent.h"
-#include "Input.h"
-#include "Display.h"
-#include "WebServerModule.h"
 #include "Debug.h"
 #include "SystemSchemaJson.h"
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
 
-ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
-TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
-long feedStepDu = FEED_STEPS_METRIC[1];
-bool showAngle = true;
-bool showTacho = true;
-bool savedShowAngle = true;
-bool savedShowTacho = true;
-MeasureUnit measure = MeasureUnit::METRIC;
-long moveStep = 1000;
+static ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
+static TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
 
 // Conversational Cycle & Pass State
 long setupIndex = 0;
@@ -44,53 +34,33 @@ static std::optional<float> _deadbandTurns;
 
 static PersistentSetting<bool> s_diameterMode(PREF_NAMESPACE, PREF_DIAMETER_MODE, true, [](const bool& val) {
   operatorPrefs.isDiameterMode = val;
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<bool> s_absoluteMode(PREF_NAMESPACE, PREF_ABSOLUTE_MODE, true, [](const bool& val) {
   operatorPrefs.isAbsoluteMode = val;
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<bool> s_zDroMode(PREF_NAMESPACE, PREF_Z_DRO_MODE, false, [](const bool& val) {
   operatorPrefs.zDroActive = val;
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<bool> s_xDroMode(PREF_NAMESPACE, PREF_X_DRO_MODE, false, [](const bool& val) {
   operatorPrefs.xDroActive = val;
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<int> s_measure(PREF_NAMESPACE, PREF_MEASURE, static_cast<int>(MeasureUnit::METRIC), [](const int& val) {
-  operatorPrefs.measure = measure = static_cast<MeasureUnit>(val);
-  machineStatusForcePublish = true;
+  operatorPrefs.measure = static_cast<MeasureUnit>(val);
 });
 
 static PersistentSetting<int> s_spindleDisplayMode(PREF_NAMESPACE, "sdm", 0, [](const int& /*val*/) {
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<long> s_jogStepDu(PREF_NAMESPACE, PREF_MOVE_STEP, JOG_STEPS_METRIC[0], [](const long& val) {
   operatorPrefs.jogStepDu = val;
-  moveStep = val;
-  machineStatusForcePublish = true;
 });
 
 static PersistentSetting<long> s_feedStepDu(PREF_NAMESPACE, PREF_FEED_STEP, FEED_STEPS_METRIC[0], [](const long& val) {
   operatorPrefs.feedStepDu = val;
-  feedStepDu = val;
-  machineStatusForcePublish = true;
-});
-
-static PersistentSetting<bool> s_showAngle(PREF_NAMESPACE, PREF_SHOW_ANGLE, true, [](const bool& val) {
-  savedShowAngle = showAngle = val;
-  machineStatusForcePublish = true;
-});
-
-static PersistentSetting<bool> s_showTacho(PREF_NAMESPACE, PREF_SHOW_TACHO, true, [](const bool& val) {
-  savedShowTacho = showTacho = val;
-  machineStatusForcePublish = true;
 });
 
 static void migrateSettingsIfNeeded() {
@@ -186,23 +156,15 @@ void SettingsService::init() {
   operatorPrefs.xDroActive = s_xDroMode.get();
 
   s_measure.init();
-  operatorPrefs.measure = measure = static_cast<MeasureUnit>(s_measure.get());
+  operatorPrefs.measure = static_cast<MeasureUnit>(s_measure.get());
 
   s_spindleDisplayMode.init();
 
   s_jogStepDu.init();
-  operatorPrefs.jogStepDu = moveStep = s_jogStepDu.get();
+  operatorPrefs.jogStepDu = s_jogStepDu.get();
 
   s_feedStepDu.init();
-  operatorPrefs.feedStepDu = feedStepDu = s_feedStepDu.get();
-
-  s_showAngle.init();
-  savedShowAngle = showAngle = s_showAngle.get();
-
-  s_showTacho.init();
-  savedShowTacho = showTacho = s_showTacho.get();
-
-  syncLegacyGlobals();
+  operatorPrefs.feedStepDu = s_feedStepDu.get();
 
   // Initialize intent settings
   long absDu = abs(currentThreadSetting.dupr);
@@ -223,11 +185,6 @@ bool SettingsService::hasCapability(LatheCapabilityFlags flag) {
 
 const char* SettingsService::getActivePresetSlug() {
   return activeMachineProfile.profileId;
-}
-
-void SettingsService::syncLegacyGlobals() {
-  ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
-  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 }
 
 static const LatheConfiguration* getActiveBaseline() {
@@ -266,8 +223,6 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
   pref.end();
 
   activeMachineProfile = *pPreset;
-  syncLegacyGlobals();
-  machineStatusForcePublish = true;
 
   if (reply) *reply = "OK:SETTINGS.preset=" + String(activeMachineProfile.profileId) + "\n";
   return true;
@@ -337,8 +292,7 @@ bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
     pref.end();
 
     if (reply) *reply = "OK:SETTINGS.preset.save=" + String(targetSlug) + "\n";
-    machineStatusForcePublish = true;
-    return true;
+      return true;
   }
   if (reply) *reply = "ERR:SETTINGS.preset.save=failed to save preset to LittleFS\n";
   return false;
@@ -433,8 +387,7 @@ bool SettingsService::reset(const char* key, String* reply) {
 
   auto reportOk = [&](const char* name) {
     if (reply) *reply = "OK:SETTINGS.reset=" + String(name) + "\n";
-    machineStatusForcePublish = true;
-  };
+    };
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
 
@@ -445,7 +398,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.zAxis.leadscrewPitchMm = pBaseline->zAxis.leadscrewPitchMm;
     pref.remove("screw_z_du");
     pref.end();
-    syncLegacyGlobals();
     reportOk(key);
     return true;
   }
@@ -453,7 +405,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.xAxis.leadscrewPitchMm = pBaseline->xAxis.leadscrewPitchMm;
     pref.remove("screw_x_du");
     pref.end();
-    syncLegacyGlobals();
     reportOk(key);
     return true;
   }
@@ -461,7 +412,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.zAxis.stepsPerMm = pBaseline->zAxis.stepsPerMm;
     pref.remove("mot_steps_z");
     pref.end();
-    syncLegacyGlobals();
     reportOk(key);
     return true;
   }
@@ -469,7 +419,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.xAxis.stepsPerMm = pBaseline->xAxis.stepsPerMm;
     pref.remove("mot_steps_x");
     pref.end();
-    syncLegacyGlobals();
     reportOk(key);
     return true;
   }
@@ -477,7 +426,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.spindle.encoder.ppr = pBaseline->spindle.encoder.ppr;
     pref.remove("enc_ppr");
     pref.end();
-    syncLegacyGlobals();
     applyDerivedMachineConfig();
     reportOk(key);
     return true;
@@ -486,7 +434,6 @@ bool SettingsService::reset(const char* key, String* reply) {
     activeMachineProfile.spindle.pulleyRatio = pBaseline->spindle.pulleyRatio;
     pref.remove("spindle_ratio");
     pref.end();
-    syncLegacyGlobals();
     applyDerivedMachineConfig();
     reportOk(key);
     return true;
@@ -529,10 +476,10 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
     setAbsoluteMode(true);
     setZDroMode(false);
     setXDroMode(false);
-    feedStepDu = 100;
+    operatorPrefs.feedStepDu = 100;
+    s_feedStepDu.set(100);
     if (reply) *reply = "OK:SETTINGS.resetGroup=prefs\n";
-    machineStatusForcePublish = true;
-    return true;
+      return true;
   }
 
   if (reply) *reply = "ERR:SETTINGS.resetGroup=unknown group: " + String(group) + "\n";
@@ -540,7 +487,8 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
 }
 
 float SettingsService::getDeadbandAngle() {
-  float derived = (ENCODER_STEPS_FLOAT > 0) ? (360.0f / ENCODER_STEPS_FLOAT) : 0.05f;
+  float cpr = activeMachineProfile.spindle.effectivePpr() * 2.0f;
+  float derived = (cpr > 0.0f) ? (360.0f / cpr) : 0.05f;
   return _deadbandAngle.value_or(derived);
 }
 
@@ -549,7 +497,8 @@ bool SettingsService::isDeadbandAngleAuto() {
 }
 
 float SettingsService::getDeadbandTurns() {
-  float derived = (ENCODER_STEPS_FLOAT > 0) ? (2.0f / ENCODER_STEPS_FLOAT) : 0.002f;
+  float cpr = activeMachineProfile.spindle.effectivePpr() * 2.0f;
+  float derived = (cpr > 0.0f) ? (2.0f / cpr) : 0.002f;
   return _deadbandTurns.value_or(derived);
 }
 
@@ -576,8 +525,6 @@ bool SettingsService::setScrewZDu(long du) {
   }
   pref.end();
 
-  syncLegacyGlobals();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -600,8 +547,6 @@ bool SettingsService::setScrewXDu(long du) {
   }
   pref.end();
 
-  syncLegacyGlobals();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -628,8 +573,6 @@ bool SettingsService::setMotorStepsZ(long steps) {
   }
   pref.end();
 
-  syncLegacyGlobals();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -656,8 +599,6 @@ bool SettingsService::setMotorStepsX(long steps) {
   }
   pref.end();
 
-  syncLegacyGlobals();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -679,9 +620,7 @@ bool SettingsService::setEncoderPpr(int ppr) {
   }
   pref.end();
 
-  syncLegacyGlobals();
   applyDerivedMachineConfig();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -703,9 +642,7 @@ bool SettingsService::setSpindleRatio(float ratio) {
   }
   pref.end();
 
-  syncLegacyGlobals();
   applyDerivedMachineConfig();
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -716,7 +653,6 @@ bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limit
   const char* label = (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT";
   MotionEngine::instance().setSoftLimitDu(axis, slot, limitDu, label, true);
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -724,7 +660,6 @@ bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
   size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
   MotionEngine::instance().getSoftLimits(axis).clearLimit(slot);
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -745,10 +680,10 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
     duprVal = -abs(duprVal);
   }
   long absDu = abs(duprVal);
-  if (measure == MeasureUnit::METRIC) {
+  if (operatorPrefs.measure == MeasureUnit::METRIC) {
     currentThreadSetting.format = THREAD_METRIC;
     currentThreadSetting.authorPitch = absDu / 10000.0f;
-  } else if (measure == MeasureUnit::TPI) {
+  } else if (operatorPrefs.measure == MeasureUnit::TPI) {
     currentThreadSetting.format = THREAD_TPI;
     currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
   } else {
@@ -757,7 +692,6 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
   }
   currentThreadSetting.dupr = duprVal;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -771,7 +705,6 @@ bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
   currentThreadSetting.authorPitch = pitchMm;
   currentThreadSetting.dupr = duVal;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -785,7 +718,6 @@ bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
   currentThreadSetting.authorPitch = tpi;
   currentThreadSetting.dupr = duVal;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -799,14 +731,12 @@ bool SettingsService::setFeedrateInch(float pitchInch, bool preserveDirection) {
   currentThreadSetting.authorPitch = pitchInch;
   currentThreadSetting.dupr = duVal;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
 bool SettingsService::reverseFeedDirection() {
   currentThreadSetting.dupr = -currentThreadSetting.dupr;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -815,23 +745,23 @@ ThreadSetting SettingsService::getThreadSetting() {
 }
 
 long SettingsService::getJogStepDu() {
-  return moveStep;
+  return operatorPrefs.jogStepDu;
 }
 
 bool SettingsService::cycleJogStep() {
   long nextStep = JOG_STEPS_METRIC[0];
-  if (measure == MeasureUnit::METRIC) {
-    if (moveStep == JOG_STEPS_METRIC[0]) {
+  if (operatorPrefs.measure == MeasureUnit::METRIC) {
+    if (operatorPrefs.jogStepDu == JOG_STEPS_METRIC[0]) {
       nextStep = JOG_STEPS_METRIC[1];
-    } else if (moveStep == JOG_STEPS_METRIC[1]) {
+    } else if (operatorPrefs.jogStepDu == JOG_STEPS_METRIC[1]) {
       nextStep = JOG_STEPS_METRIC[2];
     } else {
       nextStep = JOG_STEPS_METRIC[0];
     }
   } else {
-    if (moveStep == JOG_STEPS_IMPERIAL[0]) {
+    if (operatorPrefs.jogStepDu == JOG_STEPS_IMPERIAL[0]) {
       nextStep = JOG_STEPS_IMPERIAL[1];
-    } else if (moveStep == JOG_STEPS_IMPERIAL[1]) {
+    } else if (operatorPrefs.jogStepDu == JOG_STEPS_IMPERIAL[1]) {
       nextStep = JOG_STEPS_IMPERIAL[2];
     } else {
       nextStep = JOG_STEPS_IMPERIAL[0];
@@ -845,7 +775,6 @@ bool SettingsService::setStarts(int startsVal) {
   if (startsVal < 1 || startsVal > STARTS_MAX) return false;
   s_starts = startsVal;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -856,12 +785,10 @@ int SettingsService::getStarts() {
 bool SettingsService::setTurnPasses(int passes) {
   if (passes < 1 || passes > 99) return false;
   if (isOn()) {
-    beep();
     return false;
   }
   s_turnPasses = passes;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -877,7 +804,6 @@ bool SettingsService::setTaperRatio(float ratioK) {
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = 0;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -890,7 +816,6 @@ bool SettingsService::setTaperAngle(float angleDeg) {
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = 0;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -910,7 +835,6 @@ bool SettingsService::setTaperPreset(int presetIdx, float angleDeg, float ratioV
   currentTaperSetting.coneRatio = cone;
   currentTaperSetting.presetId = presetIdx;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -921,7 +845,6 @@ TaperSetting SettingsService::getTaperSetting() {
 bool SettingsService::setAuxForward(bool fwd) {
   s_auxForward = fwd;
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -1002,7 +925,6 @@ bool SettingsService::requestMode(int targetMode) {
   }
   s_mode = static_cast<LatheMode>(targetMode);
 
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -1015,7 +937,6 @@ bool SettingsService::requestIsOn(bool on) {
   if (!on) {
     MotionEngine::instance().stopAll();
   }
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -1025,12 +946,10 @@ bool SettingsService::isOn() {
 
 void SettingsService::triggerEstop(int estopCode) {
   setEmergencyStop(static_cast<EstopCode>(estopCode));
-  machineStatusForcePublish = true;
 }
 
 void SettingsService::clearEstop() {
   emergencyStop = EstopCode::NONE;
-  machineStatusForcePublish = true;
 }
 
 int SettingsService::getEstopCode() {
@@ -1075,7 +994,6 @@ bool SettingsService::setDeadbandAngle(const char* val) {
     pref.putFloat("db_angle", deg);
     pref.end();
   }
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -1107,7 +1025,6 @@ bool SettingsService::setDeadbandTurns(const char* val) {
     pref.putFloat("db_turns", turns);
     pref.end();
   }
-  machineStatusForcePublish = true;
   return true;
 }
 
@@ -1225,7 +1142,7 @@ bool SettingsService::get(const char* key, String* reply) {
 
   // --- Tier 3: Operator Preferences ---
   if (getAll || strcasecmp(key, "prefs.startupMeasure") == 0 || strcasecmp(key, "prefs.measure") == 0 || strcasecmp(key, "measure") == 0) {
-    appendSetting("prefs.startupMeasure", String(static_cast<int>(measure)));
+    appendSetting("prefs.startupMeasure", String(static_cast<int>(operatorPrefs.measure)));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.diaRad") == 0 || strcasecmp(key, "prefs.dia") == 0 || strcasecmp(key, "dia") == 0 || strcasecmp(key, "isDiameterMode") == 0) {
@@ -1245,11 +1162,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.feedStepDu") == 0 || strcasecmp(key, "feedStepDu") == 0) {
-    appendSetting("prefs.feedStepDu", String(feedStepDu));
+    appendSetting("prefs.feedStepDu", String(operatorPrefs.feedStepDu));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.jogStepDu") == 0 || strcasecmp(key, "jogStepDu") == 0) {
-    appendSetting("prefs.jogStepDu", String(moveStep));
+    appendSetting("prefs.jogStepDu", String(operatorPrefs.jogStepDu));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "prefs.backlashZDu") == 0 || strcasecmp(key, "backlashZDu") == 0) {
@@ -1318,9 +1235,9 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
   }
 
   if (strcasecmp(groupName, "prefs") == 0) {
-    appendSetting("prefs.startupMeasure", String(static_cast<int>(measure)));
-    appendSetting("prefs.jogStepDu", String(moveStep));
-    appendSetting("prefs.feedStepDu", String(feedStepDu));
+    appendSetting("prefs.startupMeasure", String(static_cast<int>(operatorPrefs.measure)));
+    appendSetting("prefs.jogStepDu", String(operatorPrefs.jogStepDu));
+    appendSetting("prefs.feedStepDu", String(operatorPrefs.feedStepDu));
     appendSetting("prefs.diaRad", isDiameterMode() ? "1" : "0");
     appendSetting("prefs.absInc", isAbsoluteMode() ? "1" : "0");
     appendSetting("prefs.zDroActive", isZDroMode() ? "1" : "0");
@@ -1364,7 +1281,6 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   auto reportOk = [&](const char* name, const String& val) {
     if (reply) *reply = "OK:SETTINGS." + String(name) + "=" + val + "\n";
-    machineStatusForcePublish = true;
   };
 
   auto reportErr = [&](const char* name, const char* reason) {

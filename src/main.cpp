@@ -3,7 +3,6 @@
 #include <LittleFS.h>
 #include "Config.h"
 #include "Input.h"
-#include "Display.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "Debug.h"
@@ -90,9 +89,6 @@ void setup() {
     webUiEventQueue = xQueueCreate(WEB_UI_EVENT_QUEUE_LENGTH, sizeof(WebUiEvent));
   }
 
-  DEBUG_PRINTLN("Serial1.begin()...");
-  Serial.flush();
-  Serial1.begin(NEXTION_NORMAL_BAUD, SERIAL_8N1, 44, 43);
 
 #if ENABLE_USB_KEYBOARD
   initUsbKeyboard();
@@ -106,9 +102,6 @@ void setup() {
   xTaskCreatePinnedToCore(taskKeypad, "taskKeypad", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   if (joystickUsable()) xTaskCreatePinnedToCore(taskJoystick, "taskJoystick", 4000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
 
-  DEBUG_PRINTLN("Creating taskDisplay...");
-  Serial.flush();
-  xTaskCreatePinnedToCore(taskDisplay, "taskDisplay", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
 
   // Initialize and wire MotionEngine to Core 1 ([CONC-01], Slice 3)
   DEBUG_PRINTLN("Initializing MotionEngine HAL and Core 1 Task...");
@@ -172,8 +165,9 @@ void loop() {
   IELSMode* activeMode = ModeRegistry::getActiveMode();
   if (activeMode) {
     bool isEngaged = SettingsService::isOn();
-    if (!isEngaged || (currentThreadSetting.dupr == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC) || spindlePosSync != 0) {
-      if (currentMode == LatheMode::JOYSTICK && (!isEngaged || currentThreadSetting.dupr == 0)) {
+    long duprVal = SettingsService::getThreadSetting().dupr;
+    if (!isEngaged || (duprVal == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC) || spindlePosSync != 0) {
+      if (currentMode == LatheMode::JOYSTICK && (!isEngaged || duprVal == 0)) {
         resetJoystickLatheFeedPosition();
       }
       if (activeMode->isRunning()) {

@@ -126,15 +126,11 @@ To eliminate cross-file coupling and provide clear architectural homes for all c
 
 During this architectural transition, two specific legacy components require careful isolation to avoid polluting the core:
 
-### 3.1 Nextion Display: The Transitional "Oracle" & Isolation Boundary
-* **Why It Remains Today:**  
-  The physical Nextion LCD screen running over UART (`Serial1`) serves as a physical **verification oracle**. During bench testing and refactoring, having a known-working hardware display lets the developer glance at physical DRO coordinates, confirm spindle encoder pulse counts, and verify motor motion without relying on the network stack.
-* **Strict Isolation Boundary:**  
-  1. The Nextion code ([`Display.cpp`](../src/display/Display.cpp) / [`DisplayModel.cpp`](../src/display/DisplayModel.cpp)) is strictly an **external client adapter**.
-  2. It receives read-only state updates from `MachineModel` / `DisplayModel` and transmits key codes or command strings.
-  3. **It is strictly forbidden from holding core motion logic, calculating gearing math, or directly mutating axis structs.**
-* **Deprecation Path:**  
-  Once the modern Web UI and native LVGL display clients are fully commissioned and bench-tested, the Nextion module will be cleanly retired by deleting `Display.cpp` and `Display.h` with zero impact on the rest of the controller.
+### 3.1 Legacy Nextion Display: Decommissioned
+* **Decommissioning Status:**  
+  The legacy procedural Nextion LCD UART driver (`src/display/Display.cpp`, `DisplayModel.cpp`) and Nextion UART OTA flashing routes have been fully decommissioned and removed from the core firmware to eliminate code coupling, procedural globals, and anti-patterns.
+* **Future Client Disposition:**  
+  If Nextion or dumb UART displays are supported in the future, they will reside entirely outside the core firmware as an isolated client adapter conforming to [`ELS_CLIENT_ARCHITECTURE.md`](./clients/ELS_CLIENT_ARCHITECTURE.md).
 
 ---
 
@@ -180,8 +176,7 @@ Below is the complete audit of all implementation and header files across `src/`
 | [`Motion.cpp`](../src/motion/Motion.cpp)<br>[`Motion.h`](../src/motion/Motion.h) | Mixed: Timer ISRs, spindle pulse tracking, legacy mode loops (`modeTurn`, etc.). | **Subsystem 2 (Kinematics)** | Separate real-time timer ISRs & spindle math from mode logic. Move canned cycles (`modeTurn`, `modeCone`) into Subsystem 3 `IELSMode` classes. |
 | [`Config.cpp`](../src/core/Config.cpp)<br>[`Config.h`](../src/core/Config.h) | Legacy globals (`z`, `x`, `dupr`, `starts`), NVS loader, hardware pin `#define`s. | **Subsystem 4 (Persistence)** | Systematically retire raw globals. Hardware pins move to HAL; configuration persistence moves entirely to `SettingsService`. |
 | [`Input.cpp`](../src/input/Input.cpp)<br>[`Input.h`](../src/input/Input.h) | Keypad matrix, button debounce, joystick ADC, Nextion input parser. Directly mutates state. | **Subsystem 6 (HMI Adapters)** | Refactor so input routines NEVER mutate motion state directly. They must emit canonical `CMD.*` strings into `CommandDispatcher`. |
-| [`Display.cpp`](../src/display/Display.cpp)<br>[`Display.h`](../src/display/Display.h) | Nextion LCD serial protocol, page flipping, text drawing. | **Subsystem 6 (HMI Adapters)** | Maintain as transitional verification oracle. Isolate as read-only subscriber to `DisplayModel`. |
-| [`DisplayModel.cpp`](../src/display/DisplayModel.cpp)<br>[`DisplayModel.h`](../src/display/DisplayModel.h) | Bridge between raw variables and display formatting. | **Subsystem 6 (HMI Adapters)** | Refactor to consume clean `MachineModel` domain snapshots (`K`, `I`) rather than raw globals. |
+| `src/display/` (`Display.cpp`, `DisplayModel.cpp`) | Legacy Nextion LCD UART driver & display formatter. | **Decommissioned** | **[REMOVED]** Decommissioned from firmware. Any future UART display will be an isolated client adapter conforming to Client Architecture. |
 | [`WebServerModule.cpp`](../src/web/WebServerModule.cpp)<br>[`WebServerModule.h`](../src/web/WebServerModule.h) | HTTP file server (LittleFS), WebSocket server, network routing. | **Subsystem 5 (Transport)** | Strip all legacy direct-state mutation routes. Restrict strictly to serving static web files and piping WebSocket frames to `ClientEndpoint`. |
 | [`DRO_Scale.cpp`](../src/motion/DRO_Scale.cpp)<br>[`DRO_Scale.h`](../src/motion/DRO_Scale.h) | ESP32 PCNT hardware pulse counter for optical linear scales. | **Subsystem 1 (HAL)** | Clean HAL component. Keep and integrate with `QuadratureEncoderConfig`. |
 | [`UsbKeyboard.cpp`](../src/input/UsbKeyboard.cpp)<br>[`UsbKeyboard.h`](../src/input/UsbKeyboard.h) | USB Host keyboard driver. | **Subsystem 6 (HMI Adapters)** | Clean input driver. Maps USB key scancodes to canonical `CMD.*` strings. |
@@ -190,7 +185,7 @@ Below is the complete audit of all implementation and header files across `src/`
 | [`MachineModel.cpp`](../src/core/MachineModel.cpp)<br>[`MachineModel.h`](../src/core/MachineModel.h) | Atomic state capture across 4 domains (`K`, `I`, `C`, `P`), delta detection. | **Subsystem 4 (State Model)** | Modern foundation. Authoritative state bridge between Core 1 and Core 0. |
 | [`CommandDispatcher.cpp`](../src/web/CommandDispatcher.cpp)<br>[`CommandDispatcher.h`](../src/web/CommandDispatcher.h) | Line protocol command router (`CMD.*`, `SETTINGS.*`). | **Subsystem 5 (Transport)** | Modern foundation. The single entry point for all commands across all clients (Web, physical keys, serial). |
 | [`ClientEndpoint.cpp`](../src/web/ClientEndpoint.cpp)<br>[`ClientEndpoint.h`](../src/web/ClientEndpoint.h) | Client session manager and broadcast distributor. | **Subsystem 5 (Transport)** | Modern foundation. Multiplexes connected clients, tracks subscription flags, handles unicast replies. |
-| [`RichClientAdapter.cpp`](../src/display/RichClientAdapter.cpp)<br>[`RichClientAdapter.h`](../src/display/RichClientAdapter.h) | Domain state serializer (`K.*`, `I.*`, `C.*`, `P.*`). | **Subsystem 5 (Transport)** | Modern foundation. Serializes atomic `MachineModel` snapshots into compact wire strings. |
+| [`TelemetrySerializer.cpp`](../src/core/TelemetrySerializer.cpp)<br>[`TelemetrySerializer.h`](../src/core/TelemetrySerializer.h) | Universal domain state serializer (`K.*`, `I.*`, `C.*`, `P.*`). | **Subsystem 4 (State & Telemetry Model)** | Modern foundation. Universal core state exporter. Serializes atomic `MachineModel` snapshots into canonical wire strings for all clients. |
 
 ---
 

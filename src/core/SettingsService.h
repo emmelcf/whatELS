@@ -132,11 +132,4 @@ public:
   static bool setMotorStepsX(long steps);
   static bool setEncoderPpr(int ppr);
   static bool setSpindleRatio(float ratio);
-
-  // Synchronizes physical parameters into legacy globals for Core 1 compatibility
-  static void syncLegacyGlobals();
 };
-
-extern long moveStep;
-extern bool showAngle;
-extern bool showTacho;

@@ -20,8 +20,6 @@ ControllerConfig sysConfig = {};
 OperatorPreferences operatorPrefs = {};
 
 
-int ENCODER_STEPS_INT = DEFAULT_ENCODER_PPR * 2;
-float ENCODER_STEPS_FLOAT = DEFAULT_ENCODER_PPR * 2;
 long SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
 long SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
 
@@ -113,10 +111,6 @@ void setMachineConfigDefaults() {
 }
 
 void applyDerivedMachineConfig() {
-  int ppr = (int)round(activeMachineProfile.spindle.effectivePpr());
-  if (ppr <= 0) ppr = DEFAULT_ENCODER_PPR;
-  ENCODER_STEPS_INT = ppr * 2;
-  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
 }
 
 void normalizeMachineConfig() {
@@ -290,9 +284,6 @@ void loadMachineProfile() {
     activeMachineProfile.capabilities &= ~CAP_DRO_X;
   }
 
-  // Spindle encoder parameters
-  ENCODER_STEPS_INT = (int)round(activeMachineProfile.spindle.effectivePpr() * 2.0f);
-  ENCODER_STEPS_FLOAT = (float)ENCODER_STEPS_INT;
   printMachineProfileBanner();
 }
 

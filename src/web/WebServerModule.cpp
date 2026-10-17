@@ -2,10 +2,9 @@
 #include "Config.h"
 #include "Debug.h"
 #include "Input.h"
-#include "Display.h"
 #include "core/OperatorIntent.h"
 #include "CommandDispatcher.h"
-#include "RichClientAdapter.h"
+#include "core/TelemetrySerializer.h"
 #include "ClientEndpoint.h"
 #include "SettingsService.h"
 #include "ControllerWebAssets.h"
@@ -35,28 +34,13 @@ static SemaphoreHandle_t wsMutex = NULL;
 WebServer server(80);
 WebSocketsServer webSocket(81);
 volatile int webSocketClientCount = 0;
-volatile bool machineStatusForcePublish = false;
+static volatile bool machineStatusForcePublish = false;
 String lastMachineStatus = "";
 String wifiStatus = "No WiFi";
 unsigned long wifiStatusMillis = 0;
 bool wifiSetupApActive = false;
 bool wifiStationConnected = false;
 String wifiIpAddress = "";
-volatile bool tftUploadActive = false;
-bool tftUploadFailed = false;
-int tftUploadHttpStatus = 200;
-String tftUploadMessage = "";
-long tftUploadExpectedSize = 0;
-long tftUploadReceivedSize = 0;
-long tftUploadSentSize = 0;
-int tftUploadPacketLength = 0;
-int tftUploadProgressPercent = 0;
-long nextionSerialBaud = NEXTION_NORMAL_BAUD;
-byte tftUploadPacket[NEXTION_TFT_PACKET_SIZE];
-const int NEXTION_BUFFER_LENGTH = 256;
-byte nextionBuffer[NEXTION_BUFFER_LENGTH];
-int nextionBufferIndex = 0;
-byte lastNextionPageId = 255;
 volatile bool firmwareUploadActive = false;
 bool firmwareUploadFailed = false;
 int firmwareUploadHttpStatus = 200;
@@ -311,7 +295,7 @@ static void dispatchTelemetry() {
   String droPayload = "";
 
   if (activeChannelMask & CHANNEL_CANONICAL) {
-    canonicalPayload = RichClientAdapter::buildTelemetry(current, changedDomains);
+    canonicalPayload = TelemetrySerializer::buildTelemetry(current, changedDomains);
   }
   if ((activeChannelMask & CHANNEL_GRBL) && (changedDomains & DOMAIN_KINEMATICS)) {
     grblPayload = GrblSerializer::buildStatus(current);
@@ -332,12 +316,7 @@ static void dispatchTelemetry() {
   }
 }
 
-void publishMachineStatus(const String& status, const String& modeText, const String& pitchText, const String& measureText,
-    const String& stepText, const String& rpmText, const String& turnsText, const String& angleText,
-    const String& xText, const String& xLeftText, const String& xRightText,
-    const String& yText, const String& yLeftText, const String& yRightText,
-    const String& zText, const String& zLeftText, const String& zRightText, const String& messageText,
-    bool isDiameterMode, bool isAbsoluteMode, bool xIsDroActive, bool zIsDroActive) {
+void publishMachineStatus() {
   if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
     dispatchTelemetry();
     xSemaphoreGiveRecursive(wsMutex);
@@ -553,9 +532,6 @@ void publishKeyboardEvent(byte physicalCode, byte actionCode, bool isPress) {
   line += keyboardActionLabel(actionCode);
   line += "\n";
   queueWebSocketText(line);
-  if (SHOW_KEY_PRESSES) {
-    setText("t3", (isPress ? "Press " : "Release ") + String(physicalCode));
-  }
 }
 
 static void startKeyboardCapture() {
@@ -664,12 +640,6 @@ static void scheduleConfigRestart() {
   configRestartAt = millis() + 1500;
 }
 
-static void tftUploadLog(const String& message) {
-  String line = String("TFT: ") + message + "\n";
-  DEBUG_PRINT(line);
-  webSocket.broadcastTXT(line);
-  webSocket.loop();
-}
 
 static void firmwareUploadLog(const String& message) {
   String line = String("FW: ") + message + "\n";
@@ -713,7 +683,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     // Unicast initial hydration frame strictly to the connecting client 'num'
     MachineModel hydrationModel = MachineModel::captureAll();
     if (ch == CHANNEL_CANONICAL) {
-      String hydration = RichClientAdapter::buildTelemetry(hydrationModel, DOMAIN_ALL);
+      String hydration = TelemetrySerializer::buildTelemetry(hydrationModel, DOMAIN_ALL);
       webSocket.sendTXT(num, hydration);
     } else if (ch == CHANNEL_GRBL) {
       String hydration = GrblSerializer::buildStatus(hydrationModel);
@@ -1007,7 +977,7 @@ static void handleGcodeRemove() {
 }
 
 static bool machineConfigChangeBlocked() {
-  return SettingsService::isOn() || tftUploadActive || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
+  return SettingsService::isOn() || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
 }
 
 
@@ -1101,210 +1071,7 @@ static void handleWifiReset() {
   server.send(200, "text/plain", "WiFi config reset. Restarting controller...");
 }
 
-static void beginNextionSerial(long baud) {
-  if (nextionSerialBaud == baud) {
-    return;
-  }
 
-  Serial1.updateBaudRate(baud);
-  nextionSerialBaud = baud;
-  DELAY(5);
-}
-
-static void clearNextionInput() {
-  while (Serial1.available() > 0) {
-    Serial1.read();
-  }
-}
-
-static bool waitForNextionByte(byte expected, unsigned long timeoutMs, const String& context) {
-  unsigned long start = millis();
-  while (millis() - start < timeoutMs) {
-    while (Serial1.available() > 0) {
-      if (Serial1.read() == expected) {
-        return true;
-      }
-    }
-    DELAY(1);
-    taskYIELD();
-  }
-  tftUploadLog(context + ": timeout waiting for display ACK");
-  return false;
-}
-
-static bool waitForNextionConnect(unsigned long timeoutMs, const String& context) {
-  String response = "";
-  unsigned long start = millis();
-  while (millis() - start < timeoutMs) {
-    while (Serial1.available() > 0) {
-      byte b = Serial1.read();
-      if (b != 0xFF && response.length() < 120) {
-        response += char(b);
-      }
-      if (response.indexOf("comok") >= 0) {
-        return true;
-      }
-    }
-    DELAY(1);
-    taskYIELD();
-  }
-  tftUploadLog(context + ": connect timeout");
-  return false;
-}
-
-static unsigned long nextionBaudDelayMs(long baud) {
-  return 1000000 / baud + 30;
-}
-
-static void setTftUploadError(const String& message, int status) {
-  tftUploadFailed = true;
-  tftUploadHttpStatus = status;
-  tftUploadMessage = message;
-  tftUploadLog(message);
-}
-
-static bool startNextionTftUpload(long fileSize, long currentBaud) {
-  tftUploadLog(String("upload started, size=") + String(fileSize) + " bytes, display baud=" + String(currentBaud));
-  if (fileSize <= 0) {
-    setTftUploadError("error: TFT file is empty", 400);
-    return false;
-  }
-  if (currentBaud != NEXTION_FIRST_UPLOAD_BAUD && currentBaud != NEXTION_NORMAL_BAUD) {
-    setTftUploadError(String("error: unsupported Nextion baud ") + String(currentBaud), 400);
-    return false;
-  }
-  if (SettingsService::isOn()) {
-    setTftUploadError("error: stop the controller before TFT upload", 409);
-    return false;
-  }
-
-  tftUploadActive = true;
-  tftUploadFailed = false;
-  tftUploadHttpStatus = 200;
-  tftUploadMessage = "TFT upload started";
-  tftUploadExpectedSize = fileSize;
-  tftUploadReceivedSize = 0;
-  tftUploadSentSize = 0;
-  tftUploadPacketLength = 0;
-  tftUploadProgressPercent = 0;
-  nextionBufferIndex = 0;
-  beginNextionSerial(currentBaud);
-  clearNextionInput();
-
-  writeNextionCommandRaw("");
-  DELAY(nextionBaudDelayMs(currentBaud));
-  clearNextionInput();
-  writeNextionCommandRaw("connect");
-  if (!waitForNextionConnect(NEXTION_CONNECT_TIMEOUT_MS, String("connect at selected baud ") + String(currentBaud))) {
-    setTftUploadError(String("error: Nextion display did not answer at selected baud ") + String(currentBaud) + ". Power H5 via POWER port, not USB, and try again", 500);
-    beginNextionSerial(NEXTION_NORMAL_BAUD);
-    tftUploadActive = false;
-    return false;
-  }
-  tftUploadLog(String("display connected at ") + String(currentBaud) + " baud");
-  long uploadBaud = NEXTION_UPLOAD_BAUD;
-  clearNextionInput();
-  writeNextionCommandRaw("");
-  writeNextionCommandRaw(String("whmi-wri ") + String(fileSize) + "," + String(uploadBaud) + ",0");
-  if (currentBaud != uploadBaud) {
-    DELAY(nextionBaudDelayMs(currentBaud) + 50);
-    beginNextionSerial(uploadBaud);
-  }
-  if (!waitForNextionByte(0x05, NEXTION_ACK_TIMEOUT_MS, "whmi-wri")) {
-    setTftUploadError("error: Nextion display did not accept TFT upload", 500);
-    beginNextionSerial(NEXTION_NORMAL_BAUD);
-    tftUploadActive = false;
-    return false;
-  }
-  tftUploadLog(String("display accepted upload, streaming at ") + String(uploadBaud) + " baud");
-  return true;
-}
-
-static bool flushTftUploadPacket() {
-  if (tftUploadPacketLength == 0) {
-    return true;
-  }
-
-  Serial1.write(tftUploadPacket, tftUploadPacketLength);
-  Serial1.flush();
-  tftUploadSentSize += tftUploadPacketLength;
-  tftUploadPacketLength = 0;
-  int progress = tftUploadExpectedSize > 0 ? int(tftUploadSentSize * 100 / tftUploadExpectedSize) : 0;
-  if (progress >= tftUploadProgressPercent + 10 || progress == 100) {
-    tftUploadProgressPercent = progress;
-    tftUploadLog(String("progress ") + String(progress) + "%");
-  }
-  if (!waitForNextionByte(0x05, NEXTION_ACK_TIMEOUT_MS, "packet")) {
-    setTftUploadError("error: Nextion display did not acknowledge TFT data", 500);
-    return false;
-  }
-  return true;
-}
-
-static bool writeTftUploadData(const byte* data, size_t length) {
-  size_t offset = 0;
-  while (offset < length) {
-    int packetSpace = NEXTION_TFT_PACKET_SIZE - tftUploadPacketLength;
-    int copyLength = min(int(length - offset), packetSpace);
-    memcpy(tftUploadPacket + tftUploadPacketLength, data + offset, copyLength);
-    tftUploadPacketLength += copyLength;
-    tftUploadReceivedSize += copyLength;
-    offset += copyLength;
-    if (tftUploadPacketLength == NEXTION_TFT_PACKET_SIZE && !flushTftUploadPacket()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-static void finishTftUpload() {
-  if (!tftUploadFailed && tftUploadReceivedSize != tftUploadExpectedSize) {
-    setTftUploadError("error: TFT upload size mismatch", 400);
-  }
-  if (!tftUploadFailed && !flushTftUploadPacket()) {
-  }
-  if (!tftUploadFailed) {
-    tftUploadMessage = "TFT upload complete";
-    tftUploadLog("upload complete, waiting for display reset");
-    waitForNextionByte(0x88, 5000, "display reset");
-  }
-  beginNextionSerial(NEXTION_NORMAL_BAUD);
-  lcdHashLine0 = LCD_HASH_INITIAL;
-  lcdHashLine1 = LCD_HASH_INITIAL;
-  lcdHashLine2 = LCD_HASH_INITIAL;
-  lcdHashLine3 = LCD_HASH_INITIAL;
-  tftUploadActive = false;
-}
-
-static void handleTftUpload() {
-  const HTTPUpload& upload = server.upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    String filename = upload.filename;
-    filename.toLowerCase();
-    long fileSize = server.hasArg("size") ? server.arg("size").toInt() : upload.totalSize;
-    long currentBaud = server.hasArg("baud") ? server.arg("baud").toInt() : NEXTION_FIRST_UPLOAD_BAUD;
-    tftUploadLog(String("selected ") + upload.filename + ", baud=" + String(currentBaud));
-    if (!filename.endsWith(".tft")) {
-      setTftUploadError("error: only .tft files can be uploaded", 400);
-      return;
-    }
-    startNextionTftUpload(fileSize, currentBaud);
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (!tftUploadFailed) {
-      writeTftUploadData(upload.buf, upload.currentSize);
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    finishTftUpload();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    setTftUploadError("error: TFT upload aborted", 400);
-    beginNextionSerial(NEXTION_NORMAL_BAUD);
-    tftUploadActive = false;
-  }
-}
-
-static void handleTftUploadResult() {
-  server.send(tftUploadHttpStatus, "text/plain", tftUploadMessage);
-}
 
 static void setFirmwareUploadError(const String& message, int status) {
   firmwareUploadFailed = true;
@@ -1318,10 +1085,6 @@ static bool startFirmwareUpload(size_t fileSize) {
   firmwareUploadRestartPending = false;
   if (fileSize == 0) {
     setFirmwareUploadError("error: firmware file is empty", 400);
-    return false;
-  }
-  if (tftUploadActive) {
-    setFirmwareUploadError("error: wait for TFT upload to finish before firmware upload", 409);
     return false;
   }
   if (SettingsService::isOn()) {
@@ -1415,10 +1178,6 @@ static void handleStatus() {
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send(200, "text/plain",
     String("LittleFS.freeSpace=") + String(LittleFS.totalBytes() - LittleFS.usedBytes()) + "\n" +
-    "TFT.uploadActive=" + String(tftUploadActive ? 1 : 0) + "\n" +
-    "TFT.uploaded=" + String(tftUploadSentSize) + "\n" +
-    "TFT.size=" + String(tftUploadExpectedSize) + "\n" +
-    "TFT.message=" + tftUploadMessage + "\n" +
     "FW.uploadActive=" + String(firmwareUploadActive ? 1 : 0) + "\n" +
     "FW.uploaded=" + String((unsigned long)firmwareUploadReceivedSize) + "\n" +
     "FW.size=" + String((unsigned long)firmwareUploadExpectedSize) + "\n" +
@@ -1453,7 +1212,6 @@ static void registerWebRoutes() {
   server.on("/wifi", HTTP_GET, handleWifiGet);
   server.on("/wifi", HTTP_POST, handleWifiSave);
   server.on("/wifi/reset", HTTP_POST, handleWifiReset);
-  server.on("/tft/upload", HTTP_POST, handleTftUploadResult, handleTftUpload);
   server.on("/firmware/upload", HTTP_POST, handleFirmwareUploadResult, handleFirmwareUpload);
   server.on("/status", HTTP_GET, handleStatus);
 }

@@ -1,10 +1,8 @@
-#include "RichClientAdapter.h"
+#include "TelemetrySerializer.h"
 #include "MachineModel.h"
 #include "modes/ModeRegistry.h"
 #include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/MotionConversions.h"
-
-static unsigned long lastTelemetryHash = 0;
 
 static void serializeKinematics(String* out, const KinematicsState& k) {
   *out += "K.zDu=" + String(k.z.posDu) + "\n";
@@ -80,7 +78,7 @@ static void serializeProperties(String* out, const MachineProperties& p) {
   *out += "P.dbTurnsAuto=" + String(p.deadbandTurnsAuto ? 1 : 0) + "\n";
 }
 
-String RichClientAdapter::buildTelemetry(const MachineModel& m, uint8_t domainMask) {
+String TelemetrySerializer::buildTelemetry(const MachineModel& m, uint8_t domainMask) {
   String out = "";
   out.reserve(768);
 
@@ -103,7 +101,7 @@ String RichClientAdapter::buildTelemetry(const MachineModel& m, uint8_t domainMa
 static MachineModel lastCapturedModel = {};
 static bool hasCapturedInitial = false;
 
-bool RichClientAdapter::hasStateChanged() {
+bool TelemetrySerializer::hasStateChanged() {
   MachineModel m = MachineModel::captureAll();
   if (!hasCapturedInitial) {
     hasCapturedInitial = true;

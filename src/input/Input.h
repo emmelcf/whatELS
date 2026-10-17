@@ -36,7 +36,6 @@ extern long spindlePos;
 extern long spindlePosAvg;
 extern int spindlePosSync;
 extern long spindlePosGlobal;
-extern bool beepFlag;
 
 long spindleModulo(long value);
 void processSpindleCounter();

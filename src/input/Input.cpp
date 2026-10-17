@@ -1,7 +1,6 @@
 #include "Input.h"
 #include "Config.h"
 #include "Debug.h"
-#include "Display.h"
 #include "WebServerModule.h"
 #include "UsbKeyboard.h"
 #include "SettingsService.h"
@@ -42,7 +41,6 @@ long spindlePos = 0;
 long spindlePosAvg = 0;
 int spindlePosSync = 0;
 long spindlePosGlobal = 0;
-bool beepFlag = false;
 
 static bool isPassMode(LatheMode m) {
   return m == LatheMode::TURN || m == LatheMode::FACE || m == LatheMode::CUT || m == LatheMode::THREAD || m == LatheMode::ELLIPSE || m == LatheMode::SLOT;
@@ -284,10 +282,8 @@ bool processNumpadResult(int keyCode) {
     const SoftLimit* maxLimit = limits.getLeftLimit();
     if (minLimit && posDu < minLimit->coordDu) {
       posDu = minLimit->coordDu;
-      beep();
     } else if (maxLimit && posDu > maxLimit->coordDu) {
       posDu = maxLimit->coordDu;
-      beep();
     }
     int8_t dir = (sign > 0) ? 1 : -1;
     MotionEngine::instance().startJog(a, dir, abs(newDu));
@@ -309,8 +305,6 @@ bool processNumpadResult(int keyCode) {
   if (keyCode == B_STEP) {
     if (newDu > 0) {
       SettingsService::setJogStepDu(newDu);
-    } else {
-      beep();
     }
     return true;
   }
@@ -367,10 +361,16 @@ bool processNumpad(int keyCode) {
 }
 
 // Spindle functions
+static inline int getSpindleEffectivePpr2x() {
+  int ppr = (int)round(SettingsService::getActiveProfile().spindle.effectivePpr() * 2.0f);
+  return (ppr > 0) ? ppr : 2400;
+}
+
 long spindleModulo(long value) {
-  value = value % ENCODER_STEPS_INT;
+  int ppr = getSpindleEffectivePpr2x();
+  value = value % ppr;
   if (value < 0) {
-    value += ENCODER_STEPS_INT;
+    value += ppr;
   }
   return value;
 }
@@ -405,7 +405,7 @@ void spindleSimSet(bool active, float rpm) {
 
 void spindleSimTurnDeg(float deg) {
   if (!spindleSimActive) return;
-  long counts = lroundf(deg / 360.0f * (float) ENCODER_STEPS_INT);
+  long counts = lroundf(deg / 360.0f * (float) getSpindleEffectivePpr2x());
   __atomic_fetch_add(&spindleSimManualCounts, counts, __ATOMIC_RELAXED);
   spindleSimHeartbeatMs = millis();
 }
@@ -425,7 +425,7 @@ static int spindleSimNextDelta() {
     spindleSimResync = true;
     return 0;
   }
-  float counts = spindleSimRpm / 60.0f * (float) ENCODER_STEPS_INT * dt + spindleSimFraction;
+  float counts = spindleSimRpm / 60.0f * (float) getSpindleEffectivePpr2x() * dt + spindleSimFraction;
   int delta = (int) counts;            // truncate toward zero, carry the remainder
   spindleSimFraction = counts - (float) delta;
   long pending = __atomic_load_n(&spindleSimManualCounts, __ATOMIC_RELAXED);
@@ -472,7 +472,8 @@ void processSpindleCounter() {
   }
 
   unsigned long microsNow = micros();
-  if (spindleEncTimeIndex >= ENCODER_STEPS_INT) {
+  int effectivePpr = getSpindleEffectivePpr2x();
+  if (spindleEncTimeIndex >= effectivePpr) {
     spindleEncTimeDiffBulk = microsNow - spindleEncTimeAtIndex0;
     spindleEncTimeAtIndex0 = microsNow;
     spindleEncTimeIndex = 0;
@@ -481,10 +482,10 @@ void processSpindleCounter() {
 
   spindlePos += delta;
   spindlePosGlobal += delta;
-  if (spindlePosGlobal > ENCODER_STEPS_INT) {
-    spindlePosGlobal -= ENCODER_STEPS_INT;
+  if (spindlePosGlobal > effectivePpr) {
+    spindlePosGlobal -= effectivePpr;
   } else if (spindlePosGlobal < 0) {
-    spindlePosGlobal += ENCODER_STEPS_INT;
+    spindlePosGlobal += effectivePpr;
   }
   if (spindlePos > spindlePosAvg) {
     spindlePosAvg = spindlePos;
@@ -495,7 +496,7 @@ void processSpindleCounter() {
 
   if (spindlePosSync != 0) {
     spindlePosSync += delta;
-    if (spindlePosSync % ENCODER_STEPS_INT == 0) {
+    if (spindlePosSync % effectivePpr == 0) {
       spindlePosSync = 0;
     }
   }
@@ -544,7 +545,7 @@ void prepareJoystickLatheManualMove() {
 
 bool isContinuousStep() {
   if (!sysConfig.timing.enableContinuousMove) return false;
-  return moveStep == (currentMeasure() == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0]);
+  return SettingsService::getJogStepDu() == (currentMeasure() == MeasureUnit::METRIC ? JOG_STEPS_METRIC[0] : JOG_STEPS_IMPERIAL[0]);
 }
 
 bool isRapidManualMove() {
@@ -764,7 +765,7 @@ void resetJoystickLatheFeed() {
 }
 
 bool joystickLatheFeedCommandActive() {
-  return SettingsService::isOn() && currentThreadSetting.dupr != 0 && !joystickLatheRapid && (joystickLatheDirectionZ != 0 || joystickLatheDirectionX != 0);
+  return SettingsService::isOn() && SettingsService::getThreadSetting().dupr != 0 && !joystickLatheRapid && (joystickLatheDirectionZ != 0 || joystickLatheDirectionX != 0);
 }
 
 bool manualMovesAllowedWhenOn() {
@@ -792,123 +793,20 @@ int getJoystickPitchStatusDirection() {
   return 0;
 }
 
-// Nextion byte conversion and message processing
-static bool checkForTerminator() {
-  if (nextionBufferIndex < 3) return false;
-  return nextionBuffer[nextionBufferIndex - 3] == 0xFF &&
-      nextionBuffer[nextionBufferIndex - 2] == 0xFF &&
-      nextionBuffer[nextionBufferIndex - 1] == 0xFF;
-}
-
-static const byte HEX_TO_KEYCODE[256] = {
-  [0] = 0,
-  [1] = 0,
-  [2] = 0,
-  [3] = B_OFF,
-  [4] = B_MODE,
-  [5] = B_REVERSE,
-  [6] = B_MEASURE,
-  [7] = B_STEP,
-  [8] = B_DISPL,
-  [9] = B_OFF, // tTurns
-  [10] = B_OFF, // tAngle
-  [11] = B_X_ENA,
-  [12] = B_X,
-  [13] = B_X_TOGGLE_DRO,
-  [14] = 0,
-  [15] = 0,
-  [16] = 0,
-  [17] = 0,
-  [18] = 0,
-  [19] = B_Z_ENA,
-  [20] = 0,
-  [21] = B_Z,
-  [22] = B_Z_TOGGLE_DRO,
-  [23] = B_OFF,
-  [24] = B_BACKSPACE,
-  [25] = B_ON,
-  [26] = B_0,
-  [27] = B_1,
-  [28] = B_2,
-  [29] = B_3,
-  [30] = B_4,
-  [31] = B_5,
-  [32] = B_6,
-  [33] = B_7,
-  [34] = B_8,
-  [35] = B_9,
-  [36] = B_STOPU,
-  [37] = B_STOPD,
-  [38] = B_STOPF,
-  [39] = B_STOPB,
-  [40] = B_STOPL,
-  [41] = B_STOPR,
-  [42] = B_PLUS,
-  [43] = B_MINUS,
-  [44] = B_UP,
-  [45] = B_DOWN,
-  [46] = B_FORWARD,
-  [47] = B_BACK,
-  [48] = B_LEFT,
-  [49] = B_RIGHT,
-  [50] = B_MULTISTART,
-  [51] = B_KNOWN_DIA,
-  [52] = B_KNOWN_LENGTH,
-  [53] = B_DIA_RAD,
-  [54] = B_ABS_INC,
-  [55] = B_VERSION,
-  [56] = B_SPINDLE_UNITS,
-  [57] = B_PITCH,
-};
-
-static int processNextionMessage() {
-  lastNextionPageId = 255;
-  if (nextionBufferIndex < 6) return 0;
-  if (nextionBuffer[0] == 0x65) {
-    byte pageId = nextionBuffer[1];
-    int code = 0;
-    if (pageId == 0x00) {
-      code = HEX_TO_KEYCODE[nextionBuffer[2]];
-    } else if (pageId == 0x01) {
-      switch (nextionBuffer[2]) {
-        case 12: code = B_MODE_GEARS; break;
-        case 13: code = B_MODE_TURN; break;
-        case 14: code = B_MODE_FACE; break;
-        case 15: code = B_MODE_CONE; break;
-        case 16: code = B_MODE_CUT; break;
-        case 17: code = B_MODE_THREAD; break;
-        case 18: code = B_MODE_ELLIPSE; break;
-        case 19: code = B_MODE_GCODE; break;
-        case 20: code = B_MODE_ASYNC; break;
-        case 23: code = B_MODE_XGEAR; break;
-        case 25: code = B_MODE_JOYSTICK; break;
-        case 27: code = B_MODE_SLOT; break;
-      }
-    }
-    if (code != 0) {
-      lastNextionPageId = pageId;
-      if (nextionBuffer[3] == 0) code |= PS2_BREAK;
-    }
-    return code;
-  }
-  return 0;
-}
-
-static void setModeFromUi(LatheMode modeToSet, bool eventFromNextion) {
+static void setModeFromUi(LatheMode modeToSet) {
   SettingsService::requestMode(static_cast<int>(modeToSet));
-  if (eventFromNextion && lastNextionPageId == 1) toScreen("page 0");
 }
 
 static long normalizePitch(long pitch) {
-  long delta = feedStepDu > 0 ? feedStepDu : (currentMeasure() == MeasureUnit::METRIC ? FEED_STEPS_METRIC[1] : FEED_STEPS_IMPERIAL[2]);
+  long delta = SettingsService::getPreferences().feedStepDu > 0 ? SettingsService::getPreferences().feedStepDu : (currentMeasure() == MeasureUnit::METRIC ? FEED_STEPS_METRIC[1] : FEED_STEPS_IMPERIAL[2]);
   return (delta > 0) ? (round((float)pitch / delta) * delta) : pitch;
 }
 
 void adjustPitch(bool plus) {
   bool minus = !plus;
-  long currentDupr = currentThreadSetting.dupr;
+  long currentDupr = SettingsService::getThreadSetting().dupr;
   if (currentMeasure() != MeasureUnit::TPI) {
-    long delta = feedStepDu > 0 ? feedStepDu : (currentMeasure() == MeasureUnit::METRIC ? FEED_STEPS_METRIC[1] : FEED_STEPS_IMPERIAL[2]);
+    long delta = SettingsService::getPreferences().feedStepDu > 0 ? SettingsService::getPreferences().feedStepDu : (currentMeasure() == MeasureUnit::METRIC ? FEED_STEPS_METRIC[1] : FEED_STEPS_IMPERIAL[2]);
     long normalizedDupr = normalizePitch(currentDupr);
     if (minus && currentDupr > -DUPR_MAX) {
       SettingsService::setFeedrateDupr(max(-DUPR_MAX, normalizedDupr - delta), false);
@@ -962,9 +860,10 @@ void buttonOnOffPress(bool on) {
   bool missingZStops = (zLimits.getLeftLimit() == nullptr || zLimits.getRightLimit() == nullptr);
   bool missingXStops = (xLimits.getLeftLimit() == nullptr || xLimits.getRightLimit() == nullptr);
   if (on && isPassMode() && (missingZStops || missingXStops)) {
-    beep();
+    // Cannot engage motion without set travel stops
+    return;
   } else if (!SettingsService::isOn() && on && currentLatheMode() == LatheMode::GCODE && gcodeProgramIndex >= gcodeProgramCount && setupIndex == 1) {
-    beep();
+    return;
   } else if (!SettingsService::isOn() && on && setupIndex < getLastSetupIndex()) {
     if (currentLatheMode() == LatheMode::THREAD && setupIndex == 3) SettingsService::setTaperRatio(0);
     setupIndex++;
@@ -973,17 +872,13 @@ void buttonOnOffPress(bool on) {
   } else if (!on && MotionEngine::instance().isAnyAxisMoving()) {
     setEmergencyStop(EstopCode::OFF_MANUAL_MOVE);
   } else if (!SettingsService::isOn() && on && currentLatheMode() == LatheMode::GCODE && gcodeProgramIndex >= gcodeProgramCount) {
-    beep();
+    return;
   } else if (!SettingsService::isOn() && on && currentLatheMode() == LatheMode::GCODE) {
     String name = getCurrentGcodeProgramName();
-    if (name.length() == 0) {
-      beep();
-    } else {
+    if (name.length() > 0) {
       gcodeProgramCharIndex = 0;
       gcodeProgram = readGcodeProgram(name);
-      if (gcodeProgram.length() == 0) {
-        beep();
-      } else {
+      if (gcodeProgram.length() > 0) {
         gcodeProgram += '\n';
         SettingsService::requestIsOn(true);
       }
@@ -1073,10 +968,8 @@ static void processHeldRepeatKey() {
 void processKeypadEvent() {
   processWebUiMoveFailsafe();
   int event = 0;
-  bool eventFromNextion = false;
   bool eventUsesKeyboardMap = false;
   bool eventFromWebUi = false;
-  lastNextionPageId = 255;
   WebUiEvent webUiEvent = {};
   if (readWebUiEvent(&webUiEvent)) {
     event = webUiEvent.actionCode;
@@ -1094,22 +987,6 @@ void processKeypadEvent() {
   } else if (keyboard.available()) {
     event = keyboard.read();
     eventUsesKeyboardMap = true;
-  } else if (!tftUploadActive && Serial1.available() > 0) {
-    while (Serial1.available() > 0) {
-      byte incomingByte = Serial1.read();
-      if (nextionBufferIndex < NEXTION_BUFFER_LENGTH) {
-        nextionBuffer[nextionBufferIndex] = incomingByte;
-        nextionBufferIndex++;
-      } else {
-        nextionBufferIndex = 0;
-      }
-      if (checkForTerminator()) {
-        event = processNextionMessage();
-        eventFromNextion = event != 0 && lastNextionPageId != 255;
-        nextionBufferIndex = 0;
-        break;
-      }
-    }
   }
   if (event == 0) {
     processHeldRepeatKey();
@@ -1144,7 +1021,6 @@ void processKeypadEvent() {
 
   if (currentLatheMode() == LatheMode::GCODE && SettingsService::isOn()) {
     // Not allowed to interfere other than turn off.
-    if (isPress && keyCode != B_OFF) beep();
     return;
   }
 
@@ -1218,11 +1094,11 @@ void processKeypadEvent() {
   } else if (keyCode == B_STOPD) {
     buttonRightStopPress(AXIS_X);
   } else if (keyCode == B_MODE_ELLIPSE) {
-    setModeFromUi(LatheMode::ELLIPSE, eventFromNextion);
+    setModeFromUi(LatheMode::ELLIPSE);
   } else if (keyCode == B_MODE_GCODE) {
-    setModeFromUi(LatheMode::GCODE, eventFromNextion);
+    setModeFromUi(LatheMode::GCODE);
   } else if (keyCode == B_MODE_ASYNC) {
-    setModeFromUi(LatheMode::ASYNC, eventFromNextion);
+    setModeFromUi(LatheMode::ASYNC);
   } else if (keyCode == B_MULTISTART) {
     buttonMultistartPress();
   } else if (keyCode == B_DISPL) {
@@ -1242,13 +1118,11 @@ void processKeypadEvent() {
   } else if (keyCode == B_MEASURE) {
     buttonMeasurePress();
   } else if (keyCode == B_MODE_GEARS) {
-    setModeFromUi(LatheMode::NORMAL, eventFromNextion);
+    setModeFromUi(LatheMode::NORMAL);
   } else if (keyCode == B_MODE_TURN) {
-    setModeFromUi(LatheMode::TURN, eventFromNextion);
+    setModeFromUi(LatheMode::TURN);
   } else if (keyCode == B_MODE) {
-    // Note for multi-page screens (e.g. stock Nextion or future LVGL mode selection screen):
-    // Stock Nextion opened a mode selection screen (page 1) when tapping the mode button:
-    //   if (eventFromNextion) toScreen("page 1");
+    // Note for multi-page screens:
     // For single-page screens like GeckoSub's screenset, tapping the Mode button cycles
     // through the modes sequentially directly on the main screen:
     LatheMode curMode = currentLatheMode();
@@ -1266,38 +1140,33 @@ void processKeypadEvent() {
     else if (curMode == LatheMode::ASYNC) SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
     else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
   } else if (keyCode == B_MODE_XGEAR) {
-    setModeFromUi(LatheMode::XGEAR, eventFromNextion);
+    setModeFromUi(LatheMode::XGEAR);
   } else if (keyCode == B_MODE_JOYSTICK) {
-    setModeFromUi(LatheMode::JOYSTICK, eventFromNextion);
+    setModeFromUi(LatheMode::JOYSTICK);
   } else if (keyCode == B_MODE_FACE) {
-    setModeFromUi(LatheMode::FACE, eventFromNextion);
+    setModeFromUi(LatheMode::FACE);
   } else if (keyCode == B_MODE_CONE) {
-    setModeFromUi(LatheMode::CONE, eventFromNextion);
+    setModeFromUi(LatheMode::CONE);
   } else if (keyCode == B_MODE_CUT) {
-    setModeFromUi(LatheMode::CUT, eventFromNextion);
+    setModeFromUi(LatheMode::CUT);
   } else if (keyCode == B_MODE_SLOT) {
-    setModeFromUi(LatheMode::SLOT, eventFromNextion);
+    setModeFromUi(LatheMode::SLOT);
   } else if (keyCode == B_MODE_THREAD) {
-    setModeFromUi(LatheMode::THREAD, eventFromNextion);
+    setModeFromUi(LatheMode::THREAD);
   } else if (keyCode == B_X_TOGGLE_DRO) {
     if (SettingsService::getActiveProfile().xAxis.hasDroScale) {
       SettingsService::setXDroMode(!SettingsService::isXDroMode());
     }
-    beep();
   } else if (keyCode == B_Z_TOGGLE_DRO) {
     if (SettingsService::getActiveProfile().zAxis.hasDroScale) {
       SettingsService::setZDroMode(!SettingsService::isZDroMode());
     }
-    beep();
   } else if (keyCode == B_DIA_RAD) {
     SettingsService::setDiameterMode(!SettingsService::isDiameterMode());
-    beep();
   } else if (keyCode == B_ABS_INC) {
     SettingsService::setAbsoluteMode(!SettingsService::isAbsoluteMode());
-    beep();
   } else if (keyCode == B_SPINDLE_UNITS) {
-    spindleValColorGreen = !spindleValColorGreen;
-    beep();
+    buttonDisplayPress();
   }
 }
 

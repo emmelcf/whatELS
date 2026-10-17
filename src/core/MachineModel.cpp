@@ -75,7 +75,7 @@ IntentState MachineModel::captureIntent() {
   IntentState i = {};
   i.thread = SettingsService::getThreadSetting();
   i.taper = SettingsService::getTaperSetting();
-  i.feedStepDu = feedStepDu;
+  i.feedStepDu = SettingsService::getPreferences().feedStepDu;
   i.jogStepDu = SettingsService::getJogStepDu();
   i.feedReverse = (i.thread.dupr < 0);
   return i;

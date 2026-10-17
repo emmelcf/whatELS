@@ -21,11 +21,10 @@ nanoels/
 │
 ├── src/                     # Core controller firmware (headers & implementations)
 │   ├── main.cpp             # System setup & cooperative executive loops
-│   ├── core/                # MachineModel, Config, SettingsService, Debug
+│   ├── core/                # MachineModel, TelemetrySerializer, SettingsService, Config
 │   ├── motion/              # Motion engine, Axis control, LatheProfile, DRO scales
 │   ├── input/               # Keyboard, MPG, and operator input controls
-│   ├── web/                 # WebServer, WebSockets (:81), CommandDispatcher, ClientEndpoint
-│   └── display/             # DisplayModel, RichClientAdapter, Display hardware drivers
+│   └── web/                 # WebServer, WebSockets (:81), CommandDispatcher, ClientEndpoint
 │
 ├── data/                    # LittleFS flash filesystem assets
 │   └── www/                 # Default embedded web UI (index.html, app.js, style.css)

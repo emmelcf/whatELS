@@ -29,10 +29,6 @@ struct TaperSetting {
   int presetId;      // Preset index if applicable
 };
 
-extern ThreadSetting currentThreadSetting;
-extern TaperSetting currentTaperSetting;
-extern long feedStepDu;
-
 // Conversational Cycle & Pass State
 extern long setupIndex;
 extern long opIndex;

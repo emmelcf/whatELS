@@ -2,7 +2,7 @@
 #include "Config.h"
 #include "Input.h"
 #include "MachineModel.h"
-#include "RichClientAdapter.h"
+#include "core/TelemetrySerializer.h"
 #include "WebServerModule.h"
 #include "SettingsService.h"
 #include "PresetService.h"
@@ -142,7 +142,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
     uint8_t mask = parseDomainQuery(payload);
     MachineModel m = MachineModel::captureAll();
-    String rep = RichClientAdapter::buildTelemetry(m, mask);
+    String rep = TelemetrySerializer::buildTelemetry(m, mask);
     if (reply) *reply = rep;
     return true;
   }
@@ -156,7 +156,7 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
     if (cmdLen >= 4 && strncmp(cmd, "get=", 4) == 0) {
       uint8_t mask = parseDomainQuery(cmd + 4);
       MachineModel m = MachineModel::captureAll();
-      String rep = RichClientAdapter::buildTelemetry(m, mask);
+      String rep = TelemetrySerializer::buildTelemetry(m, mask);
       if (reply) *reply = rep;
       return true;
     }
@@ -726,7 +726,8 @@ bool CommandDispatcher::dispatch(const char* payload, size_t length, String* rep
       float deg = atof(cmd + 15);
       ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
       if (hal) {
-        int32_t counts = lroundf(deg / 360.0f * (float) ENCODER_STEPS_INT);
+        float cpr = SettingsService::getActiveProfile().spindle.effectivePpr() * 2.0f;
+        int32_t counts = lroundf(deg / 360.0f * cpr);
         hal->injectSimulatedPulses(counts);
       }
       MotionEngine::instance().touchSimHeartbeat();

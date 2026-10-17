@@ -40,61 +40,65 @@ graph TD
         WebUI["Modern Web / Touch UI\n(lathe_dro_nanoels_controller.html)"]
         DROTablet["Wireless DRO Display\n(Dedicated Tablet)"]
         GrblSender["CNC / GRBL Sender\n(Third-party G-Code Streamer)"]
-        NextionLCD["Legacy Nextion LCD\n(Machine-Mounted Display)"]
+        SerialPendant["Serial Pendant / Future Adapters\n(External Client Shim)"]
     end
 
     subgraph Transport_Layer ["Transport Layer (ITransport)"]
         WSServer["WebSocket Server (:81)\n/canonical, /dro, /grbl"]
-        Serial1UART["Hardware UART (Serial1)\n115,200 Baud"]
+        SerialUART["Hardware UART / USB CDC\n115,200 Baud"]
     end
 
-    subgraph Translation_Layer ["Client Translation Layer (ICommandTranslator)"]
-        CanonicalTrans["CanonicalCommandTranslator\n(Sanitization & Parsing)"]
-        GrblTrans["GrblCommandTranslator\n(G0/G1/Jog Syntax Mapper)"]
-        InputNextion["Nextion Binary Parser\n(Legacy Input.cpp Bridge)"]
+    subgraph Translation_Layer ["Client Translation Layer (ICommandTranslator & ITelemetrySerializer)"]
+        CanonicalTrans["Canonical Client Adapter\n(Canonical Translator + TelemetrySerializer)"]
+        GrblTrans["GRBL Client Adapter\n(GrblTranslator + GrblSerializer)"]
+        CustomTrans["Custom Client Adapter\n(Custom Translator + Custom Serializer)"]
     end
 
-    subgraph Core_Motion ["Core Motion Engine & Storage"]
+    subgraph Core_Motion ["Core Motion Engine & State Subsystems"]
         Dispatcher["CommandDispatcher\n(Single Point of Truth)"]
-        MachineModel["MachineModel\n(4-Domain State Snapshot)"]
         MotionCore["Motion Kinematics & PCNT\n(Stepper Timers & Hardware Limits)"]
         SettingsSvc["SettingsService & NVS Flash\n(Persistent Preferences)"]
+        MachineModel["MachineModel\n(4-Domain State Snapshot: K, I, C, P)"]
+        CoreSerializer["TelemetrySerializer\n(Universal Canonical Serializer)"]
     end
 
     WebUI -->|WebSocket /canonical| WSServer
     DROTablet -->|WebSocket /dro| WSServer
     GrblSender -->|WebSocket /grbl| WSServer
-    NextionLCD -->|Raw UART| Serial1UART
+    SerialPendant -->|Raw Serial| SerialUART
 
     WSServer --> CanonicalTrans
     WSServer --> GrblTrans
-    Serial1UART --> InputNextion
+    SerialUART --> CustomTrans
 
     CanonicalTrans --> Dispatcher
     GrblTrans --> Dispatcher
-    InputNextion -->|Direct Motion Calls| MotionCore
+    CustomTrans --> Dispatcher
 
     Dispatcher --> MotionCore
     Dispatcher --> SettingsSvc
     MotionCore --> MachineModel
-    MachineModel -->|Atomic Push Broadcast| WSServer
+    MachineModel --> CoreSerializer
+    CoreSerializer -->|Single-Pass Broadcast| WSServer
 ```
 
 ### Layer Responsibilities
 
 #### 1. Transport Layer (`ITransport`)
-* Manages network sockets and byte streams (ESP32 `WebSocketsServer` on port 81, hardware `Serial1` UART).
+* Manages network sockets and byte streams (ESP32 `WebSocketsServer` on port 81, USB CDC, hardware UART).
 * Handles connection state, client registration, keep-alive heartbeats, and frame buffering.
 * Completely agnostic to command syntax, motion state, or kinematics.
 
-#### 2. Client Translation Layer (`ICommandTranslator`)
-* Sanitizes incoming client commands: strips whitespace and line endings (`\r`, `\n`), enforces `char[256]` bounds, and checks syntax.
-* Decodes client-specific framing into internal canonical calls (`CMD.*`, `SETTINGS.*`).
-* Translates outgoing `MachineModel` domain snapshots into the wire format expected by the client.
+#### 2. Client Translation Layer (`ICommandTranslator` & `ITelemetrySerializer`)
+* **Inbound (`ICommandTranslator`)**: Sanitizes incoming client commands (strips whitespace, enforces buffer limits, parses wire tokens) and routes validated intent to `CommandDispatcher`.
+* **Outbound (`ITelemetrySerializer`)**: Determines the outgoing wire format for connected clients:
+  - By default, native/canonical clients reference the Core's universal `TelemetrySerializer` (`src/core/TelemetrySerializer.h`), avoiding any redundant formatting or memory duplication.
+  - If a client requires an alternative format (e.g. `GrblSerializer` for G-code senders or a custom diff-caching adapter for a dumb serial screen), the translation layer provides its own serializer.
 
-#### 3. Core Motion Dispatcher (`CommandDispatcher`)
-* Dispatches validated commands directly to hardware sub-systems (`Axis`, `Motion`, `SettingsService`).
-* Single point of truth for all machine state modifications.
+#### 3. Core State & Motion Engine (`CommandDispatcher`, `MachineModel`, `TelemetrySerializer`)
+* `CommandDispatcher`: Dispatches validated commands directly to motion and settings subsystems. Single point of truth.
+* `MachineModel`: Captures atomic, tear-free snapshots across 4 independent domains: Kinematics (`K`), Intent (`I`), Cycle (`C`), and Properties (`P`).
+* `TelemetrySerializer`: Universal core state exporter. Formats `MachineModel` domains into canonical ASCII key-value telemetry without tying the core to any specific client or transport.
 
 ---
 
@@ -167,14 +171,15 @@ private:
 ### 3.1 Heterogeneous Channels & URL-Path Routing
 When multiple clients connect via WebSockets, they may require different data formats. Routing is negotiated cleanly during HTTP upgrade via the request path:
 
-| URL Path | Channel Type | Serializer Used | Target Client |
-| :--- | :--- | :--- | :--- |
-| `ws://<ip>:81/` or `/canonical` | `CHANNEL_CANONICAL` | `RichClientAdapter` (`K.*`, `I.*`, `C.*`, `P.*`) | Rich Web UI / Multi-Axis HMI |
-| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | CNC Senders (UGS, CNCjs, OpenBuilds) |
-| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | Minimal Wireless DRO Readouts |
+| URL Path | Channel Type | Serializer Used | Location & Role | Target Client |
+| :--- | :--- | :--- | :--- | :--- |
+| `ws://<ip>:81/` or `/canonical` | `CHANNEL_CANONICAL` | **`TelemetrySerializer`** (`K.*`, `I.*`, `C.*`, `P.*`) | `src/core/TelemetrySerializer.h` (Universal Core Serializer) | Rich Web UI / Multi-Axis HMI / Native Display |
+| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | `src/web/ClientEndpoint.h` (Third-Party G-Code Serializer) | CNC Senders (UGS, CNCjs, OpenBuilds) |
+| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | `src/web/ClientEndpoint.h` (Minimal Coordinates Serializer) | Minimal Wireless DRO Readouts |
 
 - **Zero Runtime Overhead**: The channel is assigned **once** during the HTTP upgrade handshake. Runtime packets require no subscription parsing.
 - **Active Channel Bitmask (`activeChannelMask`)**: The controller tracks which channels have active listeners. Formats with zero connected listeners are **never serialized**, burning zero CPU cycles.
+- **Single-Pass Universal Serialization**: For channels with multiple listeners (e.g., two tablets connected to `/canonical`), `TelemetrySerializer` formats the state snapshot **exactly once** per change event. The identical output string is pushed to all matching client sockets without redundant CPU overhead or heap allocations.
 
 ### 3.2 Unicast Request-Response vs. Channel Broadcast Separation
 1. **Unicast Request-Response (1-to-1)**:

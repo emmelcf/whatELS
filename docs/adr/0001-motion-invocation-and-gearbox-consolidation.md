@@ -98,7 +98,7 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
 * **Client Translation Layer (`ICommandTranslator` / Ingress / `CommandDispatcher` / `MotionConversions`):**
   * Sits between external clients and the Core Engine.
   * Translates incoming client commands—accepting both pure Cartesian signs (`-1`, `+1`) and lathe operator semantics (`CHUCK`/`TAIL` for $Z$; `CENTER`/`RETRACT` or `IN`/`OUT` for $X$)—into the Core's pure numeric `-1` or `+1`.
-* **Outbound Telemetry Serializer (`RichClientAdapter.cpp`):**
+* **Outbound Telemetry Serializer (`TelemetrySerializer.cpp` in `src/core/`):**
   * Projects core state to connected displays, serializing active direction into lathe semantics (`K.gearDir=CHUCK`, `K.gearDir=TAIL`) or numeric signs (`-1`/`+1`).
 * **Presentation Layer / Touch UI (`lathe-controller.js`):**
   * Operator touch view controller.

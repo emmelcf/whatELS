@@ -2,9 +2,9 @@
 
 #include <Arduino.h>
 #include "MachineModel.h"
-#include "ClientEndpoint.h"
+#include "web/ClientEndpoint.h"
 
-class RichClientAdapter : public ITelemetrySerializer {
+class TelemetrySerializer : public ITelemetrySerializer {
 public:
   // ITelemetrySerializer interface implementation
   String serialize(const MachineModel& model, uint8_t domainMask) override {
@@ -15,10 +15,11 @@ public:
     return hasStateChanged();
   }
 
-  // Static helpers for direct or legacy callers
+  // Universal telemetry builders for all client translation layers
   static String buildTelemetry(const MachineModel& model, uint8_t domainMask = DOMAIN_ALL);
   static String buildTelemetry(uint8_t domainMask = DOMAIN_ALL) {
     return buildTelemetry(MachineModel::captureAll(), domainMask);
   }
   static bool hasStateChanged();
 };
+

@@ -442,8 +442,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 extern int ENCODER_BACKLASH;
 extern int AXIS_ENCODER_BACKLASH;
 
-extern int ENCODER_STEPS_INT;
-extern float ENCODER_STEPS_FLOAT;
 extern long SAFE_DISTANCE_DU;
 extern long SLOT_LEFT_REDUCTION_DU;
 
