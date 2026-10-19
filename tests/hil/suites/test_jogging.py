@@ -1,89 +1,144 @@
-"""Manual Jogging integration tests (step jog and continuous hold/release)."""
+"""Manual Jogging integration tests (discrete step precision and continuous hold/limit enforcement)."""
 
 from __future__ import annotations
 
 import asyncio
-from core.assertions import assert_pos_du
+from core.assertions import assert_halted, assert_pos_du
 from core.base_test import HilTestCase
 
 
-class TestManualJogging(HilTestCase):
-    name = "manual_jogging"
-    description = "Verify CMD.jogStep (incremental) and CMD.jogHold / CMD.jogRelease (continuous)"
+class TestManualJogStepPrecision(HilTestCase):
+    name = "manual_jog_step_precision"
+    description = "Verify incremental touch-off jogging precision (0.1mm and 1.0mm) across all 4 Cartesian directions"
 
     async def run(self) -> None:
-        # 1. Ensure any prior feed is disengaged and zero both axes
-        if self.client.state.is_on:
-            await self.client.send("CMD.stop")
-            await self.client.wait_for(lambda s: not s.is_on, timeout_s=3.0)
+        # 1. 0.100 mm (1,000 du) incremental step jog on Z
+        step_1000 = 1000
+        await self.client.send(f"CMD.jogStepDu={step_1000}", wait_ack=True)
 
-        await self.client.send("CMD.axisZero=Z")
-        await self.client.send("CMD.axisZero=X")
-        await self.client.wait_for(lambda s: s.z_du == 0 and s.x_du == 0, timeout_s=3.0)
-
-        # 2. Configure step distance to 1 mm (10,000 du)
-        step_du = 10000
-        await self.client.send(f"CMD.jogStepDu={step_du}")
-        await asyncio.sleep(0.05)
-
-        # 3. Test step jog Z toward TAIL (+Z)
-        await self.client.send("CMD.jogStep=Z,TAIL")
+        await self.client.send("CMD.jogStep=Z,TAIL", wait_ack=True)
         state = await self.client.wait_for(
-            lambda s: s.z_du == step_du,
-            timeout_s=6.0,
-            description="Z jogged +5mm to TAIL",
+            lambda s: s.z_du == step_1000,
+            timeout_s=4.0,
+            description="Z step jog +0.1mm to TAIL",
         )
-        assert_pos_du(state.z_du, step_du, tolerance_du=0, axis="Z")
-
-        # 4. Test step jog Z back toward CHUCK (-Z)
-        await self.client.send("CMD.jogStep=Z,CHUCK")
-        state = await self.client.wait_for(
-            lambda s: s.z_du == 0,
-            timeout_s=6.0,
-            description="Z jogged -5mm back to 0",
-        )
-        assert_pos_du(state.z_du, 0, tolerance_du=0, axis="Z")
-
-        # 5. Test step jog X toward RETRACT (+X)
-        await self.client.send("CMD.jogStep=X,RETRACT")
-        state = await self.client.wait_for(
-            lambda s: s.x_du == step_du,
-            timeout_s=6.0,
-            description="X jogged +5mm to RETRACT",
-        )
-        assert_pos_du(state.x_du, step_du, tolerance_du=0, axis="X")
-
-        # 6. Test step jog X back toward INFEED (-X)
-        await self.client.send("CMD.jogStep=X,INFEED")
-        state = await self.client.wait_for(
-            lambda s: s.x_du == 0,
-            timeout_s=6.0,
-            description="X jogged -5mm back to 0",
-        )
+        assert_pos_du(state.z_du, step_1000, tolerance_du=1, axis="Z")
         assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
 
-        # 7. Test continuous jog Z toward TAIL, then release
-        await self.client.send("CMD.jogHold=Z,TAIL")
-        await self.client.wait_for(
-            lambda s: s.z_du >= 5000,
-            timeout_s=3.0,
-            description="Z continuous jog started",
+        await self.client.send("CMD.jogStep=Z,CHUCK", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: s.z_du == 0,
+            timeout_s=4.0,
+            description="Z step jog -0.1mm to CHUCK back to 0",
         )
-        await self.client.send("CMD.jogRelease=Z")
-        await asyncio.sleep(0.2)
-        pos_after_release = self.client.state.z_du
-        assert pos_after_release >= 5000, f"Expected Z >= 5000 after hold, got {pos_after_release}"
+        assert_pos_du(state.z_du, 0, tolerance_du=1, axis="Z")
+        assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
 
-        # Verify motion halted and held
-        await asyncio.sleep(0.2)
-        assert abs(self.client.state.z_du - pos_after_release) <= 100, "Z continued moving after jogRelease"
+        # 2. 1.000 mm (10,000 du) incremental step jog on Z
+        step_10000 = 10000
+        await self.client.send(f"CMD.jogStepDu={step_10000}", wait_ack=True)
 
-        # 8. Restore axis zeros
-        await self.client.send("CMD.axisZero=Z")
-        await self.client.send("CMD.axisZero=X")
-        await self.client.wait_for(lambda s: s.z_du == 0 and s.x_du == 0, timeout_s=3.0)
+        await self.client.send("CMD.jogStep=Z,TAIL", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: s.z_du == step_10000,
+            timeout_s=5.0,
+            description="Z step jog +1.0mm to TAIL",
+        )
+        assert_pos_du(state.z_du, step_10000, tolerance_du=1, axis="Z")
+        assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
+
+        await self.client.send("CMD.jogStep=Z,CHUCK", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: s.z_du == 0,
+            timeout_s=5.0,
+            description="Z step jog -1.0mm to CHUCK back to 0",
+        )
+        assert_pos_du(state.z_du, 0, tolerance_du=1, axis="Z")
+        assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
+
+        # 3. 1.000 mm (10,000 du) incremental step jog on X
+        await self.client.send("CMD.jogStep=X,RETRACT", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: s.x_du == step_10000,
+            timeout_s=5.0,
+            description="X step jog +1.0mm to RETRACT",
+        )
+        assert_pos_du(state.x_du, step_10000, tolerance_du=1, axis="X")
+        assert_pos_du(state.z_du, 0, tolerance_du=0, axis="Z")
+
+        await self.client.send("CMD.jogStep=X,CENTER", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: s.x_du == 0,
+            timeout_s=5.0,
+            description="X step jog -1.0mm to CENTER back to 0",
+        )
+        assert_pos_du(state.x_du, 0, tolerance_du=1, axis="X")
+        assert_pos_du(state.z_du, 0, tolerance_du=0, axis="Z")
 
         self.details = {
-            "step_jog_du": step_du,
-            "continuous_hold_reached_du": pos_after_release,
+            "step_1000_ok": True,
+            "step_10000_ok": True,
+        }
+
+
+class TestManualJogHoldAndLimits(HilTestCase):
+    name = "manual_jog_hold_and_limits"
+    description = "Verify continuous jog hold, anti-creep release, and automatic halt on active soft limits"
+
+    async def run(self) -> None:
+        # 1. Continuous jog Z toward TAIL
+        await self.client.send("CMD.jogHold=Z,TAIL", wait_ack=True)
+        await self.client.wait_for(
+            lambda s: s.z_du >= 5000,
+            timeout_s=4.0,
+            description="Z continuous jog started",
+        )
+
+        # 2. Release continuous jog and assert zero post-halt creep
+        await self.client.send("CMD.jogRelease=Z", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: not s.is_on,
+            timeout_s=3.0,
+            description="Z continuous jog released",
+        )
+        z_release = state.z_du
+        assert z_release >= 5000, f"Expected Z >= 5000 after hold, got {z_release}"
+
+        await asyncio.sleep(0.3)
+        assert abs(self.client.state.z_du - z_release) <= 2, (
+            f"Carriage crept after jogRelease: {self.client.state.z_du} vs {z_release}"
+        )
+
+        # 3. Arm Right soft limit at +20,000 du (+2.000 mm)
+        limit_du = 20000
+        await self.client.send(f"CMD.axisLimitDu=Z,R,{limit_du}", wait_ack=True)
+        await self.client.wait_for(
+            lambda s: s.z_right_du == limit_du,
+            timeout_s=3.0,
+            description="Right limit registered",
+        )
+
+        # 4. Hold continuous jog into the soft limit without releasing
+        await self.client.send("CMD.jogHold=Z,TAIL", wait_ack=True)
+        state = await self.client.wait_for(
+            lambda s: not s.is_on,
+            timeout_s=6.0,
+            description="automatic halt at soft limit during continuous jog",
+        )
+        assert_halted(state, "jogHold reached soft limit")
+        assert_pos_du(state.z_du, limit_du, tolerance_du=2, axis="Z")
+
+        # 5. Anti-creep hold check at limit
+        await asyncio.sleep(0.3)
+        assert_pos_du(self.client.state.z_du, limit_du, tolerance_du=2, axis="Z")
+
+        # 6. Clean up
+        await self.client.send("CMD.axisClearLimit=Z,R", wait_ack=True)
+        await self.client.send("CMD.axisZero=Z", wait_ack=True)
+        await self.client.wait_for(lambda s: s.z_du == 0, timeout_s=3.0)
+
+        self.details = {
+            "limit_du": limit_du,
+            "halted_z_du": state.z_du,
+            "overshoot_du": max(0, state.z_du - limit_du),
         }

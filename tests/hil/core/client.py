@@ -9,6 +9,11 @@ from typing import Callable
 import websockets
 
 
+class CommandRejectedError(RuntimeError):
+    """Raised when the controller replies with ERR:<reason>."""
+    pass
+
+
 @dataclass
 class ControllerState:
     # Kinematics Domain (K.*)
@@ -119,11 +124,15 @@ class NanoElsClient:
         """Enables or disables background 500ms heartbeat (used for watchdog timeout testing)."""
         self._heartbeat_suppressed = suppress
 
-    async def send(self, cmd: str, wait_ack: bool = True, timeout_s: float = 2.0) -> None:
+    async def send(self, cmd: str, wait_ack: bool = True, timeout_s: float = 2.0, expect_ack: bool | None = None) -> str:
         """Transmits a newline-delimited command frame.
         
-        When wait_ack is True and cmd starts with CMD., awaits matching 'OK:CMD.<name>' response.
+        When wait_ack is True (or expect_ack is True) and cmd starts with CMD., awaits matching 'OK:CMD.<name>' response.
+        Raises CommandRejectedError if firmware rejects with ERR:<reason>.
         """
+        if expect_ack is not None:
+            wait_ack = expect_ack
+
         if not self._ws:
             raise RuntimeError("Client is not connected")
 
@@ -149,11 +158,13 @@ class NanoElsClient:
 
         if fut is not None and tag is not None:
             try:
-                await asyncio.wait_for(fut, timeout=timeout_s)
+                res = await asyncio.wait_for(fut, timeout=timeout_s)
+                return str(res) if isinstance(res, str) else f"OK:CMD.{tag}"
             except asyncio.TimeoutError as exc:
                 if tag in self._pending_acks and fut in self._pending_acks[tag]:
                     self._pending_acks[tag].remove(fut)
                 raise TimeoutError(f"Timeout ({timeout_s}s) awaiting ACK for '{cmd}'") from exc
+        return ""
 
     async def wait_for(
         self,
@@ -193,12 +204,16 @@ class NanoElsClient:
             if check_condition in self._listeners:
                 self._listeners.remove(check_condition)
 
+    def revs_to_pulses(self, revs: float) -> int:
+        """Computes exact quadrature pulse counts for `revs` revolutions from controller P.encoderPpr."""
+        cpr = self.state.encoder_ppr * 4 if self.state.encoder_ppr > 0 else 4800
+        return int(round(revs * cpr))
+
     async def inject_spindle_revs(self, revs: float, rpm: float = 600.0) -> None:
         """Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr * 4,
         injects them, and waits for command confirmation.
         """
-        cpr = self.state.encoder_ppr * 4 if self.state.encoder_ppr > 0 else 4800
-        total_pulses = int(round(revs * cpr))
+        total_pulses = self.revs_to_pulses(revs)
         await self.send(f"CMD.simPulses={total_pulses}", wait_ack=True)
 
     async def _heartbeat_loop(self) -> None:
@@ -228,6 +243,8 @@ class NanoElsClient:
                     # 1. Synchronous Command Acknowledgment Handling:
                     if line.startswith("OK:CMD."):
                         cmd_name = line[7:].strip()
+                        if "=" in cmd_name:
+                            cmd_name = cmd_name.split("=")[0].strip()
                         if cmd_name in self._pending_acks and self._pending_acks[cmd_name]:
                             fut = self._pending_acks[cmd_name].pop(0)
                             if not fut.done():
@@ -246,7 +263,7 @@ class NanoElsClient:
                         for cmd_name, fut_list in self._pending_acks.items():
                             for fut in fut_list:
                                 if not fut.done():
-                                    fut.set_exception(RuntimeError(f"Firmware error: {err_msg}"))
+                                    fut.set_exception(CommandRejectedError(f"Firmware error: {err_msg}"))
                         self._pending_acks.clear()
                         continue
 

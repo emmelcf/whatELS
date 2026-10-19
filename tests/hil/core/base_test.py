@@ -42,6 +42,7 @@ class HilTestCase(ABC):
         await self.client.send("CMD.axisClearLimit=Z,R", wait_ack=True)
         await self.client.send("CMD.axisClearLimit=X,U", wait_ack=True)
         await self.client.send("CMD.axisClearLimit=X,D", wait_ack=True)
+        await self.client.send("CMD.taperRatio=0", wait_ack=True)
         await self.client.send("CMD.axisZero=Z", wait_ack=True)
         await self.client.send("CMD.axisZero=X", wait_ack=True)
         await self.client.wait_for(
