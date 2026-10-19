@@ -115,6 +115,43 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
     m_stepperHal->setDirection(params.axis, m_direction[idx]);
   }
 
+  if (params.enableSecondaryAxis) {
+    size_t sIdx = axisIdx(params.secondaryAxis);
+    int32_t den = (params.secondaryRatioDen > 0) ? params.secondaryRatioDen : 1;
+    int32_t secSpeedDu = static_cast<int32_t>((static_cast<int64_t>(params.speedDuPerMin) * std::abs(params.secondaryRatioNum)) / den);
+    int8_t secDir = (params.secondaryRatioNum >= 0) ? 1 : -1;
+
+    m_activeMode[sIdx] = MotionMode::VELOCITY_FEED;
+    m_direction[sIdx]  = secDir;
+
+    float secSpeedDuSec = static_cast<float>(secSpeedDu) / 60.0f;
+    int32_t secSpeedStepsSec = duToSteps(m_axes[sIdx].geometry, static_cast<int32_t>(secSpeedDuSec));
+    if (secSpeedStepsSec < 10) secSpeedStepsSec = 10;
+
+    int32_t secAccelDuSec2 = static_cast<int32_t>(m_axes[sIdx].geometry.maxAccelMmSec2 * 10000.0f);
+    int32_t secAccelStepsSec2 = duToSteps(m_axes[sIdx].geometry, secAccelDuSec2);
+    if (secAccelStepsSec2 <= 0) secAccelStepsSec2 = 1000;
+
+    m_planners[sIdx].configureProfile(50, secSpeedStepsSec, 0, secAccelStepsSec2);
+
+    if (params.targetDistDu > 0) {
+      int32_t secDistDu = static_cast<int32_t>((static_cast<int64_t>(params.targetDistDu) * std::abs(params.secondaryRatioNum)) / den);
+      m_hasTarget[sIdx]  = true;
+      m_targetStep[sIdx] = m_axes[sIdx].posSteps + secDir * duToSteps(m_axes[sIdx].geometry, secDistDu);
+    } else {
+      m_hasTarget[sIdx]  = false;
+      m_targetStep[sIdx] = 0;
+    }
+
+    m_feedHold[sIdx] = false;
+    m_isMoving[sIdx] = true;
+
+    if (m_stepperHal) {
+      m_stepperHal->setEnabled(params.secondaryAxis, true);
+      m_stepperHal->setDirection(params.secondaryAxis, secDir);
+    }
+  }
+
   return true;
 }
 
@@ -364,6 +401,10 @@ void MotionEngine::processCommandPacket(const MotionCommandPacket& pkt) {
       params.direction           = pkt.direction;
       params.speedDuPerMin       = pkt.speedDuMin;
       params.targetDistDu        = pkt.targetCoordDu;
+      params.enableSecondaryAxis = pkt.enableSecondaryAxis;
+      params.secondaryAxis       = pkt.secondaryAxis;
+      params.secondaryRatioNum   = pkt.secondaryRatioNum;
+      params.secondaryRatioDen   = pkt.secondaryRatioDen;
       startVelocityFeed(params);
       break;
     }
@@ -463,24 +504,33 @@ void MotionEngine::onMotionTick() {
     // Evaluate soft limits
     const SoftLimit* lim = m_limits[idx].findNextEnforcedLimit(m_axes[idx].posSteps, dir);
     int32_t remainingSteps = INT32_MAX;
+    bool limitReached = false;
     if (lim) {
-      remainingSteps = std::abs(lim->stepPos - m_axes[idx].posSteps);
+      int32_t distToLim = (lim->stepPos - m_axes[idx].posSteps) * dir;
+      if (distToLim <= 0) {
+        limitReached = true;
+        distToLim = 0;
+      }
+      remainingSteps = distToLim;
       m_activeLimitSlot[idx] = lim->id;
     } else {
       m_activeLimitSlot[idx] = 0;
     }
 
     // Evaluate stroke target if set
+    bool targetReached = false;
     if (m_hasTarget[idx]) {
-      int32_t distToTarget = std::abs(m_targetStep[idx] - m_axes[idx].posSteps);
+      int32_t distToTarget = (m_targetStep[idx] - m_axes[idx].posSteps) * dir;
+      if (distToTarget <= 0) {
+        targetReached = true;
+        distToTarget = 0;
+      }
       remainingSteps = std::min(remainingSteps, distToTarget);
     }
 
-    if (remainingSteps <= 0) {
-      // Limit or target reached!
-      MotionHaltReason reason = (lim && std::abs(lim->stepPos - m_axes[idx].posSteps) <= 0)
-                                    ? MotionHaltReason::SOFT_LIMIT_REACHED
-                                    : MotionHaltReason::TARGET_DISTANCE_REACHED;
+    if (limitReached || targetReached) {
+      MotionHaltReason reason = limitReached ? MotionHaltReason::SOFT_LIMIT_REACHED
+                                             : MotionHaltReason::TARGET_DISTANCE_REACHED;
       stopWithReason(axis, reason);
       continue;
     }
@@ -502,6 +552,12 @@ void MotionEngine::onMotionTick() {
           if (dir > 0 && idealStep > lim->stepPos) idealStep = lim->stepPos;
         }
 
+        // Clamp ideal step to stroke target
+        if (m_hasTarget[idx]) {
+          if (dir < 0 && idealStep < m_targetStep[idx]) idealStep = m_targetStep[idx];
+          if (dir > 0 && idealStep > m_targetStep[idx]) idealStep = m_targetStep[idx];
+        }
+
         int32_t stepDiff = idealStep - m_axes[idx].posSteps;
         while (stepDiff != 0) {
           int8_t stepDir = (stepDiff > 0) ? 1 : -1;
@@ -519,7 +575,19 @@ void MotionEngine::onMotionTick() {
         float dt = 0.001f;
         int32_t cmdVel = m_planners[idx].updateVelocity(remainingSteps, dt);
         if (m_planners[idx].isFinished() || cmdVel <= 0) {
-          stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
+          if (m_hasTarget[idx] && m_axes[idx].posSteps != m_targetStep[idx]) {
+            int8_t stepDir = (m_targetStep[idx] > m_axes[idx].posSteps) ? 1 : -1;
+            if (m_stepperHal) {
+              m_stepperHal->setDirection(axis, stepDir);
+              m_stepperHal->pulseStep(axis);
+            }
+            m_axes[idx].posSteps += stepDir;
+            if (m_axes[idx].posSteps == m_targetStep[idx]) {
+              stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+            }
+          } else {
+            stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
+          }
         } else if (m_stepperHal) {
           m_stepperHal->setDirection(axis, dir);
           m_stepperHal->pulseStep(axis);
