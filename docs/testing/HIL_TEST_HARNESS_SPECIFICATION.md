@@ -258,7 +258,7 @@ tests/hil/
     ├── __init__.py
     ├── test_coords_and_presets.py # Axis coordinate zeroing, presets, and limit origin shift tests (1 test)
     ├── test_jogging.py            # Discrete step jogging and continuous hold/limit tests (2 tests)
-    ├── test_gearing.py            # Discrete pulse-synchronized gearing accuracy tests (2 tests)
+    ├── test_gearing.py            # Discrete pulse-synchronized gearing accuracy tests (3 tests)
     ├── test_emergency.py          # Stop latency, [SAFE-01] gatekeeper, and watchdog tests (3 tests)
     ├── test_soft_limits.py        # Z and X soft limits, decel window, and directional escape (4 tests)
     ├── test_gearbox.py            # Single-axis Z and X sync/async, live nudge, TPI, and reversal (10 tests)
@@ -656,6 +656,24 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
   ```
 * **Pass Criteria:**
   - Carriage coordinate lands at $Z = +10{,}000\text{ du} \pm 2\text{ du}$[cite: 1].
+
+#### 6.5.1 `gearing_multipass_index_sync`
+* **Real-Life Machining Scenario (Single-Point Threading Index Phase Lock):**  
+  During continuous spindle rotation at $600\text{ RPM}$, consecutive multi-pass threading strokes must phase-lock to the exact same spindle entry angle ($\Delta\theta \le 1.0^\circ$) so the threading tool tracks precisely into the existing groove without shaving or destroying thread crests.
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  # Pass 1:
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
+  # Reset Z to 0 while spindle spins:
+  CMD.axisPosDu=Z,0
+  # Pass 2:
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
+  CMD.simRpm=0
+  ```
+* **Pass Criteria:**
+  - Both passes complete their $15.000\text{ mm}$ stroke landing at $Z = -15{,}000\text{ du} \pm 2\text{ du}$.
+  - Spindle engagement angles $\theta_1$ and $\theta_2$ align within $|\theta_1 - \theta_2| \le 1.0^\circ$.
 
 ---
 
@@ -1087,8 +1105,8 @@ RESULT: ALL TESTS PASSED (Exit code: 0)
 │                     │ • Implement `tests/hil/run_tests.py` CLI runner  │
 ├─────────────────────┼──────────────────────────────────────────────────┤
 │ Slice 3: Test Suite │ • Implement `test_coords_and_presets.py` (1)     │
-│ Catalog (26 Tests)  │ • Implement `test_jogging.py` (2)                │
-│                     │ • Implement `test_gearing.py` (2)                │
+│ Catalog (27 Tests)  │ • Implement `test_jogging.py` (2)                │
+│                     │ • Implement `test_gearing.py` (3)                │
 │                     │ • Implement `test_emergency.py` (3)              │
 │                     │ • Implement `test_soft_limits.py` (4)            │
 │                     │ • Implement `test_gearbox.py` (10)               │
