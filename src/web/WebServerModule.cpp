@@ -13,6 +13,7 @@
 #include <Preferences.h>
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
+#include "core_client/ClientManager.h"
 
 #include "motion/kernel/MotionEngine.h"
 
@@ -501,7 +502,9 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       String hydration = DroSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     }
+    nanoels::core_client::ClientManager::instance().onClientConnected(num, (const char*)payload);
   } else if (type == WStype_DISCONNECTED) {
+    nanoels::core_client::ClientManager::instance().onClientDisconnected(num);
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
       clientSessions[num].active = false;
       clientSessions[num].channel = CHANNEL_NONE;
@@ -535,6 +538,21 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
         writeBuffer(&inBuffer, payload[i]);
       }
       return;
+    }
+
+    // Modern Native Client routing via ClientManager
+    if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
+      if (nanoels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
+        bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
+                       (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
+                       (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
+                       (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0) ||
+                       (length >= 16 && strncasecmp((const char*)payload, "CMD.settings.get", 16) == 0);
+        if (!isQuery) {
+          machineStatusForcePublish = true;
+        }
+        return;
+      }
     }
 
     if (handleWebUiEventCommand(num, payload, length)) {
@@ -1146,6 +1164,7 @@ void taskWiFi(void *param) {
 
   webSocket.begin();
   webSocket.onEvent(handleWebSocketEvent);
+  nanoels::core_client::ClientManager::instance().init(&webSocket);
 
   while (emergencyStop == EstopCode::NONE) {
     server.handleClient();

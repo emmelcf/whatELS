@@ -249,7 +249,7 @@ class TestGearboxTpiImperialPitchConversion(HilTestCase):
 
         assert_pos_du(state.z_du, expected_z, tolerance_du=2, axis="Z")
 
-        await self.client.send("CMD.on=0", wait_ack=True)
+        await self.client.send("CMD.stop", wait_ack=True)
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {
@@ -280,7 +280,7 @@ class TestGearboxIngressStagingWorkflow(HilTestCase):
 
         assert_pos_du(state.x_du, expected_x, tolerance_du=2, axis="X")
 
-        await self.client.send("CMD.on=0", wait_ack=True)
+        await self.client.send("CMD.stop", wait_ack=True)
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {

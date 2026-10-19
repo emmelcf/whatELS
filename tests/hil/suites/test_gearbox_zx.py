@@ -44,7 +44,7 @@ class TestGearboxZXShallowTaperSync(HilTestCase):
         assert_pos_du(state.z_du, expected_z, tolerance_du=2, axis="Z")
         assert_pos_du(state.x_du, expected_x, tolerance_du=2, axis="X")
 
-        await self.client.send("CMD.on=0", wait_ack=True)
+        await self.client.send("CMD.stop", wait_ack=True)
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {
@@ -91,7 +91,7 @@ class TestGearboxZXSteepConeMajorAxisSwap(HilTestCase):
         ratio_actual = abs(float(state.x_du) / float(state.z_du))
         assert abs(ratio_actual - 2.0) <= 0.001, f"Cone ratio diverged: {ratio_actual:.4f} vs 2.0"
 
-        await self.client.send("CMD.on=0", wait_ack=True)
+        await self.client.send("CMD.stop", wait_ack=True)
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {
