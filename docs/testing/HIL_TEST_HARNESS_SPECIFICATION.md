@@ -1,28 +1,28 @@
 # NanoELS Hardware-in-the-Loop (HIL) & WebSocket Test Harness Specification
 
-> **Status:** Authoritative Specification & Implementation Blueprint  
-> **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 5 (Command Dispatcher), Subsystem 6 (Client Adapters & Testing)  
-> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](../NANOELS_MASTER_ARCHITECTURE.md)  
-> **Client Specification:** [`../clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)  
-> **Motion Engine Spec:** [`../motion/MOTION_ENGINE_SPECIFICATION.md`](../motion/MOTION_ENGINE_SPECIFICATION.md)  
-> **Date:** October 2026  
-> **Target Platform:** Host Python 3.10+ (WSL/Linux/macOS) $\longleftrightarrow$ ESP32-S3 Firmware via WebSocket (:81/canonical) or Serial UART  
+> **Status:** Authoritative Specification & Implementation Blueprint (v2.0)  
+> **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Motion Engine), Subsystem 3 (Unified Gearbox Mode), Subsystem 5 (Command Dispatcher), Subsystem 6 (Client Adapters & Testing)[cite: 1, 2, 5]  
+> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](../NANOELS_MASTER_ARCHITECTURE.md)[cite: 1]  
+> **Mode Architecture:** [`../ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md)[cite: 2, 3]  
+> **Client Specification:** [`../clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)[cite: 1]  
+> **Motion Engine Spec:** [`../motion/MOTION_ENGINE_SPECIFICATION.md`](../motion/MOTION_ENGINE_SPECIFICATION.md)[cite: 1]  
+> **Date:** October 2026[cite: 1]  
+> **Target Platform:** Host Python 3.10+ (WSL/Linux/macOS) $\longleftrightarrow$ ESP32-S3 Firmware via WebSocket (:81/canonical) or Serial UART[cite: 1]  
 
 ---
 
 ## 1. Executive Summary & Objective
 
-This specification defines the architecture, wire protocols, test authoring DSL, and firmware simulation hooks for the **NanoELS Hardware-in-the-Loop (HIL) Test Harness**.
+This specification defines the architecture, wire protocols, firmware prerequisite fixes, test authoring DSL, and firmware simulation hooks for the **NanoELS Hardware-in-the-Loop (HIL) Test Harness**[cite: 1].
 
-While unit tests (`test/test_motion_e2e.cpp`) verify kinematic algorithms in synthetic isolation on the host, this harness verifies the **complete, live compiled firmware** running on physical ESP32-S3 hardware across the external network boundary (`ws://<ip>:81/canonical`). It treats the controller as a black box, verifying:
-1. Inbound network framing, sanitization, and command dispatching on Core 0.
-2. Inter-core command queue handoff from Core 0 to Core 1.
-3. Real-time deterministic kinematics, trajectory planning, and stepper step generation on Core 1.
-4. Tear-free lock-free telemetry sampling ([`TelemetryMailbox`](../../src/motion/contract/TelemetryMailbox.h)).
-5. 50 Hz outbound WebSocket serialization and streaming back to the client.
-6. Synchronous bidirectional command acknowledgments (`OK:CMD.*` / `ERR:*`) and background client failsafe heartbeats.
+While unit tests (`test/test_motion_e2e.cpp`) verify kinematic algorithms in synthetic isolation on the host, this harness verifies the **complete, live compiled firmware** running on physical ESP32-S3 hardware across the external network boundary (`ws://<ip>:81/canonical`)[cite: 1]. It treats the controller as a black box, verifying[cite: 1]:
+1. Inbound network framing, sanitization, In-Motion Safety Gatekeeper (`[SAFE-01]`), and command dispatching on Core 0[cite: 1, 4].
+2. Inter-core command queue handoff from Core 0 to Core 1[cite: 1].
+3. Real-time deterministic kinematics, trajectory planning, 2D Bresenham multi-axis interpolation, and stepper step generation on Core 1[cite: 1, 2, 5].
+4. Tear-free lock-free telemetry sampling ([`TelemetryMailbox`](../../src/motion/contract/TelemetryMailbox.h))[cite: 1].
+5. 50 Hz outbound WebSocket serialization and command `OK:`/`ERR:` acknowledgment framing back to the client[cite: 1].
 
-To test spindle-synchronized and handwheel motion without requiring physical lathe rotation or external pulse generator hardware, the specification establishes a **Firmware Simulation Injection Hook** within the Hardware Abstraction Layer (HAL).
+To test spindle-synchronized motion without requiring physical lathe rotation or external pulse generator hardware, the specification establishes a **Firmware Simulation Injection Hook** within the Hardware Abstraction Layer (HAL)[cite: 1].
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -32,33 +32,33 @@ To test spindle-synchronized and handwheel motion without requiring physical lat
 │                                   │                                    │
 │  tests/hil/run_tests.py           │  Core 0 (Networking & Dispatch):   │
 │   ├── TestRunner / CLI Filter     │   ├── WebServerModule (:81/ws)     │
-│   ├── TestSuites (Modular DSL)    │   ├── CommandDispatcher.cpp        │
-│   └── NanoElsClient (Async WS)    │   └── MachineModel / Serializer    │
-│        ├── Background Heartbeat   │            │ (Inter-core Queue)    │
-│        └── Synchronous ACK Future │            ▼                       │
-│            │                      │  Core 1 (Real-Time Motion):        │
-│            │  ws://<ip>:81        │   ├── MotionEngine (prio 22)       │
-│            │  /canonical          │   │    └── 1.5s Sim Watchdog       │
+│   ├── TestSuites (26 Tests)       │   ├── CommandDispatcher.cpp        │
+│   └── NanoElsClient (Async WS)    │   │    └── [SAFE-01] Gatekeeper    │
+│        ├── 500ms Heartbeat Task   │   └── MachineModel / Serializer    │
+│        └── ACK / ERR Synchronizer │            │ (Inter-core Queue)    │
+│            │                      │            ▼                       │
+│            │  ws://<ip>:81        │  Core 1 (Real-Time Motion):        │
+│            │  /canonical          │   ├── MotionEngine (prio 22)       │
 │            ▼                      │   ├── Esp32SpindleEncoderHAL       │
-│      [ Outbound Commands ] ───────┼──►│    ├── Pulse Slew Clamper      │
-│       CMD.startFeed=...           │   │    └── Core 1 Sync Transition  │
-│       CMD.simPulses=4800          │   ├── Esp32StepperHAL (GPTimer)    │
-│                                   │   └── TelemetryMailbox (Seqlock)   │
-│      [ Inbound Telemetry & ACK ] ◄┼────────────────────────────────────┘
-│       OK:CMD.simEncoder           │
-│       K.zDu=-15000, K.on=0        │
+│      [ Outbound Commands ] ───────┼──►│    └── Slewed Virtual Pulses   │
+│       CMD.startFeed=...           │   ├── Esp32StepperHAL (GPTimer)    │
+│       CMD.simPulses=9600          │   └── TelemetryMailbox (Seqlock)   │
+│                                   │            │                       │
+│      [ OK:/ERR: & 50Hz State ] ◄──┼────────────┘                       │
+│       OK:CMD.startFeed            │                                    │
+│       K.zDu=-15000, K.on=0        │                                    │
 └───────────────────────────────────┴────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Firmware Simulation Injection Contract
+## 2. Firmware Simulation Injection Contract & Prerequisite Fixes
 
-To execute automated tests against physical hardware sitting on a developer's bench without mechanical spindle rotation, the firmware provides a software injection bridge directly into `ISpindleEncoderHAL`.
+To execute automated tests against physical hardware sitting on a developer's bench without mechanical spindle rotation, the firmware provides a thread-safe software injection bridge directly into `ISpindleEncoderHAL`[cite: 1].
 
 ### 2.1 Virtual Spindle Encoder HAL Interface
 
-`ISpindleEncoderHAL` is extended with non-blocking virtual injection primitives:
+`ISpindleEncoderHAL` is extended with non-blocking virtual injection primitives[cite: 1]:
 
 ```cpp
 // src/motion/hal/ISpindleEncoderHAL.h
@@ -74,8 +74,8 @@ public:
     /**
      * @brief Toggles virtual injection mode.
      * @param active When true, getPulseDelta() serves injected virtual pulses instead of PCNT pins.
-     *               Thread-safe: sets an atomic flag on Core 0. Core 1 synchronously resets integration
-     *               state and PCNT hardware baseline on mode transition inside getPulseDelta().
+     *               State transition cleanup (PCNT zeroing & integrator reset) is executed
+     *               synchronously on Core 1 inside getPulseDelta() to prevent cross-core races.
      */
     virtual void setSimulationActive(bool active) = 0;
 
@@ -86,75 +86,88 @@ public:
 
     /**
      * @brief Injects an exact discrete pulse delta.
-     * @param delta Signed pulse count. Accumulates atomically; slewed smoothly in getPulseDelta()
-     *              up to a safe maximum chunk per tick to preserve realistic acceleration.
+     * @param delta Signed pulse count (e.g. 2 * effectivePpr = 1 spindle rev in forward direction).
+     *              Accumulates atomically via fetch_add; metered out at a safe maximum slew rate
+     *              across subsequent getPulseDelta() calls so velocity limits are not violated.
      */
     virtual void injectSimulatedPulses(int32_t delta) = 0;
 
     /**
-     * @brief Sets a constant simulated spindle RPM.
+     * @brief Sets a continuous simulated spindle RPM.
      * @param rpm Signed rotational speed in RPM (+ forward / - reverse). 0.0 = stopped.
      */
     virtual void setSimulatedRpm(float rpm) = 0;
 };
 ```
 
-### 2.1.1 Concrete `Esp32SpindleEncoderHAL` Implementation Details
+### 2.1.1 Concrete `Esp32SpindleEncoderHAL` Implementation (Thread-Safe & Slewed)
 
-In `src/motion/hal/Esp32SpindleEncoderHAL.h` and `.cpp`, simulation mode introduces thread-safe atomic members, Core 1 synchronous transition detection, and pulse-slewing integration math:
+Because `CommandDispatcher.cpp` executes on Core 0 while `getPulseDelta()` executes inside the high-priority real-time motion tick on Core 1[cite: 1], the implementation enforces strict cross-core safety:
+1. **Core 1 State Transition Ownership:** Core 0 only flips `m_simActive`. Core 1 detects edges (`simActive != m_wasSimActive`) to reset `m_lastSimTimeUs`, `m_simFraction`, and the hardware PCNT baseline without race conditions.
+2. **Discrete Pulse Slew Limiting:** When `CMD.simPulses=9600` is injected[cite: 1], dumping all $9600$ counts into a single $1\text{ ms}$ tick would simulate an instantaneous $\sim 120{,}000\text{ RPM}$ spike, overflowing stepper timer frequencies and trajectory acceleration limits. Instead, `m_pendingSimPulses` is drained at a realistic maximum chunk per tick (equivalent to $600\text{ RPM}$).
 
 ```cpp
-// Member variables added to Esp32SpindleEncoderHAL:
+// Member variables in Esp32SpindleEncoderHAL:
 std::atomic<bool>     m_simActive{false};
 std::atomic<float>    m_simRpm{0.0f};
 std::atomic<int32_t>  m_pendingSimPulses{0};
-bool                  m_wasSimActive{false};       // Core 1 local state transition tracker
-int32_t               m_maxSimPulseChunk{96};      // Max pulses consumed per tick (~1200 RPM at 4800 CPR)
-int64_t               m_lastSimTimeUs{0};          // Core 1 integration timestamp
-float                 m_simFraction{0.0f};         // Core 1 sub-pulse fractional accumulator
+
+// Owned and mutated exclusively by Core 1 inside getPulseDelta():
+bool                  m_wasSimActive{false};
+int64_t               m_lastSimTimeUs{0};
+float                 m_simFraction{0.0f};
 ```
 
-**Pulse Integration & Kinematic Slewing Math in `Esp32SpindleEncoderHAL::getPulseDelta()`:**
-
-To ensure complete thread safety across ESP32-S3 cores without mutexes:
-1. Core 0 only toggles `m_simActive` atomically.
-2. Core 1 detects the edge `(simActive != m_wasSimActive)` inside `getPulseDelta()`, safely re-zeroing its own integration timestamp, fractional accumulator, and physical PCNT register baseline without race conditions.
-3. Discrete pulses (`CMD.simPulses`) are slewed in chunks of at most `m_maxSimPulseChunk` counts per tick (e.g. $\le 96$ counts/tick at $1\,\text{ms}$, corresponding to a maximum spindle speed equivalent of $1,200\,\text{RPM}$ at $4,800\,\text{cpr}$). This prevents instantaneous velocity shock spikes ($\sim 120,000\,\text{RPM}$) while ensuring 100% mathematical conservation of total counts.
+**Pulse Integration & Slew Math in `Esp32SpindleEncoderHAL::getPulseDelta()`:**
 
 ```cpp
-int32_t Esp32SpindleEncoderHAL::getPulseDelta() {
-    bool simActive = m_simActive.load(std::memory_order_relaxed);
-    int64_t nowUs = esp_timer_get_time();
+void Esp32SpindleEncoderHAL::setSimulationActive(bool active) {
+    if (!active) {
+        m_simRpm.store(0.0f, std::memory_order_relaxed);
+        m_pendingSimPulses.store(0, std::memory_order_relaxed);
+    }
+    m_simActive.store(active, std::memory_order_release);
+}
 
-    // 1. Core 1 Synchronous Mode Transition Handler:
-    if (simActive != m_wasSimActive) {
-        m_lastSimTimeUs = nowUs;
+void Esp32SpindleEncoderHAL::injectSimulatedPulses(int32_t delta) {
+    m_pendingSimPulses.fetch_add(delta, std::memory_order_relaxed);
+}
+
+void Esp32SpindleEncoderHAL::setSimulatedRpm(float rpm) {
+    m_simRpm.store(rpm, std::memory_order_relaxed);
+}
+
+int32_t Esp32SpindleEncoderHAL::getPulseDelta() {
+    bool simNow = m_simActive.load(std::memory_order_acquire);
+
+    // Handle state transitions synchronously on Core 1
+    if (simNow != m_wasSimActive) {
+        m_wasSimActive = simNow;
+        m_lastSimTimeUs = esp_timer_get_time();
         m_simFraction = 0.0f;
-        if (!simActive && m_unit) {
-            // Re-zero PCNT baseline synchronously on Core 1 when leaving simulation
-            int rawCount = 0;
-            pcnt_unit_get_count(m_unit, &rawCount);
-            m_lastCount16 = static_cast<int16_t>(rawCount);
+        if (!simNow) {
+            // Transitioned from Sim -> Physical: re-zero hardware PCNT baseline
+            resetHardwarePcntBaseline();
         }
-        m_wasSimActive = simActive;
     }
 
-    if (simActive) {
+    if (simNow) {
+        int64_t nowUs = esp_timer_get_time();
         float dt = (m_lastSimTimeUs > 0) ? static_cast<float>(nowUs - m_lastSimTimeUs) * 1e-6f : 0.0f;
         m_lastSimTimeUs = nowUs;
-        if (dt > 0.05f) dt = 0.05f; // Clamp delta-time ceiling to prevent runaway bursts
+        if (dt > 0.05f) dt = 0.05f; // Clamp delta-time to 50ms ceiling
 
-        // 2. Integrate continuous rotational RPM:
+        // 1. Integrate continuous rotational RPM:
         float rpm = m_simRpm.load(std::memory_order_relaxed);
         float counts = (rpm / 60.0f) * m_countsPerSpindleRev * dt + m_simFraction;
         int32_t delta = static_cast<int32_t>(counts);
         m_simFraction = counts - static_cast<float>(delta);
 
-        // 3. Kinematic pulse slewing: drain discrete manual pulses in safe chunks
-        // to prevent instantaneous acceleration spikes from overflowing GPTimer:
+        // 2. Drain discrete pulse injections at a safe maximum slew rate (600 RPM equivalent):
         int32_t pending = m_pendingSimPulses.load(std::memory_order_relaxed);
         if (pending != 0) {
-            int32_t step = std::clamp(pending, -m_maxSimPulseChunk, m_maxSimPulseChunk);
+            int32_t maxChunk = std::max<int32_t>(1, static_cast<int32_t>((600.0f / 60.0f) * m_countsPerSpindleRev * (dt > 0.0f ? dt : 0.001f)));
+            int32_t step = std::clamp(pending, -maxChunk, maxChunk);
             m_pendingSimPulses.fetch_sub(step, std::memory_order_relaxed);
             delta += step;
         }
@@ -166,144 +179,99 @@ int32_t Esp32SpindleEncoderHAL::getPulseDelta() {
 
     // ... standard physical PCNT hardware sampling when simulation is inactive ...
 }
-
-void Esp32SpindleEncoderHAL::setSimulationActive(bool active) {
-    // Pure atomic toggle from Core 0: Core 1 handles baseline and state reset synchronously
-    m_simActive.store(active, std::memory_order_release);
-    if (!active) {
-        m_simRpm.store(0.0f, std::memory_order_relaxed);
-    }
-}
 ```
 
 ---
 
-### 2.2 Wire Commands (`CMD.sim*`)
+### 2.2 Wire Commands (`CMD.sim*` & `CMD.ping`)
 
-The test harness commands the simulation hooks using standard canonical text frames parsed by `CommandDispatcher.cpp`:
+The test harness commands the simulation hooks using canonical text frames parsed by `CommandDispatcher.cpp`[cite: 1, 4]:
 
 | Command Frame | Parameters | Description | Controller Response |
 | :--- | :--- | :--- | :--- |
-| `CMD.simEncoder=<0\|1>` | `0` or `1` | Enables or disables virtual encoder injection mode. | `OK:CMD.simEncoder\n` |
-| `CMD.simPulses=<delta>` | Integer $\pm$ pulses | Injects a discrete number of spindle quadrature counts into Core 1. Slewed smoothly across ticks. | `OK:CMD.simPulses\n` |
-| `CMD.simRpm=<rpm>` | Float $\pm$ RPM | Commands a continuous spindle speed. The HAL automatically integrates `delta = rpm / 60 * ppr * dt` on every motion tick. | `OK:CMD.simRpm\n` |
-| `CMD.simMpg=<axis>,<counts>` | Axis `Z\|X`, $\pm$ counts | *(Phase 2 Scope)* Simulates discrete MPG handwheel detent pulses. | `OK:CMD.simMpg\n` |
-
-#### Production Safety Interlock & Compile Guard
-
-To ensure simulation commands cannot accidentally override physical lathe operation in production:
-1. **Compile-Time Guard:** `CMD.sim*` handling is conditionally compiled under `#if HIL_SIMULATION_ENABLED` (or enabled in non-production test builds).
-2. **Runtime Safety Invariant:** When receiving `CMD.simEncoder=1`, the controller asserts that physical spindle rotation is zero (`getFilteredRpm() == 0`) and all axis motion is stopped (`!isMoving()`). If violated, the command is rejected immediately with `ERR:SAFETY_INTERLOCK_ACTIVE\n`.
-
-### 2.2.1 Firmware Linkage (`CommandDispatcher` $\to$ `MotionEngine` $\to$ `ISpindleEncoderHAL`)
-
-To route `CMD.sim*` frames without global pointer leaks:
-1. `src/motion/kernel/MotionEngine.h` provides an explicit non-const getter:
-   ```cpp
-   ISpindleEncoderHAL* getEncoderHAL() { return m_encoderHal; }
-   ```
-2. `src/web/CommandDispatcher.cpp` dispatches directly through the singleton and updates the atomic millisecond heartbeat timestamp `m_lastSimHeartbeatMs` (`std::atomic<uint32_t>`):
-   ```cpp
-   // CMD.simEncoder=<0|1>
-   if (cmdLen >= 11 && strncmp(cmd, "simEncoder=", 11) == 0) {
-       bool active = atoi(cmd + 11) != 0;
-       // Safety check: reject if machine is actively cutting on physical spindle
-       if (active && (MotionEngine::instance().isAnyAxisMoving() || 
-                      MotionEngine::instance().getEncoderHAL()->getFilteredRpm() > 0)) {
-           if (reply) *reply = "ERR:SAFETY_INTERLOCK_ACTIVE\n";
-           return true;
-       }
-       ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
-       if (hal) hal->setSimulationActive(active);
-       MotionEngine::instance().touchSimHeartbeat();
-       if (reply) *reply = "OK:CMD.simEncoder\n";
-       return true;
-   }
-   // CMD.simPulses=<count>
-   if (cmdLen >= 10 && strncmp(cmd, "simPulses=", 10) == 0) {
-       int32_t pulses = atol(cmd + 10);
-       ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
-       if (hal) hal->injectSimulatedPulses(pulses);
-       MotionEngine::instance().touchSimHeartbeat();
-       if (reply) *reply = "OK:CMD.simPulses\n";
-       return true;
-   }
-   // CMD.simRpm=<rpm>
-   if (cmdLen >= 7 && strncmp(cmd, "simRpm=", 7) == 0) {
-       float rpm = atof(cmd + 7);
-       ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
-       if (hal) hal->setSimulatedRpm(rpm);
-       MotionEngine::instance().touchSimHeartbeat();
-       if (reply) *reply = "OK:CMD.simRpm\n";
-       return true;
-   }
-   ```
+| `CMD.simEncoder=<0\|1>` | `0` or `1` | Enables or disables virtual encoder injection mode. Rejects with `ERR:SAFETY_INTERLOCK_ACTIVE` if physical spindle or axes are moving. | `OK:CMD.simEncoder\n`[cite: 1, 4] |
+| `CMD.simPulses=<delta>` | Integer $\pm$ pulses | Atomically queues discrete spindle quadrature counts into Core 1 (slewed at $\le 600\text{ RPM}$). | `OK:CMD.simPulses\n`[cite: 1, 4] |
+| `CMD.simRpm=<rpm>` | Float $\pm$ RPM | Commands a continuous spindle speed. The HAL integrates `delta = rpm / 60 * cpr * dt` on every motion tick. | `OK:CMD.simRpm\n`[cite: 1, 4] |
+| `CMD.ping` | None | Refreshes the Core 1 simulation safety watchdog timestamp (`touchSimHeartbeat()`). | `OK:CMD.ping\n`[cite: 4] |
 
 ---
 
 ### 2.3 Safety Watchdog & Core 1 Failsafe Invariant
 
-To guarantee that a disconnected, hanging, or crashed test script never leaves physical steppers or simulated feeds running unattended:
-1. **Heartbeat Registration:** Every `CMD.sim*` or `CMD.ping` command invokes `MotionEngine::instance().touchSimHeartbeat()`, updating `std::atomic<uint32_t> m_lastSimHeartbeatMs`:
+To guarantee that a disconnected or crashed test script never leaves physical steppers or simulated feeds running unattended[cite: 1]:
+1. **32-Bit Atomic Heartbeat Registration:** On the 32-bit Xtensa LX7 (ESP32-S3), `m_lastSimHeartbeatMs` is stored as `std::atomic<uint32_t>` (wrapping safely via unsigned subtraction). Every `CMD.sim*` or `CMD.ping` command invokes `MotionEngine::instance().touchSimHeartbeat()`[cite: 1, 4]:
    ```cpp
-   void MotionEngine::touchSimHeartbeat() {
-       m_lastSimHeartbeatMs.store(static_cast<uint32_t>(esp_timer_get_time() / 1000), std::memory_order_relaxed);
+   void touchSimHeartbeat() {
+       uint32_t nowMs = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+       m_lastSimHeartbeatMs.store(nowMs, std::memory_order_relaxed);
    }
    ```
-2. **Core 1 Watchdog Evaluation:** Evaluated synchronously inside `MotionEngine::onMotionTick()` on Core 1:
+2. **Core 1 Watchdog Evaluation:** Evaluated synchronously inside `MotionEngine::onMotionTick()` on Core 1[cite: 1]:
    ```cpp
    if (m_encoderHal && m_encoderHal->isSimulationActive()) {
-       uint32_t nowMs = static_cast<uint32_t>(esp_timer_get_time() / 1000);
-       uint32_t lastHb = m_lastSimHeartbeatMs.load(std::memory_order_relaxed);
-       if (nowMs - lastHb > 1500) {
-           // Harness dropped offline or timed out (>1.5s): force immediate failsafe stop
+       uint32_t nowMs = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+       uint32_t lastMs = m_lastSimHeartbeatMs.load(std::memory_order_relaxed);
+       if (static_cast<uint32_t>(nowMs - lastMs) > 1500U) {
+           // Harness dropped offline or timed out: force immediate failsafe stop
            m_encoderHal->setSimulatedRpm(0.0f);
            m_encoderHal->setSimulationActive(false);
            stopAll(false); // Orderly normal deceleration stop
        }
    }
    ```
-3. **Long-Running Cut Protection & Failsafe Test Hook:**
-   - To prevent long feeds ($>1.5\,\text{s}$) from starving the watchdog while passively waiting for motion completion, `NanoElsClient` runs a background task transmitting `CMD.ping\n` every $500\,\text{ms}$.
-   - To verify the $1.5\,\text{s}$ failsafe watchdog in automated tests, `NanoElsClient` provides an explicit hook `client.suppress_heartbeat(True)` so test cases can intentionally starve the controller and confirm automatic deceleration to zero.
+3. **Client Background Keepalive:** Because cutting moves regularly take $2.0\text{s}\text{–}5.0\text{s}$, `NanoElsClient` runs an asynchronous background task (`_heartbeat_loop`) that sends `CMD.ping\n` every $500\text{ ms}$ while simulation is active, unless explicitly paused via `client.suppress_heartbeat(True)` during watchdog timeout tests.
+
+---
+
+### 2.4 Required Firmware Prerequisite Fixes in `CommandDispatcher.cpp`
+
+To ensure deterministic HIL execution and full Gearbox $Z+X$ coverage, the following fixes must be applied to `src/web/CommandDispatcher.cpp`[cite: 4]:
+
+1. **Consistent `OK:CMD.<name>\n` Replies Across All Handlers:**
+   Currently, several handlers (`handleAxisZero`, `handleAxisPosDu`, `handleAxisLimitDu`, `handleAxisClearLimit`, `handleJogStep`, `handleJogHold`, `handleJogRelease`, `handleJogStepDu`, `handleFeedStepDu`, `handleFeedStepCycle`, `handleFeedDupr`, `handleFeedMm`, `handleFeedTpi`, `handleFeedNudge`, `handleTaperRatio`, `handleTaperAngle`, `handleOn`) cast `(void)reply;` and return `true` silently[cite: 4]. Every handler that returns `true` MUST populate `*reply = "OK:CMD.<name>\n";` (and `*reply = "ERR:...\n";` on `false`) so `NanoElsClient.send()` can await command completion deterministically before inspecting state.
+2. **Dual-Axis `axis:ZX` Support in `handleStartFeed()`:**
+   In `handleStartFeed()`, `axis` is currently parsed into a single-axis `AxisId` (`AXIS_Z` or `AXIS_X`), losing `"ZX"` when `CMD.startFeed=axis:ZX,...` is called[cite: 4]. Update `handleStartFeed()` to extract the raw axis string (`"Z"`, `"X"`, or `"ZX"`), call `gb->setActiveAxis(axStr)`, and invoke `gb->startFeed(...)` with secondary taper coordination enabled when `strcasecmp(axStr, "ZX") == 0`.
+3. **Soft Limit Index Alignment (`handleAxisLimitDu` & `handleAxisClearLimit`):**
+   Ensure semantic limit tokens (`L`/`R` for $Z$, `U`/`D` for $X$) and numeric indices (`0` vs `1`) map consistently to `LimitDirection::LIMIT_LEFT_OR_UP` (`m_limits[0]`, negative travel stop) and `LimitDirection::LIMIT_RIGHT_OR_DOWN` (`m_limits[1]`, positive travel stop)[cite: 4, 5].
+4. **Low-Latency WebSocket Socket Options:**
+   Disable Wi-Fi modem sleep (`esp_wifi_set_ps(WIFI_PS_NONE)`) and set `TCP_NODELAY` on the WebSocket server socket so 50 Hz telemetry frames and `CMD.stop` packets are never delayed by TCP Nagle buffering or DTIM beacon intervals.
 
 ---
 
 ## 3. Test Harness Architecture & Python Framework
 
-The test harness is implemented in Python 3.10+ using `asyncio` and `websockets`. It contains no heavy dependencies and requires only `pip install websockets`.
+The test harness is implemented in Python 3.10+ using `asyncio` and `websockets` (`pip install websockets>=12.0`)[cite: 1].
 
 ### 3.1 Directory Layout
 
 ```
 tests/hil/
-├── requirements.txt            # websockets>=12.0
-├── run_tests.py                # Main test runner CLI and dynamic test discoverer
+├── requirements.txt               # websockets>=12.0
+├── run_tests.py                   # Main test runner CLI and dynamic test discoverer
 ├── core/
 │   ├── __init__.py
-│   ├── client.py               # NanoElsClient: Async WebSocket connection & reactive state mirror
-│   ├── assertions.py           # Domain assertion helpers (assert_pos_du, assert_halted, etc.)
-│   ├── base_test.py            # HilTestCase abstract base class
-│   └── reporter.py             # ANSI Terminal & JSON reporting formatters
+│   ├── client.py                  # NanoElsClient: Async WS, ACK sync, 500ms heartbeat & state mirror
+│   ├── assertions.py              # Domain assertion helpers (assert_pos_du, assert_halted, etc.)
+│   ├── base_test.py               # HilTestCase abstract base class
+│   └── reporter.py                # ANSI Terminal & JSON reporting formatters
 └── suites/
     ├── __init__.py
-    ├── test_gearbox.py         # Electronic gearbox at-speed and cold-start feed tests
-    ├── test_gearing.py         # Discrete pulse-synchronized gearing tests (forward & reverse)
-    ├── test_soft_limits.py     # High-speed soft limits, lookahead, and shoulder halt tests
-    ├── test_coords_and_presets.py # Axis coordinate zeroing and DRO preset tests
-    ├── test_jogging.py         # Discrete step jogging and continuous hold/release tests
-    └── test_emergency.py       # Stop command latency and feed interrupt tests
+    ├── test_coords_and_presets.py # Axis coordinate zeroing, presets, and limit origin shift tests (1 test)
+    ├── test_jogging.py            # Discrete step jogging and continuous hold/limit tests (2 tests)
+    ├── test_gearing.py            # Discrete pulse-synchronized gearing accuracy tests (2 tests)
+    ├── test_emergency.py          # Stop latency, [SAFE-01] gatekeeper, and watchdog tests (3 tests)
+    ├── test_soft_limits.py        # Z and X soft limits, decel window, and directional escape (4 tests)
+    ├── test_gearbox.py            # Single-axis Z and X sync/async, live nudge, TPI, and reversal (10 tests)
+    └── test_gearbox_zx.py         # Coordinated Z+X taper/cone sync, async, and dual-limit halt (4 tests)
 ```
 
 ---
 
 ## 4. `NanoElsClient` Specification & State Engine
 
-`NanoElsClient` manages the asynchronous transport, incoming packet deserialization, state maintenance, synchronous command acknowledgment (`OK:` / `ERR:`), and condition waiting.
+`NanoElsClient` manages the asynchronous WebSocket transport, command ACK synchronization, 500 ms simulation heartbeat, incoming 50 Hz packet deserialization, and predicate waiting[cite: 1].
 
 ### 4.1 Internal State Representation
-
-The client continuously parses incoming 50 Hz text frames and maintains a local cache:
 
 ```python
 # tests/hil/core/client.py
@@ -320,6 +288,7 @@ class ControllerState:
     is_moving: bool = False
     mode: int = 0
     estop: int = 0
+    perms: int = 0
     z_left_du: int | None = None
     z_right_du: int | None = None
     x_up_du: int | None = None
@@ -336,145 +305,214 @@ class ControllerState:
     # Properties Domain (P.*)
     screw_z_du: int = 40000
     motor_steps_z: int = 800
-    encoder_ppr: int = 1200  # Spindle pulses per rev (4x quadrature = 4800 counts/rev)
+    encoder_ppr: int = 2400  # Effective quadrature counts per spindle revolution = encoder_ppr * 2
     
-    # Raw dictionary of all received keys
+    # Raw dictionary of all received keys and monotonic frame counter
     raw: dict[str, str] = field(default_factory=dict)
+    telemetry_seq: int = 0
 ```
 
-> [!NOTE]
-> **PPR vs. Quadrature Counts:** Standard optical spindle encoders report optical pulses per revolution ($PPR$). Physical quadrature decoding on ESP32-S3 hardware PCNT multiplies this by 4 ($CPR = 4 \times PPR$). For a 1200 PPR encoder, $1\text{ spindle rev} = 4,800\text{ counts}$; for 2400 PPR, $1\text{ rev} = 9,600\text{ counts}$. Test cases must never hardcode raw pulse counts; always compute counts dynamically from `client.state.encoder_ppr` or use `client.inject_spindle_revs()`.
+### 4.2 Core Async Client API & Deterministic ACK Synchronization
 
-### 4.2 Core Async Client API & Heartbeat Management
+To prevent stale-cache race conditions (where `wait_for()` evaluates cached state before the ESP32 has processed a newly transmitted command), `NanoElsClient.send()` awaits the controller's `OK:` or `ERR:` response frame and optionally waits for the next fresh 50 Hz telemetry snapshot (`telemetry_seq` increment).
 
 ```python
+class CommandRejectedError(RuntimeError):
+    """Raised when the controller replies with ERR:<reason>."""
+    pass
+
 class NanoElsClient:
     def __init__(self, host: str = "nanoels.local", port: int = 81):
         self.uri = f"ws://{host}:{port}/canonical"
         self.state = ControllerState()
         self._ws = None
-        self._listeners: list[Callable[[ControllerState], bool]] = []
-        self._pending_acks: dict[str, list[asyncio.Future]] = {}
+        self._listeners: list[Callable[[ControllerState], None]] = []
+        self._ack_queue: asyncio.Queue[str] = asyncio.Queue()
         self._rx_task: asyncio.Task | None = None
-        self._heartbeat_task: asyncio.Task | None = None
-        self._heartbeat_suppressed: bool = False
-        
+        self._hb_task: asyncio.Task | None = None
+        self._suppress_hb: bool = False
+
     async def connect(self, timeout_s: float = 5.0) -> None:
-        """Connects to controller, starts receiver loop and background 500ms heartbeat."""
-        ...
+        """Connects to controller, starts RX and 500ms heartbeat tasks, and hydrates state."""
+        self._ws = await asyncio.wait_for(websockets.connect(self.uri, ping_interval=None), timeout=timeout_s)
+        self._rx_task = asyncio.create_task(self._rx_loop())
+        self._hb_task = asyncio.create_task(self._heartbeat_loop())
+        await self.send("?get=ALL", expect_ack=False)
+        await self.wait_for(lambda s: s.telemetry_seq > 0, timeout_s=timeout_s, description="initial hydration")
 
     async def disconnect(self) -> None:
-        """Cancels heartbeat, stops active feeds, clears simulation, and closes socket."""
-        ...
-
-    async def send(self, cmd: str, wait_ack: bool = True, timeout_s: float = 2.0) -> None:
-        """
-        Transmits a newline-delimited command frame.
-        When wait_ack is True, awaits matching 'OK:CMD.<name>' response from controller,
-        raising RuntimeError immediately if 'ERR:<reason>' is returned.
-        This prevents false-positive test passes on stale cached state.
-        """
-        ...
+        """Safely stops active feeds, disables simulation, and closes socket cleanly."""
+        if self._hb_task:
+            self._hb_task.cancel()
+        try:
+            await self.send("CMD.stop", expect_ack=False)
+            await self.send("CMD.simRpm=0", expect_ack=False)
+            await self.send("CMD.simEncoder=0", expect_ack=False)
+        except Exception:
+            pass
+        if self._rx_task:
+            self._rx_task.cancel()
+        if self._ws:
+            await self._ws.close()
 
     def suppress_heartbeat(self, suppress: bool = True) -> None:
-        """Enables or disables the background 500ms heartbeat (used for watchdog timeout testing)."""
-        self._heartbeat_suppressed = suppress
+        """Pauses or resumes the automatic 500ms CMD.ping keepalive (used to test watchdog timeout)."""
+        self._suppress_hb = suppress
+
+    async def send(self, cmd: str, expect_ack: bool = True, timeout_s: float = 2.0) -> str:
+        """
+        Transmits a newline-delimited command frame.
+        If expect_ack is True, awaits the corresponding OK: or ERR: response from CommandDispatcher.
+        Raises CommandRejectedError if the firmware responds with ERR:...
+        """
+        # Drain any stale ACKs
+        while not self._ack_queue.empty():
+            self._ack_queue.get_nowait()
+
+        clean = cmd.strip() + "\n"
+        await self._ws.send(clean)
+
+        if not expect_ack:
+            return ""
+
+        reply = await asyncio.wait_for(self._ack_queue.get(), timeout=timeout_s)
+        if reply.startswith("ERR:"):
+            raise CommandRejectedError(f"Command '{cmd.strip()}' rejected by firmware: {reply}")
+        return reply
+
+    async def wait_next_telemetry(self, timeout_s: float = 1.0) -> ControllerState:
+        """Waits for at least one fresh 50Hz telemetry broadcast frame to arrive."""
+        start_seq = self.state.telemetry_seq
+        return await self.wait_for(lambda s: s.telemetry_seq > start_seq, timeout_s=timeout_s, description="next telemetry frame")
 
     async def wait_for(
         self, 
         predicate: Callable[[ControllerState], bool], 
         timeout_s: float = 5.0, 
-        description: str = "condition"
+        description: str = "condition",
+        require_fresh_frame: bool = True
     ) -> ControllerState:
         """
         Asynchronously yields control until predicate(self.state) evaluates to True.
-        Raises TimeoutError with diagnostic state dump if timeout expires.
+        If require_fresh_frame is True, waits for at least one new telemetry packet after invocation.
         """
-        ...
+        if require_fresh_frame:
+            await self.wait_next_telemetry(timeout_s=min(timeout_s, 0.5))
+        if predicate(self.state):
+            return self.state
 
-    async def inject_spindle_revs(self, revs: float, rpm: float = 600.0) -> None:
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+
+        def _check(st: ControllerState):
+            if not fut.done() and predicate(st):
+                fut.set_result(st)
+
+        self._listeners.append(_check)
+        try:
+            return await asyncio.wait_for(fut, timeout=timeout_s)
+        except asyncio.TimeoutError as e:
+            raise TimeoutError(f"Timed out ({timeout_s}s) waiting for {description}. Last state: {self.state}") from e
+        finally:
+            self._listeners.remove(_check)
+
+    def revs_to_pulses(self, revs: float) -> int:
+        """Computes exact quadrature pulse counts for `revs` revolutions from controller P.encoderPpr."""
+        cpr = self.state.encoder_ppr * 2
+        return int(round(revs * cpr))
+
+    async def inject_spindle_revs(self, revs: float) -> None:
         """
-        Calculates exact quadrature counts for `revs` revolutions based on state.encoder_ppr * 4,
-        injects them via CMD.simPulses, and confirms receipt.
+        Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr,
+        injects them via CMD.simPulses, and waits for the slewed injection to settle.
         """
-        cpr = self.state.encoder_ppr * 4 if self.state.encoder_ppr > 0 else 4800
-        total_pulses = int(round(revs * cpr))
-        await self.send(f"CMD.simPulses={total_pulses}", wait_ack=True)
+        pulses = self.revs_to_pulses(revs)
+        await self.send(f"CMD.simPulses={pulses}")
+        # At 600 RPM slew ceiling (10 rev/sec), wait for slewing + 200ms settle margin
+        slew_duration_s = (abs(revs) / 10.0) + 0.25
+        await asyncio.sleep(slew_duration_s)
+        await self.wait_next_telemetry()
 ```
 
-### 4.3 Multi-Line Frame Ingestion & ACK Resolution
-
-The ESP32-S3 `WebServerModule` transmits WebSocket packets that batch multiple domain lines separated by newline (`\n`) characters within a single TCP/WebSocket frame payload (e.g. `OK:CMD.axisZero\nK.zDu=0\nK.rpm=600\nK.on=1\n`).
-
-`NanoElsClient._rx_loop()` processes both asynchronous telemetry updates and synchronous command ACKs:
+### 4.3 Multi-Line Frame Ingestion & Heartbeat Loop Details
 
 ```python
-# tests/hil/core/client.py
+    async def _heartbeat_loop(self) -> None:
+        """Transmits CMD.ping every 500ms so long cutting moves never trip the 1.5s Core 1 watchdog."""
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                if not self._suppress_hb and self._ws:
+                    await self._ws.send("CMD.ping\n")
+        except asyncio.CancelledError:
+            pass
 
-async def _rx_loop(self) -> None:
-    """Continuously ingests WebSocket frames, splitting telemetry and resolving ACKs."""
-    try:
-        async for message in self._ws:
-            if isinstance(message, bytes):
-                message = message.decode("utf-8", errors="replace")
-            
-            lines = message.split("\n")
-            changed = False
-            for raw_line in lines:
-                line = raw_line.strip()
-                if not line:
-                    continue
+    async def _rx_loop(self) -> None:
+        """Continuously ingests WebSocket frames, routes OK:/ERR: replies, and updates telemetry state."""
+        try:
+            async for message in self._ws:
+                if isinstance(message, bytes):
+                    message = message.decode("utf-8", errors="replace")
+                
+                lines = message.split("\n")
+                changed = False
+                for raw_line in lines:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    if line.startswith("OK:") or line.startswith("ERR:"):
+                        # Ignore background ping ACKs so they don't pollute command ACK queue
+                        if line != "OK:CMD.ping":
+                            self._ack_queue.put_nowait(line)
+                        continue
+                    if self._parse_telemetry_line(line):
+                        changed = True
 
-                # 1. Synchronous Command Acknowledgment Handling:
-                if line.startswith("OK:CMD."):
-                    cmd_name = line[7:].strip()
-                    if cmd_name in self._pending_acks and self._pending_acks[cmd_name]:
-                        fut = self._pending_acks[cmd_name].pop(0)
-                        if not fut.done():
-                            fut.set_result(True)
-                    continue
+                if changed:
+                    self.state.telemetry_seq += 1
+                    for listener in list(self._listeners):
+                        listener(self.state)
+        except asyncio.CancelledError:
+            pass
 
-                if line.startswith("ERR:"):
-                    err_msg = line[4:].strip()
-                    # Reject all pending command futures with error
-                    for cmd_name, fut_list in self._pending_acks.items():
-                        for fut in fut_list:
-                            if not fut.done():
-                                fut.set_exception(RuntimeError(f"Firmware error: {err_msg}"))
-                    self._pending_acks.clear()
-                    continue
+    def _parse_telemetry_line(self, line: str) -> bool:
+        """Parses canonical K.*, I.*, C.*, P.* lines into self.state."""
+        if "=" not in line:
+            return False
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.strip()
+        self.state.raw[key] = val
 
-                # 2. Asynchronous Domain Telemetry Ingestion:
-                if self._parse_telemetry_line(line):
-                    changed = True
-
-            if changed:
-                for check_fn in list(self._listeners):
-                    check_fn(self.state)
-    except asyncio.CancelledError:
-        pass
-
-async def _heartbeat_loop(self) -> None:
-    """Background task sending CMD.ping every 500ms to keep Core 1 sim watchdog fed."""
-    try:
-        while True:
-            await asyncio.sleep(0.5)
-            if not self._heartbeat_suppressed and self._ws:
-                # Transmit ping without blocking on ACK
-                clean = "CMD.ping\n"
-                await self._ws.send(clean)
-    except asyncio.CancelledError:
-        pass
+        if key == "K.zDu": self.state.z_du = int(val)
+        elif key == "K.xDu": self.state.x_du = int(val)
+        elif key == "K.rpm": self.state.rpm = int(val)
+        elif key == "K.turns": self.state.turns = float(val)
+        elif key == "K.angle": self.state.angle = float(val)
+        elif key == "K.on": self.state.is_on = (val == "1" or val.lower() == "true")
+        elif key == "K.mode": self.state.mode = int(val)
+        elif key == "K.estop": self.state.estop = int(val)
+        elif key == "K.perms": self.state.perms = int(val, 0)
+        elif key == "K.dupr": self.state.dupr = int(val)
+        elif key == "K.nextDupr": self.state.next_dupr = int(val)
+        elif key == "K.zLeftDu": self.state.z_left_du = None if val == "NONE" else int(val)
+        elif key == "K.zRightDu": self.state.z_right_du = None if val == "NONE" else int(val)
+        elif key == "K.xUpDu": self.state.x_up_du = None if val == "NONE" else int(val)
+        elif key == "K.xDownDu": self.state.x_down_du = None if val == "NONE" else int(val)
+        elif key == "P.encoderPpr": self.state.encoder_ppr = int(val)
+        elif key == "P.motorStepsZ": self.state.motor_steps_z = int(val)
+        elif key == "P.screwZDu": self.state.screw_z_du = int(val)
+        else: return False
+        return True
 ```
 
 ---
 
 ## 5. Test Case Authoring DSL & Lifecycle
 
-Every test inherits from `HilTestCase`. The runner guarantees that:
-1. `setup()` prepares controller state (clears limits, stops motion, zeroes axes) with guaranteed sequential ACK delivery.
-2. `run()` executes the scenario and evaluates assertions.
-3. `teardown()` **always executes**, even upon assertion failure, syntax error, or keyboard interrupt, resetting the simulation mode and ensuring motion is halted.
+Every test inherits from `HilTestCase`. The runner guarantees that[cite: 1]:
+1. `setup()` prepares a clean controller state (stops motion, enables simulation, clears all 4 soft limits on $Z$ and $X$, resets taper ratio to `0`, and zeroes $Z$ and $X$)[cite: 1, 4].
+2. `run()` executes the scenario and evaluates assertions[cite: 1].
+3. `teardown()` **always executes**, even upon assertion failure or exception, restoring heartbeat keepalive, halting motion, and disabling simulation mode[cite: 1].
 
 ### 5.1 Test Case Skeleton
 
@@ -484,536 +522,509 @@ Every test inherits from `HilTestCase`. The runner guarantees that:
 class HilTestCase(ABC):
     name: str = "Unnamed Test"
     description: str = ""
-    timeout_s: float = 10.0
+    timeout_s: float = 15.0
 
     def __init__(self, client: NanoElsClient):
         self.client = client
 
     async def setup(self) -> None:
-        """Default setup: stop any active feed, enable simulation mode, zero Z/X with ACK synchronization."""
-        await self.client.send("CMD.stop", wait_ack=True)
-        await self.client.send("CMD.simEncoder=1", wait_ack=True)
-        await self.client.send("CMD.simRpm=0", wait_ack=True)
-        await self.client.send("CMD.axisZero=Z", wait_ack=True)
-        await self.client.send("CMD.axisZero=X", wait_ack=True)
-        await self.client.wait_for(lambda s: s.z_du == 0 and s.x_du == 0 and not s.is_on)
+        """Default setup: stop feed, enable sim mode, clear all limits/tapers, zero Z and X."""
+        self.client.suppress_heartbeat(False)
+        await self.client.send("CMD.stop")
+        await self.client.send("CMD.simEncoder=1")
+        await self.client.send("CMD.simRpm=0")
+        await self.client.send("CMD.axisClearLimit=Z,L")
+        await self.client.send("CMD.axisClearLimit=Z,R")
+        await self.client.send("CMD.axisClearLimit=X,U")
+        await self.client.send("CMD.axisClearLimit=X,D")
+        await self.client.send("CMD.taperRatio=0")
+        await self.client.send("CMD.axisZero=Z")
+        await self.client.send("CMD.axisZero=X")
+        await self.client.wait_for(lambda s: s.z_du == 0 and s.x_du == 0 and not s.is_on and s.rpm == 0)
 
     @abstractmethod
-    async def run(self) -> None:
-        """Test logic and assertions."""
+    async def run(self) -> dict[str, Any]:
+        """Test logic and assertions. Returns a dict of key diagnostic metrics for reporting."""
         pass
 
     async def teardown(self) -> None:
-        """Default teardown: restore heartbeat, stop feed, clear simulation mode."""
+        """Default teardown: restore heartbeat, stop feed, clear limits, disable simulation."""
         self.client.suppress_heartbeat(False)
-        await self.client.send("CMD.stop", wait_ack=False)
-        await self.client.send("CMD.simRpm=0", wait_ack=False)
-        await self.client.send("CMD.simEncoder=0", wait_ack=False)
-```
-
-### 5.2 Domain Assertion Primitives
-
-To eliminate boilerplate, `tests/hil/core/assertions.py` provides high-level assertions:
-
-```python
-# Asserts value is within +/- tolerance_du (default +/- 2 du = 0.2 microns)
-def assert_pos_du(actual_du: int, expected_du: int, tolerance_du: int = 2, axis: str = "Z"):
-    diff = abs(actual_du - expected_du)
-    assert diff <= tolerance_du, (
-        f"Axis {axis} position mismatch! Expected: {expected_du} du, "
-        f"Actual: {actual_du} du, Error: {diff} du (Allowed: +/-{tolerance_du} du)"
-    )
-
-# Asserts motion has halted cleanly with is_on == False
-def assert_halted(state: ControllerState, reason: str = ""):
-    assert not state.is_on, f"Expected controller to be halted, but is_on is True! ({reason})"
+        await self.client.send("CMD.stop", expect_ack=False)
+        await self.client.send("CMD.simRpm=0", expect_ack=False)
+        await self.client.send("CMD.simEncoder=0", expect_ack=False)
 ```
 
 ---
 
-## 6. Authoritative Test Catalog & Real-Life Scenarios
+## 6. Authoritative Test Catalog & Real-Life Machining Scenarios (26 Tests)
 
-Every test in the NanoELS HIL suite verifies a specific physical machining behavior across the external WebSocket boundary (`ws://<ip>:81/canonical`). This catalog defines the real-life scenario, inbound parameters, simulation stimulus, and exact pass/fail criteria for each test case.
-
----
-
-### 6.1 `gearbox_at_speed_z_feed` (Suite: `test_gearbox.py`)
-
-* **Real-Life Machining Scenario (Longitudinal Turning to Dimension):**  
-  The machinist turns on the spindle drive and lets the lathe stabilize at cutting speed ($600\text{ RPM}$). They touch off the tool on the workpiece outside diameter and engage electronic power feed towards the chuck to turn a cylindrical journal. When the carriage reaches the programmed $45.000\text{ mm}$ stroke length, the feed automatically disengages. The spindle continues spinning at $600\text{ RPM}$ so the cutting tool does not leave a dwell gouge mark or fracture in the cut. Once the tool has stopped, the machinist powers down the spindle.
-
-* **Objective:**  
-  Verify on-the-fly synchronized feed engagement while the spindle is already rotating at full speed, followed by automatic disengagement at target stroke distance with zero post-halt creep under continuous spindle rotation.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.simRpm=600
-  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:45000
-  CMD.simRpm=0
-  ```
-
-* **Physical Simulation Stimulus:**  
-  Virtual spindle acceleration to $600\text{ RPM}$ ($10\text{ rev/sec}$), steady-state rotation during the $45.0\text{ mm}$ cut ($30\text{ spindle revs}$ at $1.500\text{ mm/rev}$), and continuous $600\text{ RPM}$ rotation during a $1.0\text{s}$ post-halt hold window.
-
-* **Lifecycle Sequence:**
-  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580` (spindle confirmed stable at speed).
-  2. Send `CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:45000`; wait for `s.is_on == True`.
-  3. Wait for `s.is_on == False` (controller disengages motion upon reaching $-45,000\text{ du}$).
-  4. **Anti-Creep Hold Window:** Maintain spindle spinning at $600\text{ RPM}$ for $1.0\text{s}$ post-halt.
-  5. Send `CMD.simRpm=0`; wait $300\text{ ms}$ for spindle spin-down.
-
-* **Pass Criteria:**
-  - Carriage coordinate halts at $-45,000\text{ du} \pm 2\text{ du}$ ($\pm 0.2\ \mu\text{m}$).
-  - `s.is_on` transitions to `False` upon reaching target distance.
-  - Position remains completely stationary ($0\text{ du}$ drift) throughout the $1.0\text{s}$ hold window while the spindle continues spinning at $600\text{ RPM}$.
-
-* **Fail Criteria:**
-  - Carriage overshoots past $-45,002\text{ du}$ or stops short ($>2\text{ du}$ error).
-  - Carriage creeps or advances while spindle continues spinning during the hold window.
-  - Controller fails to disengage motion within $6.0\text{s}$ timeout.
+Every test in the NanoELS HIL suite verifies a specific physical machining behavior across the external WebSocket boundary (`ws://<ip>:81/canonical`)[cite: 1].
 
 ---
 
-### 6.2 `gearbox_at_speed_x_feed` (Suite: `test_gearbox.py`)
+### Suite 1: `test_coords_and_presets.py` (Basic ELS Coordinate System)
 
-* **Real-Life Machining Scenario (Facing to Workpiece Center):**  
-  The spindle is spinning at $600\text{ RPM}$. The machinist faces off the raw end of a part, feeding the cross-slide inward from the outside diameter towards workpiece centerline ($X = 0$). When the tool reaches the center, the cross-slide feed automatically trips out to prevent overrunning past center or loading the cross-slide leadscrew. The spindle continues spinning at $600\text{ RPM}$ while the cut is disengaged.
-
-* **Objective:**  
-  Verify on-the-fly synchronized cross-slide feed engagement at operating speed, accurate $0.500\text{ mm/rev}$ pitch tracking on Axis X, and zero post-halt creep.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.simRpm=600
-  CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER,dist:15000
-  CMD.simRpm=0
-  ```
-
-* **Physical Simulation Stimulus:**  
-  Virtual spindle at $600\text{ RPM}$ ($10\text{ rev/sec}$), steady-state rotation during the $15.0\text{ mm}$ cross-feed cut ($30\text{ revs}$ at $0.500\text{ mm/rev}$), and continuous $600\text{ RPM}$ during a $1.0\text{s}$ post-halt hold window.
-
-* **Lifecycle Sequence:**
-  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
-  2. Send `CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER,dist:15000`; wait for `s.is_on == True`.
-  3. Wait for `s.is_on == False` (controller auto-halts at $-15,000\text{ du}$).
-  4. **Anti-Creep Hold Window:** Hold spindle at $600\text{ RPM}$ for $1.0\text{s}$.
-  5. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
-
-* **Pass Criteria:**
-  - Cross-slide halts at $-15,000\text{ du} \pm 2\text{ du}$.
-  - Zero creep ($0\text{ du}$ drift) during the $1.0\text{s}$ post-halt hold window at $600\text{ RPM}$.
-  - `s.is_on` is `False`.
-
-* **Fail Criteria:**
-  - Cross-slide position error exceeds $\pm 2\text{ du}$.
-  - Cross-slide creeps past target while spindle rotates.
-  - Timeout exceeding $6.0\text{s}$.
-
----
-
-### 6.3 `gearbox_cold_start_ramp` (Suite: `test_gearbox.py`)
-
-* **Real-Life Machining Scenario (Threading Pass from Standstill / Foot-Brake Restart):**  
-  The machinist sets up an external single-point threading pass. With the spindle stopped ($0\text{ RPM}$), they engage electronic threading synchronization. They switch the motor switch ON, and the motor accelerates through its inertia curve to $600\text{ RPM}$. The electronic leadscrew must track the encoder pulses through every degree of the startup ramp, maintaining exact thread pitch synchronization without losing steps or cross-threading the existing thread groove.
-
-* **Objective:**  
-  Verify synchronized electronic gearing when motion is armed while stationary and the spindle accelerates through a dynamic velocity ramp.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK,dist:20000
-  CMD.simRpm=600
-  CMD.simRpm=0
-  ```
-
-* **Physical Simulation Stimulus:**  
-  Spindle begins at $0\text{ RPM}$, then accelerates to $600\text{ RPM}$ while feed is already engaged. Spindle continues spinning until $20.0\text{ mm}$ ($20\text{ revs}$ at $1.000\text{ mm/rev}$) is completed, followed by a $1.0\text{s}$ anti-creep hold at $600\text{ RPM}$.
-
-* **Lifecycle Sequence:**
-  1. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK,dist:20000`; wait for `s.is_on == True` at $0\text{ RPM}$.
-  2. Send `CMD.simRpm=600` (acceleration ramp begins).
-  3. Wait for `s.is_on == False` (auto-halt at $-20,000\text{ du}$).
-  4. Hold at $600\text{ RPM}$ for $1.0\text{s}$.
-  5. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
-
-* **Pass Criteria:**
-  - Carriage halts at $-20,000\text{ du} \pm 2\text{ du}$.
-  - Zero lost steps or pitch distortion during acceleration ramp.
-  - Zero creep during $1.0\text{s}$ post-halt hold window.
-
-* **Fail Criteria:**
-  - Coordinate mismatch $>2\text{ du}$.
-  - Motion fails to start on spindle acceleration.
-  - Timeout exceeding $6.0\text{s}$.
-
----
-
-### 6.4 `gearbox_stop_command` (Suite: `test_gearbox.py`)
-
-* **Real-Life Machining Scenario (Operator Feed Hold on Tool Chatter):**  
-  While taking a heavy roughing cut at $600\text{ RPM}$, the operator notices severe tool chatter or poor chip curling and taps **STOP / FEED HOLD** on the touchscreen. The carriage leadscrew must stop instantly to prevent tool breakage, while the spindle continues spinning at full cutting speed so the workpiece does not stall or weld onto the carbide insert.
-
-* **Objective:**  
-  Verify that `CMD.stop` disengages physical stepping immediately ($<100\text{ ms}$) while the spindle continues spinning at full cutting speed, with zero post-stop carriage creep.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.simRpm=600
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
-  CMD.stop
-  CMD.simRpm=0
-  ```
-
-* **Physical Simulation Stimulus:**  
-  Continuous $600\text{ RPM}$ spindle rotation throughout the entire test, remaining at $600\text{ RPM}$ during both active cutting and after the stop command is received.
-
-* **Lifecycle Sequence:**
-  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
-  2. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL`; wait for `s.is_on == True`.
-  3. Send `CMD.stop` while spindle continues rotating.
-  4. Wait for `s.is_on == False` (halt confirmation).
-  5. Record halted position $Z_0$; settle for $500\text{ ms}$ while spindle continues turning at $600\text{ RPM}$.
-  6. Assert $Z_{500\text{ms}} == Z_0$.
-  7. Send `CMD.simRpm=0`; settle for $300\text{ ms}$.
-
-* **Pass Criteria:**
-  - `s.is_on` transitions to `False` in $<1.0\text{s}$.
-  - Post-halt carriage position is rock-solid ($Z_{500\text{ms}} == Z_0$, exactly $0\text{ du}$ drift) while spindle spins at $600\text{ RPM}$.
-
-* **Fail Criteria:**
-  - Carriage continues creeping after stop confirmation.
-  - `is_on` remains `True`.
-
----
-
-### 6.5 `soft_limit_at_speed_chuck_halt` (Suite: `test_soft_limits.py`)
-
-* **Real-Life Machining Scenario (Turning up to Chuck / Shoulder Stop):**  
-  The machinist mounts a short workpiece in a 3-jaw chuck. To turn the entire length without crashing into the spinning chuck jaws, they set a virtual Left soft stop $5\text{ mm}$ in front of the chuck face ($-50.000\text{ mm}$). With the spindle running at $600\text{ RPM}$, they engage feed towards the chuck. The motion engine continuously evaluates lookahead distance, cleanly decelerates to a halt at the soft stop, and transitions to disengaged without striking the chuck jaws.
-
-* **Objective:**  
-  Verify soft limit lookahead enforcement, clean boundary deceleration, and zero overrun when feeding towards a Left boundary stop under continuous spindle rotation.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.axisLimitDu=Z,L,-50000
-  CMD.simRpm=600
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
-  CMD.simRpm=0
-  CMD.axisClearLimit=Z,L
-  ```
-
-* **Physical Simulation Stimulus:**  
-  Continuous $600\text{ RPM}$ virtual spindle rotation throughout approach, boundary arrival, and a $1.0\text{s}$ post-halt dwell window.
-
-* **Lifecycle Sequence:**
-  1. Set Left limit at $-50,000\text{ du}$; wait for `s.z_left_du == -50000`.
-  2. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
-  3. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK`; wait for `s.is_on == True`.
-  4. Wait for `s.is_on == False` (automatic halt at soft shoulder).
-  5. **Anti-Creep Hold Window:** Hold at $600\text{ RPM}$ for $1.0\text{s}$.
-  6. Send `CMD.simRpm=0`; clear limit.
-
-* **Pass Criteria:**
-  - Carriage halts at $-50,000\text{ du} \pm 2\text{ du}$ without touching or overrunning past $-50,002\text{ du}$.
-  - Zero creep during $1.0\text{s}$ hold window at $600\text{ RPM}$.
-  - `s.is_on` is `False`.
-
-* **Fail Criteria:**
-  - Carriage overruns past $-50,002\text{ du}$ (simulated chuck crash).
-  - Controller fails to halt within $8.0\text{s}$.
-  - Carriage creeps past $-50,000\text{ du}$ during post-halt hold window.
-
----
-
-### 6.6 `soft_limit_at_speed_tail_halt` (Suite: `test_soft_limits.py`)
-
-* **Real-Life Machining Scenario (Reverse Turning / Tailstock Crash Prevention):**  
-  The machinist is boring out an internal cavity or reverse-turning towards the tailstock. To prevent the carriage from colliding with the tailstock casting or running off the leadscrew threads at the end of the lathe bed, a Right soft stop is set at $+50.000\text{ mm}$. The carriage feeds in reverse at $600\text{ RPM}$ and halts cleanly at the boundary stop.
-
-* **Objective:**  
-  Verify soft limit enforcement and zero overrun in the positive travel direction ($+Z$, towards tailstock).
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.axisLimitDu=Z,R,50000
-  CMD.simRpm=600
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
-  CMD.simRpm=0
-  CMD.axisClearLimit=Z,R
-  ```
-
-* **Pass Criteria:**
-  - Carriage halts at $+50,000\text{ du} \pm 2\text{ du}$.
-  - Zero creep during $1.0\text{s}$ hold window at $600\text{ RPM}$.
-
-* **Fail Criteria:**
-  - Carriage overruns past $+50,002\text{ du}$.
-
----
-
-### 6.7 `axis_zero_and_preset` (Suite: `test_coords_and_presets.py`)
-
-* **Real-Life Machining Scenario (Touch-Off on Part Face & Gauge Block Offset):**  
-  The operator edges up the tool to kiss the end face of a newly chucked workpiece. They tap `Ø Z` on the touch DRO, establishing the part zero origin ($Z = 0.000\text{ mm}$). Then, to calibrate cross-slide tool offset, they touch off against a $10.000\text{ mm}$ gauge block on the part diameter and use the DRO numeric preset modal to enter $+10.000\text{ mm}$ directly on the X axis.
-
-* **Objective:**  
-  Verify that coordinate presetting (`CMD.axisPosDu`) and coordinate zeroing (`CMD.axisZero`) update workpiece coordinates instantly and accurately on both axes with zero position bounce.
-
+#### 6.1 `axis_zero_and_preset`
+* **Real-Life Machining Scenario (Touch-Off on Part Face, Gauge Block Offset & Soft Limit Origin Tracking):**  
+  The operator touches off the tool on the end face of a newly chucked workpiece and taps `Ø Z` ($Z = 0.000\text{ mm}$)[cite: 1]. Next, they touch off against a $10.000\text{ mm}$ gauge block on the diameter and preset $X = +10.000\text{ mm}$[cite: 1]. Finally, with a soft limit active, shifting the workpiece coordinate origin (`CMD.axisZero`) must invoke `SoftLimitTable::updateOrigin()` so physical machine envelope protection remains aligned[cite: 5].
 * **Parameters & Inbound Wire Commands:**
   ```text
   CMD.axisPosDu=Z,250000
   CMD.axisZero=Z
   CMD.axisPosDu=X,100000
   CMD.axisZero=X
+  CMD.axisLimitDu=Z,L,-50000
+  CMD.axisPosDu=Z,10000
   ```
-
 * **Lifecycle Sequence:**
-  1. Preset Z to $+250,000\text{ du}$ ($+25.000\text{ mm}$); verify `s.z_du == 250000`.
-  2. Zero Z; verify `s.z_du == 0`.
-  3. Preset X to $+100,000\text{ du}$ ($+10.000\text{ mm}$); verify `s.x_du == 100000`.
-  4. Zero X; verify `s.x_du == 0`.
-  5. **Settle Window:** Wait $300\text{ ms}$; verify both axes remain rock-solid at $0\text{ du}$.
-
+  1. Preset $Z$ to $+250{,}000\text{ du}$; assert `s.z_du == 250000`[cite: 1].
+  2. Zero $Z$; assert `s.z_du == 0`[cite: 1].
+  3. Preset $X$ to $+100{,}000\text{ du}$; assert `s.x_du == 100000`[cite: 1].
+  4. Zero $X$; assert `s.x_du == 0`[cite: 1].
+  5. Set $Z$ Left limit at $-50{,}000\text{ du}$, then shift $Z$ coordinate to $+10{,}000\text{ du}$; verify `s.z_du == 10000` and `s.z_left_du` updates coherently via `updateOrigin()`[cite: 1, 5].
+  6. Zero $Z$, clear limit, wait $300\text{ ms}$, and assert zero coordinate bounce[cite: 1].
 * **Pass Criteria:**
-  - Exact coordinate matching ($0\text{ du}$ error) on all presets and zeroes.
-  - Zero coordinate bounce or jitter after $300\text{ ms}$ settle window.
-
-* **Fail Criteria:**
-  - Coordinate does not update within $3.0\text{s}$.
-  - Position reports non-zero after `axisZero`.
+  - Exact $0\text{ du}$ error on all presets and zeroes; zero coordinate jitter after $300\text{ ms}$ settle window[cite: 1].
 
 ---
 
-### 6.8 `stop_command_latency` (Suite: `test_emergency.py`)
+### Suite 2: `test_jogging.py` (Basic ELS Manual Positioning)
 
-* **Real-Life Machining Scenario (Deterministic Emergency Feed Interrupt):**  
-  During an active feed at $600\text{ RPM}$, the operator hits emergency stop / feed hold. For operator safety and machine protection, the motion engine must extinguish stepper pulses in under $100\text{ ms}$ (less than one single spindle revolution at $600\text{ RPM}$).
-
-* **Objective:**  
-  Measure the round-trip latency from dispatching `CMD.stop` to the moment physical stepping is terminated (`is_on == False`).
-
-* **Latency Budget & Network Considerations:**  
-  The measured time $T_{\text{elapsed}}$ spans:
-  1. Client dispatch and Wi-Fi transmission.
-  2. Core 0 WebSocket frame ingestion and `CommandDispatcher` processing.
-  3. Core 0 to Core 1 command queue delivery and motion deceleration.
-  4. Core 1 to Core 0 `TelemetryMailbox` commit and 50 Hz outbound serialization.  
-  Because the outbound telemetry rate is 50 Hz, state reporting has a discrete quantization floor of $20\text{ ms}$. To minimize Wi-Fi stack latency and jitter during HIL runs, the ESP32-S3 Wi-Fi power-save mode must be disabled (`esp_wifi_set_ps(WIFI_PS_NONE)`) and `TCP_NODELAY` must be configured on the WebSocket server socket.
-
+#### 6.2 `manual_jog_step_precision`
+* **Real-Life Machining Scenario (Incremental Touch-Off Jogging):**  
+  The machinist steps the tool in using incremental jog steps ($0.10\text{ mm}$ and $1.00\text{ mm}$) across all four Cartesian directions (`TAIL` $+Z$, `CHUCK` $-Z$, `RETRACT` $+X$, `CENTER` $-X$) to kiss the workpiece surface[cite: 1, 2, 4].
 * **Parameters & Inbound Wire Commands:**
   ```text
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
-  CMD.simRpm=600
-  CMD.stop
-  ```
-
-* **Pass Criteria:**
-  - Stop latency $T_{\text{elapsed}} < 100.0\text{ ms}$.
-  - Controller state reports `is_on == False`.
-
-* **Fail Criteria:**
-  - Stop latency exceeds $100.0\text{ ms}$.
-  - Controller remains in motion.
-
----
-
-### 6.9 `gearing_sync_1_5mm_pitch` (Suite: `test_gearing.py`)
-
-* **Real-Life Machining Scenario (Discrete Forward Spindle Synchronization):**  
-  Carriage engages a forward longitudinal feed of $1.5\text{ mm/rev}$ pitch towards the chuck. Two complete revolutions of the spindle ($2 \times 4 \times PPR$ counts, e.g. $9600$ quadrature counts for $1200\text{ PPR}$) must advance the carriage by exactly $-3.0\text{ mm}$ ($-30{,}000\text{ du}$).
-
-* **Objective:**  
-  Verify mathematical accuracy and step generation of the Bresenham synchronizer over exact discrete pulse injection without accumulated floating-point round-off, while testing the pulse slewer under large discrete count dumps.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK
-  CMD.simPulses=9600
-  ```
-  *(Counts computed dynamically as `int(2.0 * client.state.encoder_ppr * 4)`)*
-
-* **Pass Criteria:**
-  - Carriage coordinate lands at $Z = -30{,}000\text{ du}$ with $\le 2\text{ du}$ tolerance ($0.2\,\mu\text{m}$).
-  - Discrete pulses are consumed smoothly across motion ticks without velocity overshoot or step loss.
-
-* **Fail Criteria:**
-  - $Z$ coordinate deviates by more than $2\text{ du}$.
-
----
-
-### 6.10 `gearing_sync_reverse_1_0mm` (Suite: `test_gearing.py`)
-
-* **Real-Life Machining Scenario (Discrete Reverse Spindle Synchronization):**  
-  Carriage engages a reverse feed of $1.0\text{ mm/rev}$ pitch towards the tailstock ($+Z$). One complete revolution ($1 \times 4 \times PPR$ counts, e.g. $4800$ quadrature counts) must advance the carriage by exactly $+1.0\text{ mm}$ ($+10{,}000\text{ du}$).
-
-* **Objective:**  
-  Verify reverse direction gearing accuracy and signed step pulse generation.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
-  CMD.simPulses=4800
-  ```
-  *(Counts computed dynamically as `int(1.0 * client.state.encoder_ppr * 4)`)*
-
-* **Pass Criteria:**
-  - Carriage coordinate lands at $Z = +10{,}000\text{ du}$ with $\le 2\text{ du}$ tolerance.
-
-* **Fail Criteria:**
-  - $Z$ coordinate deviates by more than $2\text{ du}$.
-
----
-
-### 6.11 `manual_jogging` (Suite: `test_jogging.py`)
-
-* **Real-Life Machining Scenario (Manual Machine Setup & Positioning):**  
-  The machinist uses touch jog controls on the HMI to position the tool. Incremental single-step jogging must advance the carriage or cross-slide by exact fixed increments ($1.0\text{ mm}$ / $10{,}000\text{ du}$) on both axes ($Z$ and $X$). Continuous jogging (`jogHold`) must feed until released (`jogRelease`) and halt cleanly without creeping.
-
-* **Objective:**  
-  Verify `CMD.jogStep` incremental moves, `CMD.jogHold` continuous motion, and `CMD.jogRelease` termination via the thread-safe inter-core queue across both axes ($Z$ and $X$) with explicit intermediate step verifications.
-
-* **Parameters & Inbound Wire Commands:**
-  ```text
-  CMD.axisZero=Z
-  CMD.axisZero=X
+  CMD.jogStepDu=1000
+  CMD.jogStep=Z,TAIL
+  CMD.jogStep=Z,CHUCK
   CMD.jogStepDu=10000
   CMD.jogStep=Z,TAIL
   CMD.jogStep=Z,CHUCK
   CMD.jogStep=X,RETRACT
-  CMD.jogStep=X,INFEED
+  CMD.jogStep=X,CENTER
+  ```
+* **Lifecycle Sequence:**
+  1. Set `CMD.jogStepDu=1000` ($0.100\text{ mm}$)[cite: 4]. Jog `Z,TAIL` $\to$ assert $Z = +1{,}000\text{ du}$. Jog `Z,CHUCK` $\to$ assert $Z = 0\text{ du}$.
+  2. Set `CMD.jogStepDu=10000` ($1.000\text{ mm}$)[cite: 1, 4]. Jog `Z,TAIL` $\to$ assert $Z = +10{,}000\text{ du}$. Jog `Z,CHUCK` $\to$ assert $Z = 0\text{ du}$[cite: 1].
+  3. Jog `X,RETRACT` $\to$ assert $X = +10{,}000\text{ du}$. Jog `X,CENTER` $\to$ assert $X = 0\text{ du}$[cite: 1, 2].
+* **Pass Criteria:**
+  - Every incremental jog lands within $\pm 1\text{ du}$ of the exact target coordinate, and the non-jogged axis remains at $0\text{ du}$.
+
+#### 6.3 `manual_jog_hold_and_limits`
+* **Real-Life Machining Scenario (Continuous Apron D-Pad Jog & Soft Stop Enforcement):**  
+  The operator holds down the continuous jog button (`jogHold`) to traverse the bed, releases the button (`jogRelease`), and then jogs continuously into an active soft limit to verify that manual jogging cannot crash past a virtual bed stop[cite: 1, 4, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
   CMD.jogHold=Z,TAIL
   CMD.jogRelease=Z
+  CMD.axisLimitDu=Z,R,20000
+  CMD.jogHold=Z,TAIL
   ```
-
-* **Lifecycle Sequence & Intermediate Checks:**
-  1. `CMD.jogStep=Z,TAIL` $\to$ wait for motion stop; assert $Z == +10{,}000\text{ du} \pm 0\text{ du}$.
-  2. `CMD.jogStep=Z,CHUCK` $\to$ wait for motion stop; assert $Z == 0\text{ du} \pm 0\text{ du}$.
-  3. `CMD.jogStep=X,RETRACT` $\to$ wait for motion stop; assert $X == +10{,}000\text{ du} \pm 0\text{ du}$.
-  4. `CMD.jogStep=X,INFEED` $\to$ wait for motion stop; assert $X == 0\text{ du} \pm 0\text{ du}$.
-  5. `CMD.jogHold=Z,TAIL` $\to$ monitor progress; assert $Z \ge 5{,}000\text{ du}$.
-  6. `CMD.jogRelease=Z` $\to$ record position $Z_{\text{rel}}$, settle $300\text{ ms}$; assert creep $|Z_{300\text{ms}} - Z_{\text{rel}}| \le 100\text{ du}$.
-
+* **Lifecycle Sequence:**
+  1. Send `CMD.jogHold=Z,TAIL`; wait until `s.z_du >= 5000`[cite: 1, 4].
+  2. Send `CMD.jogRelease=Z`; wait for `s.is_on == False`. Record $Z_{\text{release}}$; wait $300\text{ ms}$ and assert $0\text{ du}$ post-release creep[cite: 1, 4].
+  3. Set Right soft limit `CMD.axisLimitDu=Z,R,20000`[cite: 4].
+  4. Send `CMD.jogHold=Z,TAIL` and hold without releasing; wait for controller to auto-halt at the soft limit (`s.is_on == False`).
 * **Pass Criteria:**
-  - All four incremental step jogs land at exact commanded coordinates without cumulative step drift.
-  - Continuous jog travels $\ge 5{,}000\text{ du}$ and halts immediately upon `CMD.jogRelease` (creep $\le 100\text{ du}$).
-
-* **Fail Criteria:**
-  - Axis coordinate error exceeds $0\text{ du}$ on any step jog.
-  - Creep after release exceeds $100\text{ du}$.
+  - `jogRelease` decelerates cleanly without post-halt creep[cite: 1].
+  - Unreleased `jogHold` automatically halts at $+20{,}000\text{ du} \pm 2\text{ du}$ without overrunning the soft limit[cite: 1, 5].
 
 ---
 
-### 6.12 `sim_watchdog_timeout_halt` (Suite: `test_emergency.py`)
+### Suite 3: `test_gearing.py` (Core Bresenham Synchronizer Accuracy)
 
-* **Real-Life Machining Scenario (Host Controller / Network Disconnect During Live Cut):**  
-  While turning or threading with electronic spindle synchronization at $600\text{ RPM}$, the client UI or supervisory host crashes, hangs, or experiences an abrupt Wi-Fi link drop. The embedded motion engine must detect the loss of supervisory communication, automatically decelerate all active feeds to a complete halt within $1.5\text{s}$, and disengage virtual simulation injection to prevent runaway feed carriage crashes.
+#### 6.4 `gearing_sync_1_5mm_pitch`
+* **Real-Life Machining Scenario (Discrete Forward Spindle Synchronization):**  
+  Carriage engages a forward longitudinal feed of $1.500\text{ mm/rev}$ pitch towards the chuck[cite: 1]. Exactly $2.0$ revolutions of discrete spindle pulses (`client.revs_to_pulses(2.0)`) must advance the carriage by $-3.000\text{ mm}$ ($-30{,}000\text{ du}$)[cite: 1].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK
+  CMD.simPulses=<2 * cpr>
+  ```
+* **Pass Criteria:**
+  - Carriage coordinate lands at $Z = -30{,}000\text{ du} \pm 2\text{ du}$ ($0.2\,\mu\text{m}$), confirming zero rounding drift in `SpindleSynchronizer`[cite: 1, 5].
 
-* **Objective:**  
-  Verify that the Core 1 hardware failsafe watchdog automatically disengages motion (`is_on == False`) and zeroes simulated RPM when client heartbeats cease for $>1.5\text{s}$.
+#### 6.5 `gearing_sync_reverse_1_0mm`
+* **Real-Life Machining Scenario (Discrete Reverse Carriage Gearing):**  
+  Carriage engages a $+Z$ feed of $1.000\text{ mm/rev}$ pitch towards the tailstock[cite: 1]. Exactly $1.0$ revolution of spindle pulses (`client.revs_to_pulses(1.0)`) must advance the carriage by $+1.000\text{ mm}$ ($+10{,}000\text{ du}$)[cite: 1].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
+  CMD.simPulses=<1 * cpr>
+  ```
+* **Pass Criteria:**
+  - Carriage coordinate lands at $Z = +10{,}000\text{ du} \pm 2\text{ du}$[cite: 1].
 
+---
+
+### Suite 4: `test_emergency.py` (Safety Gatekeeper, Watchdog & Stop Latency)
+
+#### 6.6 `stop_command_latency`
+* **Real-Life Machining Scenario (Deterministic Emergency Feed Interrupt):**  
+  During an active feed at $600\text{ RPM}$ (both synchronized and asynchronous), the operator hits **STOP**[cite: 1]. Stepper pulse generation must terminate in under $100\text{ ms}$[cite: 1].
 * **Parameters & Inbound Wire Commands:**
   ```text
   CMD.simRpm=600
   CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
-  # [Client suppresses all background heartbeats for 1.8s]
-  # [Client reconnects / polls status]
+  CMD.stop
+  CMD.startFeed=axis:Z,sync:0,feed:3000000,dir:CHUCK
+  CMD.stop
   ```
-
-* **Lifecycle Sequence:**
-  1. Send `CMD.simRpm=600`; wait for `s.rpm >= 580`.
-  2. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK`; wait for `s.is_on == True`.
-  3. Call `client.suppress_heartbeat(True)` to intentionally cease all `CMD.ping` frames.
-  4. Passively wait $1.8\text{s}$ (exceeding the $1.5\text{s}$ watchdog trip threshold).
-  5. Call `client.suppress_heartbeat(False)` to resume telemetry polling.
-  6. Query state; assert failsafe stop has executed.
-
 * **Pass Criteria:**
-  - Controller state reports `is_on == False` (feed disengaged).
-  - Simulated spindle RPM is automatically zeroed (`s.rpm == 0`).
-  - Carriage position remains frozen at the failsafe shutdown point without subsequent motion.
+  - Round-trip stop latency $T_{\text{elapsed}} < 100.0\text{ ms}$ for both `sync:1` and `sync:0` feeds, and `s.is_on == False`[cite: 1].
 
-* **Fail Criteria:**
-  - Controller remains in motion (`is_on == True`) after $1.8\text{s}$ without heartbeat.
-  - Watchdog fails to trip, or causes an unhandled panic/watchdog reset rather than an orderly deceleration halt.
-
----
-
-### 6.13 `gearing_multipass_index_sync` (Suite: `test_gearing.py`)
-
-* **Real-Life Machining Scenario (Multi-Pass Thread Tracking & Phase Lock):**  
-  When single-point threading, the tool takes multiple cutting passes across the same thread groove. After pass 1, the machinist retracts $X$, rapids $Z$ back to start ($Z = 0.000\text{ mm}$), and engages pass 2 while the spindle continuously turns at $600\text{ RPM}$. The controller must not start stepping immediately upon engagement; it must enter a phase-lock wait state (`WAITING_FOR_INDEX`), arming motion only when the spindle reaches the exact same rotational index angle ($\pm 1^{\circ}$) as pass 1.
-
-* **Objective:**  
-  Verify spindle angle synchronization and phase-lock re-engagement accuracy across multiple consecutive threading passes under continuous spindle rotation.
-
+#### 6.7 `in_motion_safety_gatekeeper_lockout`
+* **Real-Life Machining Scenario (Operator Bumps Setup Controls During Active Cut — `[SAFE-01]`):**  
+  While the carriage is actively cutting under chip load (`ModeState::RUNNING`), an accidental tap on axis zero, direction flip, axis swap, sync toggle, pitch rewrite, or mode switch must be blocked by `canExecuteCommand()` at the single-gate dispatcher (`CommandDispatcher.cpp`) so the tool and workpiece are never damaged[cite: 2, 3, 4].
 * **Parameters & Inbound Wire Commands:**
   ```text
   CMD.simRpm=600
-  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
-  # [Pass 1 completes at -15.000 mm]
-  CMD.axisPosDu=Z,0
-  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
-  # [Pass 2 re-engages and completes at -15.000 mm]
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
+  CMD.axisZero=Z          -> Expect ERR:Command locked during active motion
+  CMD.gearDir=TAIL        -> Expect ERR:Command locked during active motion
+  CMD.gearAxis=X          -> Expect ERR:Command locked during active motion
+  CMD.gearSync=0          -> Expect ERR:Command locked during active motion
+  CMD.feedMm=2.0          -> Expect ERR:Command locked during active motion
+  CMD.mode=TURNING        -> Expect ERR:Command locked during active motion
+  CMD.stop                -> Expect OK:CMD.stop
+  ```
+* **Pass Criteria:**
+  - All 6 forbidden configuration commands raise `CommandRejectedError` (`ERR:Command locked during active motion`)[cite: 4].
+  - Motion remains uninterrupted (`s.is_on == True`, `s.dupr == 10000`) until `CMD.stop` is sent, which succeeds immediately[cite: 1, 2, 4].
+
+#### 6.8 `sim_safety_interlock_and_watchdog_halt`
+* **Real-Life Machining Scenario (Network Drop / Crashed Test Runner Failsafe):**  
+  If the Wi-Fi connection drops or the host script crashes while the virtual spindle is driving the physical lathe steppers at $600\text{ RPM}$, the Core 1 $1.5\text{s}$ watchdog must automatically extinguish simulated RPM and halt all axes[cite: 1].
+* **Lifecycle Sequence:**
+  1. Start continuous feed: `CMD.simRpm=600`, `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK`; wait for `s.is_on == True`[cite: 1].
+  2. Call `client.suppress_heartbeat(True)` and sleep for $1.8\text{s}$ (exceeding the $1500\text{ ms}$ Core 1 timeout)[cite: 1].
+  3. Re-enable heartbeat and inspect state.
+* **Pass Criteria:**
+  - Without receiving any stop command from the host, the controller has automatically set `s.rpm == 0`, `s.is_on == False`, and halted carriage motion[cite: 1].
+
+---
+
+### Suite 5: `test_soft_limits.py` (Universal Machine Envelope & Bed Dogs)
+
+#### 6.9 `soft_limit_at_speed_chuck_halt`
+* **Real-Life Machining Scenario (Turning up to Chuck / Shoulder Stop):**  
+  With a Left soft stop set at $-50.000\text{ mm}$ (`-50000 du`) in front of the spinning chuck jaws ($600\text{ RPM}$), the motion engine looks ahead ($d_{\text{stop}} = v_i^2 / 2a$), decelerates smoothly to a halt at the shoulder, and holds position with zero overrun while the spindle keeps turning[cite: 1, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,L,-50000
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
   CMD.simRpm=0
   ```
-
 * **Pass Criteria:**
-  - Pass 1 and Pass 2 both complete at $-15{,}000\text{ du} \pm 2\text{ du}$.
-  - The spindle angle at motion commencement on Pass 2 matches Pass 1 within $\pm 0.5^{\circ}$.
-  - Zero lost steps or cumulative phase drift across consecutive passes.
+  - Carriage halts at $-50{,}000\text{ du} \pm 2\text{ du}$ with zero overrun past $-50{,}002\text{ du}$ and zero creep during a $1.0\text{s}$ post-halt hold window at $600\text{ RPM}$[cite: 1].
 
-* **Fail Criteria:**
-  - Spindle engagement angle diverges by $>1.0^{\circ}$ between passes.
-  - Final position differs between passes by $>2\text{ du}$.
+#### 6.10 `soft_limit_at_speed_tail_halt`
+* **Real-Life Machining Scenario (Reverse Turning / Tailstock Crash Prevention):**  
+  With a Right soft stop set at $+50.000\text{ mm}$ (`+50000 du`), the carriage feeds toward the tailstock at $600\text{ RPM}$ and halts cleanly at the boundary[cite: 1].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,R,50000
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
+  CMD.simRpm=0
+  ```
+* **Pass Criteria:**
+  - Carriage halts at $+50{,}000\text{ du} \pm 2\text{ du}$ with zero post-halt creep[cite: 1].
+
+#### 6.11 `soft_limit_x_axis_center_and_retract`
+* **Real-Life Machining Scenario (Cross-Slide Centerline & Retract Stops):**  
+  The machinist sets an inward cross-slide stop at centerline (`X,U,-15000`) and an outward retract stop (`X,D,15000`) so facing and grooving cuts never overrun centerline or bottom out the cross-slide nut[cite: 1, 3, 4].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=X,U,-15000
+  CMD.axisLimitDu=X,D,15000
+  CMD.simRpm=600
+  CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER
+  CMD.startFeed=axis:X,sync:1,feed:5000,dir:RETRACT
+  ```
+* **Pass Criteria:**
+  - Cross-slide halts cleanly at $-15{,}000\text{ du} \pm 2\text{ du}$ on the inward cut and $+15{,}000\text{ du} \pm 2\text{ du}$ on the retract pass, with $Z$ remaining at $0\text{ du}$[cite: 1].
+
+#### 6.12 `soft_limit_at_limit_directional_lock_and_escape`
+* **Real-Life Machining Scenario (Resting on Bed Stop — Directional Lockout & Reverse Escape `[KIN-03]`):**  
+  Once the carriage has halted at the Left soft limit ($-20{,}000\text{ du}$, $D_{\text{remaining}} = 0$), attempting to start a feed or jog further toward the chuck (`CHUCK`) must be blocked, whereas commanding a feed or jog toward the tailstock (`TAIL`) must immediately work to back the tool away from the shoulder[cite: 3, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,L,-20000
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
+  # After halting at -20000 du:
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK  -> Blocked / 0 movement
+  CMD.jogStep=Z,CHUCK                               -> Blocked / 0 movement
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL,dist:10000 -> Escapes to -10000 du
+  ```
+* **Pass Criteria:**
+  - Zero movement past $-20{,}002\text{ du}$ when re-commanding `CHUCK` while resting on the limit[cite: 3, 5].
+  - Reverse `TAIL` stroke cleanly moves the carriage back to $-10{,}000\text{ du} \pm 2\text{ du}$[cite: 3].
+
+---
+
+### Suite 6: `test_gearbox.py` (Single-Axis $Z$ & $X$ Electronic Gearbox)
+
+#### 6.13 `gearbox_at_speed_z_feed`
+* **Real-Life Machining Scenario (Longitudinal Turning to Dimension):**  
+  Spindle stabilizes at $600\text{ RPM}$; operator engages $Z$ feed ($1.500\text{ mm/rev}$) toward the chuck for a $45.000\text{ mm}$ stroke[cite: 1]. Carriage disengages automatically at $-45{,}000\text{ du}$ while spindle continues spinning[cite: 1].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:45000
+  ```
+* **Pass Criteria:**
+  - Halts at $Z = -45{,}000\text{ du} \pm 2\text{ du}$, `s.dupr == 15000`, and $0\text{ du}$ drift during $1.0\text{s}$ hold at $600\text{ RPM}$[cite: 1].
+
+#### 6.14 `gearbox_at_speed_x_feed`
+* **Real-Life Machining Scenario (Facing to Workpiece Center):**  
+  Spindle spinning at $600\text{ RPM}$; operator engages $X$ cross-feed ($0.500\text{ mm/rev}$) toward centerline for $15.000\text{ mm}$[cite: 1].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=600
+  CMD.startFeed=axis:X,sync:1,feed:5000,dir:CENTER,dist:15000
+  ```
+* **Pass Criteria:**
+  - Halts at $X = -15{,}000\text{ du} \pm 2\text{ du}$, $Z$ remains at $0\text{ du}$, and $0\text{ du}$ drift during $1.0\text{s}$ hold at $600\text{ RPM}$[cite: 1].
+
+#### 6.15 `gearbox_cold_start_ramp`
+* **Real-Life Machining Scenario (Threading Pass from Standstill & Mid-Cut RPM Dip):**  
+  Operator arms synchronized feed ($1.000\text{ mm/rev}$, $20.000\text{ mm}$ stroke) with spindle stopped ($0\text{ RPM}$)[cite: 1]. Spindle accelerates through a multi-stage inertia curve ($150 \to 300 \to 600\text{ RPM}$), dips to $300\text{ RPM}$ under heavy cutting load, and finishes at $600\text{ RPM}$[cite: 1, 5].
+* **Lifecycle Sequence:**
+  1. Send `CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK,dist:20000` at $0\text{ RPM}$[cite: 1].
+  2. Step `CMD.simRpm` through `150`, `300`, `600`, `300`, `600` at $150\text{ ms}$ intervals.
+  3. Wait for `s.is_on == False` and hold at $600\text{ RPM}$ for $1.0\text{s}$[cite: 1].
+* **Pass Criteria:**
+  - Carriage halts at $-20{,}000\text{ du} \pm 2\text{ du}$ with zero lost steps across the velocity transitions[cite: 1].
+
+#### 6.16 `gearbox_stop_command`
+* **Real-Life Machining Scenario (Operator Feed Hold on Tool Chatter & Immediate Reverse Retract):**  
+  Operator stops a cut mid-pass (`CMD.stop`) while spindle spins at $600\text{ RPM}$, verifies zero creep, and immediately commands a reverse feed back to the starting point[cite: 1].
+* **Pass Criteria:**
+  - Post-stop position holds with $0\text{ du}$ drift for $500\text{ ms}$ at $600\text{ RPM}$, and subsequent reverse `CMD.startFeed` executes cleanly[cite: 1].
+
+#### 6.17 `gearbox_async_velocity_feed_z_and_x`
+* **Real-Life Machining Scenario (Motorized Power Feed / Milling Traverse with Spindle Stopped):**  
+  With the spindle completely stationary ($0\text{ RPM}$), the machinist uses Asynchronous Gearbox mode (`sync:0`, `MotionMode::VELOCITY_FEED`) to traverse $Z$ at $600\text{ mm/min}$ ($10\text{ mm/s}$) for $20.000\text{ mm}$, and then $X$ at $300\text{ mm/min}$ ($5\text{ mm/s}$) for $10.000\text{ mm}$[cite: 2, 3, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=0
+  CMD.startFeed=axis:Z,sync:0,feed:6000000,dir:CHUCK,dist:200000
+  CMD.startFeed=axis:X,sync:0,feed:3000000,dir:CENTER,dist:100000
+  ```
+* **Pass Criteria:**
+  - Both axes execute with `s.rpm == 0`, land at $Z = -200{,}000\text{ du} \pm 2\text{ du}$ and $X = -100{,}000\text{ du} \pm 2\text{ du}$, and elapsed duration is within $1.8\text{s}\text{–}3.2\text{s}$ (matching commanded velocity + accel/decel ramps)[cite: 2, 3, 5].
+
+#### 6.18 `gearbox_live_feed_nudge_and_step_cycle`
+* **Real-Life Machining Scenario (In-Cut Live Chip-Load Tuning — `[KIN-02]`):**  
+  While actively cutting in Gearbox mode (`PERM_LIVE_FEED_TRIM`), the machinist taps `[ + ]` (`CMD.feedNudge=1`) twice to increase feedrate from $1.000\text{ mm/rev}$ to $1.100\text{ mm/rev}$ ($0.050\text{ mm}$ step) and cycles the step size (`CMD.feedStepCycle`)[cite: 2, 3, 4]. `SpindleSynchronizer::updatePitchLive()` must re-anchor cleanly at the current coordinate without a discontinuity jump[cite: 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.feedStepDu=500
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK
+  CMD.simPulses=<5 * cpr>     -> Advances to -50,000 du
+  CMD.feedNudge=1             -> Pitch becomes 10,500 dupr
+  CMD.feedNudge=1             -> Pitch becomes 11,000 dupr
+  CMD.feedStepCycle           -> Permitted live
+  CMD.simPulses=<5 * cpr>     -> Advances by -55,000 du to -105,000 du
+  CMD.stop
+  ```
+* **Pass Criteria:**
+  - At the instant of `CMD.feedNudge=1`, $Z$ remains at $-50{,}000\text{ du} \pm 2\text{ du}$ (zero historical jump)[cite: 5].
+  - After the second 5-rev pulse injection, $Z$ lands at $-105{,}000\text{ du} \pm 2\text{ du}$.
+
+#### 6.19 `gearbox_tpi_imperial_pitch_conversion`
+* **Real-Life Machining Scenario (Imperial 20 TPI Leadscrew Pitch):**  
+  The machinist configures a $20\text{ TPI}$ pitch (`CMD.feedTpi=20`), which converts to $\text{dupr} = \text{round}(254{,}000 / 20) = 12{,}700\text{ dupr}$ ($1.2700\text{ mm/rev}$)[cite: 3, 4]. Over $4.0$ spindle revolutions, the carriage must advance by exactly $0.2000\text{ in}$ ($-5.0800\text{ mm} = -50{,}800\text{ du}$).
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.mode=gearbox
+  CMD.gearAxis=Z
+  CMD.gearSync=1
+  CMD.gearDir=CHUCK
+  CMD.feedTpi=20
+  CMD.on=1
+  CMD.simPulses=<4 * cpr>
+  CMD.on=0
+  ```
+* **Pass Criteria:**
+  - `s.dupr == 12700` and $Z$ lands at $-50{,}800\text{ du} \pm 2\text{ du}$[cite: 1, 3].
+
+#### 6.20 `gearbox_ingress_staging_workflow`
+* **Real-Life Machining Scenario (Modal Parameter Staging via Hardware Pendant / Nextion Adapter):**  
+  Tests the Ingress Staging pathway (`ELS_MODE_ARCHITECTURE.md` Section 4.1.3) where individual modal parameters (`CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedMm`) are staged while idle and triggered via `CMD.on=1` and halted via `CMD.on=0`[cite: 2, 4].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.mode=gearbox
+  CMD.gearAxis=X
+  CMD.gearSync=1
+  CMD.gearDir=RETRACT
+  CMD.feedMm=0.25
+  CMD.on=1
+  CMD.simPulses=<10 * cpr>
+  CMD.on=0
+  ```
+* **Pass Criteria:**
+  - Cross-slide advances to $+25{,}000\text{ du} \pm 2\text{ du}$ ($+2.500\text{ mm}$) and halts cleanly on `CMD.on=0`[cite: 2, 4].
+
+#### 6.21 `gearbox_spindle_reversal_and_shoulder_phase_tracking`
+* **Real-Life Machining Scenario (Reversing Spindle Under Threading Lock — `[KIN-01]`):**  
+  When cutting metric threads or tapping without disengaging the half-nut, the machinist stops the spindle at the bottom of the pass and reverses spindle rotation (`-RPM` / negative encoder counts) to back the tool out along the exact same thread helix back to $Z = 0.000\text{ mm}$[cite: 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:20000,dir:CHUCK
+  CMD.simPulses=<10 * cpr>    -> Advances to -200,000 du
+  CMD.simPulses=<-10 * cpr>   -> Reverses back to 0 du
+  CMD.stop
+  ```
+* **Pass Criteria:**
+  - After $+10$ revs, $Z = -200{,}000\text{ du} \pm 2\text{ du}$.
+  - After $-10$ revs, $Z$ returns to $0\text{ du} \pm 2\text{ du}$ with zero cumulative phase slip[cite: 5].
+
+#### 6.22 `gearbox_runway_too_short_guard`
+* **Real-Life Machining Scenario (Engaging High-Speed Feed Too Close to Chuck Shoulder):**  
+  Verifies Pre-Cut Runway Verification (`MOTION_ENGINE_SPECIFICATION.md` Section 4.2, item 4: $v_{\text{entry\_max}} = \sqrt{2 \cdot a \cdot D_{\text{remaining}}}$)[cite: 5]. If a soft limit is only $0.050\text{ mm}$ ($500\text{ du}$) ahead and the spindle is screaming at $1200\text{ RPM}$ with a $2.0\text{ mm/rev}$ pitch, the controller must either reject engagement or clamp velocity so the carriage never overruns $-500\text{ du}$[cite: 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,L,-500
+  CMD.simRpm=1200
+  CMD.startFeed=axis:Z,sync:1,feed:20000,dir:CHUCK
+  ```
+* **Pass Criteria:**
+  - Either `CMD.startFeed` raises `CommandRejectedError` OR the carriage halts at $Z \ge -502\text{ du}$ without crashing past the $-500\text{ du}$ soft limit[cite: 1, 5].
+
+---
+
+### Suite 7: `test_gearbox_zx.py` (Coordinated Dual-Axis $Z+X$ Taper & Cone Mode)
+
+#### 6.23 `gearbox_zx_shallow_taper_sync`
+* **Real-Life Machining Scenario (Turning a Morse / Metric External Taper — `[KIN-04]`):**  
+  The machinist configures Gearbox mode for coordinated $Z+X$ cutting (`axis:ZX`) with a taper ratio of `0.10` and a $Z$ feed of $1.000\text{ mm/rev}$ toward the chuck[cite: 2, 4, 5]. Over a $40.000\text{ mm}$ axial cut ($-40{,}000\text{ du}$), the cross-slide must advance proportionally in lockstep[cite: 2, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.taperRatio=0.10
+  CMD.mode=gearbox
+  CMD.gearAxis=ZX
+  CMD.gearSync=1
+  CMD.gearDir=CHUCK
+  CMD.feedDupr=10000
+  CMD.on=1
+  CMD.simPulses=<4 * cpr>
+  CMD.on=0
+  ```
+* **Pass Criteria:**
+  - $Z$ lands at $-40{,}000\text{ du} \pm 2\text{ du}$.
+  - $X$ lands at its exact proportional taper delta ($\pm 2\text{ du}$) with zero post-halt creep[cite: 2, 5].
+
+#### 6.24 `gearbox_zx_steep_cone_major_axis_swap`
+* **Real-Life Machining Scenario (Turning a Steep $63.4^\circ$ Valve Seat / Center Point — 2D Bresenham Major-Axis Swap):**  
+  When turning a steep cone where radial travel exceeds axial travel (`taperRatio=2.0`, $\Delta X = 2 \times \Delta Z$), the 2D Bresenham interpolator swaps the major/minor axes so $X$ steps smoothly without stair-stepping or violating $X$ max velocity[cite: 2, 5].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.taperRatio=2.0
+  CMD.mode=gearbox
+  CMD.gearAxis=ZX
+  CMD.gearSync=1
+  CMD.gearDir=CHUCK
+  CMD.feedDupr=5000
+  CMD.on=1
+  CMD.simPulses=<4 * cpr>
+  CMD.on=0
+  ```
+* **Pass Criteria:**
+  - Both $Z$ and $X$ maintain exact $1:2$ geometric proportionality ($\left\vert{}X_{\text{du}} / Z_{\text{du}}\right\vert{}$ matches `taperRatio` within $\pm 2\text{ du}$)[cite: 2, 5].
+
+#### 6.25 `gearbox_zx_async_taper_feed`
+* **Real-Life Machining Scenario (Electronic Compound Slide Power Feed at $0\text{ RPM}$):**  
+  Executes a coordinated $Z+X$ taper move in asynchronous velocity mode (`sync:0`, `simRpm=0`) with `taperRatio=0.25`[cite: 2, 4].
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.simRpm=0
+  CMD.taperRatio=0.25
+  CMD.startFeed=axis:ZX,sync:0,feed:3000000,dir:CHUCK,dist:20000
+  ```
+* **Pass Criteria:**
+  - Move completes with `s.rpm == 0`; $Z$ halts at $-20{,}000\text{ du} \pm 2\text{ du}$ and $X$ halts at the exact $0.25$ proportional coordinate ($\pm 2\text{ du}$)[cite: 2, 5].
+
+#### 6.26 `gearbox_zx_secondary_axis_soft_limit_halt`
+* **Real-Life Machining Scenario (Cross-Slide Limit Tripping First During a Taper Cut):**  
+  During a coordinated $Z+X$ taper cut, the cross-slide ($X$) reaches its active soft limit (`X,U,-5000`) *before* the carriage ($Z$) reaches its $Z$ limit (`Z,L,-100000`). Both axes must decelerate and halt simultaneously on the $X$ boundary so the tool does not continue feeding along $Z$ and gouge a cylindrical flat into the tapered part.
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisLimitDu=Z,L,-100000
+  CMD.axisLimitDu=X,U,-5000
+  CMD.taperRatio=0.25
+  CMD.simRpm=600
+  CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK
+  ```
+* **Pass Criteria:**
+  - Motion halts automatically (`s.is_on == False`) when $X$ reaches $-5{,}000\text{ du} \pm 2\text{ du}$[cite: 1, 3].
+  - $Z$ halts simultaneously at the corresponding proportional coordinate ($-20{,}000\text{ du} \pm 2\text{ du}$) with zero post-halt creep on either axis while the spindle continues spinning at $600\text{ RPM}$[cite: 1].
 
 ---
 
 ## 7. CLI Runner & Output Formats
 
-The test harness is executed via `run_tests.py`:
+The test harness is executed via `run_tests.py`[cite: 1]:
 
 ```bash
-# Run all 13 tests against default hostname (nanoels.local)
+# Run all 26 tests against default hostname (nanoels.local)
 python3 tests/hil/run_tests.py
 
 # Run against a specific IP address
 python3 tests/hil/run_tests.py --host 192.168.10.22
 
-# Filter specific tests by keyword
-python3 tests/hil/run_tests.py --filter gearing
-python3 tests/hil/run_tests.py --filter watchdog
+# Filter specific suites or tests by keyword
+python3 tests/hil/run_tests.py --filter gearbox_zx
+python3 tests/hil/run_tests.py --filter soft_limit
 
-# Output machine-readable JSON summary for CI or analysis
+# Output machine-readable JSON summary for AI agent analysis or CI
 python3 tests/hil/run_tests.py --json > test_report.json
 ```
 
 ### 7.1 Human-Readable ANSI Terminal Output
 
 ```
-================================================================================
-                    NANOELS HARDWARE-IN-THE-LOOP TEST SUITE                    
+========================================================================================
+                      NANOELS HARDWARE-IN-THE-LOOP TEST SUITE (v2.0)                    
 Target: ws://192.168.10.22:81/canonical | Firmware: v5.38 (ESP32-S3)
-================================================================================
-TEST NAME                          STATUS    DURATION   DETAILS
---------------------------------------------------------------------------------
-axis_zero_and_preset               [PASS]    0.68s      tested_z_preset: 250000, tested_x_preset: 100000
-gearbox_at_speed_x_feed            [PASS]    2.62s      spindle_rpm: 600, expected_x_du: -15000
-gearbox_at_speed_z_feed            [PASS]    2.20s      spindle_rpm: 600, expected_z_du: -45000
-gearbox_cold_start_ramp            [PASS]    1.80s      expected_z_du: -20000, actual_z_du: -20000
-gearbox_stop_command               [PASS]    1.41s      halted_z_du: 2400, settled_z_du: 2400
-gearing_multipass_index_sync       [PASS]    2.85s      pass1_angle: 142.3 deg, pass2_angle: 142.4 deg
-gearing_sync_1_5mm_pitch           [PASS]    0.34s      expected_z_du: -30000, actual_z_du: -30000
-gearing_sync_reverse_1_0mm         [PASS]    0.37s      expected_z_du: 10000, actual_z_du: 10000
-manual_jogging                     [PASS]    2.91s      step_jog_du: 10000, continuous_hold_reached_du: 6000
-sim_watchdog_timeout_halt          [PASS]    2.15s      timeout_trip_ms: 1502, halted_is_on: False
-soft_limit_at_speed_chuck_halt     [PASS]    2.41s      limit_du: -50000, halted_z_du: -50000
-soft_limit_at_speed_tail_halt      [PASS]    2.37s      limit_du: 50000, halted_z_du: 50000
-stop_command_latency               [PASS]    0.30s      stop_latency_ms: 62.58
---------------------------------------------------------------------------------
-SUMMARY: 13 Passed, 0 Failed, 0 Errors | Total Time: 22.41s
+========================================================================================
+TEST NAME                                          STATUS   DURATION  DETAILS
+----------------------------------------------------------------------------------------
+axis_zero_and_preset                               [PASS]   0.74s     z_preset: 250000, x_preset: 100000
+gearbox_async_velocity_feed_z_and_x                [PASS]   3.82s     z_du: -200000, x_du: -100000
+gearbox_at_speed_x_feed                            [PASS]   2.62s     rpm: 600, actual_x_du: -15000
+gearbox_at_speed_z_feed                            [PASS]   2.20s     rpm: 600, actual_z_du: -45000
+gearbox_cold_start_ramp                            [PASS]   2.15s     expected_z_du: -20000, actual_z_du: -20000
+gearbox_ingress_staging_workflow                   [PASS]   1.40s     actual_x_du: 25000
+gearbox_live_feed_nudge_and_step_cycle             [PASS]   1.65s     mid_z_du: -50000, final_z_du: -105000
+gearbox_runway_too_short_guard                     [PASS]   0.45s     limit_du: -500, min_z_du: -500
+gearbox_spindle_reversal_and_shoulder_phase        [PASS]   2.50s     fwd_z_du: -200000, rev_z_du: 0
+gearbox_stop_command                               [PASS]   1.41s     halted_z_du: 2400, settled_z_du: 2400
+gearbox_tpi_imperial_pitch_conversion              [PASS]   0.92s     dupr: 12700, actual_z_du: -50800
+gearbox_zx_async_taper_feed                        [PASS]   1.95s     z_du: -20000, x_du: -5000
+gearbox_zx_secondary_axis_soft_limit_halt          [PASS]   2.30s     x_limit: -5000, halted_z_du: -20000
+gearbox_zx_shallow_taper_sync                      [PASS]   1.10s     z_du: -40000, x_du: -4000
+gearbox_zx_steep_cone_major_axis_swap              [PASS]   1.15s     z_du: -20000, x_du: -40000
+gearing_sync_1_5mm_pitch                           [PASS]   0.52s     expected_z_du: -30000, actual_z_du: -30000
+gearing_sync_reverse_1_0mm                         [PASS]   0.41s     expected_z_du: 10000, actual_z_du: 10000
+in_motion_safety_gatekeeper_lockout                [PASS]   0.88s     locked_cmds_rejected: 6
+manual_jog_hold_and_limits                         [PASS]   2.10s     limit_du: 20000, halted_z_du: 20000
+manual_jog_step_precision                          [PASS]   1.35s     step_1000_ok: true, step_10000_ok: true
+sim_safety_interlock_and_watchdog_halt             [PASS]   2.12s     watchdog_tripped: true, final_rpm: 0
+soft_limit_at_limit_directional_lock_and_escape    [PASS]   2.45s     locked_at_du: -20000, escaped_du: -10000
+soft_limit_at_speed_chuck_halt                     [PASS]   2.41s     limit_du: -50000, halted_z_du: -50000
+soft_limit_at_speed_tail_halt                      [PASS]   2.37s     limit_du: 50000, halted_z_du: 50000
+soft_limit_x_axis_center_and_retract               [PASS]   3.10s     up_halt: -15000, down_halt: 15000
+stop_command_latency                               [PASS]   0.54s     sync_stop_ms: 48.2, async_stop_ms: 41.7
+----------------------------------------------------------------------------------------
+SUMMARY: 26 Passed, 0 Failed, 0 Errors | Total Time: 45.01s
 RESULT: ALL TESTS PASSED (Exit code: 0)
-================================================================================
+========================================================================================
 ```
 
 ### 7.2 Machine-Readable JSON Schema (`--json`)
@@ -1023,15 +1034,15 @@ RESULT: ALL TESTS PASSED (Exit code: 0)
   "timestamp": "2026-10-19T16:35:00Z",
   "target": "ws://192.168.10.22:81/canonical",
   "firmware_version": "5.38",
-  "total": 13,
-  "passed": 13,
+  "total": 26,
+  "passed": 26,
   "failed": 0,
-  "duration_s": 22.41,
+  "duration_s": 45.01,
   "results": [
     {
       "name": "gearing_sync_1_5mm_pitch",
       "status": "PASS",
-      "duration_s": 0.34,
+      "duration_s": 0.52,
       "details": {
         "expected_z_du": -30000,
         "actual_z_du": -30000,
@@ -1039,109 +1050,22 @@ RESULT: ALL TESTS PASSED (Exit code: 0)
       }
     },
     {
-      "name": "soft_limit_at_speed_chuck_halt",
+      "name": "gearbox_zx_secondary_axis_soft_limit_halt",
       "status": "PASS",
-      "duration_s": 2.41,
+      "duration_s": 2.30,
       "details": {
-        "limit_du": -50000,
-        "halted_z_du": -50000,
-        "error_du": 0
-      }
-    },
-    {
-      "name": "sim_watchdog_timeout_halt",
-      "status": "PASS",
-      "duration_s": 2.15,
-      "details": {
-        "timeout_trip_ms": 1502,
-        "halted_is_on": false,
-        "halted_rpm": 0
+        "x_limit_du": -5000,
+        "halted_x_du": -5000,
+        "halted_z_du": -20000
       }
     }
   ]
 }
 ```
 
-### 7.3 Dynamic Test Discovery & Execution Engine (`run_tests.py`)
-
-`run_tests.py` dynamically scans the `tests/hil/suites/` directory to discover all subclasses of `HilTestCase`, allowing any developer to add a new test file without modifying runner registration logic:
-
-```python
-# tests/hil/run_tests.py
-
-import argparse
-import asyncio
-import importlib
-import inspect
-from pathlib import Path
-import pkgutil
-import sys
-
-from core.base_test import HilTestCase
-from core.client import NanoElsClient
-from core.reporter import print_terminal_report, emit_json_report
-
-def discover_test_classes(filter_keyword: str = "") -> list[type[HilTestCase]]:
-    """Discovers all HilTestCase subclasses inside tests/hil/suites/."""
-    suites_dir = Path(__file__).parent / "suites"
-    test_classes = []
-
-    for _, module_name, _ in pkgutil.iter_modules([str(suites_dir)]):
-        module = importlib.import_module(f"suites.{module_name}")
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if (
-                inspect.isclass(attr)
-                and issubclass(attr, HilTestCase)
-                and attr is not HilTestCase
-            ):
-                if not filter_keyword or filter_keyword.lower() in attr.name.lower():
-                    test_classes.append(attr)
-
-    test_classes.sort(key=lambda cls: cls.name)
-    return test_classes
-
-async def main_async() -> int:
-    parser = argparse.ArgumentParser(description="NanoELS Hardware-in-the-Loop Test Runner")
-    parser.add_argument("--host", default="nanoels.local", help="Controller IP/Hostname (default: nanoels.local)")
-    parser.add_argument("--port", type=int, default=81, help="WebSocket port (default: 81)")
-    parser.add_argument("--filter", default="", help="Case-insensitive test name filter")
-    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
-    args = parser.parse_args()
-
-    test_classes = discover_test_classes(args.filter)
-    if not test_classes:
-        print(f"No test cases found matching filter: '{args.filter}'")
-        return 1
-
-    client = NanoElsClient(host=args.host, port=args.port)
-    await client.connect()
-
-    results = []
-    try:
-        for test_cls in test_classes:
-            test_instance = test_cls(client)
-            result = await test_instance.execute()
-            results.append(result)
-    finally:
-        await client.disconnect()
-
-    if args.json:
-        emit_json_report(results, host=args.host)
-    else:
-        print_terminal_report(results, host=args.host)
-
-    return 0 if all(r.status == "PASS" for r in results) else 1
-
-if __name__ == "__main__":
-    sys.exit(asyncio.run(main_async()))
-```
-
 ---
 
 ## 8. Implementation Plan & Work Breakdown
-
-The implementation is partitioned into three sequential slices following the Pair Programming Protocol:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -1149,34 +1073,26 @@ The implementation is partitioned into three sequential slices following the Pai
 ├─────────────────────┬──────────────────────────────────────────────────┤
 │ Phase               │ Deliverables & Scope                             │
 ├─────────────────────┼──────────────────────────────────────────────────┤
-│ Slice 1: Firmware   │ • Add virtual injection to ISpindleEncoderHAL    │
-│ Simulation Bridge   │ • Implement pulse slewer (m_maxSimPulseChunk)    │
-│                     │ • Implement Core 1 sync mode transition reset    │
-│                     │ • Wire CMD.sim* in CommandDispatcher.cpp         │
-│                     │ • Add 1.5s atomic safety watchdog in firmware    │
-│                     │ • Add TCP_NODELAY & WIFI_PS_NONE latency flags   │
-│                     │ • Add HIL_SIMULATION_ENABLED compile guard       │
+│ Slice 1: Firmware   │ • Add slewed virtual injection to Spindle HAL    │
+│ Simulation Bridge & │ • Enforce Core 1 state transitions in getPulse   │
+│ Dispatcher Fixes    │ • Use atomic<uint32_t> for 1.5s watchdog         │
+│                     │ • Add OK:/ERR: replies to all CommandDispatcher  │
+│                     │   handlers & fix axis:ZX in handleStartFeed()    │
 │                     │ • Verify build via `pio run -e esp32s3`          │
 ├─────────────────────┼──────────────────────────────────────────────────┤
-│ Slice 2: Python     │ • Implement `tests/hil/core/client.py`:          │
-│ Core Framework      │   - Synchronous ACK (OK:CMD.* / ERR:*) handling  │
-│                     │   - 500ms background heartbeat task              │
-│                     │   - suppress_heartbeat() failsafe test hook      │
-│                     │   - Dynamic CPR calculation (encoder_ppr * 4)    │
+│ Slice 2: Python     │ • Implement `tests/hil/core/client.py` with      │
+│ Core Framework      │   ACK queue sync & 500ms CMD.ping heartbeat task │
 │                     │ • Implement `tests/hil/core/base_test.py`        │
 │                     │ • Implement `tests/hil/core/assertions.py`       │
 │                     │ • Implement `tests/hil/run_tests.py` CLI runner  │
-│                     │ • Verify connection against live ESP32-S3        │
 ├─────────────────────┼──────────────────────────────────────────────────┤
-│ Slice 3: Test Suite │ • Implement all 6 modular test suites (13 tests):│
-│ Catalog & Run       │   - `test_gearbox.py` (at-speed Z/X, cold start) │
-│                     │   - `test_gearing.py` (forward, reverse, sync)   │
-│                     │   - `test_soft_limits.py` (chuck and tail halts) │
-│                     │   - `test_coords_and_presets.py` (DRO zeroes)    │
-│                     │   - `test_jogging.py` (step and continuous)      │
-│                     │   - `test_emergency.py` (latency, watchdog halt) │
-│                     │ • Execute full test suite against hardware       │
-│                     │ • Record baseline test report in docs/testing/   │
+│ Slice 3: Test Suite │ • Implement `test_coords_and_presets.py` (1)     │
+│ Catalog (26 Tests)  │ • Implement `test_jogging.py` (2)                │
+│                     │ • Implement `test_gearing.py` (2)                │
+│                     │ • Implement `test_emergency.py` (3)              │
+│                     │ • Implement `test_soft_limits.py` (4)            │
+│                     │ • Implement `test_gearbox.py` (10)               │
+│                     │ • Implement `test_gearbox_zx.py` (4)             │
 └─────────────────────┴──────────────────────────────────────────────────┘
 ```
 
@@ -1184,12 +1100,11 @@ The implementation is partitioned into three sequential slices following the Pai
 
 ## 9. Acceptance Criteria (Definition of Done)
 
-The HIL test harness is considered complete and operational when:
-1. `pio run -e esp32s3` compiles cleanly with zero warnings or errors with `CMD.sim*` hooks and safety interlocks enabled.
-2. The firmware automatically times out and executes an orderly deceleration stop if the test runner halts or drops heartbeats for $>1.5\text{s}$ (verified by `sim_watchdog_timeout_halt`).
-3. Discrete pulse injection tests (`CMD.simPulses`) execute without kinematic step-rate shock or timer overflows due to pulse slewing.
-4. The Python harness connects via WebSocket, executes all 13 test cases across the 6 modular suites with sequential ACK verification, and outputs both ANSI formatted console logs and `--json` reports.
-5. Gearing pitch accuracy assertion confirms **0 step drift** on synchronized feeds over physical hardware.
-6. Soft limit assertion confirms carriage halts cleanly at the shoulder without step overshoot.
-7. Multi-pass threading test confirms repeatable phase lock synchronization within $\pm 0.5^{\circ}$ of spindle rotation.
-8. Stop command latency tests confirm physical motion termination within $<100\text{ ms}$.
+The HIL test harness is considered complete and operational when[cite: 1]:
+1. `pio run -e esp32s3` compiles cleanly with zero warnings or errors with `CMD.sim*` hooks and consistent `OK:`/`ERR:` replies enabled[cite: 1].
+2. The firmware automatically times out and halts within $1.5\text{s}$ if the test runner suppresses heartbeats or terminates abruptly (`sim_safety_interlock_and_watchdog_halt` passes)[cite: 1].
+3. The In-Motion Safety Gatekeeper (`[SAFE-01]`) deterministically rejects all locked configuration mutations during active cutting (`in_motion_safety_gatekeeper_lockout` passes)[cite: 2, 4].
+4. Single-axis ($Z$, $X$) and coordinated dual-axis ($Z+X$) Gearbox tests verify **$\le 2\text{ du}$ ($0.2\,\mu\text{m}$) accuracy** across synchronized, asynchronous, live-nudge, and spindle-reversal operations[cite: 1, 2, 5].
+5. Soft limit assertions confirm clean deceleration halts on both primary and secondary axes without step overshoot or post-halt creep[cite: 1, 5].
+
+```
