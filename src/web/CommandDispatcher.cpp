@@ -161,6 +161,7 @@ static bool handleStartFeed(const char* args, String* reply) {
   if (!args || !*args) return false;
   const char* p = args;
   AxisId axis = AXIS_Z;
+  bool isDualAxis = false;
   bool isSync = true;
   int32_t feedRateDu = 0;
   int8_t dir = 0;
@@ -200,7 +201,13 @@ static bool handleStartFeed(const char* args, String* reply) {
       }
 
       if (strcasecmp(key, "axis") == 0 || strcasecmp(key, "a") == 0) {
-        axis = MotionConversions::parseAxisId(val, AXIS_Z);
+        if (strcasecmp(val, "ZX") == 0 || strcasecmp(val, "Z+X") == 0 || strcmp(val, "2") == 0 || strcasecmp(val, "TAPER") == 0) {
+          isDualAxis = true;
+          axis = AXIS_Z;
+        } else {
+          isDualAxis = false;
+          axis = MotionConversions::parseAxisId(val, AXIS_Z);
+        }
       } else if (strcasecmp(key, "sync") == 0 || strcasecmp(key, "s") == 0) {
         isSync = (strcasecmp(val, "1") == 0 || strcasecmp(val, "sync") == 0 || strcasecmp(val, "true") == 0);
       } else if (strcasecmp(key, "feed") == 0 || strcasecmp(key, "rate") == 0 || strcasecmp(key, "f") == 0) {
@@ -232,7 +239,13 @@ static bool handleStartFeed(const char* args, String* reply) {
       return false;
     }
 
-    axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
+    if (strcasecmp(axisToken, "ZX") == 0 || strcasecmp(axisToken, "Z+X") == 0 || strcmp(axisToken, "2") == 0 || strcasecmp(axisToken, "TAPER") == 0) {
+      isDualAxis = true;
+      axis = AXIS_Z;
+    } else {
+      isDualAxis = false;
+      axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
+    }
     isSync = (strcasecmp(syncToken, "1") == 0 || strcasecmp(syncToken, "sync") == 0 || strcasecmp(syncToken, "true") == 0);
     dir = MotionConversions::semanticToDirection(axis, dirToken);
     if (dir == 0) {
@@ -253,6 +266,10 @@ static bool handleStartFeed(const char* args, String* reply) {
   }
 
   ModeRegistry::activateMode(ModeIds::GEARBOX);
+  gb->setActiveAxis(isDualAxis ? "ZX" : (axis == AXIS_X ? "X" : "Z"));
+  if (isDualAxis && isSync) {
+    SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
+  }
   bool ok = gb->startFeed(axis, isSync, feedRateDu, dir, distDu);
   if (ok) {
     if (reply) *reply = "OK:CMD.startFeed\n";
@@ -291,25 +308,30 @@ static bool handleJogHold(const char* args, String* reply) {
   pkt.axis = axis;
   pkt.direction = dir;
   pkt.targetCoordDu = -1;
-  return MotionEngine::instance().postCommand(pkt);
+  bool ok = MotionEngine::instance().postCommand(pkt);
+  if (ok && reply) *reply = "OK:CMD.jogHold\n";
+  return ok;
 }
 
 static bool handleJogRelease(const char* args, String* reply) {
-  (void)reply;
+  bool ok = false;
   if (!args || !*args || strcasecmp(args, "ALL") == 0) {
     MotionCommandPacket pkt;
     pkt.type = MotionCommandPacket::Type::STOP_NORMAL;
     pkt.axis = AXIS_Z;
     MotionEngine::instance().postCommand(pkt);
     pkt.axis = AXIS_X;
-    return MotionEngine::instance().postCommand(pkt);
+    ok = MotionEngine::instance().postCommand(pkt);
+  } else {
+    char ax = args[0];
+    AxisId axis = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
+    MotionCommandPacket pkt;
+    pkt.type = MotionCommandPacket::Type::STOP_NORMAL;
+    pkt.axis = axis;
+    ok = MotionEngine::instance().postCommand(pkt);
   }
-  char ax = args[0];
-  AxisId axis = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
-  MotionCommandPacket pkt;
-  pkt.type = MotionCommandPacket::Type::STOP_NORMAL;
-  pkt.axis = axis;
-  return MotionEngine::instance().postCommand(pkt);
+  if (ok && reply) *reply = "OK:CMD.jogRelease\n";
+  return ok;
 }
 
 static bool handleJogStep(const char* args, String* reply) {
@@ -331,13 +353,15 @@ static bool handleJogStep(const char* args, String* reply) {
   pkt.axis = axis;
   pkt.direction = dir;
   pkt.targetCoordDu = stepDu;
-  return MotionEngine::instance().postCommand(pkt);
+  bool ok = MotionEngine::instance().postCommand(pkt);
+  if (ok && reply) *reply = "OK:CMD.jogStep\n";
+  return ok;
 }
 
 static bool handleJogStepDu(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   SettingsService::setJogStepDu(atol(args));
+  if (reply) *reply = "OK:CMD.jogStepDu\n";
   return true;
 }
 
@@ -402,16 +426,15 @@ static bool handleFeedNudge(const char* args, String* reply) {
 }
 
 static bool handleAxisZero(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   char axChar = args[0];
   AxisId axis = (axChar == 'X' || axChar == 'x') ? AXIS_X : AXIS_Z;
   MotionEngine::instance().zeroAxis(axis);
+  if (reply) *reply = "OK:CMD.axisZero\n";
   return true;
 }
 
 static bool handleAxisPosDu(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   char axChar = args[0];
   const char* p = strchr(args, ',');
@@ -419,37 +442,40 @@ static bool handleAxisPosDu(const char* args, String* reply) {
   long du = atol(p + 1);
   AxisId axis = (axChar == 'X' || axChar == 'x') ? AXIS_X : AXIS_Z;
   MotionEngine::instance().setAxisPositionDu(axis, du);
+  if (reply) *reply = "OK:CMD.axisPosDu\n";
   return true;
 }
 
 static bool handleAxisLimitDu(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   char ax = args[0];
   const char* p = strchr(args, ',');
   if (!p) return false;
   p++;
-  bool isLeft = (*p == 'L' || *p == 'l' || *p == '1' || *p == 'U' || *p == 'u');
+  // Slot 0 = Left/Chuck/Infeed (0, L, l, U, u); Slot 1 = Right/Tail/Retract (1, R, r, D, d)
+  bool isLeft = (*p == 'L' || *p == 'l' || *p == '0' || *p == 'U' || *p == 'u');
   const char* p2 = strchr(p, ',');
   if (!p2) return false;
   long du = atol(p2 + 1);
   AxisId axisId = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
   LimitDirection dir = isLeft ? LimitDirection::LIMIT_LEFT_OR_UP : LimitDirection::LIMIT_RIGHT_OR_DOWN;
   SettingsService::setAxisLimitDu(axisId, dir, du);
+  if (reply) *reply = "OK:CMD.axisLimitDu\n";
   return true;
 }
 
 static bool handleAxisClearLimit(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   char ax = args[0];
   const char* p = strchr(args, ',');
   if (!p) return false;
   p++;
-  bool isLeft = (*p == 'L' || *p == 'l' || *p == '1' || *p == 'U' || *p == 'u');
+  // Slot 0 = Left/Chuck/Infeed (0, L, l, U, u); Slot 1 = Right/Tail/Retract (1, R, r, D, d)
+  bool isLeft = (*p == 'L' || *p == 'l' || *p == '0' || *p == 'U' || *p == 'u');
   AxisId axisId = (ax == 'X' || ax == 'x') ? AXIS_X : AXIS_Z;
   LimitDirection dir = isLeft ? LimitDirection::LIMIT_LEFT_OR_UP : LimitDirection::LIMIT_RIGHT_OR_DOWN;
   SettingsService::clearAxisLimit(axisId, dir);
+  if (reply) *reply = "OK:CMD.axisClearLimit\n";
   return true;
 }
 
@@ -566,6 +592,14 @@ static bool handleMode(const char* args, String* reply) {
 static bool handleSimEncoder(const char* args, String* reply) {
   if (!args || !*args) return false;
   bool active = atoi(args) != 0;
+  if (active) {
+    // Safety check: reject if physical spindle is rotating or any axis is moving
+    ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+    if (MotionEngine::instance().isAnyAxisMoving() || (hal && hal->getFilteredRpm() > 0)) {
+      if (reply) *reply = "ERR:SAFETY_INTERLOCK_ACTIVE\n";
+      return true;
+    }
+  }
   ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
   if (hal) hal->setSimulationActive(active);
   MotionEngine::instance().touchSimHeartbeat();
@@ -596,7 +630,7 @@ static bool handleSimRpm(const char* args, String* reply) {
 static bool handlePing(const char* args, String* reply) {
   (void)args;
   MotionEngine::instance().touchSimHeartbeat();
-  if (reply) *reply = "PONG\n";
+  if (reply) *reply = "OK:CMD.ping\n";
   return true;
 }
 

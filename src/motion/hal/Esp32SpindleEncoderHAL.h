@@ -45,6 +45,8 @@ private:
   std::atomic<bool>     m_simActive{false};
   std::atomic<float>    m_simRpm{0.0f};
   std::atomic<int32_t>  m_pendingSimPulses{0};
+  bool                  m_wasSimActive{false};
+  int32_t               m_maxSimPulseChunk{96}; // Max pulses consumed per tick (~1200 RPM at 4800 CPR)
   int64_t               m_lastSimTimeUs{0};
   float                 m_simFraction{0.0f};
 

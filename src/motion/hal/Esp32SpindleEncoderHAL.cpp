@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <esp_timer.h>
 #include <cmath>
+#include <algorithm>
 
 Esp32SpindleEncoderHAL::Esp32SpindleEncoderHAL() = default;
 
@@ -122,8 +123,23 @@ bool Esp32SpindleEncoderHAL::init(
 }
 
 int32_t IRAM_ATTR Esp32SpindleEncoderHAL::getPulseDelta() {
-  if (m_simActive.load(std::memory_order_relaxed)) {
-    int64_t nowUs = esp_timer_get_time();
+  bool simActive = m_simActive.load(std::memory_order_relaxed);
+  int64_t nowUs = esp_timer_get_time();
+
+  // Core 1 Synchronous Mode Transition Handler:
+  if (simActive != m_wasSimActive) {
+    m_lastSimTimeUs = nowUs;
+    m_simFraction = 0.0f;
+    if (!simActive && m_unit) {
+      // Re-zero PCNT baseline synchronously on Core 1 when leaving simulation
+      int rawCount = 0;
+      pcnt_unit_get_count(m_unit, &rawCount);
+      m_lastCount16 = static_cast<int16_t>(rawCount);
+    }
+    m_wasSimActive = simActive;
+  }
+
+  if (simActive) {
     float dt = (m_lastSimTimeUs > 0) ? static_cast<float>(nowUs - m_lastSimTimeUs) * 1e-6f : 0.0f;
     m_lastSimTimeUs = nowUs;
     if (dt > 0.05f) dt = 0.05f;
@@ -133,8 +149,13 @@ int32_t IRAM_ATTR Esp32SpindleEncoderHAL::getPulseDelta() {
     int32_t delta = static_cast<int32_t>(counts);
     m_simFraction = counts - static_cast<float>(delta);
 
-    int32_t manual = m_pendingSimPulses.exchange(0, std::memory_order_relaxed);
-    delta += manual;
+    // Kinematic pulse slewing: drain discrete manual pulses in safe chunks
+    int32_t pending = m_pendingSimPulses.load(std::memory_order_relaxed);
+    if (pending != 0) {
+      int32_t step = std::clamp(pending, -m_maxSimPulseChunk, m_maxSimPulseChunk);
+      m_pendingSimPulses.fetch_sub(step, std::memory_order_relaxed);
+      delta += step;
+    }
 
     m_accumulatedPulses += delta;
     updateRpmEstimate(delta, nowUs);
@@ -154,7 +175,7 @@ int32_t IRAM_ATTR Esp32SpindleEncoderHAL::getPulseDelta() {
   m_lastCount16     = current16;
   m_accumulatedPulses += delta16;
 
-  int64_t nowUs = esp_timer_get_time();
+  nowUs = esp_timer_get_time();
   updateRpmEstimate(delta16, nowUs);
 
   return delta16;
@@ -207,20 +228,10 @@ void Esp32SpindleEncoderHAL::resetIndexSync() {
 }
 
 void Esp32SpindleEncoderHAL::setSimulationActive(bool active) {
-  if (active && !m_simActive.load()) {
-    m_lastSimTimeUs = esp_timer_get_time();
-    m_simFraction = 0.0f;
-    m_pendingSimPulses.store(0);
-    m_simActive.store(true, std::memory_order_release);
-  } else if (!active && m_simActive.load()) {
-    m_simActive.store(false, std::memory_order_release);
-    m_simRpm.store(0.0f);
-    m_pendingSimPulses.store(0);
-    if (m_unit) {
-      int rawCount = 0;
-      pcnt_unit_get_count(m_unit, &rawCount);
-      m_lastCount16 = static_cast<int16_t>(rawCount);
-    }
+  // Pure atomic toggle from Core 0: Core 1 handles baseline and state reset synchronously in getPulseDelta()
+  m_simActive.store(active, std::memory_order_release);
+  if (!active) {
+    m_simRpm.store(0.0f, std::memory_order_relaxed);
   }
 }
 

@@ -37,7 +37,7 @@ class ControllerState:
     # Properties Domain (P.*)
     screw_z_du: int = 40000
     motor_steps_z: int = 800
-    encoder_ppr: int = 2400
+    encoder_ppr: int = 1200  # Default 1200 lines (4x quadrature = 4800 counts/spindle rev)
 
     # Raw key-value dictionary of all received wire lines
     raw: dict[str, str] = field(default_factory=dict)
@@ -65,10 +65,13 @@ class NanoElsClient:
         self.state = ControllerState()
         self._ws = None
         self._rx_task: asyncio.Task | None = None
-        self._listeners: list[asyncio.Future] = []
+        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_suppressed: bool = False
+        self._listeners: list[Callable[[ControllerState], bool]] = []
+        self._pending_acks: dict[str, list[asyncio.Future]] = {}
 
     async def connect(self, timeout_s: float = 5.0) -> None:
-        """Connects to the controller WebSocket and starts the receiver loop."""
+        """Connects to the controller WebSocket, starts receiver and background heartbeat."""
         try:
             self._ws = await asyncio.wait_for(
                 websockets.connect(self.uri), timeout=timeout_s
@@ -77,16 +80,26 @@ class NanoElsClient:
             raise ConnectionError(f"Failed to connect to NanoELS at {self.uri}: {e}") from e
 
         self._rx_task = asyncio.create_task(self._rx_loop())
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         # Request sysinfo to ensure line is open and hydrated
-        await self.send("?sysinfo")
+        await self.send("?sysinfo", wait_ack=False)
 
     async def disconnect(self) -> None:
-        """Stops active feeds and closes socket cleanly."""
+        """Stops active feeds, clears simulation, cancels heartbeat and closes socket cleanly."""
+        self._heartbeat_suppressed = True
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            self._heartbeat_task = None
+
         try:
             if self._ws:
-                await self.send("CMD.stop")
-                await self.send("CMD.simRpm=0")
-                await self.send("CMD.simEncoder=0")
+                await self.send("CMD.stop", wait_ack=False)
+                await self.send("CMD.simRpm=0", wait_ack=False)
+                await self.send("CMD.simEncoder=0", wait_ack=False)
         except Exception:
             pass
 
@@ -102,12 +115,45 @@ class NanoElsClient:
             await self._ws.close()
             self._ws = None
 
-    async def send(self, cmd: str) -> None:
-        """Transmits a newline-delimited command frame."""
+    def suppress_heartbeat(self, suppress: bool = True) -> None:
+        """Enables or disables background 500ms heartbeat (used for watchdog timeout testing)."""
+        self._heartbeat_suppressed = suppress
+
+    async def send(self, cmd: str, wait_ack: bool = True, timeout_s: float = 2.0) -> None:
+        """Transmits a newline-delimited command frame.
+        
+        When wait_ack is True and cmd starts with CMD., awaits matching 'OK:CMD.<name>' response.
+        """
         if not self._ws:
             raise RuntimeError("Client is not connected")
-        clean = cmd.strip() + "\n"
-        await self._ws.send(clean)
+
+        clean_cmd = cmd.strip()
+        tag = None
+        fut: asyncio.Future | None = None
+
+        if wait_ack and clean_cmd.startswith("CMD."):
+            tag = clean_cmd[4:]
+            if "=" in tag:
+                tag = tag.split("=")[0].strip()
+            else:
+                tag = tag.strip()
+
+            loop = asyncio.get_running_loop()
+            fut = loop.create_future()
+            if tag not in self._pending_acks:
+                self._pending_acks[tag] = []
+            self._pending_acks[tag].append(fut)
+
+        wire_msg = clean_cmd + "\n"
+        await self._ws.send(wire_msg)
+
+        if fut is not None and tag is not None:
+            try:
+                await asyncio.wait_for(fut, timeout=timeout_s)
+            except asyncio.TimeoutError as exc:
+                if tag in self._pending_acks and fut in self._pending_acks[tag]:
+                    self._pending_acks[tag].remove(fut)
+                raise TimeoutError(f"Timeout ({timeout_s}s) awaiting ACK for '{cmd}'") from exc
 
     async def wait_for(
         self,
@@ -148,16 +194,25 @@ class NanoElsClient:
                 self._listeners.remove(check_condition)
 
     async def inject_spindle_revs(self, revs: float, rpm: float = 600.0) -> None:
-        """Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr (4x quadrature),
-
-        injects them, and waits for completion.
+        """Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr * 4,
+        injects them, and waits for command confirmation.
         """
-        ppr = self.state.encoder_ppr if self.state.encoder_ppr > 0 else 1200
-        total_pulses = int(round(revs * ppr * 4))
-        await self.send(f"CMD.simPulses={total_pulses}")
+        cpr = self.state.encoder_ppr * 4 if self.state.encoder_ppr > 0 else 4800
+        total_pulses = int(round(revs * cpr))
+        await self.send(f"CMD.simPulses={total_pulses}", wait_ack=True)
+
+    async def _heartbeat_loop(self) -> None:
+        """Background task transmitting CMD.ping every 500ms to keep Core 1 sim watchdog fed."""
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                if not self._heartbeat_suppressed and self._ws:
+                    await self._ws.send("CMD.ping\n")
+        except asyncio.CancelledError:
+            pass
 
     async def _rx_loop(self) -> None:
-        """Continuously ingests WebSocket frames and splits batched newline-delimited lines."""
+        """Continuously ingests WebSocket frames, splitting telemetry and resolving ACKs."""
         try:
             async for message in self._ws:
                 if isinstance(message, bytes):
@@ -169,15 +224,40 @@ class NanoElsClient:
                     line = raw_line.strip()
                     if not line:
                         continue
+
+                    # 1. Synchronous Command Acknowledgment Handling:
+                    if line.startswith("OK:CMD."):
+                        cmd_name = line[7:].strip()
+                        if cmd_name in self._pending_acks and self._pending_acks[cmd_name]:
+                            fut = self._pending_acks[cmd_name].pop(0)
+                            if not fut.done():
+                                fut.set_result(True)
+                        continue
+
+                    if line == "PONG":
+                        if "ping" in self._pending_acks and self._pending_acks["ping"]:
+                            fut = self._pending_acks["ping"].pop(0)
+                            if not fut.done():
+                                fut.set_result(True)
+                        continue
+
+                    if line.startswith("ERR:"):
+                        err_msg = line[4:].strip()
+                        for cmd_name, fut_list in self._pending_acks.items():
+                            for fut in fut_list:
+                                if not fut.done():
+                                    fut.set_exception(RuntimeError(f"Firmware error: {err_msg}"))
+                        self._pending_acks.clear()
+                        continue
+
+                    # 2. Asynchronous Domain Telemetry Ingestion:
                     if self._parse_telemetry_line(line):
                         changed = True
 
                 if changed:
                     # Notify active condition listeners
                     for check_fn in list(self._listeners):
-                        if check_fn(self.state):
-                            # Future resolved inside check_fn
-                            pass
+                        check_fn(self.state)
         except asyncio.CancelledError:
             pass
         except Exception:

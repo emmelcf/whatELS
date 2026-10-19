@@ -34,16 +34,16 @@ class HilTestCase(ABC):
         self.details: dict[str, Any] = {}
 
     async def setup(self) -> None:
-        """Default setup: stop any active feed, enable simulation mode, zero Z/X axes."""
-        await self.client.send("CMD.stop")
-        await self.client.send("CMD.simRpm=0")
-        await self.client.send("CMD.simEncoder=1")
-        await self.client.send("CMD.axisClearLimit=Z,1")
-        await self.client.send("CMD.axisClearLimit=Z,0")
-        await self.client.send("CMD.axisClearLimit=X,1")
-        await self.client.send("CMD.axisClearLimit=X,0")
-        await self.client.send("CMD.axisZero=Z")
-        await self.client.send("CMD.axisZero=X")
+        """Default setup: stop any active feed, enable simulation mode, zero Z/X axes with ACK synchronization."""
+        await self.client.send("CMD.stop", wait_ack=True)
+        await self.client.send("CMD.simRpm=0", wait_ack=True)
+        await self.client.send("CMD.simEncoder=1", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=Z,L", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=Z,R", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=X,U", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=X,D", wait_ack=True)
+        await self.client.send("CMD.axisZero=Z", wait_ack=True)
+        await self.client.send("CMD.axisZero=X", wait_ack=True)
         await self.client.wait_for(
             lambda s: s.z_du == 0 and s.x_du == 0 and not s.is_on,
             timeout_s=3.0,
@@ -56,11 +56,12 @@ class HilTestCase(ABC):
         pass
 
     async def teardown(self) -> None:
-        """Guaranteed teardown: stop feed, clear simulation RPM, disable simulation mode."""
+        """Guaranteed teardown: restore heartbeat, stop feed, clear simulation RPM, disable simulation mode."""
         try:
-            await self.client.send("CMD.stop")
-            await self.client.send("CMD.simRpm=0")
-            await self.client.send("CMD.simEncoder=0")
+            self.client.suppress_heartbeat(False)
+            await self.client.send("CMD.stop", wait_ack=False)
+            await self.client.send("CMD.simRpm=0", wait_ack=False)
+            await self.client.send("CMD.simEncoder=0", wait_ack=False)
         except Exception:
             pass
 

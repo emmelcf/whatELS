@@ -13,6 +13,7 @@ private:
     ModeState m_state = ModeState::IDLE;
 
     AxisId    m_axis = AXIS_Z;
+    bool      m_isDualAxis = false;
     bool      m_isSync = true;
     int8_t    m_direction = -1;        // Cartesian polarity: -1 (chuck/infeed), +1 (tail/retract)
     int32_t   m_feedRateDu = 1000;     // Canonical magnitude: dupr if sync, du/min if async
@@ -50,7 +51,8 @@ public:
     bool nudgeFeed(int direction);
 
     AxisId getAxis() const { return m_axis; }
-    const char* getActiveAxisStr() const { return (m_axis == AXIS_X) ? "X" : "Z"; }
+    bool isDualAxis() const { return m_isDualAxis; }
+    const char* getActiveAxisStr() const { return m_isDualAxis ? "ZX" : ((m_axis == AXIS_X) ? "X" : "Z"); }
     const char* getActiveAxis() const { return getActiveAxisStr(); }
     bool isSync() const { return m_isSync; }
     int8_t getDirection() const { return m_direction; }

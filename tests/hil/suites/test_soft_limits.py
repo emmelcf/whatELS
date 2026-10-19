@@ -18,7 +18,7 @@ class TestSoftLimitAtSpeedChuckHalt(HilTestCase):
     async def run(self) -> None:
         # 1. Set Left limit at -50,000 du (-5.000 mm)
         limit_du = -50000
-        await self.client.send(f"CMD.axisLimitDu=Z,1,{limit_du}")
+        await self.client.send(f"CMD.axisLimitDu=Z,L,{limit_du}", wait_ack=True)
         await self.client.wait_for(
             lambda s: s.z_left_du == limit_du,
             timeout_s=3.0,
@@ -26,11 +26,11 @@ class TestSoftLimitAtSpeedChuckHalt(HilTestCase):
         )
 
         # 2. Bring spindle all the way up to 600 RPM first
-        await self.client.send("CMD.simRpm=600")
+        await self.client.send("CMD.simRpm=600", wait_ack=True)
         await self.client.wait_for(lambda s: s.rpm >= 580, description="spindle at 600 RPM")
 
         # 3. Engage Z feed towards Chuck on-the-fly at speed
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK")
+        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK", wait_ack=True)
         await self.client.wait_for(lambda s: s.is_on, description="feed engaged at speed")
 
         # 4. Wait for controller to automatically disengage on reaching limit
@@ -45,8 +45,8 @@ class TestSoftLimitAtSpeedChuckHalt(HilTestCase):
         hold_state = self.client.state
 
         # 6. Shut down spindle and clear limit
-        await self.client.send("CMD.simRpm=0")
-        await self.client.send("CMD.axisClearLimit=Z,1")
+        await self.client.send("CMD.simRpm=0", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=Z,L", wait_ack=True)
         await asyncio.sleep(0.3)
 
         # 7. Assert carriage stopped cleanly at limit with zero overrun or creep
@@ -67,7 +67,7 @@ class TestSoftLimitAtSpeedTailHalt(HilTestCase):
     async def run(self) -> None:
         # 1. Set Right limit at +50,000 du (+5.000 mm)
         limit_du = 50000
-        await self.client.send(f"CMD.axisLimitDu=Z,0,{limit_du}")
+        await self.client.send(f"CMD.axisLimitDu=Z,R,{limit_du}", wait_ack=True)
         await self.client.wait_for(
             lambda s: s.z_right_du == limit_du,
             timeout_s=3.0,
@@ -75,11 +75,11 @@ class TestSoftLimitAtSpeedTailHalt(HilTestCase):
         )
 
         # 2. Bring spindle to 600 RPM first
-        await self.client.send("CMD.simRpm=600")
+        await self.client.send("CMD.simRpm=600", wait_ack=True)
         await self.client.wait_for(lambda s: s.rpm >= 580, description="spindle at 600 RPM")
 
         # 3. Engage Z feed towards Tailstock on-the-fly at speed
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL")
+        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL", wait_ack=True)
         await self.client.wait_for(lambda s: s.is_on, description="feed engaged at speed")
 
         # 4. Wait for automatic halt at right soft stop
@@ -94,8 +94,8 @@ class TestSoftLimitAtSpeedTailHalt(HilTestCase):
         hold_state = self.client.state
 
         # 6. Shut down spindle and clear limit
-        await self.client.send("CMD.simRpm=0")
-        await self.client.send("CMD.axisClearLimit=Z,0")
+        await self.client.send("CMD.simRpm=0", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=Z,R", wait_ack=True)
         await asyncio.sleep(0.3)
 
         # 7. Assert carriage stopped cleanly at limit

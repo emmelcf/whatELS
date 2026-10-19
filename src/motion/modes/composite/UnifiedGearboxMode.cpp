@@ -89,6 +89,12 @@ bool UnifiedGearboxMode::setActiveAxis(const char* axisStr) {
     if (!axisStr) return false;
     if (m_state == ModeState::RUNNING) return false; // In-motion lockout
 
+    if (strcasecmp(axisStr, "ZX") == 0 || strcasecmp(axisStr, "Z+X") == 0 || strcmp(axisStr, "2") == 0 || strcasecmp(axisStr, "TAPER") == 0) {
+        m_isDualAxis = true;
+        m_axis = AXIS_Z;
+        return true;
+    }
+    m_isDualAxis = false;
     m_axis = MotionConversions::parseAxisId(axisStr, AXIS_Z);
     return true;
 }
@@ -264,7 +270,7 @@ void UnifiedGearboxMode::onSpindleSyncAcquired(AxisId axis) {
 }
 
 void UnifiedGearboxMode::writeTelemetry(TelemetryWriter& writer) const {
-    writer.writeKeyValue("gear_axis", (m_axis == AXIS_X) ? "X" : "Z");
+    writer.writeKeyValue("gear_axis", getActiveAxisStr());
     writer.writeKeyValue("gear_sync", static_cast<int32_t>(m_isSync ? 1 : 0));
     writer.writeKeyValue("gear_dir", MotionConversions::directionToSemantic(m_axis, m_direction));
     writer.writeKeyValue("feed_rate", m_feedRateDu);
