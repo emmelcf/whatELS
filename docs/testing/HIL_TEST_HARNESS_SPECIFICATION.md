@@ -218,21 +218,21 @@ The test harness is implemented in Python 3.10+ using `asyncio` and `websockets`
 ```
 tests/hil/
 ├── requirements.txt            # websockets>=12.0
-├── run_tests.py                # Main test runner CLI and test discoverer
+├── run_tests.py                # Main test runner CLI and dynamic test discoverer
 ├── core/
 │   ├── __init__.py
-│   ├── client.py               # NanoElsClient: Async WebSocket connection & state engine
-│   ├── assertions.py           # Domain assertion helpers (within_du, halted_at, ratio_equals)
+│   ├── client.py               # NanoElsClient: Async WebSocket connection & reactive state mirror
+│   ├── assertions.py           # Domain assertion helpers (assert_pos_du, assert_halted, etc.)
 │   ├── base_test.py            # HilTestCase abstract base class
 │   └── reporter.py             # ANSI Terminal & JSON reporting formatters
 └── suites/
     ├── __init__.py
-    ├── test_gearing.py         # Spindle-synchronized feed & pitch accuracy tests
-    ├── test_soft_limits.py     # Soft limits, shoulder lookahead, and halt reason tests
-    ├── test_threading.py       # Threading passes, multi-start index synchronization
-    ├── test_jogging.py         # Continuous and discrete jog increments
-    ├── test_emergency.py       # Stop command latency and E-stop state lockout
-    └── test_settings.py        # Settings persistence and hydration verification
+    ├── test_gearbox.py         # Electronic gearbox at-speed and cold-start feed tests
+    ├── test_gearing.py         # Discrete pulse-synchronized gearing tests (forward & reverse)
+    ├── test_soft_limits.py     # High-speed soft limits, lookahead, and shoulder halt tests
+    ├── test_coords_and_presets.py # Axis coordinate zeroing and DRO preset tests
+    ├── test_jogging.py         # Discrete step jogging and continuous hold/release tests
+    └── test_emergency.py       # Stop command latency and feed interrupt tests
 ```
 
 ---
@@ -260,10 +260,10 @@ class ControllerState:
     is_moving: bool = False
     mode: int = 0
     estop: int = 0
-    z_left_du: int = 2147483647
-    z_right_du: int = -2147483648
-    x_up_du: int = 2147483647
-    x_down_du: int = -2147483648
+    z_left_du: int | None = None
+    z_right_du: int | None = None
+    x_up_du: int | None = None
+    x_down_du: int | None = None
     dupr: int = 0
     next_dupr: int = 0
     
@@ -746,6 +746,81 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
 
 ---
 
+### 6.9 `gearing_sync_1_5mm_pitch` (Suite: `test_gearing.py`)
+
+* **Real-Life Machining Scenario (Discrete Forward Spindle Synchronization):**  
+  Carriage engages a forward longitudinal feed of $1.5\text{ mm/rev}$ pitch towards the chuck. Two complete revolutions of the spindle ($9600$ quadrature counts) must advance the carriage by exactly $-3.0\text{ mm}$ ($-30{,}000\text{ du}$).
+
+* **Objective:**  
+  Verify mathematical accuracy and step generation of the Bresenham synchronizer over exact discrete pulse injection without accumulated floating-point round-off.
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK
+  CMD.simPulses=9600
+  ```
+
+* **Pass Criteria:**
+  - Carriage coordinate lands at $Z = -30{,}000\text{ du}$ with $\le 2\text{ du}$ tolerance ($0.2\,\mu\text{m}$).
+
+* **Fail Criteria:**
+  - $Z$ coordinate deviates by more than $2\text{ du}$.
+
+---
+
+### 6.10 `gearing_sync_reverse_1_0mm` (Suite: `test_gearing.py`)
+
+* **Real-Life Machining Scenario (Discrete Reverse Spindle Synchronization):**  
+  Carriage engages a reverse feed of $1.0\text{ mm/rev}$ pitch towards the tailstock ($+Z$). One complete revolution ($4800$ quadrature counts) must advance the carriage by exactly $+1.0\text{ mm}$ ($+10{,}000\text{ du}$).
+
+* **Objective:**  
+  Verify reverse direction gearing accuracy and signed step pulse generation.
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.startFeed=axis:Z,sync:1,feed:10000,dir:TAIL
+  CMD.simPulses=4800
+  ```
+
+* **Pass Criteria:**
+  - Carriage coordinate lands at $Z = +10{,}000\text{ du}$ with $\le 2\text{ du}$ tolerance.
+
+* **Fail Criteria:**
+  - $Z$ coordinate deviates by more than $2\text{ du}$.
+
+---
+
+### 6.11 `manual_jogging` (Suite: `test_jogging.py`)
+
+* **Real-Life Machining Scenario (Manual Machine Setup & Positioning):**  
+  The machinist uses touch jog controls on the HMI to position the tool. Incremental single-step jogging must advance the carriage or cross-slide by exact fixed increments ($1.0\text{ mm}$ / $10{,}000\text{ du}$) on both axes ($Z$ and $X$). Continuous jogging (`jogHold`) must feed until released (`jogRelease`) and halt cleanly without creeping.
+
+* **Objective:**  
+  Verify `CMD.jogStep` incremental moves, `CMD.jogHold` continuous motion, and `CMD.jogRelease` termination via the thread-safe inter-core queue across both axes ($Z$ and $X$).
+
+* **Parameters & Inbound Wire Commands:**
+  ```text
+  CMD.axisZero=Z
+  CMD.axisZero=X
+  CMD.jogStepDu=10000
+  CMD.jogStep=Z,TAIL
+  CMD.jogStep=Z,CHUCK
+  CMD.jogStep=X,RETRACT
+  CMD.jogStep=X,INFEED
+  CMD.jogHold=Z,TAIL
+  CMD.jogRelease=Z
+  ```
+
+* **Pass Criteria:**
+  - Incremental step jogs land at exact commanded coordinates ($0$ and $+10{,}000\text{ du}$) on both $Z$ and $X$.
+  - Continuous jog travels $\ge 5000\text{ du}$ and halts immediately upon `CMD.jogRelease` (creep $\le 100\text{ du}$).
+
+* **Fail Criteria:**
+  - Axis coordinate error exceeds $0\text{ du}$ on step jog.
+  - Creep after release exceeds $100\text{ du}$.
+
+---
+
 ## 7. CLI Runner & Output Formats
 
 The test harness is executed via `run_tests.py`:
@@ -755,7 +830,7 @@ The test harness is executed via `run_tests.py`:
 python3 tests/hil/run_tests.py
 
 # Run against a specific IP address
-python3 tests/hil/run_tests.py --host 192.168.1.150
+python3 tests/hil/run_tests.py --host 192.168.10.22
 
 # Filter specific tests by keyword
 python3 tests/hil/run_tests.py --filter gearing
@@ -770,19 +845,23 @@ python3 tests/hil/run_tests.py --json > test_report.json
 ```
 ================================================================================
                     NANOELS HARDWARE-IN-THE-LOOP TEST SUITE                    
-Target: ws://192.168.1.150:81/canonical | Firmware: v5.38 (ESP32-S3)
+Target: ws://192.168.10.22:81/canonical | Firmware: v5.38 (ESP32-S3)
 ================================================================================
-TEST NAME                     STATUS   DURATION   DETAILS
+TEST NAME                          STATUS    DURATION   DETAILS
 --------------------------------------------------------------------------------
-gearing_sync_1_5mm_pitch      [PASS]     1.24s    zDu: -30000 du (err: 0 du)
-gearing_sync_reverse_pitch    [PASS]     1.18s    zDu: +15000 du (err: 0 du)
-soft_limit_shoulder_halt      [PASS]     3.42s    Halted at -50000 du cleanly
-soft_limit_no_overshoot       [PASS]     2.85s    Max excursion: -50000 du
-stop_command_latency          [PASS]     0.08s    Halt latency: 34.2 ms
-threading_multistart_index    [PASS]     4.10s    3 starts matched angle offsets
-settings_hydration_check      [PASS]     0.45s    All 18 parameters verified
+axis_zero_and_preset               [PASS]    0.68s      tested_z_preset: 250000, tested_x_preset: 100000
+gearbox_at_speed_x_feed            [PASS]    2.62s      spindle_rpm: 600, expected_x_du: -15000
+gearbox_at_speed_z_feed            [PASS]    2.20s      spindle_rpm: 600, expected_z_du: -45000
+gearbox_cold_start_ramp            [PASS]    1.80s      expected_z_du: -20000, actual_z_du: -20000
+gearbox_stop_command               [PASS]    1.41s      halted_z_du: 2400, settled_z_du: 2400
+gearing_sync_1_5mm_pitch           [PASS]    0.34s      expected_z_du: -30000, actual_z_du: -30000
+gearing_sync_reverse_1_0mm         [PASS]    0.37s      expected_z_du: 10000, actual_z_du: 10000
+manual_jogging                     [PASS]    2.91s      step_jog_du: 10000, continuous_hold_reached_du: 6000
+soft_limit_at_speed_chuck_halt     [PASS]    2.41s      limit_du: -50000, halted_z_du: -50000
+soft_limit_at_speed_tail_halt      [PASS]    2.37s      limit_du: 50000, halted_z_du: 50000
+stop_command_latency               [PASS]    0.30s      stop_latency_ms: 62.58
 --------------------------------------------------------------------------------
-SUMMARY: 7 Passed, 0 Failed, 0 Skipped | Total Time: 13.32s
+SUMMARY: 11 Passed, 0 Failed, 0 Errors | Total Time: 17.42s
 RESULT: ALL TESTS PASSED (Exit code: 0)
 ================================================================================
 ```
