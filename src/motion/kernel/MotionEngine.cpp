@@ -165,8 +165,20 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
   m_activeMode[idx] = MotionMode::SPINDLE_SYNC_GEARING;
   m_direction[idx]  = (params.direction > 0) ? 1 : -1;
 
+  int64_t startPulses = m_accumulatedSpindlePulses;
+  int32_t effPpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
+                       ? m_encoderHal->getCountsPerSpindleRev()
+                       : 4096;
+  if (m_lastRpm >= 5.0f && effPpr > 0) {
+    int64_t rem = startPulses % effPpr;
+    if (rem < 0) rem += effPpr;
+    if (rem > 0) {
+      startPulses += (effPpr - rem);
+    }
+  }
+
   int32_t signedPitch = m_direction[idx] * std::abs(params.pitchDupr);
-  m_sync[idx].engage(m_accumulatedSpindlePulses, m_axes[idx].posSteps, signedPitch);
+  m_sync[idx].engage(startPulses, m_axes[idx].posSteps, signedPitch);
 
   if (params.targetDistDu > 0) {
     m_hasTarget[idx]  = true;
@@ -192,7 +204,7 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
       int8_t secDir = (params.secondaryRatioNum >= 0) ? 1 : -1;
       m_activeMode[sIdx] = MotionMode::SPINDLE_SYNC_GEARING;
       m_direction[sIdx]  = secDir;
-      m_sync[sIdx].engage(m_accumulatedSpindlePulses, m_axes[sIdx].posSteps, secDir * secPitch);
+      m_sync[sIdx].engage(startPulses, m_axes[sIdx].posSteps, secDir * secPitch);
       m_feedHold[sIdx] = false;
       m_isMoving[sIdx] = true;
       m_hasTarget[sIdx] = false;
@@ -591,6 +603,10 @@ void MotionEngine::onMotionTick() {
 
     switch (m_activeMode[idx]) {
       case MotionMode::SPINDLE_SYNC_GEARING: {
+        if (effectivePulses < m_sync[idx].getAnchorPulses()) {
+          // Waiting for armed spindle index crossing before initiating step pulses
+          break;
+        }
         int32_t effectivePpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
                                    ? m_encoderHal->getCountsPerSpindleRev()
                                    : 4096;

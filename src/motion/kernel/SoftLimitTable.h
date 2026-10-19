@@ -37,34 +37,60 @@ public:
       int32_t currentSteps,
       int8_t direction,
       bool allowPassThrough = false) const {
+    const SoftLimit* candidate = nullptr;
     const int32_t deadband = allowPassThrough ? ADVANCE_DEADBAND_STEPS : 0;
 
     if (direction < 0) {
-      // Slot 0 is designated Left/Inward limit
-      if (m_limits[0].isEnforced()) {
-        int32_t threshold = currentSteps - deadband;
-        if (m_limits[0].stepPos <= threshold) {
-          return &m_limits[0];
+      // Negative travel: find closest enforced lower bound at or below threshold
+      int32_t highestPosBelow = INT32_MIN;
+      int32_t threshold = currentSteps - deadband;
+      for (size_t i = 0; i < MAX_LIMITS; ++i) {
+        if (!m_limits[i].isEnforced()) continue;
+        if (m_limits[i].bound == LimitBound::UPPER) continue; // Upper bounds do not block negative travel
+        if (m_limits[i].stepPos <= threshold) {
+          if (m_limits[i].stepPos > highestPosBelow) {
+            highestPosBelow = m_limits[i].stepPos;
+            candidate = &m_limits[i];
+          }
         }
       }
     } else if (direction > 0) {
-      // Slot 1 is designated Right/Outward limit
-      if (m_limits[1].isEnforced()) {
-        int32_t threshold = currentSteps + deadband;
-        if (m_limits[1].stepPos >= threshold) {
-          return &m_limits[1];
+      // Positive travel: find closest enforced upper bound at or above threshold
+      int32_t lowestPosAbove = INT32_MAX;
+      int32_t threshold = currentSteps + deadband;
+      for (size_t i = 0; i < MAX_LIMITS; ++i) {
+        if (!m_limits[i].isEnforced()) continue;
+        if (m_limits[i].bound == LimitBound::LOWER) continue; // Lower bounds do not block positive travel
+        if (m_limits[i].stepPos >= threshold) {
+          if (m_limits[i].stepPos < lowestPosAbove) {
+            lowestPosAbove = m_limits[i].stepPos;
+            candidate = &m_limits[i];
+          }
         }
       }
     }
 
-    return nullptr;
+    return candidate;
   }
 
   // Backwards-compatible convenience getters for single-limit displays
-  const SoftLimit* getLeftLimit() const { return m_limits[0].isEnforced() ? &m_limits[0] : nullptr; }
-  const SoftLimit* getRightLimit() const { return m_limits[1].isEnforced() ? &m_limits[1] : nullptr; }
+  const SoftLimit* getLeftLimit() const {
+    if (m_limits[0].isEnforced()) return &m_limits[0];
+    for (size_t i = 0; i < MAX_LIMITS; ++i) {
+      if (m_limits[i].isEnforced() && m_limits[i].bound == LimitBound::LOWER) return &m_limits[i];
+    }
+    return nullptr;
+  }
 
-  bool setLimit(size_t slot, int32_t coordDu, int32_t stepPos, const char* label = nullptr, bool enable = true);
+  const SoftLimit* getRightLimit() const {
+    if (m_limits[1].isEnforced()) return &m_limits[1];
+    for (size_t i = 0; i < MAX_LIMITS; ++i) {
+      if (m_limits[i].isEnforced() && m_limits[i].bound == LimitBound::UPPER) return &m_limits[i];
+    }
+    return nullptr;
+  }
+
+  bool setLimit(size_t slot, int32_t coordDu, int32_t stepPos, const char* label = nullptr, bool enable = true, LimitBound bound = LimitBound::AUTO);
   bool setEnabled(size_t slot, bool enable);
   bool clearLimit(size_t slot);
   void clearAll();

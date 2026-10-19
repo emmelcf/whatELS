@@ -7,7 +7,7 @@ SoftLimitTable::SoftLimitTable() {
   clearAll();
 }
 
-bool SoftLimitTable::setLimit(size_t slot, int32_t coordDu, int32_t stepPos, const char* label, bool enable) {
+bool SoftLimitTable::setLimit(size_t slot, int32_t coordDu, int32_t stepPos, const char* label, bool enable, LimitBound bound) {
   if (slot >= MAX_LIMITS) {
     return false;
   }
@@ -17,6 +17,12 @@ bool SoftLimitTable::setLimit(size_t slot, int32_t coordDu, int32_t stepPos, con
   m_limits[slot].enabled = enable;
   m_limits[slot].coordDu = coordDu;
   m_limits[slot].stepPos = stepPos;
+
+  if (bound == LimitBound::AUTO) {
+    m_limits[slot].bound = (slot == 0) ? LimitBound::LOWER : (slot == 1 ? LimitBound::UPPER : LimitBound::BOTH);
+  } else {
+    m_limits[slot].bound = bound;
+  }
 
   if (label != nullptr) {
     std::strncpy(m_limits[slot].label, label, sizeof(m_limits[slot].label) - 1);
