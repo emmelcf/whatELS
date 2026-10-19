@@ -79,7 +79,7 @@ class NanoElsClient:
         """Connects to the controller WebSocket, starts receiver and background heartbeat."""
         try:
             self._ws = await asyncio.wait_for(
-                websockets.connect(self.uri), timeout=timeout_s
+                websockets.connect(self.uri, ping_interval=None, ping_timeout=None), timeout=timeout_s
             )
         except Exception as e:
             raise ConnectionError(f"Failed to connect to NanoELS at {self.uri}: {e}") from e
@@ -96,7 +96,7 @@ class NanoElsClient:
             self._heartbeat_task.cancel()
             try:
                 await self._heartbeat_task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, Exception):
                 pass
             self._heartbeat_task = None
 
@@ -112,12 +112,15 @@ class NanoElsClient:
             self._rx_task.cancel()
             try:
                 await self._rx_task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, Exception):
                 pass
             self._rx_task = None
 
         if self._ws:
-            await self._ws.close()
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
             self._ws = None
 
     def suppress_heartbeat(self, suppress: bool = True) -> None:
@@ -222,7 +225,10 @@ class NanoElsClient:
             while True:
                 await asyncio.sleep(0.5)
                 if not self._heartbeat_suppressed and self._ws:
-                    await self._ws.send("CMD.ping\n")
+                    try:
+                        await self._ws.send("CMD.ping\n")
+                    except Exception:
+                        break
         except asyncio.CancelledError:
             pass
 

@@ -48,14 +48,14 @@ graph TD
         SerialUART["Hardware UART / USB CDC\n115,200 Baud"]
     end
 
-    subgraph Translation_Layer ["Client Translation Layer (ICommandTranslator & ITelemetrySerializer)"]
-        CanonicalTrans["Canonical Client Adapter\n(Canonical Translator + TelemetrySerializer)"]
-        GrblTrans["GRBL Client Adapter\n(GrblTranslator + GrblSerializer)"]
-        CustomTrans["Custom Client Adapter\n(Custom Translator + Custom Serializer)"]
+    subgraph Core_Client_Layer ["Controller-Side Client Layer (src/core_client/)"]
+        NativeClient["Native Client (src/core_client/clients/native/)\n(Direct Command Pass-through + Canonical Telemetry)"]
+        GrblClient["GRBL Client (src/core_client/clients/grbl/)\n(G-code Translator + GrblSerializer)"]
+        DroClient["DRO Client (src/core_client/clients/dro/)\n(Minimal Coordinate Serializer)"]
     end
 
-    subgraph Core_Motion ["Core Motion Engine & State Subsystems"]
-        Dispatcher["CommandDispatcher\n(Single Point of Truth)"]
+    subgraph Core_Domain ["Core Domain & State Subsystems (src/core/ & src/motion/)"]
+        Dispatcher["CommandDispatcher (src/core/CommandDispatcher.h)\n(Single Point of Truth & Safety Gatekeeper)"]
         MotionCore["Motion Kinematics & PCNT\n(Stepper Timers & Hardware Limits)"]
         SettingsSvc["SettingsService & NVS Flash\n(Persistent Preferences)"]
         MachineModel["MachineModel\n(4-Domain State Snapshot: K, I, C, P)"]
@@ -67,13 +67,14 @@ graph TD
     GrblSender -->|WebSocket /grbl| WSServer
     SerialPendant -->|Raw Serial| SerialUART
 
-    WSServer --> CanonicalTrans
-    WSServer --> GrblTrans
-    SerialUART --> CustomTrans
+    WSServer --> NativeClient
+    WSServer --> GrblClient
+    WSServer --> DroClient
+    SerialUART --> NativeClient
 
-    CanonicalTrans --> Dispatcher
-    GrblTrans --> Dispatcher
-    CustomTrans --> Dispatcher
+    NativeClient --> Dispatcher
+    GrblClient --> Dispatcher
+    DroClient --> Dispatcher
 
     Dispatcher --> MotionCore
     Dispatcher --> SettingsSvc
@@ -89,14 +90,15 @@ graph TD
 * Handles connection state, client registration, keep-alive heartbeats, and frame buffering.
 * Completely agnostic to command syntax, motion state, or kinematics.
 
-#### 2. Client Translation Layer (`ICommandTranslator` & `ITelemetrySerializer`)
-* **Inbound (`ICommandTranslator`)**: Sanitizes incoming client commands (strips whitespace, enforces buffer limits, parses wire tokens) and routes validated intent to `CommandDispatcher`.
-* **Outbound (`ITelemetrySerializer`)**: Determines the outgoing wire format for connected clients:
-  - By default, native/canonical clients reference the Core's universal `TelemetrySerializer` (`src/core/TelemetrySerializer.h`), avoiding any redundant formatting or memory duplication.
-  - If a client requires an alternative format (e.g. `GrblSerializer` for G-code senders or a custom diff-caching adapter for a dumb serial screen), the translation layer provides its own serializer.
+#### 2. Native Baseline Client vs. Alien Adapters
+* **Native Baseline Client (Zero-Translation)**:
+  - Native clients (such as the Touch DRO Web UI and Python HIL Test Suite) speak the controller's native command surface (`CMD.*`, `SETTINGS.*`, `?get`).
+  - No protocol translation takes place. Commands pass directly into `CommandDispatcher`, and execution results are returned via universal canonical serialization.
+* **Alien Adapters (`ICommandTranslator` & `ITelemetrySerializer`)**:
+  - Translates foreign wire protocols (e.g. GRBL G-code streaming for CNC senders, or binary packets for dumb serial screens) into native `CommandDispatcher` invocations and maps responses back into the client's expected grammar (`ok`, `error:20`).
 
 #### 3. Core State & Motion Engine (`CommandDispatcher`, `MachineModel`, `TelemetrySerializer`)
-* `CommandDispatcher`: Dispatches validated commands directly to motion and settings subsystems. Single point of truth.
+* `CommandDispatcher`: Dispatches validated commands directly to motion and settings subsystems. Single point of truth. Operates inside a defensive fault-contained sandbox and returns a strongly typed `CommandResult`.
 * `MachineModel`: Captures atomic, tear-free snapshots across 4 independent domains: Kinematics (`K`), Intent (`I`), Cycle (`C`), and Properties (`P`).
 * `TelemetrySerializer`: Universal core state exporter. Formats `MachineModel` domains into canonical ASCII key-value telemetry without tying the core to any specific client or transport.
 
@@ -104,22 +106,50 @@ graph TD
 
 ## 3. Composable Client Endpoint Pipeline (C++ Specification)
 
-To ensure that any future client transport (Nextion v2 UART driver, USB-UART serial pendant, Bluetooth Low Energy, or CAN/Modbus bus) can be integrated without modifying kinematic firmware, the system defines a composable client pipeline:
+To ensure that any client transport (WebSocket, REST HTTP, USB-UART serial pendant, or physical hardware HMI) can be integrated without modifying kinematic firmware, the system defines a composable client pipeline:
 
 $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translator}$$
 
 ```
    Raw Wire (Bytes/Text)              Inbound Translation                   Core Controller
-[ Physical I/O Channel ] ──(Inbound)──► [ ICommandTranslator ] ──(Dispatch)──► [ Motion / Model ]
+[ Physical I/O Channel ] ──(Inbound)──► [ ICommandTranslator ] ──(Dispatch)──► [ CommandDispatcher ]
            ▲                                                                           │
+           │                                                                     (CommandResult)
            │                                                                           │
-           └──────────────(Outbound)── [ ITelemetrySerializer ] ◄──(Capture)───────────┘
+           └──────────────(Outbound)── [ Response Serializer ] ◄───────────────────────┘
+                                       [ ITelemetrySerializer ] ◄──(Capture)── [ MachineModel ]
 ```
 
 ### C++ Interface Definitions
 
 ```cpp
 // src/web/ClientEndpoint.h
+
+enum class CommandStatus : uint8_t {
+    OK = 0,            // Command recognized and executed successfully
+    FAILED,            // Command recognized, but rejected or failed
+    UNRECOGNIZED       // Command was not recognized in any routing table
+};
+
+struct CommandResult {
+    CommandStatus status;
+    const char*   command;     // Canonical command name (e.g. "stop", "axisZero")
+    String        payload;     // Detail: error reason on failure, data/ack on success
+    uint32_t      errorCode;   // Structured error code (0 = NONE)
+
+    static CommandResult ok(const char* cmd, const String& data = "") {
+        return { CommandStatus::OK, cmd, data, 0 };
+    }
+    static CommandResult failed(const char* cmd, const String& reason, uint32_t code = 0) {
+        return { CommandStatus::FAILED, cmd, reason, code };
+    }
+    static CommandResult unrecognized(const char* cmd = "") {
+        return { CommandStatus::UNRECOGNIZED, cmd, "", 0 };
+    }
+
+    bool isOk() const { return status == CommandStatus::OK; }
+    bool isHandled() const { return status != CommandStatus::UNRECOGNIZED; }
+};
 
 class ITransport {
 public:
@@ -133,7 +163,9 @@ class ICommandTranslator {
 public:
     virtual ~ICommandTranslator() = default;
     // Decodes raw client wire bytes/strings into canonical dispatcher actions
-    virtual bool translateInbound(const char* payload, size_t length, CommandDispatcher& dispatcher) = 0;
+    virtual CommandResult translateInbound(const char* payload, size_t length) = 0;
+    // Serializes domain CommandResult into client-specific response frame
+    virtual String serializeResponse(const CommandResult& result) = 0;
 };
 
 class ITelemetrySerializer {
@@ -148,10 +180,16 @@ public:
     ClientEndpoint(ITransport& transport, ICommandTranslator& translator, ITelemetrySerializer& serializer)
         : transport_(transport), translator_(translator), serializer_(serializer) {}
 
+    // Synchronous Inbound Command Execution & Guaranteed Response Delivery
     void onInboundData(const char* data, size_t len) {
-        translator_.translateInbound(data, len, CommandDispatcher::instance());
+        CommandResult result = translator_.translateInbound(data, len);
+        String response = translator_.serializeResponse(result);
+        if (response.length() > 0 && transport_.isConnected()) {
+            transport_.sendText(response.c_str());
+        }
     }
 
+    // Outbound Telemetry Broadcast
     void onStateChanged(const MachineModel& model, uint8_t domainMask) {
         if (!transport_.isConnected()) return;
         char buffer[256];

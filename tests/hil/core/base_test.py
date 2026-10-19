@@ -37,6 +37,7 @@ class HilTestCase(ABC):
         """Default setup: stop any active feed, enable simulation mode, zero Z/X axes with ACK synchronization."""
         await self.client.send("CMD.stop", wait_ack=True)
         await self.client.send("CMD.simRpm=0", wait_ack=True)
+        await self.client.wait_for(lambda s: s.rpm == 0 and not s.is_on, timeout_s=4.0, description="spindle stopped before sim engage")
         await self.client.send("CMD.simEncoder=1", wait_ack=True)
         await self.client.send("CMD.axisClearLimit=Z,L", wait_ack=True)
         await self.client.send("CMD.axisClearLimit=Z,R", wait_ack=True)
