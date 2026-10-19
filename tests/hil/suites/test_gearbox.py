@@ -233,12 +233,8 @@ class TestGearboxTpiImperialPitchConversion(HilTestCase):
     description = "Verify imperial 20 TPI pitch configuration (12,700 dupr) travels exactly 0.2000 in over 4 revs"
 
     async def run(self) -> None:
-        await self.client.send("CMD.mode=gearbox", wait_ack=True)
-        await self.client.send("CMD.gearAxis=Z", wait_ack=True)
-        await self.client.send("CMD.gearSync=1", wait_ack=True)
-        await self.client.send("CMD.gearDir=CHUCK", wait_ack=True)
-        await self.client.send("CMD.feedTpi=20", wait_ack=True)
-        await self.client.send("CMD.on=1", wait_ack=True)
+        # 20 TPI = 12,700 dupr
+        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:12700,dir:CHUCK", wait_ack=True)
         await self.client.wait_for(lambda s: s.is_on, description="gearbox on")
 
         # 4 revolutions at 20 TPI (12,700 dupr) = 50,800 du
@@ -259,18 +255,14 @@ class TestGearboxTpiImperialPitchConversion(HilTestCase):
         }
 
 
-class TestGearboxIngressStagingWorkflow(HilTestCase):
-    name = "gearbox_ingress_staging_workflow"
-    description = "Verify modal parameter staging (axis, sync, dir, feedMm) triggered via CMD.on=1 / CMD.on=0"
+class TestGearboxXAxisGearing0_25mm(HilTestCase):
+    name = "gearbox_x_axis_gearing_0_25mm"
+    description = "Verify X-axis cross-slide synchronized gearing at 0.250 mm/rev advances +25,000 du over 10 spindle revs"
 
     async def run(self) -> None:
-        await self.client.send("CMD.mode=gearbox", wait_ack=True)
-        await self.client.send("CMD.gearAxis=X", wait_ack=True)
-        await self.client.send("CMD.gearSync=1", wait_ack=True)
-        await self.client.send("CMD.gearDir=RETRACT", wait_ack=True)
-        await self.client.send("CMD.feedMm=0.25", wait_ack=True)
-        await self.client.send("CMD.on=1", wait_ack=True)
-        await self.client.wait_for(lambda s: s.is_on, description="staged motion running")
+        # 0.250 mm/rev = 2,500 dupr on X axis towards RETRACT
+        await self.client.send("CMD.startFeed=axis:X,sync:1,feed:2500,dir:RETRACT", wait_ack=True)
+        await self.client.wait_for(lambda s: s.is_on, description="X feed active")
 
         # 10 revs at 0.250 mm/rev (2,500 dupr) = +25,000 du
         pulses_10revs = self.client.revs_to_pulses(10.0)
@@ -337,7 +329,11 @@ class TestGearboxRunwayTooShortGuard(HilTestCase):
             rejected = True
 
         if not rejected:
-            # If accepted, controller must auto-halt without overrunning past -502 du
+            # Wait for feed engagement then auto-halt without overrunning past -502 du
+            try:
+                await self.client.wait_for(lambda s: s.is_on, timeout_s=1.0)
+            except (asyncio.TimeoutError, Exception):
+                pass  # May have halted almost instantaneously
             await self.client.wait_for(lambda s: not s.is_on, timeout_s=3.0)
             assert self.client.state.z_du >= (limit_du - 2), (
                 f"Carriage crashed past limit! Position: {self.client.state.z_du}, Limit: {limit_du}"

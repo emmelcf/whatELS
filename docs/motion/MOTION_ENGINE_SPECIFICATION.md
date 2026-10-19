@@ -343,6 +343,13 @@ In coordinated dual-axis operations ($Z+X$ taper and cone cuts):
    $$\text{effectivePulses} = \min(\text{accumulatedPulses}, \text{boundPulse}_Z, \text{boundPulse}_X)$$
 3. **Synchronous Position Landing**: Both axes compute their ideal steps using `effectivePulses`. $X$ lands on its exact limit step, $Z$ lands on its exact proportional taper coordinate, and `stopWithReason()` halts both axes synchronously with zero partner-axis overshoot.
 
+### 5.5 Dual-Axis Coordinated Velocity Feeds (Tapers at 0 RPM & Power Compound Moves)
+In asynchronous dual-axis velocity moves (`MotionMode::VELOCITY_FEED` with `enableSecondaryAxis = true`):
+1. **Proportional Acceleration Scaling**: To guarantee both axes accelerate, cruise, and decelerate with identical profile durations without path distortion, the secondary axis acceleration is scaled in exact proportion to the taper ratio:
+   $$a_{\text{secondary}} = a_{\text{master}} \times \left|\frac{\text{secondaryRatioNum}}{\text{secondaryRatioDen}}\right|$$
+2. **Master Distance Stroke Authority**: The commanded primary axis (`params.axis`) retains master stroke completion authority. If the follower axis reaches its target steps ahead of the master (e.g. due to discrete sub-step rounding), it holds position without aborting the master trajectory early.
+3. **Collision / Soft Limit Priority**: Soft limits on *either* axis retain 100% unconditional emergency stop authority. If an enforced soft limit is reached on either axis, both axes disengage immediately via `stopWithReason()`.
+
 ---
 
 ## 6. Complete `MotionEngine` Interface Contract

@@ -46,12 +46,6 @@ static CommandResult handleGearDir(const char* args);
 static CommandResult handleFeedMm(const char* args);
 static CommandResult handleFeedTpi(const char* args);
 static CommandResult handleFeedDupr(const char* args);
-static CommandResult handleOn(const char* args);
-
-// Dynamic Command ID Resolvers
-static CommandId resolveOnCommandId(const char* args) {
-  return (args && atoi(args) == 0) ? CommandId::CMD_STOP : CommandId::CMD_RUN;
-}
 
 // =============================================================================
 // ROUTING TABLE (Zero Hardcoded Dispatcher Logic)
@@ -93,8 +87,7 @@ static const CommandRoute COMMAND_ROUTES[] = {
   { "feedDir",       CommandId::CMD_SET_DIR,     handleGearDir,       nullptr },
   { "feedMm",        CommandId::CMD_SET_PITCH,   handleFeedMm,        nullptr },
   { "feedTpi",       CommandId::CMD_SET_PITCH,   handleFeedTpi,       nullptr },
-  { "feedDupr",      CommandId::CMD_SET_PITCH,   handleFeedDupr,      nullptr },
-  { "on",            CommandId::CMD_RUN,         handleOn,            resolveOnCommandId }
+  { "feedDupr",      CommandId::CMD_SET_PITCH,   handleFeedDupr,      nullptr }
 };
 
 static const size_t NUM_COMMAND_ROUTES = sizeof(COMMAND_ROUTES) / sizeof(COMMAND_ROUTES[0]);
@@ -552,23 +545,6 @@ static CommandResult handleFeedDupr(const char* args) {
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
   if (gb) gb->setFeedRate(std::abs(dupr));
   return CommandResult::ok("feedDupr");
-}
-
-static CommandResult handleOn(const char* args) {
-  if (!args || !*args) return CommandResult::failed("on", "Missing argument");
-  int on = atoi(args);
-  if (on == 0) {
-    return handleStop("");
-  } else {
-    IELSMode* active = ModeRegistry::getActiveMode();
-    if (active && !active->isRunning()) {
-      if (!active->start()) {
-        return CommandResult::failed("on", "Failed to start active mode");
-      }
-    }
-    SettingsService::requestIsOn(true);
-    return CommandResult::ok("on");
-  }
 }
 
 // =============================================================================

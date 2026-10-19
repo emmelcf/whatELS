@@ -20,13 +20,8 @@ class TestGearboxZXShallowTaperSync(HilTestCase):
         taper_ratio = 0.10
         await self.client.send(f"CMD.taperRatio={taper_ratio}", wait_ack=True)
 
-        # 2. Stage Gearbox mode on dual-axis ZX
-        await self.client.send("CMD.mode=gearbox", wait_ack=True)
-        await self.client.send("CMD.gearAxis=ZX", wait_ack=True)
-        await self.client.send("CMD.gearSync=1", wait_ack=True)
-        await self.client.send("CMD.gearDir=CHUCK", wait_ack=True)
-        await self.client.send("CMD.feedDupr=10000", wait_ack=True)
-        await self.client.send("CMD.on=1", wait_ack=True)
+        # 2. Start Gearbox feed on dual-axis ZX (Z lead = 10,000 dupr)
+        await self.client.send("CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK", wait_ack=True)
         await self.client.wait_for(lambda s: s.is_on, description="dual-axis feed active")
 
         # 3. Inject 4 spindle revolutions (Z lead = 10,000 dupr -> Z = -40,000 du, X = -4,000 du)
@@ -62,12 +57,8 @@ class TestGearboxZXSteepConeMajorAxisSwap(HilTestCase):
         cone_ratio = 2.0
         await self.client.send(f"CMD.taperRatio={cone_ratio}", wait_ack=True)
 
-        await self.client.send("CMD.mode=gearbox", wait_ack=True)
-        await self.client.send("CMD.gearAxis=ZX", wait_ack=True)
-        await self.client.send("CMD.gearSync=1", wait_ack=True)
-        await self.client.send("CMD.gearDir=CHUCK", wait_ack=True)
-        await self.client.send("CMD.feedDupr=5000", wait_ack=True)
-        await self.client.send("CMD.on=1", wait_ack=True)
+        # Start Gearbox feed on dual-axis ZX (Z lead = 5,000 dupr)
+        await self.client.send("CMD.startFeed=axis:ZX,sync:1,feed:5000,dir:CHUCK", wait_ack=True)
         await self.client.wait_for(lambda s: s.is_on, description="steep cone active")
 
         # 4 revolutions at 5,000 dupr Z lead:

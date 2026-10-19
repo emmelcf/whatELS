@@ -512,22 +512,22 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 * `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
 * `CMD.get=K,I,C,P`: Atomic snapshot hydration across requested domains.
 
-### 10.3 Quarantined & Deprecated Modal Commands (Transitional / Dumb Client Shim Only)
+### 10.3 Decommissioned Legacy Commands & Deprecated Modal Staging
 
-> [!WARNING]
-> The following commands are **deprecated** in the core and quarantined in a compatibility ingress adapter. Modern rich clients (Web UI) **must not use these commands**. They exist temporarily to support memoryless dumb displays (Nextion) until those devices are migrated to a dedicated client translation shim outside the core.
+> [!CAUTION]
+> `CMD.on=1` is **fully decommissioned and removed** from the firmware `CommandDispatcher`. All physical motion invocations strictly require atomic `CMD.startFeed=...` or `CMD.startCycle=...`. Drip-fed parameter staging followed by naked `CMD.on=1` will return `ERR:Unrecognized command`.
 
-| Deprecated Command | Legacy Purpose | Replacement / Modern Equivalent |
-| :--- | :--- | :--- |
-| `CMD.on=1` | Staged feed start | Use atomic `CMD.startFeed=...` |
-| `CMD.gearAxis=<axis>` | Modal axis selection | Pass axis in `CMD.startFeed` |
-| `CMD.gearSync=<sync>` | Modal sync toggle | Pass sync in `CMD.startFeed` |
-| `CMD.gearDir=<dir>` | Modal direction toggle | Pass dir (`-1`/`+1`, `CHUCK`/`TAIL`/`CENTER`/`RETRACT`) in `CMD.startFeed` |
-| `CMD.feedMm=<mm>` | Modal feedrate staging | Pass rate in `CMD.startFeed` |
-| `CMD.feedDupr=<du>` | Modal pitch staging | Pass rate in `CMD.startFeed` |
-| `CMD.feedRev` | Pitch sign flip | Pass dir (`-1`/`+1`) in `CMD.startFeed` |
-| `@pitch:<val>`, `@feed:<val>` | Monolithic string injection | Use `CMD.startFeed` or `SETTINGS.set` |
-| `CMD.mode=<modeId>` (idle) | Setting idle tab in core | Client owns view state; core is `IDLE` |
+| Decommissioned / Deprecated Command | Legacy Purpose | Replacement / Modern Equivalent | Status |
+| :--- | :--- | :--- | :--- |
+| `CMD.on=1` | Staged feed start | Use atomic `CMD.startFeed=...` | **Decommissioned & Removed** |
+| `CMD.gearAxis=<axis>` | Modal axis selection | Pass axis in `CMD.startFeed` | Modal Setter Only (Idle) |
+| `CMD.gearSync=<sync>` | Modal sync toggle | Pass sync in `CMD.startFeed` | Modal Setter Only (Idle) |
+| `CMD.gearDir=<dir>` | Modal direction toggle | Pass dir in `CMD.startFeed` | Modal Setter Only (Idle) |
+| `CMD.feedMm=<mm>` | Modal feedrate staging | Pass rate in `CMD.startFeed` | Modal Setter Only (Idle) |
+| `CMD.feedDupr=<du>` | Modal pitch staging | Pass rate in `CMD.startFeed` | Modal Setter Only (Idle) |
+| `CMD.feedRev` | Pitch sign flip | Pass dir in `CMD.startFeed` | Deprecated |
+| `@pitch:<val>`, `@feed:<val>` | Monolithic string injection | Use `CMD.startFeed` or `SETTINGS.set` | Deprecated |
+| `CMD.mode=<modeId>` (idle) | Setting idle tab in core | Client owns view state; core is `IDLE` | Transitional |
 
 ### 10.4 Subsystem 5 Command Dispatcher Architecture: Single-Gate Router & Axis-Aware Safety
 

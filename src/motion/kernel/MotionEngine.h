@@ -150,6 +150,7 @@ private:
   bool                m_hasTarget[NUM_AXES]  = { false, false };
   uint8_t             m_activeLimitSlot[NUM_AXES] = { 0, 0 };
   bool                m_isDualCoordinated = false;
+  size_t              m_masterAxisIdx = 0;
   int32_t             m_stepFraction[NUM_AXES] = { 0, 0 };
 
 #if defined(ESP32) || defined(ARDUINO)

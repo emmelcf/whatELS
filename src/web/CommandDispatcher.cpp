@@ -50,7 +50,6 @@ static bool handlePing(const char* args, String* reply);
 static bool handleSpindleSim(const char* args, String* reply);
 static bool handleSpindleSimTurn(const char* args, String* reply);
 #endif
-static bool handleOn(const char* args, String* reply);
 static bool handleMeasure(const char* args, String* reply);
 
 // =============================================================================
@@ -101,7 +100,6 @@ static const CommandRoute COMMAND_ROUTES[] = {
   { "spindleSim",    CommandId::CMD_NONE,        handleSpindleSim },
   { "spindleSimTurn",CommandId::CMD_NONE,        handleSpindleSimTurn },
 #endif
-  { "on",            CommandId::CMD_RUN,         handleOn },
   { "measure",       CommandId::CMD_SET_PARAM,   handleMeasure },
 };
 
@@ -691,32 +689,6 @@ static bool handleSpindleSimTurn(const char* args, String* reply) {
   return true;
 }
 #endif
-
-static bool handleOn(const char* args, String* reply) {
-  if (!args || !*args) return false;
-  int on = atoi(args);
-  if (on == 0) {
-    IELSMode* active = ModeRegistry::getActiveMode();
-    if (active && active->isRunning()) {
-      active->stop(StopType::NORMAL_STOP);
-    }
-    MotionEngine::instance().stopAll();
-    SettingsService::requestIsOn(false);
-    if (reply) *reply = "OK:CMD.on\n";
-    return true;
-  } else {
-    IELSMode* active = ModeRegistry::getActiveMode();
-    if (active && !active->isRunning()) {
-      if (!active->start()) {
-        if (reply) *reply = "ERR:Failed to start active mode\n";
-        return false;
-      }
-    }
-    SettingsService::requestIsOn(true);
-    if (reply) *reply = "OK:CMD.on\n";
-    return true;
-  }
-}
 
 static bool handleMeasure(const char* args, String* reply) {
   if (!args || !*args) return false;

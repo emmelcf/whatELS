@@ -857,37 +857,27 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
 
 #### 6.19 `gearbox_tpi_imperial_pitch_conversion`
 * **Real-Life Machining Scenario (Imperial 20 TPI Leadscrew Pitch):**  
-  The machinist configures a $20\text{ TPI}$ pitch (`CMD.feedTpi=20`), which converts to $\text{dupr} = \text{round}(254{,}000 / 20) = 12{,}700\text{ dupr}$ ($1.2700\text{ mm/rev}$)[cite: 3, 4]. Over $4.0$ spindle revolutions, the carriage must advance by exactly $0.2000\text{ in}$ ($-5.0800\text{ mm} = -50{,}800\text{ du}$).
+  The machinist configures a $20\text{ TPI}$ pitch (`12,700 dupr`), which converts to $\text{dupr} = \text{round}(254{,}000 / 20) = 12{,}700\text{ dupr}$ ($1.2700\text{ mm/rev}$)[cite: 3, 4]. Over $4.0$ spindle revolutions, the carriage must advance by exactly $0.2000\text{ in}$ ($-5.0800\text{ mm} = -50{,}800\text{ du}$).
 * **Parameters & Inbound Wire Commands:**
   ```text
-  CMD.mode=gearbox
-  CMD.gearAxis=Z
-  CMD.gearSync=1
-  CMD.gearDir=CHUCK
-  CMD.feedTpi=20
-  CMD.on=1
+  CMD.startFeed=axis:Z,sync:1,feed:12700,dir:CHUCK
   CMD.simPulses=<4 * cpr>
-  CMD.on=0
+  CMD.stop
   ```
 * **Pass Criteria:**
   - `s.dupr == 12700` and $Z$ lands at $-50{,}800\text{ du} \pm 2\text{ du}$[cite: 1, 3].
 
-#### 6.20 `gearbox_ingress_staging_workflow`
-* **Real-Life Machining Scenario (Modal Parameter Staging via Hardware Pendant / Nextion Adapter):**  
-  Tests the Ingress Staging pathway (`ELS_MODE_ARCHITECTURE.md` Section 4.1.3) where individual modal parameters (`CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedMm`) are staged while idle and triggered via `CMD.on=1` and halted via `CMD.on=0`[cite: 2, 4].
+#### 6.20 `gearbox_x_axis_gearing_0_25mm`
+* **Real-Life Machining Scenario (Cross-Slide Gearing at 0.250 mm/rev):**  
+  Tests synchronized cross-slide X-axis gearing at $0.250\text{ mm/rev}$ ($2{,}500\text{ dupr}$) advancing $+25{,}000\text{ du}$ ($+2.500\text{ mm}$) over $10.0$ spindle revolutions under canonical atomic invocation.
 * **Parameters & Inbound Wire Commands:**
   ```text
-  CMD.mode=gearbox
-  CMD.gearAxis=X
-  CMD.gearSync=1
-  CMD.gearDir=RETRACT
-  CMD.feedMm=0.25
-  CMD.on=1
+  CMD.startFeed=axis:X,sync:1,feed:2500,dir:RETRACT
   CMD.simPulses=<10 * cpr>
-  CMD.on=0
+  CMD.stop
   ```
 * **Pass Criteria:**
-  - Cross-slide advances to $+25{,}000\text{ du} \pm 2\text{ du}$ ($+2.500\text{ mm}$) and halts cleanly on `CMD.on=0`[cite: 2, 4].
+  - Cross-slide advances to $+25{,}000\text{ du} \pm 2\text{ du}$ ($+2.500\text{ mm}$) and halts cleanly on `CMD.stop`[cite: 2, 4].
 
 #### 6.21 `gearbox_spindle_reversal_and_shoulder_phase_tracking`
 * **Real-Life Machining Scenario (Reversing Spindle Under Threading Lock — `[KIN-01]`):**  
@@ -925,14 +915,9 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
 * **Parameters & Inbound Wire Commands:**
   ```text
   CMD.taperRatio=0.10
-  CMD.mode=gearbox
-  CMD.gearAxis=ZX
-  CMD.gearSync=1
-  CMD.gearDir=CHUCK
-  CMD.feedDupr=10000
-  CMD.on=1
+  CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK
   CMD.simPulses=<4 * cpr>
-  CMD.on=0
+  CMD.stop
   ```
 * **Pass Criteria:**
   - $Z$ lands at $-40{,}000\text{ du} \pm 2\text{ du}$.
@@ -944,14 +929,9 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
 * **Parameters & Inbound Wire Commands:**
   ```text
   CMD.taperRatio=2.0
-  CMD.mode=gearbox
-  CMD.gearAxis=ZX
-  CMD.gearSync=1
-  CMD.gearDir=CHUCK
-  CMD.feedDupr=5000
-  CMD.on=1
+  CMD.startFeed=axis:ZX,sync:1,feed:5000,dir:CHUCK
   CMD.simPulses=<4 * cpr>
-  CMD.on=0
+  CMD.stop
   ```
 * **Pass Criteria:**
   - Both $Z$ and $X$ maintain exact $1:2$ geometric proportionality ($\left\vert{}X_{\text{du}} / Z_{\text{du}}\right\vert{}$ matches `taperRatio` within $\pm 2\text{ du}$)[cite: 2, 5].
@@ -1009,38 +989,39 @@ python3 tests/hil/run_tests.py --json > test_report.json
 ```
 ========================================================================================
                       NANOELS HARDWARE-IN-THE-LOOP TEST SUITE (v2.0)                    
-Target: ws://192.168.10.22:81/canonical | Firmware: v5.38 (ESP32-S3)
+Target: ws://192.168.10.48:81/canonical | Firmware: v5.38 (ESP32-S3)
 ========================================================================================
 TEST NAME                                          STATUS   DURATION  DETAILS
 ----------------------------------------------------------------------------------------
-axis_zero_and_preset                               [PASS]   0.74s     z_preset: 250000, x_preset: 100000
-gearbox_async_velocity_feed_z_and_x                [PASS]   3.82s     z_du: -200000, x_du: -100000
-gearbox_at_speed_x_feed                            [PASS]   2.62s     rpm: 600, actual_x_du: -15000
-gearbox_at_speed_z_feed                            [PASS]   2.20s     rpm: 600, actual_z_du: -45000
-gearbox_cold_start_ramp                            [PASS]   2.15s     expected_z_du: -20000, actual_z_du: -20000
-gearbox_ingress_staging_workflow                   [PASS]   1.40s     actual_x_du: 25000
-gearbox_live_feed_nudge_and_step_cycle             [PASS]   1.65s     mid_z_du: -50000, final_z_du: -105000
-gearbox_runway_too_short_guard                     [PASS]   0.45s     limit_du: -500, min_z_du: -500
-gearbox_spindle_reversal_and_shoulder_phase        [PASS]   2.50s     fwd_z_du: -200000, rev_z_du: 0
-gearbox_stop_command                               [PASS]   1.41s     halted_z_du: 2400, settled_z_du: 2400
-gearbox_tpi_imperial_pitch_conversion              [PASS]   0.92s     dupr: 12700, actual_z_du: -50800
-gearbox_zx_async_taper_feed                        [PASS]   1.95s     z_du: -20000, x_du: -5000
-gearbox_zx_secondary_axis_soft_limit_halt          [PASS]   2.30s     x_limit: -5000, halted_z_du: -20000
-gearbox_zx_shallow_taper_sync                      [PASS]   1.10s     z_du: -40000, x_du: -4000
-gearbox_zx_steep_cone_major_axis_swap              [PASS]   1.15s     z_du: -20000, x_du: -40000
-gearing_sync_1_5mm_pitch                           [PASS]   0.52s     expected_z_du: -30000, actual_z_du: -30000
-gearing_sync_reverse_1_0mm                         [PASS]   0.41s     expected_z_du: 10000, actual_z_du: 10000
-in_motion_safety_gatekeeper_lockout                [PASS]   0.88s     locked_cmds_rejected: 6
-manual_jog_hold_and_limits                         [PASS]   2.10s     limit_du: 20000, halted_z_du: 20000
-manual_jog_step_precision                          [PASS]   1.35s     step_1000_ok: true, step_10000_ok: true
-sim_safety_interlock_and_watchdog_halt             [PASS]   2.12s     watchdog_tripped: true, final_rpm: 0
-soft_limit_at_limit_directional_lock_and_escape    [PASS]   2.45s     locked_at_du: -20000, escaped_du: -10000
-soft_limit_at_speed_chuck_halt                     [PASS]   2.41s     limit_du: -50000, halted_z_du: -50000
-soft_limit_at_speed_tail_halt                      [PASS]   2.37s     limit_du: 50000, halted_z_du: 50000
-soft_limit_x_axis_center_and_retract               [PASS]   3.10s     up_halt: -15000, down_halt: 15000
-stop_command_latency                               [PASS]   0.54s     sync_stop_ms: 48.2, async_stop_ms: 41.7
+axis_zero_and_preset                               [PASS]   0.81s     tested_z_preset: 250000, tested_x_preset: 100000
+gearbox_async_velocity_feed_z_and_x                [PASS]   4.46s     z_duration_s: 2.09, x_duration_s: 2.08
+gearbox_at_speed_x_feed                            [PASS]   2.24s     spindle_rpm: 600, expected_x_du: -15000
+gearbox_at_speed_z_feed                            [PASS]   2.37s     spindle_rpm: 600, expected_z_du: -45000
+gearbox_cold_start_ramp                            [PASS]   2.53s     expected_z_du: -20000, actual_z_du: -20000
+gearbox_live_feed_nudge_and_step_cycle             [PASS]   1.10s     mid_z_du: -50000, final_z_du: -105000
+gearbox_runway_too_short_guard                     [PASS]   1.07s     limit_du: -500, rejected_by_dispatcher: False
+gearbox_spindle_reversal_and_shoulder_phase_tracking [PASS] 1.85s     fwd_z_du: 0, rev_z_du: 0
+gearbox_stop_command                               [PASS]   1.86s     halted_z_du: -11225, settled_z_du: -11225
+gearbox_tpi_imperial_pitch_conversion              [PASS]   1.01s     expected_z_du: -50800, actual_z_du: -50800
+gearbox_x_axis_gearing_0_25mm                      [PASS]   1.28s     expected_x_du: 25000, actual_x_du: 25000
+gearbox_zx_async_taper_feed                        [PASS]   1.16s     taper_ratio: 0.25, z_du: -20000
+gearbox_zx_secondary_axis_soft_limit_halt          [PASS]   2.02s     x_limit_du: -5000, halted_x_du: -5000
+gearbox_zx_shallow_taper_sync                      [PASS]   0.98s     taper_ratio: 0.1, z_du: -40000
+gearbox_zx_steep_cone_major_axis_swap              [PASS]   1.01s     cone_ratio: 2.0, z_du: -20000
+gearing_multipass_index_sync                       [PASS]   1.38s     pass1_angle: 159.8, pass2_angle: 159.8
+gearing_sync_1_5mm_pitch                           [PASS]   0.92s     expected_z_du: -30000, actual_z_du: -30000
+gearing_sync_reverse_1_0mm                         [PASS]   0.80s     expected_z_du: 10000, actual_z_du: 10000
+in_motion_safety_gatekeeper_lockout                [PASS]   1.09s     locked_cmds_rejected: 6
+manual_jog_hold_and_limits                         [PASS]   2.28s     limit_du: 20000, halted_z_du: 0
+manual_jog_step_precision                          [PASS]   2.19s     step_1000_ok: True, step_10000_ok: True
+sim_safety_interlock_and_watchdog_halt             [PASS]   2.41s     timeout_trip_ms: 1801.07, watchdog_tripped: True
+soft_limit_at_limit_directional_lock_and_escape    [PASS]   1.72s     locked_at_du: -20000, escaped_du: -10000
+soft_limit_at_speed_chuck_halt                     [PASS]   2.92s     limit_du: -50000, halted_z_du: -50000
+soft_limit_at_speed_tail_halt                      [PASS]   2.62s     limit_du: 50000, halted_z_du: 50000
+soft_limit_x_axis_center_and_retract               [PASS]   2.83s     up_halt: 15000, down_halt: 15000
+stop_command_latency                               [PASS]   1.07s     sync_stop_ms: 46.75, async_stop_ms: 47.5
 ----------------------------------------------------------------------------------------
-SUMMARY: 26 Passed, 0 Failed, 0 Errors | Total Time: 45.01s
+SUMMARY: 27 Passed, 0 Failed, 0 Errors | Total Time: 48.00s
 RESULT: ALL TESTS PASSED (Exit code: 0)
 ========================================================================================
 ```

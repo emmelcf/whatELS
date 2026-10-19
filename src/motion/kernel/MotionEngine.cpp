@@ -130,7 +130,8 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
     int32_t secSpeedStepsSec = duToSteps(m_axes[sIdx].geometry, static_cast<int32_t>(secSpeedDuSec));
     if (secSpeedStepsSec < 10) secSpeedStepsSec = 10;
 
-    int32_t secAccelDuSec2 = static_cast<int32_t>(m_axes[sIdx].geometry.maxAccelMmSec2 * 10000.0f);
+    // Scale secondary acceleration proportionally with taper ratio so both axes ramp synchronously
+    int32_t secAccelDuSec2 = static_cast<int32_t>((static_cast<int64_t>(accelDuSec2) * std::abs(params.secondaryRatioNum)) / den);
     int32_t secAccelStepsSec2 = duToSteps(m_axes[sIdx].geometry, secAccelDuSec2);
     if (secAccelStepsSec2 <= 0) secAccelStepsSec2 = 1000;
 
@@ -154,6 +155,7 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
     }
   }
 
+  m_masterAxisIdx     = idx;
   m_isDualCoordinated = params.enableSecondaryAxis;
   return true;
 }
@@ -215,6 +217,7 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
     }
   }
 
+  m_masterAxisIdx     = idx;
   m_isDualCoordinated = params.enableSecondaryAxis;
   return true;
 }
@@ -595,6 +598,10 @@ void MotionEngine::onMotionTick() {
     }
 
     if (limitReached || targetReached) {
+      if (m_isDualCoordinated && targetReached && !limitReached && idx != m_masterAxisIdx) {
+        // Follower axis reached target; hold position without aborting master trajectory
+        continue;
+      }
       MotionHaltReason reason = limitReached ? MotionHaltReason::SOFT_LIMIT_REACHED
                                              : MotionHaltReason::TARGET_DISTANCE_REACHED;
       stopWithReason(axis, reason);
@@ -653,10 +660,14 @@ void MotionEngine::onMotionTick() {
             }
             m_axes[idx].posSteps += stepDir;
             if (m_axes[idx].posSteps == m_targetStep[idx]) {
-              stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+              if (!m_isDualCoordinated || idx == m_masterAxisIdx) {
+                stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+              }
             }
           } else {
-            stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
+            if (!m_isDualCoordinated || idx == m_masterAxisIdx) {
+              stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
+            }
           }
         } else if (m_stepperHal) {
           m_stepFraction[idx] += cmdVel;
@@ -666,7 +677,9 @@ void MotionEngine::onMotionTick() {
             m_stepperHal->pulseStep(axis);
             m_axes[idx].posSteps += dir;
             if (m_hasTarget[idx] && m_axes[idx].posSteps == m_targetStep[idx]) {
-              stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+              if (!m_isDualCoordinated || idx == m_masterAxisIdx) {
+                stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+              }
               break;
             }
           }
