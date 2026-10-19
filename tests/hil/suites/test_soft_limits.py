@@ -173,6 +173,7 @@ class TestSoftLimitAtLimitDirectionalLockAndEscape(HilTestCase):
         await self.client.send("CMD.simRpm=600", wait_ack=True)
         await self.client.wait_for(lambda s: s.rpm >= 580, description="spindle at 600 RPM")
         await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:10000,dir:CHUCK", wait_ack=True)
+        await self.client.wait_for(lambda s: s.is_on, timeout_s=2.0, description="feed active")
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=8.0, description="halted at Left stop")
         assert_pos_du(self.client.state.z_du, limit_du, tolerance_du=2, axis="Z")
 

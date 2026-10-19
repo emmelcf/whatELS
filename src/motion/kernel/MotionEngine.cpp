@@ -115,6 +115,7 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
     m_stepperHal->setDirection(params.axis, m_direction[idx]);
   }
 
+  m_stepFraction[idx] = 0;
   if (params.enableSecondaryAxis) {
     size_t sIdx = axisIdx(params.secondaryAxis);
     int32_t den = (params.secondaryRatioDen > 0) ? params.secondaryRatioDen : 1;
@@ -123,6 +124,7 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
 
     m_activeMode[sIdx] = MotionMode::VELOCITY_FEED;
     m_direction[sIdx]  = secDir;
+    m_stepFraction[sIdx] = 0;
 
     float secSpeedDuSec = static_cast<float>(secSpeedDu) / 60.0f;
     int32_t secSpeedStepsSec = duToSteps(m_axes[sIdx].geometry, static_cast<int32_t>(secSpeedDuSec));
@@ -494,7 +496,8 @@ void MotionEngine::onMotionTick() {
       if (lastHb > 0 && (nowMs - lastHb > 1500)) {
         m_encoderHal->setSimulatedRpm(0.0f);
         m_encoderHal->setSimulationActive(false);
-        stopAll(false);
+        stopWithReason(AXIS_Z, MotionHaltReason::ESTOP);
+        stopWithReason(AXIS_X, MotionHaltReason::ESTOP);
       }
 #endif
     }
@@ -640,9 +643,17 @@ void MotionEngine::onMotionTick() {
             stopWithReason(axis, m_hasTarget[idx] ? MotionHaltReason::TARGET_DISTANCE_REACHED : MotionHaltReason::NORMAL_STOP);
           }
         } else if (m_stepperHal) {
-          m_stepperHal->setDirection(axis, dir);
-          m_stepperHal->pulseStep(axis);
-          m_axes[idx].posSteps += dir;
+          m_stepFraction[idx] += cmdVel;
+          while (m_stepFraction[idx] >= 1000) {
+            m_stepFraction[idx] -= 1000;
+            m_stepperHal->setDirection(axis, dir);
+            m_stepperHal->pulseStep(axis);
+            m_axes[idx].posSteps += dir;
+            if (m_hasTarget[idx] && m_axes[idx].posSteps == m_targetStep[idx]) {
+              stopWithReason(axis, MotionHaltReason::TARGET_DISTANCE_REACHED);
+              break;
+            }
+          }
         }
         break;
       }

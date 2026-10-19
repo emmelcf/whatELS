@@ -120,6 +120,7 @@ class TestManualJogHoldAndLimits(HilTestCase):
 
         # 4. Hold continuous jog into the soft limit without releasing
         await self.client.send("CMD.jogHold=Z,TAIL", wait_ack=True)
+        await self.client.wait_for(lambda s: s.is_on, timeout_s=2.0, description="continuous jog active")
         state = await self.client.wait_for(
             lambda s: not s.is_on,
             timeout_s=6.0,
