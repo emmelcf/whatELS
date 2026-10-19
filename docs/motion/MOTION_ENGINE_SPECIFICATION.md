@@ -128,13 +128,21 @@ A soft limit represents an operator-clamped virtual stop (such as a chuck should
 Zero magic sentinels (`LONG_MAX`, `LONG_MIN`). State is explicitly modeled:
 
 ```cpp
+enum class LimitBound : uint8_t {
+  AUTO  = 0,
+  LOWER = 1, // Stops motion in negative direction (-1 / Chuck / Centerline)
+  UPPER = 2, // Stops motion in positive direction (+1 / Tailstock / Retract)
+  BOTH  = 3  // Stops motion in both directions
+};
+
 struct SoftLimit {
-  uint8_t id        = 0;       // Slot ID (1..MAX_LIMITS)
-  bool    defined   = false;   // True if coordinate exists (saved in memory/recipe)
-  bool    enabled   = false;   // True if actively enforced during physical motion
-  char    label[16] = {0};     // Semantic tag (e.g. "CHUCK", "SHLDR_1", "GROOVE")
-  int32_t coordDu   = 0;       // Workpiece coordinate in canonical deci-microns
-  int32_t stepPos   = 0;       // Raw leadscrew machine position in motor steps
+  uint8_t    id        = 0;       // Slot ID (1..MAX_LIMITS)
+  bool       defined   = false;   // True if coordinate exists (saved in memory/recipe)
+  bool       enabled   = false;   // True if actively enforced during physical motion
+  char       label[16] = {0};     // Semantic tag (e.g. "CHUCK", "SHLDR_1", "GROOVE")
+  int32_t    coordDu   = 0;       // Workpiece coordinate in canonical deci-microns
+  int32_t    stepPos   = 0;       // Raw leadscrew machine position in motor steps
+  LimitBound bound     = LimitBound::AUTO; // Bound enforcement polarity
 
   inline bool isEnforced() const {
     return defined && enabled;
@@ -152,8 +160,9 @@ public:
 
   /**
    * @brief Queries the immediate next enforced soft limit strictly ahead in the motion path.
-   * @details If resting directly on an active limit (currentSteps == stepPos), motion in that
-   *          direction is BLOCKED (returns that limit with D_remaining = 0) unless allowPassThrough is true.
+   * @details If resting directly on an active limit (currentSteps == stepPos), motion into that
+   *          boundary is BLOCKED (returns that limit with D_remaining = 0) unless allowPassThrough is true.
+   *          Travel in the reverse direction away from the boundary is always permitted.
    * @param currentSteps Current axis position in raw motor steps.
    * @param direction Cartesian motion polarity (-1 toward Chuck/Center, +1 toward Tail/Retract).
    * @param allowPassThrough Set true ONLY when operator explicitly commands a pass-through override.
@@ -167,11 +176,13 @@ public:
     const int32_t deadband = allowPassThrough ? ADVANCE_DEADBAND_STEPS : 0;
 
     if (direction < 0) {
-      // Negative travel: find closest enforced limit at or below current position threshold
+      // Negative travel: find closest enforced lower bound at or below threshold
       int32_t highestPosBelow = INT32_MIN;
       int32_t threshold = currentSteps - deadband;
       for (size_t i = 0; i < MAX_LIMITS; ++i) {
-        if (m_limits[i].isEnforced() && (m_limits[i].stepPos <= threshold)) {
+        if (!m_limits[i].isEnforced()) continue;
+        if (m_limits[i].bound == LimitBound::UPPER) continue; // Upper bounds do not block negative travel
+        if (m_limits[i].stepPos <= threshold) {
           if (m_limits[i].stepPos > highestPosBelow) {
             highestPosBelow = m_limits[i].stepPos;
             candidate = &m_limits[i];
@@ -179,11 +190,13 @@ public:
         }
       }
     } else if (direction > 0) {
-      // Positive travel: find closest enforced limit at or above current position threshold
+      // Positive travel: find closest enforced upper bound at or above threshold
       int32_t lowestPosAbove = INT32_MAX;
       int32_t threshold = currentSteps + deadband;
       for (size_t i = 0; i < MAX_LIMITS; ++i) {
-        if (m_limits[i].isEnforced() && (m_limits[i].stepPos >= threshold)) {
+        if (!m_limits[i].isEnforced()) continue;
+        if (m_limits[i].bound == LimitBound::LOWER) continue; // Lower bounds do not block positive travel
+        if (m_limits[i].stepPos >= threshold) {
           if (m_limits[i].stepPos < lowestPosAbove) {
             lowestPosAbove = m_limits[i].stepPos;
             candidate = &m_limits[i];
@@ -316,7 +329,14 @@ When the carriage decelerates into a soft limit shoulder or pauses in Feed Hold:
 2. **Spindle encoder pulses continue accumulating uninterrupted in `m_spindlePhasePulses` throughout deceleration, pause, and resting dwell**.
 3. When the operator or canned cycle reverses spindle rotation or commands carriage return, the synchronizer tracks modulo thread phase so the tool locks back onto the exact original thread helix without stripped threads or cross-threading.
 
-### 5.3 Coordinated Multi-Axis Limit Coupling & Pulse Clamping (`[KIN-04]`)
+### 5.3 Multi-Pass Threading Spindle Index Phase-Locking
+When multi-pass single-point threading or spindle-synchronized feed strokes are commanded with the spindle actively rotating at speed ($\text{RPM} \ge 5$):
+1. **Index-Synchronous Start Anchor**: The initial engagement pulse anchor is calculated at the upcoming integer multiple of the effective spindle revolution:
+   $$\text{startPulses} = P_{\text{current}} + (PPR - (P_{\text{current}} \pmod{PPR}))$$
+2. **Armed Index Hold**: The motion engine enters the armed state. Stepping is held stationary until the accumulated spindle pulses reach `startPulses` (the spindle zero-degree index marker $\theta = 0.0^\circ$).
+3. **Phase-Locked Helix Tracking**: Once the spindle crosses the index marker, discrete stepping commences in strict synchronization. Because every pass arms and commences at $\theta = 0.0^\circ$, successive threading passes align within $\Delta\theta \le 1.0^\circ$, ensuring the cutting tool repeatedly tracks into the exact same thread groove without destroying thread crests.
+
+### 5.4 Coordinated Multi-Axis Limit Coupling & Pulse Clamping (`[KIN-04]`)
 In coordinated dual-axis operations ($Z+X$ taper and cone cuts):
 1. **The Partner-Axis Race Condition**: If $X$ hits its $-5{,}000\text{ du}$ soft limit at pulse 2400, but a 1 ms tick arrives with 12 pulses (advancing spindle accumulator to 2412), evaluating $Z$ before $X$ would cause $Z$ to overstep by 4 steps before $X$'s limit halts the engine.
 2. **Analytical Master Pulse Clamping**: Before evaluating either axis, `MotionEngine` inverts the electronic gearing for all active soft limits and stroke targets using `calculatePulsesForStep()`:
