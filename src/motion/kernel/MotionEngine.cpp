@@ -152,6 +152,7 @@ bool MotionEngine::startVelocityFeed(const FeedParameters& params) {
     }
   }
 
+  m_isDualCoordinated = params.enableSecondaryAxis;
   return true;
 }
 
@@ -200,6 +201,7 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
     }
   }
 
+  m_isDualCoordinated = params.enableSecondaryAxis;
   return true;
 }
 
@@ -263,7 +265,13 @@ void MotionEngine::stopWithReason(AxisId axis, MotionHaltReason reason) {
   int32_t haltedDu    = getWorkpieceCoordDu(m_axes[idx]);
   const SoftLimit* lim = m_limits[idx].findNextEnforcedLimit(m_axes[idx].posSteps, m_direction[idx]);
 
-  stop(axis, reason == MotionHaltReason::ESTOP);
+  if (m_isDualCoordinated) {
+    m_isDualCoordinated = false;
+    stop(AXIS_Z, reason == MotionHaltReason::ESTOP);
+    stop(AXIS_X, reason == MotionHaltReason::ESTOP);
+  } else {
+    stop(axis, reason == MotionHaltReason::ESTOP);
+  }
 
   if (m_listener) {
     m_listener->onMotionHalted(axis, reason, haltedSteps, haltedDu, lim);
@@ -284,6 +292,10 @@ void MotionEngine::stop(AxisId axis, bool emergency) {
     if (emergency) {
       m_stepperHal->setEnabled(axis, false);
     }
+  }
+
+  if (!m_isMoving[0] && !m_isMoving[1]) {
+    m_isDualCoordinated = false;
   }
 }
 
@@ -493,6 +505,45 @@ void MotionEngine::onMotionTick() {
   }
 
   // 3. Motion Service for each axis
+  int64_t effectivePulses = m_accumulatedSpindlePulses;
+
+  if (m_isDualCoordinated && m_isMoving[0] && m_isMoving[1]) {
+    for (size_t a = 0; a < NUM_AXES; ++a) {
+      if (!m_sync[a].isEngaged()) continue;
+      int8_t aDir = m_direction[a];
+      int32_t boundStep = 0;
+      bool hasBound = false;
+
+      const SoftLimit* aLim = m_limits[a].findNextEnforcedLimit(m_axes[a].posSteps, aDir);
+      if (aLim) {
+        boundStep = aLim->stepPos;
+        hasBound = true;
+      }
+      if (m_hasTarget[a]) {
+        if (!hasBound || (m_targetStep[a] - boundStep) * aDir < 0) {
+          boundStep = m_targetStep[a];
+          hasBound = true;
+        }
+      }
+
+      if (hasBound) {
+        int32_t effPpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
+                             ? m_encoderHal->getCountsPerSpindleRev()
+                             : 4096;
+        int64_t limitPulse = m_sync[a].calculatePulsesForStep(
+            boundStep,
+            m_axes[a].geometry.motorStepsPerRev,
+            m_axes[a].geometry.screwPitchDu,
+            effPpr);
+        if (limitPulse > m_sync[a].getAnchorPulses()) {
+          effectivePulses = std::min(effectivePulses, limitPulse);
+        } else if (limitPulse < m_sync[a].getAnchorPulses()) {
+          effectivePulses = std::max(effectivePulses, limitPulse);
+        }
+      }
+    }
+  }
+
   for (size_t idx = 0; idx < NUM_AXES; ++idx) {
     if (!m_isMoving[idx] || m_feedHold[idx] || m_activeMode[idx] == MotionMode::STOPPED) {
       continue;
@@ -541,7 +592,7 @@ void MotionEngine::onMotionTick() {
                                    ? m_encoderHal->getCountsPerSpindleRev()
                                    : 4096;
         int32_t idealStep = m_sync[idx].computeIdealSyncSteps(
-            m_accumulatedSpindlePulses,
+            effectivePulses,
             m_axes[idx].geometry.motorStepsPerRev,
             m_axes[idx].geometry.screwPitchDu,
             effectivePpr);

@@ -149,6 +149,7 @@ private:
   int32_t             m_targetStep[NUM_AXES] = { 0, 0 };
   bool                m_hasTarget[NUM_AXES]  = { false, false };
   uint8_t             m_activeLimitSlot[NUM_AXES] = { 0, 0 };
+  bool                m_isDualCoordinated = false;
 
 #if defined(ESP32) || defined(ARDUINO)
   QueueHandle_t       m_cmdQueue   = nullptr;

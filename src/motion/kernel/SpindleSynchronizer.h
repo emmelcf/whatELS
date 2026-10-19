@@ -55,6 +55,16 @@ public:
       int32_t effectiveEncoderEdgesPerRev);
 
   /**
+   * @brief Inverts synchronous gearing to find spindle pulse count corresponding to a given target step.
+   * @details Used for cross-axis limit clamping during coordinated multi-axis motion.
+   */
+  int64_t IRAM_ATTR calculatePulsesForStep(
+      int32_t targetStep,
+      int32_t motorStepsPerRev,
+      int32_t screwPitchDu,
+      int32_t effectiveEncoderEdgesPerRev) const;
+
+  /**
    * @brief Updates continuous spindle phase tracking [KIN-01].
    * @details Must be called across deceleration, pause, dwell, and reversal so phase is preserved.
    * @param deltaPulses Incremental spindle encoder edges since last sample.

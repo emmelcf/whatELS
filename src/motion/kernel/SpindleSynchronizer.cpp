@@ -37,6 +37,23 @@ int32_t SpindleSynchronizer::computeIdealSyncSteps(
   return m_currentTargetSteps;
 }
 
+int64_t SpindleSynchronizer::calculatePulsesForStep(
+    int32_t targetStep,
+    int32_t motorStepsPerRev,
+    int32_t screwPitchDu,
+    int32_t effectiveEncoderEdgesPerRev) const {
+  if (motorStepsPerRev == 0 || m_pitchDupr == 0) {
+    return m_anchorPulses;
+  }
+  int64_t stepOffset = targetStep - m_anchorSteps;
+  int64_t num = stepOffset * static_cast<int64_t>(screwPitchDu) * static_cast<int64_t>(effectiveEncoderEdgesPerRev);
+  int64_t den = static_cast<int64_t>(motorStepsPerRev) * static_cast<int64_t>(m_pitchDupr);
+  if (den == 0) {
+    return m_anchorPulses;
+  }
+  return m_anchorPulses + (num / den);
+}
+
 void SpindleSynchronizer::updateSpindlePhase(int32_t deltaPulses) {
   m_spindlePhasePulses += deltaPulses;
 }

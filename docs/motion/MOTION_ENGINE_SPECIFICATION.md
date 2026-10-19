@@ -232,16 +232,19 @@ v_min|  ─────┘                                 └─────  (
      +───────────────────────────────────────────────────> Time (t)
 ```
 
-### 4.2 Real-Time Deceleration Window Calculation & Runway Safety
-At every step position $P_i$ during motion at velocity $v_i$:
+### 4.2 Real-Time Deceleration Window Calculation & Directional Boundary Safety
+At every step position $P_i$ during motion at velocity $v_i$ with direction $\text{dir} \in \{-1, +1\}$:
 
 1. **Calculate stopping distance with discrete sample margin:**
    $$d_{\text{stop}} = \text{ceil}\left(\frac{v_i^2 - v_{\text{end}}^2}{2a}\right) + \text{ceil}(0.5 \cdot v_i \cdot \Delta t)$$
-2. **Query path clearance to the next soft limit:**
-   $$D_{\text{remaining}} = \text{abs}(P_{\text{limit}} - P_i)$$
+2. **Directional path clearance to the next soft limit or target coordinate:**
+   $$D_{\text{remaining}} = (P_{\text{limit}} - P_i) \cdot \text{dir}$$
+   *Boundary Hit Condition*: If $D_{\text{remaining}} \le 0$, the boundary has been met or crossed. The axis halts immediately with zero runaway, avoiding naive `abs() == 0` equality traps.
 3. **Deceleration Condition:**
    $$\text{If } D_{\text{remaining}} \le d_{\text{stop}}, \quad \text{transition from CRUISE to DECELERATION ramp!}$$
-4. **Pre-Cut Runway Verification:** Before engaging synchronous gearing or feed, verify that current spindle RPM does not exceed the maximum entry velocity allowable for the runway:
+4. **Discrete Residual Step Completion:**
+   When the trapezoidal profile decelerates to $v = 0$, any residual steps remaining to the exact target step ($N \le 4$ steps caused by discrete sample margin) are stepped out at baseline rate to ensure the cut lands on the exact commanded coordinate without leaving an unfinished $0.05\text{–}0.10\text{ mm}$ stub.
+5. **Pre-Cut Runway Verification:** Before engaging synchronous gearing or feed, verify that current spindle RPM does not exceed the maximum entry velocity allowable for the runway:
    $$v_{\text{entry\_max}} = \sqrt{2 \cdot a \cdot D_{\text{remaining}}}$$
 
 ---
@@ -285,6 +288,20 @@ public:
     return m_currentTargetSteps;
   }
 
+  // Exact closed-form inverse calculation for cross-axis limit clamping [KIN-04]
+  int64_t IRAM_ATTR calculatePulsesForStep(
+      int32_t targetStep,
+      int32_t motorStepsPerRev,
+      int32_t screwPitchDu,
+      int32_t effectiveEncoderEdgesPerRev) const {
+    if (motorStepsPerRev == 0 || m_pitchDupr == 0) return m_anchorPulses;
+    int64_t stepOffset = targetStep - m_anchorSteps;
+    int64_t num = stepOffset * static_cast<int64_t>(screwPitchDu) * static_cast<int64_t>(effectiveEncoderEdgesPerRev);
+    int64_t den = static_cast<int64_t>(motorStepsPerRev) * static_cast<int64_t>(m_pitchDupr);
+    if (den == 0) return m_anchorPulses;
+    return m_anchorPulses + (num / den);
+  }
+
 private:
   int64_t m_anchorPulses       = 0;
   int32_t m_anchorSteps        = 0;
@@ -298,6 +315,13 @@ When the carriage decelerates into a soft limit shoulder or pauses in Feed Hold:
 1. Stepping decelerates along the safe acceleration envelope and halts at `p = limit.stepPos`.
 2. **Spindle encoder pulses continue accumulating uninterrupted in `m_spindlePhasePulses` throughout deceleration, pause, and resting dwell**.
 3. When the operator or canned cycle reverses spindle rotation or commands carriage return, the synchronizer tracks modulo thread phase so the tool locks back onto the exact original thread helix without stripped threads or cross-threading.
+
+### 5.3 Coordinated Multi-Axis Limit Coupling & Pulse Clamping (`[KIN-04]`)
+In coordinated dual-axis operations ($Z+X$ taper and cone cuts):
+1. **The Partner-Axis Race Condition**: If $X$ hits its $-5{,}000\text{ du}$ soft limit at pulse 2400, but a 1 ms tick arrives with 12 pulses (advancing spindle accumulator to 2412), evaluating $Z$ before $X$ would cause $Z$ to overstep by 4 steps before $X$'s limit halts the engine.
+2. **Analytical Master Pulse Clamping**: Before evaluating either axis, `MotionEngine` inverts the electronic gearing for all active soft limits and stroke targets using `calculatePulsesForStep()`:
+   $$\text{effectivePulses} = \min(\text{accumulatedPulses}, \text{boundPulse}_Z, \text{boundPulse}_X)$$
+3. **Synchronous Position Landing**: Both axes compute their ideal steps using `effectivePulses`. $X$ lands on its exact limit step, $Z$ lands on its exact proportional taper coordinate, and `stopWithReason()` halts both axes synchronously with zero partner-axis overshoot.
 
 ---
 
