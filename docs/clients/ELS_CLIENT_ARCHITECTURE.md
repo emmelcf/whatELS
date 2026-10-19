@@ -253,6 +253,148 @@ A core tenet of the multi-client architecture is that the **Core Motion Engine d
 4. **Change Broadcast on Motion Inception:**
    - The controller only broadcasts mode transitions (`K.mode=<modeId>`, `K.on=1`) when physical stepping actually begins (`RUNNING`). At that point, all connected clients reflect active motion or enter Safe Monitor Lockout.
 
+### 3.5 Client Profile Registry & Capability Governance (`ClientProfile`)
+To prevent hardcoded assumptions about device capabilities while maintaining strict safety boundaries, the controller core maintains a **Client Profile Registry**. 
+
+Device clients do not infer capabilities from arbitrary labels. Instead, each concrete client product or interface (`webui`, `smarttouch`, `hil_harness`, `nextion_lcd`) is registered in firmware with explicit transport rules, permission scopes, and an optional translation layer.
+
+```cpp
+// src/core_client/ClientProfile.h
+
+enum TransportType : uint8_t {
+    TRANSPORT_NONE      = 0,
+    TRANSPORT_WEBSOCKET = 1 << 0,
+    TRANSPORT_UART      = 1 << 1,
+    TRANSPORT_USB_CDC   = 1 << 2
+};
+
+enum ClientPermission : uint32_t {
+    PERM_NONE           = 0,
+    PERM_READ_TELEMETRY = 1 << 0,  // Can observe state, read positions & settings
+    PERM_JOG_PULSE      = 1 << 1,  // Can execute manual step jogs & continuous jogs
+    PERM_MOTION_START   = 1 << 2,  // Can engage feeds and start cutting cycles
+    PERM_SETTINGS_WRITE = 1 << 3,  // Can modify persistent calibration & settings
+    PERM_SIMULATION     = 1 << 4,  // Can inject fake RPM & encoder steps (CMD.simRpm, CMD.simEncoder)
+    PERM_SYSTEM_RESET   = 1 << 5   // Can trigger reboot or factory defaults
+};
+
+typedef ICommandTranslator* (*TranslationFactory)(ITransport* transport);
+
+struct ClientProfile {
+    const char*        name;               // Concrete client identifier (e.g. "webui", "smarttouch", "hil_harness")
+    uint8_t            allowedTransports;  // Bitmask of TransportType permitted for this client
+    uint32_t           permissions;        // Bitmask of ClientPermission granted to this client
+    uint16_t           minProtocolVersion; // Minimum accepted protocol version (e.g. 100 for v1.0.0)
+    TranslationFactory createTranslator;   // nullptr if Native (zero-translation), or factory for adapter
+};
+```
+
+#### Built-in Core Profiles Example:
+| Profile Name | Allowed Transports | Translation Layer | Permissions | Role & Safety Boundary |
+| :--- | :--- | :--- | :--- | :--- |
+| **`webui`** | WebSocket | `nullptr` (Native) | `READ_TELEMETRY`, `JOG_PULSE`, `MOTION_START`, `SETTINGS_WRITE` | Operator Touch UI. *Strictly forbidden from spindle simulation.* |
+| **`smarttouch`** | UART, WebSocket | `nullptr` (Native) | `READ_TELEMETRY`, `JOG_PULSE`, `MOTION_START`, `SETTINGS_WRITE` | Hardware lathe console. Direct native control. |
+| **`hil_harness`** | WebSocket, USB CDC | `nullptr` (Native) | `READ_TELEMETRY`, `JOG_PULSE`, `MOTION_START`, `SETTINGS_WRITE`, `SIMULATION`, `SYSTEM_RESET` | Automated CI test harness & diagnostics. Full root authority. |
+| **`nextion_lcd`** | UART | `NextionAdapter` | `READ_TELEMETRY`, `JOG_PULSE`, `MOTION_START` | Constrained hardware screen. Requires translation presenter. |
+| **`spectator_dro`**| WebSocket | `nullptr` (Native) | `READ_TELEMETRY` | Read-only remote DRO display. *Motion commands rejected.* |
+
+#### Command Permission Gatekeeper:
+When any command arrives via `ClientEndpoint::handleIncoming()`, the endpoint verifies the calling session's granted permissions before dispatching into `CommandDispatcher`:
+$$\text{if } (\text{commandRequiresPerm}(cmd) \ \& \sim\text{session.effectivePerms}) \implies \mathbf{ERR:CMD.permission\_denied}$$
+This ensures an unauthorized Web UI or remote tablet can never inject fake RPM simulation (`CMD.simRpm`) while a real machine spindle is stationary.
+
+---
+
+### 3.6 Inbound Handshake & Authoritative Session Management (`ActiveClientSession`)
+When a connection is established over any transport, the device client must announce its identity. 
+
+#### Client-Provided Information vs. Core-Assigned Authority
+* **Client Announces (Informational):** The client provides its client type, build/protocol version, and an optional human-readable friendly label (e.g. `"Headstock Tablet"`).
+* **Core Assigns (Authoritative):** The client **cannot** self-assign a unique ID because multiple devices running the same software would collide. The core allocates an authoritative, unique **`session_id`** from its active connection pool.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Device Client (Web UI / Tablet / Pendant)
+    participant CM as ClientManager (Session Gate)
+    participant Core as CommandDispatcher / Kinematics
+
+    Client->>CM: CLIENT.hello type=webui, ver=1.2.0, label="Headstock Tablet"
+    Note over CM: 1. Lookup 'webui' in ClientProfile registry<br/>2. Verify transport is allowed (WebSocket: OK)<br/>3. Verify version (1.2.0 >= min 1.0.0: OK)<br/>4. Allocate unique session_id (e.g. 2)<br/>5. Bind profile permissions & optional translator
+    CM-->>Client: OK:CLIENT.hello session_id=2, type=webui, controllerVer=1.0.4, perms=0x0F
+    CM->>Client: [Unicast Initial Hydration Frame for Session 2]
+
+    Note over Client,CM: Later: Operator triggers an action
+    Client->>CM: CMD.jogStep=Z,100
+    Note over CM: Map transport handle to session_id=2.<br/>Verify session 2 permissions (PERM_JOG_PULSE: OK).<br/>Audit log: "[Session 2: Headstock Tablet] CMD.jogStep=Z,100"
+    CM->>Core: dispatch(CMD.jogStep=Z,100)
+    Core-->>CM: OK
+    CM-->>Client: OK:CMD.jogStep:Z,100
+```
+
+#### Handshake Wire Grammar:
+1. **Inbound Client Hello:**
+   ```text
+   CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"
+   ```
+2. **Outbound Controller Acknowledgement:**
+   ```text
+   OK:CLIENT.hello session_id=<uint8>,type=<profile_name>,controllerVer=<version_string>,perms=<hex_mask>
+   ```
+3. **Rejection Errors:**
+   * `ERR:CLIENT.unknown_type:type=<name>` — Profile not registered in core.
+   * `ERR:CLIENT.transport_disallowed:type=<name>,transport=<type>` — Profile not permitted on this physical medium.
+   * `ERR:CLIENT.incompatible_version:min_required=<min_ver>,received=<received_ver>` — Client is outdated.
+
+#### Session Lifecycle & Active Table:
+```cpp
+// src/core_client/ActiveClientSession.h
+
+struct ActiveClientSession {
+    uint8_t              sessionId;          // Authoritative unique Core session ID
+    const ClientProfile* profile;            // Points to static profile ("webui", "smarttouch")
+    String               clientLabel;        // Human-friendly name ("Headstock Tablet")
+    uint16_t             clientVersion;      // Validated client version
+    uint32_t             effectivePerms;     // Granted permission bitmask
+    ITransport*          transport;          // Underlying physical transport handle
+    ClientEndpoint*      endpoint;           // Bound endpoint (Native or Translation Adapter)
+    bool                 holdsControlLock;   // Safe Monitor Lockout token
+    uint32_t             connectTimestampMs; // Session creation time
+};
+```
+* **Request Association:** In connection-oriented transports (WebSocket client index, dedicated UART port handle), incoming bytes immediately index to the corresponding `ActiveClientSession`.
+* **Safe Monitor Lockout Exclusivity:** When an active session initiates a cutting cycle (`CMD.startCycle` / `CMD.on=1`), that session acquires `holdsControlLock = true`. Any motion commands from secondary sessions are rejected until the cycle finishes or E-Stop is triggered.
+* **Disconnect Cleanup:** When the transport closes, `ClientManager` tears down the `ActiveClientSession`, releases any control locks held, and logs session closure.
+
+---
+
+### 3.7 Mode Decomposition & Synthesis in Translation Layers
+A central responsibility of the Translation Layer is bridging modern, composite Core Motion Modes with constrained or legacy client interfaces.
+
+```
+       [ Constrained / Legacy Hardware ]               [ Translation Layer ]                 [ Controller Core ]
+(Nextion Screen / Dedicated Pushbutton Panel)            (NextionAdapter)                    (MotionEngine)
+
+          [ Button: Feed Z ]           ──(Touch)──►   Map to Mode 50 (Gearbox)   ──(Dispatch)──►  Execute Unified
+          [ Button: Face X ]           ──(Touch)──►   with axis=Z or axis=X                       Gearbox Mode 50
+          [ Button: Taper/Cone ]       ──(Touch)──►   with angle/taper params
+
+          [ Widget: Z Pos  ]           ◄──(Render)─   Decompose Mode 50 Telemetry ◄──(Snapshot)─  Broadcast Universal
+          [ Widget: X Pos  ]           ◄──(Render)─   into individual page widgets                MachineModel State
+```
+
+1. **Unified Core, Fragmented Views:**
+   * The core implements **Mode 50: Unified Electronic Gearbox**, unifying Z-longitudinal feed, X-facing feed, and dual-axis taper into a single kinematic cycle.
+   * Modern clients (`webui`, `smarttouch`) interact with Mode 50 natively, exposing a single multi-axis card with axis selection and taper angles.
+   * Constrained hardware (e.g. Nextion LCD) has legacy firmware pages with hardcoded, discrete buttons: `[Feed Z]`, `[Face X]`, `[Cone]`.
+2. **Translation Synthesis & Decomposition:**
+   * **Inbound Synthesis:** The `NextionAdapter` listens for the `[Face X]` touch event, constructs the canonical command `CMD.startCycle=gearbox,axis=X,pitch=0.15`, and dispatches it into `CommandDispatcher`.
+   * **Outbound Decomposition:** When Mode 50 is running, the adapter decomposes the single unified state into the specific text strings expected by Nextion widgets (`t_feed_x.txt="0.150"`).
+3. **Hardware Profile Awareness:**
+   * The core dynamically reports available modes based on active lathe hardware capabilities (`MODE.discover`).
+   * If the machine profile has only a Z leadscrew motor (`MOTOR_Z` set, `MOTOR_X` absent), the controller omits 2-axis modes (Facing, Spherical, Taper).
+   * Translation adapters use this discovery data to disable or gray out buttons on physical panels automatically.
+
 ---
 
 ## 4. Change-Driven Status Dispatch & Immutable `StatusSnapshot`

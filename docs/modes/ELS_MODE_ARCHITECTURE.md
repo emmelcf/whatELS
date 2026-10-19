@@ -785,43 +785,18 @@ A machine tool setup may feature:
    - **Constrained Clients (Nextion LCD):** An on-board Translation Layer / Adapter buffers single-key inputs and synthesizes the fully qualified command when the operator triggers physical motion.
 4. **Broadcast on Inception:** Only when physical motion begins (`RUNNING`) does the controller broadcast active mode ownership, transitioning observing clients to active tracking or Safe Monitor Lockout.
 
-### 6.2 Client Registration Handshake
-When any client connects to the controller (via WebSocket or Serial), it exchanges a capability manifest:
+### 6.2 Client Registration Handshake & Session Mode Ownership
 
-#### Message: `CLIENT_REGISTER`
-```json
-{
-  "type": "client_register",
-  "client_id": "headstock_tablet_v14",
-  "client_type": "WEB_UI",
-  "supported_modes": [50, 51, 52, 53, 54, 55, 56],
-  "supported_primitives": [10, 11, 12, 13, 14, 15]
-}
-```
+All transport connection mechanics, client identity announcements, permissions, and session management are authoritatively defined in **[`ELS_CLIENT_ARCHITECTURE.md §3.5–§3.6`](../clients/ELS_CLIENT_ARCHITECTURE.md#35-client-profile-registry--capability-governance-clientprofile)**.
 
-#### Message: `REGISTER_ACK` (Controller to Client)
-```json
-{
-  "type": "register_ack",
-  "controller_version": "1.0.4-modular",
-  "lathe_profile": {
-    "model": "Precision Matthews 1022",
-    "capabilities": ["SPINDLE_ENCODER", "MOTOR_Z", "MOTOR_X", "DRO_Z", "DRO_X"]
-  },
-  "available_modes": [
-    { "id": 50, "name": "GEARBOX", "category": "COMPOSITE" },
-    { "id": 51, "name": "TURNING", "category": "COMPOSITE" },
-    { "id": 52, "name": "FACING", "category": "COMPOSITE" },
-    { "id": 53, "name": "THREADING", "category": "COMPOSITE" },
-    { "id": 54, "name": "CUTOFF", "category": "COMPOSITE" },
-    { "id": 55, "name": "SLOTTING", "category": "COMPOSITE" },
-    { "id": 56, "name": "SPHERE", "category": "COMPOSITE" }
-  ],
-  "active_mode_id": 50,
-  "active_primitive_id": 10,
-  "system_state": "IDLE"
-}
-```
+From the Mode Engine's perspective, the registration handshake establishes:
+1. **Authoritative Session ID (`session_id`):** The core assigns a unique numeric handle to each connected client session.
+2. **Permission Verification:** Only sessions with `PERM_MOTION_START` can command mode inception.
+3. **Safe Monitor Lockout (Motion Ownership):**
+   * When an active session commands motion inception (`CMD.startCycle` or `CMD.on=1`), that session claims **exclusive execution ownership** of the running mode.
+   * All secondary sessions immediately transition to **Safe Monitor Lockout**: they receive live telemetry updates (`K.*`, `I.*`) and retain emergency stop authority (`CMD.stop`), but any commands attempting to modify parameters or initiate secondary motion are rejected (`ERR:control_locked:active_session=<id>`).
+4. **Adapter Mode Synthesis & Decomposition:**
+   * For constrained clients (e.g. Nextion LCD), the Translation Layer decomposes composite modes (such as Unified Gearbox Mode 50) into discrete button views and synthesizes canonical mode commands. Refer to [`ELS_CLIENT_ARCHITECTURE.md §3.7`](../clients/ELS_CLIENT_ARCHITECTURE.md#37-mode-decomposition--synthesis-in-translation-layers).
 
 ---
 
