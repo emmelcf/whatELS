@@ -12,6 +12,7 @@
 #include <Update.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+#include <esp_wifi.h>
 
 #include "motion/kernel/MotionEngine.h"
 
@@ -1079,6 +1080,10 @@ static bool connectStationWifi() {
 
   wifiStationConnected = true;
   wifiIpAddress = WiFi.localIP().toString();
+
+  // Disable Wi-Fi modem sleep for low-latency telemetry and HIL testing
+  WiFi.setSleep(false);
+  esp_wifi_set_ps(WIFI_PS_NONE);
   
   if (sysConfig.wifi.hostname.length() > 0) {
     if (MDNS.begin(sysConfig.wifi.hostname.c_str())) {

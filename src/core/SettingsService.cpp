@@ -797,11 +797,17 @@ int SettingsService::getTurnPasses() {
 }
 
 bool SettingsService::setTaperRatio(float ratioK) {
-  if (ratioK <= 0.0f) return false;
-  float cone = 1.0f / ratioK;
+  if (ratioK < 0.0f) return false;
+  if (ratioK == 0.0f) {
+    currentTaperSetting.modeType = TAPER_RATIO;
+    currentTaperSetting.authorVal = 0.0f;
+    currentTaperSetting.coneRatio = 0.0f;
+    currentTaperSetting.presetId = 0;
+    return true;
+  }
   currentTaperSetting.modeType = TAPER_RATIO;
   currentTaperSetting.authorVal = ratioK;
-  currentTaperSetting.coneRatio = cone;
+  currentTaperSetting.coneRatio = ratioK;
   currentTaperSetting.presetId = 0;
 
   return true;
@@ -840,6 +846,10 @@ bool SettingsService::setTaperPreset(int presetIdx, float angleDeg, float ratioV
 
 TaperSetting SettingsService::getTaperSetting() {
   return currentTaperSetting;
+}
+
+float SettingsService::getTaperRatio() {
+  return currentTaperSetting.coneRatio;
 }
 
 bool SettingsService::setAuxForward(bool fwd) {

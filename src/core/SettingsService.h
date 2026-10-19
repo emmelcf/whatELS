@@ -83,6 +83,7 @@ public:
   static bool setTaperAngle(float angleDeg);
   static bool setTaperPreset(int presetIdx, float angleDeg, float ratioVal);
   static TaperSetting getTaperSetting();
+  static float getTaperRatio();
   static bool setAuxForward(bool fwd);
   static bool getAuxForward();
 

@@ -157,6 +157,19 @@ static bool handleSettings(const char* args, String* reply) {
   return false;
 }
 
+static AxisId parseAxisWithDual(const char* val, bool* outIsDual) {
+  if (!val) {
+    if (outIsDual) *outIsDual = false;
+    return AXIS_Z;
+  }
+  if (strcasecmp(val, "ZX") == 0 || strcasecmp(val, "Z+X") == 0 || strcmp(val, "2") == 0 || strcasecmp(val, "TAPER") == 0) {
+    if (outIsDual) *outIsDual = true;
+    return AXIS_Z;
+  }
+  if (outIsDual) *outIsDual = false;
+  return MotionConversions::parseAxisId(val, AXIS_Z);
+}
+
 static bool handleStartFeed(const char* args, String* reply) {
   if (!args || !*args) return false;
   const char* p = args;
@@ -201,13 +214,7 @@ static bool handleStartFeed(const char* args, String* reply) {
       }
 
       if (strcasecmp(key, "axis") == 0 || strcasecmp(key, "a") == 0) {
-        if (strcasecmp(val, "ZX") == 0 || strcasecmp(val, "Z+X") == 0 || strcmp(val, "2") == 0 || strcasecmp(val, "TAPER") == 0) {
-          isDualAxis = true;
-          axis = AXIS_Z;
-        } else {
-          isDualAxis = false;
-          axis = MotionConversions::parseAxisId(val, AXIS_Z);
-        }
+        axis = parseAxisWithDual(val, &isDualAxis);
       } else if (strcasecmp(key, "sync") == 0 || strcasecmp(key, "s") == 0) {
         isSync = (strcasecmp(val, "1") == 0 || strcasecmp(val, "sync") == 0 || strcasecmp(val, "true") == 0);
       } else if (strcasecmp(key, "feed") == 0 || strcasecmp(key, "rate") == 0 || strcasecmp(key, "f") == 0) {
@@ -239,13 +246,7 @@ static bool handleStartFeed(const char* args, String* reply) {
       return false;
     }
 
-    if (strcasecmp(axisToken, "ZX") == 0 || strcasecmp(axisToken, "Z+X") == 0 || strcmp(axisToken, "2") == 0 || strcasecmp(axisToken, "TAPER") == 0) {
-      isDualAxis = true;
-      axis = AXIS_Z;
-    } else {
-      isDualAxis = false;
-      axis = MotionConversions::parseAxisId(axisToken, AXIS_Z);
-    }
+    axis = parseAxisWithDual(axisToken, &isDualAxis);
     isSync = (strcasecmp(syncToken, "1") == 0 || strcasecmp(syncToken, "sync") == 0 || strcasecmp(syncToken, "true") == 0);
     dir = MotionConversions::semanticToDirection(axis, dirToken);
     if (dir == 0) {
@@ -366,61 +367,81 @@ static bool handleJogStepDu(const char* args, String* reply) {
 }
 
 static bool handleFeedStepDu(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   SettingsService::setJogStepDu(atol(args));
+  if (reply) *reply = "OK:CMD.feedStepDu\n";
   return true;
 }
 
 static bool handleFeedStepCycle(const char* args, String* reply) {
   (void)args;
-  (void)reply;
   SettingsService::cycleJogStep();
+  if (reply) *reply = "OK:CMD.feedStepCycle\n";
   return true;
 }
 
 static bool handleFeedRev(const char* args, String* reply) {
   (void)args;
-  (void)reply;
   SettingsService::reverseFeedDirection();
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) gb->setDirectionSign(-gb->getDirection());
+  if (reply) *reply = "OK:CMD.feedRev\n";
   return true;
 }
 
 static bool handleFeedDupr(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setFeedrateDupr(atol(args), false);
+  long dupr = atol(args);
+  SettingsService::setFeedrateDupr(dupr, false);
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) gb->setFeedRate(std::abs(dupr));
+  if (reply) *reply = "OK:CMD.feedDupr\n";
   return true;
 }
 
 static bool handleFeedMm(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setFeedrateMm(atof(args), false);
+  float mm = atof(args);
+  SettingsService::setFeedrateMm(mm, false);
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) gb->setFeedRateMm(std::abs(mm));
+  if (reply) *reply = "OK:CMD.feedMm\n";
   return true;
 }
 
 static bool handleFeedTpi(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setFeedrateTpi(atof(args), false);
+  float tpi = atof(args);
+  SettingsService::setFeedrateTpi(tpi, false);
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb && tpi > 0.0f) {
+    int32_t dupr = static_cast<int32_t>(std::round(254000.0f / tpi));
+    gb->setFeedRate(dupr);
+  }
+  if (reply) *reply = "OK:CMD.feedTpi\n";
   return true;
 }
 
 static bool handleFeedInch(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setFeedrateInch(atof(args), false);
+  float inch = atof(args);
+  SettingsService::setFeedrateInch(inch, false);
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb && inch > 0.0f) {
+    int32_t dupr = static_cast<int32_t>(std::round(inch * 254000.0f));
+    gb->setFeedRate(dupr);
+  }
+  if (reply) *reply = "OK:CMD.feedInch\n";
   return true;
 }
 
 static bool handleFeedNudge(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   int dir = atoi(args);
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
-  if (gb) {
-    return gb->nudgeFeed(dir);
+  if (gb && gb->nudgeFeed(dir)) {
+    if (reply) *reply = "OK:CMD.feedNudge\n";
+    return true;
   }
   return false;
 }
@@ -497,7 +518,7 @@ static bool handleGearAxis(const char* args, String* reply) {
     if (gb->isSync()) {
       SettingsService::requestMode(targetLowLevelMode);
     }
-    if (reply) *reply = String("OK:CMD.gearAxis=") + axStr + "\n";
+    if (reply) *reply = "OK:CMD.gearAxis\n";
     return true;
   }
   return false;
@@ -517,7 +538,7 @@ static bool handleGearSync(const char* args, String* reply) {
       else if (strcasecmp(curAx, "ZX") == 0) SettingsService::requestMode(static_cast<int>(LatheMode::CONE));
       else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
     }
-    if (reply) *reply = String("OK:CMD.gearSync=") + (sync ? "1" : "0") + "\n";
+    if (reply) *reply = "OK:CMD.gearSync\n";
     return true;
   }
   return false;
@@ -528,35 +549,41 @@ static bool handleGearDir(const char* args, String* reply) {
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
   if (gb) {
     gb->setDirection(args);
-    if (reply) *reply = String("OK:CMD.gearDir=") + (gb->getDirection() > 0 ? "1" : "-1") + "\n";
+    if (reply) *reply = "OK:CMD.gearDir\n";
     return true;
   }
   return false;
 }
 
 static bool handleTaperRatio(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setTaperRatio(atof(args));
-  return true;
+  if (SettingsService::setTaperRatio(atof(args))) {
+    if (reply) *reply = "OK:CMD.taperRatio\n";
+    return true;
+  }
+  return false;
 }
 
 static bool handleTaperAngle(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
-  SettingsService::setTaperAngle(atof(args));
-  return true;
+  if (SettingsService::setTaperAngle(atof(args))) {
+    if (reply) *reply = "OK:CMD.taperAngle\n";
+    return true;
+  }
+  return false;
 }
 
 static bool handleTaperPreset(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   int presetId = 0;
   float angleDeg = 0.0f;
   float ratioVal = 0.0f;
   sscanf(args, "%d,%f,%f", &presetId, &angleDeg, &ratioVal);
-  SettingsService::setTaperPreset(presetId, angleDeg, ratioVal);
-  return true;
+  if (SettingsService::setTaperPreset(presetId, angleDeg, ratioVal)) {
+    if (reply) *reply = "OK:CMD.taperPreset\n";
+    return true;
+  }
+  return false;
 }
 
 static bool handleMode(const char* args, String* reply) {
@@ -573,7 +600,7 @@ static bool handleMode(const char* args, String* reply) {
         else SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
       }
     }
-    if (reply) *reply = String("OK:CMD.mode=") + targetBySlug->getSlug() + "\n";
+    if (reply) *reply = "OK:CMD.mode\n";
     return true;
   }
 
@@ -583,7 +610,7 @@ static bool handleMode(const char* args, String* reply) {
     if (m == ModeIds::GEARBOX) {
       ModeRegistry::activateMode(ModeIds::GEARBOX);
     }
-    if (reply) *reply = String("OK:CMD.mode=") + m + "\n";
+    if (reply) *reply = "OK:CMD.mode\n";
     return true;
   }
   return false;
@@ -666,7 +693,6 @@ static bool handleSpindleSimTurn(const char* args, String* reply) {
 #endif
 
 static bool handleOn(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   int on = atoi(args);
   if (on == 0) {
@@ -676,17 +702,27 @@ static bool handleOn(const char* args, String* reply) {
     }
     MotionEngine::instance().stopAll();
     SettingsService::requestIsOn(false);
+    if (reply) *reply = "OK:CMD.on\n";
+    return true;
   } else {
+    IELSMode* active = ModeRegistry::getActiveMode();
+    if (active && !active->isRunning()) {
+      if (!active->start()) {
+        if (reply) *reply = "ERR:Failed to start active mode\n";
+        return false;
+      }
+    }
     SettingsService::requestIsOn(true);
+    if (reply) *reply = "OK:CMD.on\n";
+    return true;
   }
-  return true;
 }
 
 static bool handleMeasure(const char* args, String* reply) {
-  (void)reply;
   if (!args || !*args) return false;
   int meas = atoi(args);
   SettingsService::setMeasure(meas);
+  if (reply) *reply = "OK:CMD.measure\n";
   return true;
 }
 

@@ -53,6 +53,20 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
     m_direction = direction;
     m_targetDistDu = targetDistDu;
 
+    // Coordinated Dual-Axis Taper Extension [KIN-04]
+    bool enableSecondary = m_isDualAxis;
+    int32_t secNum = 0;
+    int32_t secDen = 10000;
+    if (enableSecondary) {
+        float taperRatio = SettingsService::getTaperRatio();
+        if (taperRatio > 0.00001f) {
+            int32_t rawNum = static_cast<int32_t>(std::round(taperRatio * static_cast<float>(secDen)));
+            secNum = (direction < 0) ? -rawNum : rawNum;
+        } else {
+            enableSecondary = false;
+        }
+    }
+
     bool ok = false;
     if (m_isSync) {
         SpindleSyncParams params;
@@ -61,6 +75,12 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
         params.pitchDupr = feedRateDu;
         params.targetDistDu = targetDistDu;
         params.respectSoftLimits = true;
+        if (enableSecondary) {
+            params.enableSecondaryAxis = true;
+            params.secondaryAxis = AXIS_X;
+            params.secondaryRatioNum = secNum;
+            params.secondaryRatioDen = secDen;
+        }
         ok = m_engine->engageSpindleSync(params);
     } else {
         VelocityFeedParams params;
@@ -69,6 +89,12 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
         params.feedRateDuPerMin = feedRateDu;
         params.targetDistDu = targetDistDu;
         params.respectSoftLimits = true;
+        if (enableSecondary) {
+            params.enableSecondaryAxis = true;
+            params.secondaryAxis = AXIS_X;
+            params.secondaryRatioNum = secNum;
+            params.secondaryRatioDen = secDen;
+        }
         ok = m_engine->engageVelocityFeed(params);
     }
 
@@ -231,6 +257,9 @@ bool UnifiedGearboxMode::start() {
 void UnifiedGearboxMode::stop(StopType stopType) {
     if (m_engine) {
         m_engine->stop(m_axis, stopType == StopType::EMERGENCY_IMMEDIATE);
+        if (m_isDualAxis) {
+            m_engine->stop(AXIS_X, stopType == StopType::EMERGENCY_IMMEDIATE);
+        }
     }
     SettingsService::requestIsOn(false);
     if (stopType == StopType::FEED_HOLD) {
@@ -253,7 +282,11 @@ void UnifiedGearboxMode::onMotionHalted(
     int32_t haltedPosSteps,
     int32_t haltedCoordDu,
     const SoftLimit* triggeredLimit) {
-    if (axis == m_axis) {
+    if (axis == m_axis || (m_isDualAxis && axis == AXIS_X)) {
+        if (m_isDualAxis && m_engine) {
+            m_engine->stop(m_axis, false);
+            m_engine->stop(AXIS_X, false);
+        }
         SettingsService::requestIsOn(false);
         if (reason == MotionHaltReason::FEED_HOLD) {
             m_state = ModeState::PAUSED;
