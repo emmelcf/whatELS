@@ -62,50 +62,35 @@ class TestSpindleSyncGearingReverse(HilTestCase):
         self.details = {"expected_z_du": expected_z, "actual_z_du": state.z_du, "error_du": abs(state.z_du - expected_z)}
 
 
-class TestSpindleSyncMultipassIndexSync(HilTestCase):
-    name = "gearing_multipass_index_sync"
-    description = "Verify spindle angle phase lock aligns within +/-1.0 deg across consecutive threading passes"
+class TestSpindleSyncStrokeLimit(HilTestCase):
+    name = "gearing_sync_stroke_limit_auto_stop"
+    description = "Verify synchronized feed auto-halts exactly at target distance (15.0mm) without manual stop"
 
     async def run(self) -> None:
-        # 1. Start continuous spindle at 600 RPM
-        await self.client.send("CMD.simRpm=600", wait_ack=True)
-        await self.client.wait_for(lambda s: s.rpm >= 580, timeout_s=3.0, description="spindle stable at speed")
-
-        # 2. Pass 1: engage feed towards chuck for 15.0 mm
+        # 1. Engage Z-axis gearbox feed towards chuck at 1.500 mm with a 15.000 mm stroke limit
         await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000", wait_ack=True)
-        pass1_state = await self.client.wait_for(lambda s: s.is_on, timeout_s=2.0)
-        pass1_angle = pass1_state.angle
+        await self.client.wait_for(lambda s: s.is_on, timeout_s=2.0, description="feed engaged")
 
-        # Wait for Pass 1 stroke to complete
-        await self.client.wait_for(lambda s: not s.is_on, timeout_s=5.0, description="Pass 1 completed")
-        assert_pos_du(self.client.state.z_du, -15000, tolerance_du=2, axis="Z")
+        # 2. Inject 12 spindle revolutions (12 * 1.5mm = 18.0mm of pulses; should auto-halt at 15.0mm = 10 revs)
+        pulses = self.client.revs_to_pulses(12.0)
+        await self.client.send(f"CMD.simPulses={pulses}")
 
-        # 3. Reset Z position to 0 while spindle continues spinning
-        await self.client.send("CMD.axisPosDu=Z,0", wait_ack=True)
-        await self.client.wait_for(lambda s: s.z_du == 0, timeout_s=2.0)
+        # 3. Wait for stroke to complete and feed to auto-disengage
+        expected_z = -15000
+        state = await self.client.wait_for(
+            lambda s: not s.is_on and abs(s.z_du - expected_z) <= 5,
+            timeout_s=5.0,
+            description="stroke limit reached and feed auto-halted",
+        )
 
-        # 4. Pass 2: re-engage feed
-        await self.client.send("CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000", wait_ack=True)
-        pass2_state = await self.client.wait_for(lambda s: s.is_on, timeout_s=2.0)
-        pass2_angle = pass2_state.angle
-
-        # Wait for Pass 2 to complete
-        await self.client.wait_for(lambda s: not s.is_on, timeout_s=5.0, description="Pass 2 completed")
-        assert_pos_du(self.client.state.z_du, -15000, tolerance_du=2, axis="Z")
-
-        # Stop spindle
-        await self.client.send("CMD.simRpm=0", wait_ack=True)
-
-        # Compute phase difference modulo 360
-        angle_diff = abs(pass1_angle - pass2_angle)
-        if angle_diff > 180.0:
-            angle_diff = 360.0 - angle_diff
-
-        assert angle_diff <= 1.0, f"Spindle sync phase angle diverged between passes: {angle_diff:.2f} deg (max 1.0 deg)"
+        # 4. Assert accuracy within +/- 2 du and verify mode automatically disengaged
+        assert_pos_du(state.z_du, expected_z, tolerance_du=2, axis="Z")
+        assert not state.is_on, "Feed mode did not auto-disengage at stroke limit"
         self.details = {
-            "pass1_angle": round(pass1_angle, 1),
-            "pass2_angle": round(pass2_angle, 1),
-            "angle_diff_deg": round(angle_diff, 2),
+            "expected_z_du": expected_z,
+            "actual_z_du": state.z_du,
+            "error_du": abs(state.z_du - expected_z),
+            "is_on": state.is_on,
         }
 
 

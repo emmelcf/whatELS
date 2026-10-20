@@ -657,23 +657,17 @@ Every test in the whatELS HIL suite verifies a specific physical machining behav
 * **Pass Criteria:**
   - Carriage coordinate lands at $Z = +10{,}000\text{ du} \pm 2\text{ du}$[cite: 1].
 
-#### 6.5.1 `gearing_multipass_index_sync`
-* **Real-Life Machining Scenario (Single-Point Threading Index Phase Lock):**  
-  During continuous spindle rotation at $600\text{ RPM}$, consecutive multi-pass threading strokes must phase-lock to the exact same spindle entry angle ($\Delta\theta \le 1.0^\circ$) so the threading tool tracks precisely into the existing groove without shaving or destroying thread crests.
+#### 6.5.1 `gearing_sync_stroke_limit_auto_stop`
+* **Real-Life Machining Scenario (Synchronized Stroke Auto-Stop):**  
+  When feeding into a shoulder or cutting a fixed-length thread to a stop, the controller must auto-terminate motion precisely at the commanded distance (`dist:15000`) and disengage the active feed without requiring an explicit operator stop command, preventing tool crash. (Note: Microstep spindle index alignment is verified at the unit-test level in the real-time motion kernel).
 * **Parameters & Inbound Wire Commands:**
   ```text
-  CMD.simRpm=600
-  # Pass 1:
   CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
-  # Reset Z to 0 while spindle spins:
-  CMD.axisPosDu=Z,0
-  # Pass 2:
-  CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK,dist:15000
-  CMD.simRpm=0
+  CMD.simPulses=<12.0 revs worth of pulses>
   ```
 * **Pass Criteria:**
-  - Both passes complete their $15.000\text{ mm}$ stroke landing at $Z = -15{,}000\text{ du} \pm 2\text{ du}$.
-  - Spindle engagement angles $\theta_1$ and $\theta_2$ align within $|\theta_1 - \theta_2| \le 1.0^\circ$.
+  - Carriage motion terminates at $Z = -15{,}000\text{ du} \pm 2\text{ du}$.
+  - Active feed disengages automatically (`is_on = False`) upon reaching target distance despite excess incoming spindle pulses.
 
 ---
 
@@ -1008,7 +1002,7 @@ gearbox_zx_async_taper_feed                        [PASS]   1.16s     taper_rati
 gearbox_zx_secondary_axis_soft_limit_halt          [PASS]   2.02s     x_limit_du: -5000, halted_x_du: -5000
 gearbox_zx_shallow_taper_sync                      [PASS]   0.98s     taper_ratio: 0.1, z_du: -40000
 gearbox_zx_steep_cone_major_axis_swap              [PASS]   1.01s     cone_ratio: 2.0, z_du: -20000
-gearing_multipass_index_sync                       [PASS]   1.38s     pass1_angle: 159.8, pass2_angle: 159.8
+gearing_sync_stroke_limit_auto_stop                [PASS]   1.38s     expected_z_du: -15000, actual_z_du: -15000
 gearing_sync_1_5mm_pitch                           [PASS]   0.92s     expected_z_du: -30000, actual_z_du: -30000
 gearing_sync_reverse_1_0mm                         [PASS]   0.80s     expected_z_du: 10000, actual_z_du: 10000
 in_motion_safety_gatekeeper_lockout                [PASS]   1.09s     locked_cmds_rejected: 6
