@@ -1,7 +1,9 @@
 #include "WebServerModule.h"
 #include "Config.h"
-#include "Debug.h"
+#include <esp_log.h>
 #include "core/OperatorIntent.h"
+
+static const char* TAG = "WEB";
 #include "CommandDispatcher.h"
 #include "core/TelemetrySerializer.h"
 #include "ClientEndpoint.h"
@@ -453,7 +455,7 @@ static void scheduleConfigRestart() {
 
 static void firmwareUploadLog(const String& message) {
   String line = String("FW: ") + message + "\n";
-  DEBUG_PRINT(line);
+  ESP_LOGI(TAG, "%s", message.c_str());
   webSocket.broadcastTXT(line);
   webSocket.loop();
 }
@@ -487,8 +489,8 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
 
     IPAddress ip = webSocket.remoteIP(num);
     const char* chName = (ch == CHANNEL_GRBL) ? "GRBL" : ((ch == CHANNEL_DRO) ? "DRO" : "CANONICAL");
-    Serial.printf("[WS] Client [%u] connected from %s (Channel: %s, Total: %d, Free Heap: %u bytes)\n",
-                  num, ip.toString().c_str(), chName, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
+    ESP_LOGI(TAG, "[WS] Client [%u] connected from %s (Channel: %s, Total: %d, Free Heap: %u bytes)",
+             num, ip.toString().c_str(), chName, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
 
     // Unicast initial hydration frame strictly to the connecting client 'num'
     MachineModel hydrationModel = MachineModel::captureAll();
@@ -517,19 +519,19 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
         webSocketClientCount++;
       }
     }
-    Serial.printf("[WS] Client [%u] disconnected (Remaining: %d, Free Heap: %u bytes)\n",
-                  num, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
+    ESP_LOGI(TAG, "[WS] Client [%u] disconnected (Remaining: %d, Free Heap: %u bytes)",
+             num, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
     requestWebUiMoveRelease();
   } else if (type == WStype_ERROR) {
-    Serial.printf("[WS] Client [%u] error! (Payload len: %u, Free Heap: %u bytes)\n",
-                  num, (unsigned int)length, (unsigned int)ESP.getFreeHeap());
+    ESP_LOGE(TAG, "[WS] Client [%u] error! (Payload len: %u, Free Heap: %u bytes)",
+             num, (unsigned int)length, (unsigned int)ESP.getFreeHeap());
   } else if (type == WStype_TEXT) {
     String cmdStr = "";
     for (size_t i = 0; i < length; i++) {
       if (payload[i] >= 32 && payload[i] <= 126) cmdStr += (char)payload[i];
     }
     if (cmdStr != "?" && cmdStr != "?sysinfo") {
-      Serial.printf("WebSocket Command [%d]: %s\n", num, cmdStr.c_str());
+      ESP_LOGD(TAG, "WebSocket Command [%d]: %s", num, cmdStr.c_str());
     }
 
     // Direct routing for GRBL CNC stream
@@ -1062,10 +1064,10 @@ static bool connectStationWifi() {
   }
 
   if (sysConfig.wifi.hostname.length() > 0) {
-    DEBUG_PRINTF("Setting WiFi hostname to: %s\n", sysConfig.wifi.hostname.c_str());
+    ESP_LOGI(TAG, "Setting WiFi hostname to: %s", sysConfig.wifi.hostname.c_str());
     WiFi.setHostname(sysConfig.wifi.hostname.c_str());
   } else {
-    DEBUG_PRINTLN("sysConfig.wifi.hostname is empty! Falling back to default.");
+    ESP_LOGW(TAG, "sysConfig.wifi.hostname is empty! Falling back to default 'whatels'");
     WiFi.setHostname("whatels");
   }
 
@@ -1075,26 +1077,23 @@ static bool connectStationWifi() {
     WiFi.setHostname(sysConfig.wifi.hostname.c_str());
   }
   
-  DEBUG_PRINTF("Connecting to WiFi SSID: %s\n", sysConfig.wifi.ssid.c_str());
+  ESP_LOGI(TAG, "Connecting to WiFi SSID: %s", sysConfig.wifi.ssid.c_str());
   WiFi.begin(sysConfig.wifi.ssid.c_str(), sysConfig.wifi.password.c_str());
   setWiFiStatus("Connecting");
   for (int i = 0; i < 40; i++) {
     if (WiFi.status() == WL_CONNECTED) {
-      DEBUG_PRINTLN("WiFi connected successfully!");
+      ESP_LOGI(TAG, "WiFi connected successfully!");
       break;
     }
-    DEBUG_PRINT(".");
     DELAY(500);
     taskYIELD();
   }
   if (WiFi.status() != WL_CONNECTED) {
-    DEBUG_PRINTLN("");
     String errorMsg = getStationWifiError();
-    DEBUG_PRINTF("WiFi connection failed. Status: %d, Error: %s\n", WiFi.status(), errorMsg.c_str());
+    ESP_LOGE(TAG, "WiFi connection failed. Status: %d, Error: %s", WiFi.status(), errorMsg.c_str());
     setWiFiStatus(errorMsg);
     return false;
   }
-  DEBUG_PRINTLN("");
 
   wifiStationConnected = true;
   wifiIpAddress = WiFi.localIP().toString();
@@ -1105,47 +1104,41 @@ static bool connectStationWifi() {
   
   if (sysConfig.wifi.hostname.length() > 0) {
     if (MDNS.begin(sysConfig.wifi.hostname.c_str())) {
-      DEBUG_PRINTF("mDNS responder started: http://%s.local\n", sysConfig.wifi.hostname.c_str());
+      ESP_LOGI(TAG, "mDNS responder started: http://%s.local", sysConfig.wifi.hostname.c_str());
     } else {
-      DEBUG_PRINTLN("Error setting up mDNS responder!");
+      ESP_LOGE(TAG, "Error setting up mDNS responder!");
     }
   }
 
   setWiFiStatus("See " + wifiIpAddress);
-  DEBUG_PRINT("Web UI: http://");
-  DEBUG_PRINTLN(wifiIpAddress);
+  ESP_LOGI(TAG, "Web UI available at: http://%s", wifiIpAddress.c_str());
   return true;
 }
 
 static bool startSetupAccessPoint() {
   WiFi.disconnect(true);
-  DEBUG_PRINTLN("Starting Setup Access Point...");
+  ESP_LOGI(TAG, "Starting Setup Access Point...");
   WiFi.mode(WIFI_AP);
   wifiSetupApActive = WiFi.softAP(sysConfig.wifi.setupApSsid.c_str(), sysConfig.wifi.setupApPassword.c_str());
   wifiStationConnected = false;
   if (!wifiSetupApActive) {
-    DEBUG_PRINTLN("WiFi softAP creation failed!");
+    ESP_LOGE(TAG, "WiFi softAP creation failed!");
     wifiIpAddress = "";
     setWiFiStatus("WiFi AP failed");
     return false;
   }
-  DEBUG_PRINTLN("WiFi softAP created successfully.");
-
   wifiIpAddress = WiFi.softAPIP().toString();
+  ESP_LOGI(TAG, "WiFi softAP created successfully. SSID: %s, Pass: %s, URL: http://%s",
+           sysConfig.wifi.setupApSsid.c_str(), sysConfig.wifi.setupApPassword.c_str(), wifiIpAddress.c_str());
+
   setWiFiStatus("Setup " + wifiIpAddress);
-  DEBUG_PRINT("Setup AP: ");
-  DEBUG_PRINT(sysConfig.wifi.setupApSsid);
-  DEBUG_PRINT(" / ");
-  DEBUG_PRINTLN(sysConfig.wifi.setupApPassword);
-  DEBUG_PRINT("Web UI: http://");
-  DEBUG_PRINTLN(wifiIpAddress);
   return true;
 }
 
 void taskWiFi(void *param) {
-  DEBUG_PRINTLN("Starting WiFi task...");
+  ESP_LOGI(TAG, "Starting WiFi task...");
   if (!connectStationWifi() && !startSetupAccessPoint()) {
-    DEBUG_PRINTLN("Both Station and AP modes failed to start. Stopping WiFi task.");
+    ESP_LOGE(TAG, "Both Station and AP modes failed to start. Stopping WiFi task.");
     vTaskDelete(NULL);
     return;
   }
@@ -1181,8 +1174,8 @@ void taskWiFi(void *param) {
     if (millis() - lastHealthLog >= 10000) {
       lastHealthLog = millis();
       if (webSocketClientCount > 0) {
-        Serial.printf("[HEALTH] WiFi IP: %s, WS clients: %d, Free Heap: %u bytes\n",
-                      wifiIpAddress.c_str(), webSocketClientCount, (unsigned int)ESP.getFreeHeap());
+        ESP_LOGI(TAG, "[HEALTH] WiFi IP: %s, WS clients: %d, Free Heap: %u bytes",
+                 wifiIpAddress.c_str(), webSocketClientCount, (unsigned int)ESP.getFreeHeap());
       }
     }
     // WiFi connection watchdog & exponential backoff retry strategy
@@ -1198,7 +1191,7 @@ void taskWiFi(void *param) {
         if (wifiDisconnectStartedAt == 0) {
           wifiDisconnectStartedAt = millis();
         } else if (millis() - wifiDisconnectStartedAt >= WIFI_DISCONNECT_DEBOUNCE_MS) {
-          DEBUG_PRINTLN("WiFi connection lost! Confirmed disconnected after debounce.");
+          ESP_LOGW(TAG, "WiFi connection lost! Confirmed disconnected after debounce.");
           requestWebUiMoveRelease();
           webSocketClientCount = 0;
           activeChannelMask = CHANNEL_NONE;
@@ -1223,9 +1216,9 @@ void taskWiFi(void *param) {
         wifiDisconnectStartedAt = 0;
         wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
         setWiFiStatus("See " + wifiIpAddress);
-        DEBUG_PRINTLN("WiFi reconnected successfully!");
+        ESP_LOGI(TAG, "WiFi reconnected successfully!");
       } else if ((long)(millis() - wifiNextRetryAt) >= 0) {
-        DEBUG_PRINTF("WiFi retrying connection (interval %lu ms)...\n", wifiRetryIntervalMs);
+        ESP_LOGD(TAG, "WiFi retrying connection (interval %lu ms)...", wifiRetryIntervalMs);
         setWiFiStatus("WiFi retry (" + String(wifiRetryIntervalMs / 1000) + "s)");
         WiFi.reconnect();
         wifiRetryIntervalMs = min(wifiRetryIntervalMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
@@ -1238,7 +1231,7 @@ void taskWiFi(void *param) {
       ESP.restart();
     }
     if (configRestartPending && ((long)(millis() - configRestartAt) >= 0)) {
-      DEBUG_PRINTLN("Machine config saved, restarting now");
+      ESP_LOGI(TAG, "Machine config saved, restarting now");
       DELAY(50);
       ESP.restart();
     }

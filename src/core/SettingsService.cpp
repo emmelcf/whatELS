@@ -1,8 +1,10 @@
 #include "SettingsService.h"
 #include "Config.h"
 #include "OperatorIntent.h"
-#include "Debug.h"
+#include <esp_log.h>
 #include "SystemSchemaJson.h"
+
+static const char* TAG = "SETTINGS";
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
 #include "motion/MotionConversions.h"
@@ -98,7 +100,7 @@ static void migrateSettingsIfNeeded() {
 
   int storedVersion = sysPref.getInt("sw_ver", 0);
   if (SOFTWARE_VERSION > storedVersion) {
-    DEBUG_PRINTF("[SettingsService] Migrating software settings from v%d to v%d...\n", storedVersion, SOFTWARE_VERSION);
+    ESP_LOGI(TAG, "Migrating software settings from v%d to v%d...", storedVersion, SOFTWARE_VERSION);
 
     // Cascading non-destructive migration blocks for future firmware versions:
     // if (storedVersion < 39) { ... }
@@ -106,7 +108,7 @@ static void migrateSettingsIfNeeded() {
 
     sysPref.putInt("sw_ver", SOFTWARE_VERSION);
     sysConfig.swVersion = SOFTWARE_VERSION;
-    DEBUG_PRINTF("[SettingsService] Settings migration complete. Current version: v%d\n", SOFTWARE_VERSION);
+    ESP_LOGI(TAG, "Settings migration complete. Current version: v%d", SOFTWARE_VERSION);
   } else {
     sysConfig.swVersion = storedVersion;
   }
@@ -114,7 +116,7 @@ static void migrateSettingsIfNeeded() {
 }
 
 void SettingsService::init() {
-  DEBUG_PRINTLN("SettingsService::init...");
+  ESP_LOGI(TAG, "Initializing SettingsService...");
   migrateSettingsIfNeeded();
 
   // Load active machine profile from NVS namespace "machine"
@@ -512,7 +514,7 @@ bool SettingsService::isDeadbandTurnsAuto() {
 bool SettingsService::setScrewZDu(long du) {
   if (du < 100 || du > 10000000) return false;
   if (activeMachineProfile.zAxis.leadscrewPitchDu() == du) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for screw_z_du");
+    ESP_LOGD(TAG, "Suppressed redundant write for screw_z_du");
     return true;
   }
   float pitchMm = (float)du / 10000.0f;
@@ -535,7 +537,7 @@ bool SettingsService::setScrewZDu(long du) {
 bool SettingsService::setScrewXDu(long du) {
   if (du < 100 || du > 10000000) return false;
   if (activeMachineProfile.xAxis.leadscrewPitchDu() == du) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for screw_x_du");
+    ESP_LOGD(TAG, "Suppressed redundant write for screw_x_du");
     return true;
   }
   float pitchMm = (float)du / 10000.0f;
@@ -559,7 +561,7 @@ bool SettingsService::setMotorStepsZ(long steps) {
   if (steps < 10 || steps > 1000000) return false;
   long currentStepsZ = activeMachineProfile.zAxis.motorSteps();
   if (currentStepsZ == steps) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_z");
+    ESP_LOGD(TAG, "Suppressed redundant write for mot_steps_z");
     return true;
   }
   float pitchMm = activeMachineProfile.zAxis.leadscrewPitchMm;
@@ -586,7 +588,7 @@ bool SettingsService::setMotorStepsX(long steps) {
   if (steps < 10 || steps > 1000000) return false;
   long currentStepsX = activeMachineProfile.xAxis.motorSteps();
   if (currentStepsX == steps) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_x");
+    ESP_LOGD(TAG, "Suppressed redundant write for mot_steps_x");
     return true;
   }
   float pitchMm = activeMachineProfile.xAxis.leadscrewPitchMm;
@@ -612,7 +614,7 @@ bool SettingsService::setMotorStepsX(long steps) {
 bool SettingsService::setEncoderPpr(int ppr) {
   if (ppr < 10 || ppr > 30000) return false;
   if (activeMachineProfile.spindle.encoder.ppr == (uint16_t)ppr) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for enc_ppr");
+    ESP_LOGD(TAG, "Suppressed redundant write for enc_ppr");
     return true;
   }
   activeMachineProfile.spindle.encoder.ppr = (uint16_t)ppr;
@@ -634,7 +636,7 @@ bool SettingsService::setEncoderPpr(int ppr) {
 bool SettingsService::setSpindleRatio(float ratio) {
   if (ratio < 0.01f || ratio > 50.0f) return false;
   if (fabsf(activeMachineProfile.spindle.pulleyRatio - ratio) < 0.0001f) {
-    DEBUG_PRINTLN("[NVS] Suppressed redundant write for spindle_ratio");
+    ESP_LOGD(TAG, "Suppressed redundant write for spindle_ratio");
     return true;
   }
   activeMachineProfile.spindle.pulleyRatio = ratio;
@@ -986,7 +988,7 @@ bool SettingsService::setJogStepDu(long du) {
 bool SettingsService::setDeadbandAngle(const char* val) {
   if (!val || *val == '\0' || strcasecmp(val, "auto") == 0 || strcasecmp(val, "default") == 0) {
     if (!_deadbandAngle.has_value()) {
-      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_angle (already auto)");
+      ESP_LOGD(TAG, "Suppressed redundant write for db_angle (already auto)");
       return true;
     }
     _deadbandAngle = std::nullopt;
@@ -1000,7 +1002,7 @@ bool SettingsService::setDeadbandAngle(const char* val) {
     float deg = atof(val);
     if (deg < 0.0f || deg > 360.0f) return false;
     if (_deadbandAngle.has_value() && fabsf(_deadbandAngle.value() - deg) < 0.0001f) {
-      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_angle");
+      ESP_LOGD(TAG, "Suppressed redundant write for db_angle");
       return true;
     }
     _deadbandAngle = deg;
@@ -1017,7 +1019,7 @@ bool SettingsService::setDeadbandAngle(const char* val) {
 bool SettingsService::setDeadbandTurns(const char* val) {
   if (!val || *val == '\0' || strcasecmp(val, "auto") == 0 || strcasecmp(val, "default") == 0) {
     if (!_deadbandTurns.has_value()) {
-      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_turns (already auto)");
+      ESP_LOGD(TAG, "Suppressed redundant write for db_turns (already auto)");
       return true;
     }
     _deadbandTurns = std::nullopt;
@@ -1031,7 +1033,7 @@ bool SettingsService::setDeadbandTurns(const char* val) {
     float turns = atof(val);
     if (turns < 0.0f || turns > 10.0f) return false;
     if (_deadbandTurns.has_value() && fabsf(_deadbandTurns.value() - turns) < 0.0001f) {
-      DEBUG_PRINTLN("[NVS] Suppressed redundant write for db_turns");
+      ESP_LOGD(TAG, "Suppressed redundant write for db_turns");
       return true;
     }
     _deadbandTurns = turns;

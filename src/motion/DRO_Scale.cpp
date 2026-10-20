@@ -1,6 +1,9 @@
 #include "DRO_Scale.h"
 #include <driver/pulse_cnt.h>
+#include <esp_log.h>
 #include "../core/Config.h"
+
+static const char* TAG = "DRO";
 
 DRO_Scale xScale(X_SCALE_PIN_A, X_SCALE_PIN_B, X_SCALE_PCNT_UNIT, X_SCALE_PULSES_PER_MM, 100);
 DRO_Scale zScale(Z_SCALE_PIN_A, Z_SCALE_PIN_B, Z_SCALE_PCNT_UNIT, Z_SCALE_PULSES_PER_MM, 100);
@@ -27,8 +30,7 @@ DRO_Scale::DRO_Scale(gpio_num_t pinA, gpio_num_t pinB, int unit, float scale, in
 }
 
 void DRO_Scale::attach() {
-    Serial.println("DRO_Scale::attach start");
-    Serial.flush();
+    ESP_LOGI(TAG, "Attaching DRO Scale on pins %d, %d...", aPinNumber, bPinNumber);
     pinMode(aPinNumber, puType == up ? INPUT_PULLUP : INPUT);
     pinMode(bPinNumber, puType == up ? INPUT_PULLUP : INPUT);
 

@@ -1,15 +1,17 @@
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <esp_log.h>
 #include "Config.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
-#include "Debug.h"
 #include "SettingsService.h"
 #include "core/OperatorIntent.h"
 #include "modes/ModeRegistry.h"
 #include "motion/hal/Esp32StepperHAL.h"
 #include "motion/hal/Esp32SpindleEncoderHAL.h"
 #include "motion/kernel/MotionEngine.h"
+
+static const char* TAG = "MAIN";
 
 static Esp32StepperHAL stepperHal;
 static Esp32SpindleEncoderHAL encoderHal;
@@ -21,48 +23,41 @@ void setup() {
   Serial.begin(DEBUG_UART_BAUD, SERIAL_8N1, DEBUG_UART_RX_PIN, DEBUG_UART_TX_PIN);
 #endif
   delay(100);
-  DEBUG_PRINTLN("--- whatELS Controller Starting ---");
-  DEBUG_PRINTLN("Mounting LittleFS...");
-  Serial.flush();
+  ESP_LOGI(TAG, "--- whatELS Controller Starting ---");
+  ESP_LOGI(TAG, "Mounting LittleFS...");
   if (LittleFS.begin(true)) {
     gcodeProgramCount = getGcodeProgramCount();
-    DEBUG_PRINTLN("LittleFS mounted.");
+    ESP_LOGI(TAG, "LittleFS mounted successfully (%d programs)", gcodeProgramCount);
   } else {
-    DEBUG_PRINTLN("Failed to mount LittleFS!");
+    ESP_LOGE(TAG, "Failed to mount LittleFS!");
   }
-  DEBUG_PRINTLN("Loading configuration...");
-  DEBUG_PRINTLN("Loading machine config...");
+  ESP_LOGI(TAG, "Loading machine config...");
   loadMachineConfig();
-  DEBUG_PRINTLN("Initializing SettingsService & Machine Profile...");
+  ESP_LOGI(TAG, "Initializing SettingsService & Machine Profile...");
   SettingsService::init();
-  DEBUG_PRINTLN("Loading wifi config...");
+  ESP_LOGI(TAG, "Loading WiFi config...");
   loadWifiConfig();
-  DEBUG_PRINTLN("Loading keyboard config...");
+  ESP_LOGI(TAG, "Loading keyboard config...");
   loadKeyboardConfig();
 
   if (activeMachineProfile.xAxis.hasDroScale) {
-    DEBUG_PRINTLN("xScale.attach()...");
-    Serial.flush();
+    ESP_LOGI(TAG, "Attaching X DRO scale...");
     xScale.attach();
   }
   if (activeMachineProfile.zAxis.hasDroScale) {
-    DEBUG_PRINTLN("zScale.attach()...");
+    ESP_LOGI(TAG, "Attaching Z DRO scale...");
     zScale.attach();
   }
 
   // Always boot cleanly and safely into standard manual feed / DRO mode
-  DEBUG_PRINTLN("Initializing ModeRegistry & standard modes...");
+  ESP_LOGI(TAG, "Initializing ModeRegistry & standard modes...");
   ModeRegistry::initStandardModes();
 
-  DEBUG_PRINTLN("Setting default mode LatheMode::NORMAL...");
-  Serial.flush();
+  ESP_LOGI(TAG, "Setting default mode LatheMode::NORMAL...");
   SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
-  DEBUG_PRINTLN("Default mode configured.");
-  Serial.flush();
 
   // Initialize and wire MotionEngine to Core 1 ([CONC-01], Slice 3)
-  DEBUG_PRINTLN("Initializing MotionEngine HAL and Core 1 Task...");
-  Serial.flush();
+  ESP_LOGI(TAG, "Initializing MotionEngine HAL and Core 1 Task...");
   StepTimingConfig defaultTiming;
   stepperHal.configureAxis(AXIS_Z, Z_STEP, Z_DIR, Z_ENA, defaultTiming);
   stepperHal.configureAxis(AXIS_X, X_STEP, X_DIR, X_ENA, defaultTiming);
@@ -79,15 +74,12 @@ void setup() {
   applyDerivedMachineConfig();
 
   engine.startTask(22, 1);
-  DEBUG_PRINTLN("MotionEngine task started on Core 1 (priority 22).");
-  Serial.flush();
+  ESP_LOGI(TAG, "MotionEngine task started on Core 1 (priority 22)");
   if (sysConfig.wifi.enabled) {
-    DEBUG_PRINTLN("Creating taskWiFi...");
-    Serial.flush();
+    ESP_LOGI(TAG, "Creating taskWiFi on Core 0...");
     xTaskCreatePinnedToCore(taskWiFi, "taskWiFi", 10000 /* stack size */, NULL, 0 /* priority */, NULL, 0 /* core */);
   }
-  DEBUG_PRINTLN("setup() completed successfully!");
-  Serial.flush();
+  ESP_LOGI(TAG, "setup() completed successfully!");
 }
 
 void loop() {

@@ -1,8 +1,10 @@
 #include "Config.h"
 #include "SettingsService.h"
 #include <LittleFS.h>
-#include "Debug.h"
+#include <esp_log.h>
 #include "PersistentSetting.h"
+
+static const char* TAG = "CONFIG";
 #include "motion/kernel/MotionEngine.h"
 #include "motion/DRO_Scale.h"
 
@@ -136,13 +138,11 @@ void normalizeMachineConfig() {
 }
 
 void loadMachineConfig() {
-  DEBUG_PRINTLN("setMachineConfigDefaults...");
+  ESP_LOGD(TAG, "Loading machine configuration from NVS...");
   setMachineConfigDefaults();
   Preferences cfg;
-  DEBUG_PRINTLN("cfg.begin...");
   cfg.begin(CONFIG_NAMESPACE);
 
-  DEBUG_PRINTLN("loading fields...");
   sysConfig.timing.stepTimeMs = cfg.getLong(CFG_STEP_TIME_MS, sysConfig.timing.stepTimeMs);
   sysConfig.timing.delayBetweenStepsMs = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, sysConfig.timing.delayBetweenStepsMs);
   sysConfig.timing.enableContinuousMove = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, sysConfig.timing.enableContinuousMove);
@@ -170,39 +170,26 @@ void loadMachineConfig() {
 }
 
 void printMachineProfileBanner() {
-  Serial.println("\n==================================================================");
-  Serial.printf(" whatELS Machine Profile: %s (%s)\n", activeMachineProfile.profileId, activeMachineProfile.modelName);
-  Serial.printf(" Capabilities: 0x%08X\n", (unsigned int)activeMachineProfile.capabilities);
-  Serial.print(" Active Flags: [");
-  bool first = true;
-  for (uint32_t b = 0; b < 32; b++) {
-    uint32_t flag = 1UL << b;
-    if (activeMachineProfile.capabilities & flag) {
-      if (!first) Serial.print(", ");
-      Serial.print(getCapabilityName((LatheCapabilityFlags)flag));
-      first = false;
-    }
-  }
-  Serial.println("]");
-  Serial.printf(" Spindle: Native PPR=%u, Ratio=%.2f -> Effective PPR=%.1f\n",
-                activeMachineProfile.spindle.encoder.ppr,
-                activeMachineProfile.spindle.pulleyRatio,
-                activeMachineProfile.spindle.effectivePpr());
-  Serial.printf(" Z-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
-                activeMachineProfile.zAxis.leadscrewPitchMm,
-                activeMachineProfile.zAxis.leadscrewPitchDu(),
-                activeMachineProfile.zAxis.stepsPerMm,
-                activeMachineProfile.zAxis.motorSteps());
-  Serial.printf(" X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
-                activeMachineProfile.xAxis.leadscrewPitchMm,
-                activeMachineProfile.xAxis.leadscrewPitchDu(),
-                activeMachineProfile.xAxis.stepsPerMm,
-                activeMachineProfile.xAxis.motorSteps());
-  Serial.println("==================================================================\n");
+  ESP_LOGI(TAG, "whatELS Machine Profile: %s (%s) [Caps: 0x%08X]",
+           activeMachineProfile.profileId, activeMachineProfile.modelName, (unsigned int)activeMachineProfile.capabilities);
+  ESP_LOGI(TAG, "Spindle: Native PPR=%u, Ratio=%.2f -> Effective PPR=%.1f",
+           activeMachineProfile.spindle.encoder.ppr,
+           activeMachineProfile.spindle.pulleyRatio,
+           activeMachineProfile.spindle.effectivePpr());
+  ESP_LOGI(TAG, "Z-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)",
+           activeMachineProfile.zAxis.leadscrewPitchMm,
+           activeMachineProfile.zAxis.leadscrewPitchDu(),
+           activeMachineProfile.zAxis.stepsPerMm,
+           activeMachineProfile.zAxis.motorSteps());
+  ESP_LOGI(TAG, "X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)",
+           activeMachineProfile.xAxis.leadscrewPitchMm,
+           activeMachineProfile.xAxis.leadscrewPitchDu(),
+           activeMachineProfile.xAxis.stepsPerMm,
+           activeMachineProfile.xAxis.motorSteps());
 }
 
 void loadMachineProfile() {
-  DEBUG_PRINTLN("loadMachineProfile: Checking NVS 'machine'...");
+  ESP_LOGD(TAG, "Checking NVS 'machine'...");
   Preferences pref;
   pref.begin("machine", false);
 
@@ -220,10 +207,10 @@ void loadMachineProfile() {
 
   LatheConfiguration loadedProfile;
   if (loadProfileFromLittleFS(slugToLoad, &loadedProfile)) {
-    DEBUG_PRINTF("loadMachineProfile: Loaded preset '%s' from LittleFS catalog\n", slugToLoad);
+    ESP_LOGI(TAG, "Loaded preset '%s' from LittleFS catalog", slugToLoad);
     activeMachineProfile = loadedProfile;
   } else {
-    DEBUG_PRINTF("loadMachineProfile: Preset '%s' not found on LittleFS. Using ROM failsafe (WM210V)...\n", slugToLoad);
+    ESP_LOGW(TAG, "Preset '%s' not found on LittleFS. Using ROM failsafe (WM210V)...", slugToLoad);
     activeMachineProfile = getDefaultProfile();
   }
 
@@ -286,7 +273,7 @@ void loadMachineProfile() {
 }
 
 void saveMachineProfile() {
-  DEBUG_PRINTLN("saveMachineProfile: Persisting sparse overrides to NVS 'machine'...");
+  ESP_LOGI(TAG, "Persisting sparse overrides to NVS 'machine'...");
   Preferences pref;
   pref.begin("machine", false);
 
@@ -406,7 +393,7 @@ void loadKeyboardConfig() {
     setKeyboardConfigDefaults();
     saveKeyboardConfig();
   }
-  DEBUG_PRINTLN("Finished loadKeyboardConfig");
+  ESP_LOGD(TAG, "Finished loadKeyboardConfig");
 }
 
 void setWifiConfigDefaults() {

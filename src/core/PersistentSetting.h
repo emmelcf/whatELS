@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <cmath>
-#include "Debug.h"
+#include <esp_log.h>
 
 namespace detail {
 inline bool readPref(Preferences& p, const char* key, bool def) { return p.getBool(key, def); }
@@ -88,7 +88,7 @@ class PersistentSetting {
   // Assignment / mutation with dirty check
   bool set(const T& newVal) {
     if (detail::equals(_value, newVal)) {
-      DEBUG_PRINTF("[NVS] Suppressed redundant write for key '%s'\n", _key);
+      ESP_LOGD("NVS", "Suppressed redundant write for key '%s'", _key);
       return false;
     }
 
@@ -98,7 +98,7 @@ class PersistentSetting {
     if (pref.begin(_ns, false)) { // Read-write mode
       detail::writePref(pref, _key, _value);
       pref.end();
-      DEBUG_PRINTF("[NVS] Persisted '%s'\n", _key);
+      ESP_LOGD("NVS", "Persisted '%s'", _key);
     }
 
     if (_onChange) {

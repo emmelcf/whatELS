@@ -3,8 +3,10 @@
 
 #if ENABLE_USB_KEYBOARD
 
-#include "Debug.h"
+#include <esp_log.h>
 #include <EspUsbHost.h>
+
+static const char* TAG = "USB_KBD";
 #include <PS2KeyAdvanced.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -83,17 +85,17 @@ static EspUsbHost usbHost;
 void initUsbKeyboard() {
   usbKeyQueue = xQueueCreate(USB_KEY_QUEUE_SIZE, sizeof(uint16_t));
   if (!usbKeyQueue) {
-    DEBUG_PRINTLN("Failed to create usbKeyQueue!");
+    ESP_LOGE(TAG, "Failed to create usbKeyQueue!");
     return;
   }
 
   usbHost.onKeyboard([](const EspUsbHostKeyboardEvent &event) {
-    DEBUG_PRINTF("USB Key: %s iface=%u keycode=0x%02X ascii='%c' (0x%02X)\r\n",
-                 event.pressed ? "PRESS" : "RELEASE",
-                 event.interfaceNumber,
-                 event.keycode,
-                 (event.ascii >= 0x20 && event.ascii < 0x7F) ? (char)event.ascii : ' ',
-                 event.ascii);
+    ESP_LOGD(TAG, "USB Key: %s iface=%u keycode=0x%02X ascii='%c' (0x%02X)",
+             event.pressed ? "PRESS" : "RELEASE",
+             event.interfaceNumber,
+             event.keycode,
+             (event.ascii >= 0x20 && event.ascii < 0x7F) ? (char)event.ascii : ' ',
+             event.ascii);
 
     if (!usbKeyQueue) return;
     uint8_t ps2 = hidToPs2Code(event.keycode);
@@ -109,18 +111,18 @@ void initUsbKeyboard() {
   });
 
   usbHost.onConsumerControl([](const EspUsbHostConsumerControlEvent &event) {
-    DEBUG_PRINTF("USB Consumer: %s usage=0x%04X\r\n",
-                 event.pressed ? "PRESS" : "RELEASE",
-                 event.usage);
+    ESP_LOGD(TAG, "USB Consumer: %s usage=0x%04X",
+             event.pressed ? "PRESS" : "RELEASE",
+             event.usage);
   });
 
   usbHost.onDeviceConnected([](const EspUsbHostDeviceInfo &device) {
-    DEBUG_PRINTF("USB device connected: VID=%04X PID=%04X (%s %s)\n",
-                 device.vid, device.pid, device.manufacturer, device.product);
+    ESP_LOGI(TAG, "USB device connected: VID=%04X PID=%04X (%s %s)",
+             device.vid, device.pid, device.manufacturer, device.product);
   });
 
   usbHost.onDeviceDisconnected([](const EspUsbHostDeviceInfo &device) {
-    DEBUG_PRINTF("USB device disconnected: VID=%04X PID=%04X\n", device.vid, device.pid);
+    ESP_LOGI(TAG, "USB device disconnected: VID=%04X PID=%04X", device.vid, device.pid);
   });
 
   EspUsbHostConfig config;
@@ -128,9 +130,9 @@ void initUsbKeyboard() {
   config.taskPriority = 2;
 
   if (!usbHost.begin(config)) {
-    DEBUG_PRINTF("usbHost.begin() failed: %s\n", usbHost.lastErrorName());
+    ESP_LOGE(TAG, "usbHost.begin() failed: %s", usbHost.lastErrorName());
   } else {
-    DEBUG_PRINTLN("USB Host initialized");
+    ESP_LOGI(TAG, "USB Host initialized");
   }
 }
 
