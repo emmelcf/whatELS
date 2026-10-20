@@ -51,6 +51,8 @@ docs/
 ### [Clients & HMI (`docs/clients/`)](./clients/ELS_CLIENT_ARCHITECTURE.md)
 *Supervisory Domain (Core 0).*
 - **[`ELS_CLIENT_ARCHITECTURE.md`](./clients/ELS_CLIENT_ARCHITECTURE.md):** Multi-client architecture, WebSocket & Serial wire protocols, Tier 3 capability handshake, Safe Monitor Lockout.
+- **[`CLIENT_IMPLEMENTATION_GUIDE.md`](./clients/CLIENT_IMPLEMENTATION_GUIDE.md):** Step-by-step developer implementation guide, interface reference, and gap analysis.
+- **[`CANONICAL_COMMAND_REFERENCE.md`](./protocol/CANONICAL_COMMAND_REFERENCE.md):** Authoritative wire command syntax, arguments, permissions, and returns.
 - **[`hmi/`](./clients/hmi/HMI_DESIGN_GUIDELINES.md):** 800×480 rich touch design principles, physical lathe ergonomics, high-contrast dark mode.
 - **[`web_ui/`](./clients/web_ui/OVERVIEW.md):** Touch DRO Web Client overview and interaction ledger.
 
