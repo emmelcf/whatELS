@@ -1,7 +1,6 @@
 #include "WebServerModule.h"
 #include "Config.h"
 #include <esp_log.h>
-#include "core/OperatorIntent.h"
 
 static const char* TAG = "WEB";
 #include "CommandDispatcher.h"
@@ -645,6 +644,9 @@ int getGcodeProgramCount() {
   return count;
 }
 
+static int s_gcodeProgramIndex = 0;
+static int s_gcodeProgramCount = 0;
+
 String getCurrentGcodeProgramName() {
   File root = LittleFS.open("/");
   if (!root || !root.isDirectory()) {
@@ -658,7 +660,7 @@ String getCurrentGcodeProgramName() {
     String filename = file.name();
     file.close();
     if (filename.endsWith(".gcode")) {
-      if (count == gcodeProgramIndex) {
+      if (count == s_gcodeProgramIndex) {
         return filename.substring(0, filename.length() - 6);
       }
       count++;
@@ -669,28 +671,28 @@ String getCurrentGcodeProgramName() {
   return "";
 }
 
-bool saveGcode() {
-  if (gcodeSaveName.length() < 2) {
+bool saveGcode(const String& name, const String& content) {
+  if (name.length() < 2) {
     writeBuffer(&outBuffer, "error: name must be at least 2 chars\n");
     return false;
   }
-  if (gcodeSaveValue.length() < 2) {
+  if (content.length() < 2) {
     writeBuffer(&outBuffer, "error: program too short\n");
     return false;
   }
 
-  String filename = "/" + gcodeSaveName + ".gcode";
+  String filename = "/" + name + ".gcode";
   File file = LittleFS.open(filename, "w");
   if (!file) {
     writeBuffer(&outBuffer, "error: failed to open file\n");
     return false;
   }
 
-  file.print(gcodeSaveValue);
+  file.print(content);
   file.close();
 
   writeBuffer(&outBuffer, "success: G-code saved\n");
-  gcodeProgramCount = getGcodeProgramCount();
+  s_gcodeProgramCount = getGcodeProgramCount();
   return true;
 }
 
@@ -709,7 +711,7 @@ void removeGcodeByName(const String& name) {
   }
 
   writeBuffer(&outBuffer, "success: " + name + " deleted\n");
-  gcodeProgramCount = getGcodeProgramCount();
+  s_gcodeProgramCount = getGcodeProgramCount();
 }
 
 bool removeAllGcode() {
@@ -730,7 +732,7 @@ bool removeAllGcode() {
   }
 
   writeBuffer(&outBuffer, "success: all G-code deleted\n");
-  gcodeProgramCount = 0;
+  s_gcodeProgramCount = 0;
   return true;
 }
 
@@ -754,9 +756,7 @@ String readGcodeProgram(const String& name) {
 
 static void handleGcodeAdd() {
   if (server.hasArg("name") && server.hasArg("gcode")) {
-    gcodeSaveName = server.arg("name");
-    gcodeSaveValue = server.arg("gcode");
-    if (saveGcode()) {
+    if (saveGcode(server.arg("name"), server.arg("gcode"))) {
       server.send(200, "text/plain", "G-code saved successfully");
     } else {
       server.send(500, "text/plain", "Failed to save G-code");

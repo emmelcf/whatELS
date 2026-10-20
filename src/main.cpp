@@ -5,7 +5,6 @@
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "SettingsService.h"
-#include "core/OperatorIntent.h"
 #include "modes/ModeRegistry.h"
 #include "motion/hal/Esp32StepperHAL.h"
 #include "motion/hal/Esp32SpindleEncoderHAL.h"
@@ -26,8 +25,8 @@ void setup() {
   ESP_LOGI(TAG, "--- whatELS Controller Starting ---");
   ESP_LOGI(TAG, "Mounting LittleFS...");
   if (LittleFS.begin(true)) {
-    gcodeProgramCount = getGcodeProgramCount();
-    ESP_LOGI(TAG, "LittleFS mounted successfully (%d programs)", gcodeProgramCount);
+    int gcodeCount = getGcodeProgramCount();
+    ESP_LOGI(TAG, "LittleFS mounted successfully (%d programs)", gcodeCount);
   } else {
     ESP_LOGE(TAG, "Failed to mount LittleFS!");
   }
@@ -72,7 +71,7 @@ void setup() {
   engine.setStepperHAL(&stepperHal);
   engine.setEncoderHAL(&encoderHal);
 
-  applyDerivedMachineConfig();
+  SettingsService::applyDerivedMachineConfig();
 
   engine.startTask(22, 1);
   ESP_LOGI(TAG, "MotionEngine task started on Core 1 (priority 22)");

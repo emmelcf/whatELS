@@ -674,7 +674,7 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 
 ### 10.4 Subsystem 5 Command Dispatcher Architecture: Single-Gate Router & Axis-Aware Safety
 
-To prevent security bypasses, race conditions, and code duplication across command handlers, `CommandDispatcher` (`src/web/CommandDispatcher.cpp`) is structured as a **Single-Gate Command Router**:
+To prevent security bypasses, race conditions, and code duplication across command handlers, `CommandDispatcher` (`src/core/CommandDispatcher.cpp`) is structured as a **Single-Gate Command Router**:
 
 ```
 Client Payload (e.g. "CMD.jogStep=X,TAIL\n")

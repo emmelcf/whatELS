@@ -8,7 +8,6 @@
 #include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/MotionConversions.h"
 #include "motion/kernel/MotionEngine.h"
-#include "core/OperatorIntent.h"
 
 // =============================================================================
 // FORWARD DECLARATIONS OF DEDICATED COMMAND HANDLERS

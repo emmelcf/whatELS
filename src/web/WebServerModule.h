@@ -81,7 +81,7 @@ void requestWebUiMoveRelease();
 int getGcodeProgramCount();
 String getCurrentGcodeProgramName();
 String readGcodeProgram(const String& name);
-bool saveGcode();
+bool saveGcode(const String& name, const String& content);
 void removeGcodeByName(const String& name);
 bool removeAllGcode();
 

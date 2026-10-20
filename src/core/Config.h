@@ -265,12 +265,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 // Global Variables (extern declarations)
 extern bool SHOW_KEY_PRESSES;
 
-// Active Lathe Machine Profile (Tier 1 Architecture)
-extern LatheConfiguration activeMachineProfile;
-void loadMachineProfile();
-void saveMachineProfile();
-void applyDerivedMachineConfig();
-void printMachineProfileBanner();
 
 // Keyboard Configuration Lifecycle (Tier 2: "sys")
 void setKeyboardConfigDefaults();

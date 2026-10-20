@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include "Config.h"
 
 // --- Authoritative Operator Intent Models ---
 enum ThreadFormat {
@@ -29,16 +28,3 @@ struct TaperSetting {
   int presetId;      // Preset index if applicable
 };
 
-// Conversational Cycle & Pass State
-extern long setupIndex;
-extern long opIndex;
-extern bool opIndexAdvanceFlag;
-
-// Conversational G-code State
-extern String gcodeCommand;
-extern int gcodeProgramIndex;
-extern int gcodeProgramCount;
-extern String gcodeSaveName;
-extern String gcodeSaveValue;
-extern String gcodeProgram;
-extern int gcodeProgramCharIndex;

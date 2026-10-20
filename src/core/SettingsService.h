@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <optional>
+#include "Config.h"
 #include "LatheProfile.h"
 #include "OperatorIntent.h"
 
@@ -114,9 +115,6 @@ public:
   static void triggerEstop(int estopCode);
   static void clearEstop();
   static int getEstopCode();
-
-  // Core 1 Synchronization Hook (Called from main.cpp / motion loop)
-  static void applyCore1PendingLatches();
 
   // --- Tier 3: Workshop Operator Preferences ---
   static const OperatorPreferences& getPreferences() { return operatorPrefs; }

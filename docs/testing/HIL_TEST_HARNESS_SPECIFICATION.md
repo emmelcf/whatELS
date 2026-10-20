@@ -225,7 +225,7 @@ To guarantee that a disconnected or crashed test script never leaves physical st
 
 ### 2.4 Required Firmware Prerequisite Fixes in `CommandDispatcher.cpp`
 
-To ensure deterministic HIL execution and full Gearbox $Z+X$ coverage, the following fixes must be applied to `src/web/CommandDispatcher.cpp`[cite: 4]:
+To ensure deterministic HIL execution and full Gearbox $Z+X$ coverage, the following fixes must be applied to `src/core/CommandDispatcher.cpp`[cite: 4]:
 
 1. **Consistent `OK:CMD.<name>\n` Replies Across All Handlers:**
    Currently, several handlers (`handleAxisZero`, `handleAxisPosDu`, `handleAxisLimitDu`, `handleAxisClearLimit`, `handleJogStep`, `handleJogHold`, `handleJogRelease`, `handleJogStepDu`, `handleFeedStepDu`, `handleFeedStepCycle`, `handleFeedDupr`, `handleFeedMm`, `handleFeedTpi`, `handleFeedNudge`, `handleTaperRatio`, `handleTaperAngle`, `handleOn`) cast `(void)reply;` and return `true` silently[cite: 4]. Every handler that returns `true` MUST populate `*reply = "OK:CMD.<name>\n";` (and `*reply = "ERR:...\n";` on `false`) so `WhatElsClient.send()` can await command completion deterministically before inspecting state.

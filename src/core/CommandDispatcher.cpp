@@ -8,7 +8,6 @@
 #include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/MotionConversions.h"
 #include "motion/kernel/MotionEngine.h"
-#include "core/OperatorIntent.h"
 
 namespace whatels {
 namespace core {
@@ -380,16 +379,19 @@ static CommandResult handleAxisClearLimit(const char* args) {
 static CommandResult handleTaperRatio(const char* args) {
   if (!args || !*args) return CommandResult::failed("taperRatio", "Missing ratio");
   float ratio = atof(args);
-  SettingsService::setTaperRatio(ratio);
-  return CommandResult::ok("taperRatio");
+  if (SettingsService::setTaperRatio(ratio)) {
+    return CommandResult::ok("taperRatio");
+  }
+  return CommandResult::failed("taperRatio", "Failed to set taper ratio");
 }
 
 static CommandResult handleTaperAngle(const char* args) {
   if (!args || !*args) return CommandResult::failed("taperAngle", "Missing angle");
   float angle = atof(args);
-  float ratio = tan(angle * (M_PI / 180.0));
-  SettingsService::setTaperRatio(ratio);
-  return CommandResult::ok("taperAngle");
+  if (SettingsService::setTaperAngle(angle)) {
+    return CommandResult::ok("taperAngle");
+  }
+  return CommandResult::failed("taperAngle", "Failed to set taper angle");
 }
 
 static CommandResult handleTaperPreset(const char* args) {

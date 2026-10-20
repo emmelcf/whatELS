@@ -11,24 +11,11 @@ static const char* TAG = "SETTINGS";
 #include "motion/MotionConversions.h"
 #include "motion/DRO_Scale.h"
 
-LatheConfiguration activeMachineProfile = {};
+static LatheConfiguration activeMachineProfile = {};
 
 static ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
 static TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
 
-// Conversational Cycle & Pass State
-long setupIndex = 0;
-long opIndex = 0;
-bool opIndexAdvanceFlag = false;
-
-// Conversational G-code State
-String gcodeCommand = "";
-int gcodeProgramIndex = 0;
-int gcodeProgramCount = 0;
-String gcodeSaveName = "";
-String gcodeSaveValue = "";
-String gcodeProgram = "";
-int gcodeProgramCharIndex = 0;
 
 static int s_starts = 1;
 static int s_turnPasses = 1;
@@ -201,9 +188,6 @@ void SettingsService::applyDerivedMachineConfig() {
   MotionEngine::instance().configureAxis(AXIS_X, activeMachineProfile.xAxis.toAxisGeometry(), defaultTiming);
 }
 
-void applyDerivedMachineConfig() {
-  SettingsService::applyDerivedMachineConfig();
-}
 
 void SettingsService::printMachineProfileBanner() {
   ESP_LOGI(TAG, "whatELS Machine Profile: %s (%s) [Caps: 0x%08X]",
@@ -224,9 +208,6 @@ void SettingsService::printMachineProfileBanner() {
            activeMachineProfile.xAxis.motorSteps());
 }
 
-void printMachineProfileBanner() {
-  SettingsService::printMachineProfileBanner();
-}
 
 void SettingsService::loadMachineProfile() {
   ESP_LOGD(TAG, "Checking NVS 'machine'...");
@@ -312,9 +293,6 @@ void SettingsService::loadMachineProfile() {
   printMachineProfileBanner();
 }
 
-void loadMachineProfile() {
-  SettingsService::loadMachineProfile();
-}
 
 void SettingsService::saveMachineProfile() {
   ESP_LOGI(TAG, "Persisting sparse overrides to NVS 'machine'...");
@@ -339,9 +317,6 @@ void SettingsService::saveMachineProfile() {
   pref.end();
 }
 
-void saveMachineProfile() {
-  SettingsService::saveMachineProfile();
-}
 
 const LatheConfiguration& SettingsService::getActiveProfile() {
   return activeMachineProfile;
@@ -1140,9 +1115,6 @@ int SettingsService::getEstopCode() {
   return static_cast<int>(emergencyStop);
 }
 
-void SettingsService::applyCore1PendingLatches() {
-  // FreeRTOS Core 1 MotionEngine task samples parameters continuously
-}
 
 bool SettingsService::setJogStepDu(long du) {
   if (du < 1 || du > 1000000) return false;
