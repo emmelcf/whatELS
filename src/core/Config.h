@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <driver/pulse_cnt.h>
+#include "BoardPins.h"
 #include "LatheProfile.h"
 
 /**
@@ -12,8 +12,8 @@
  *
  * TABLE OF CONTENTS:
  *  1. System Versioning & Storage Namespaces
- *  2. Hardware Pinout & Board Definitions (whatELS Controller PCB)
- *  3. Motion Physics, Limits & Default Machine Parameters
+ *  2. Hardware Pinout & Peripheral Flags
+ *  3. Motion Physics & Default Parameters
  *  4. Operational Modes, Units & Step Increments
  *  5. HMI & Input Action Codes
  *  6. Persistent Storage (NVS) Keys
@@ -32,101 +32,25 @@
 #define CONTROLLER_VERSION_TEXT "H" WHATELS_STRINGIFY(HARDWARE_VERSION) "V" WHATELS_STRINGIFY(SOFTWARE_VERSION)
 
 // Flash Storage Namespaces (4-tier taxonomy)
-#define NVS_NAMESPACE_MACHINE "machine" // Tier 1: Hardware geometry & pin limits
+#define NVS_NAMESPACE_MACHINE "machine" // Tier 1: Hardware geometry & machine profile
 #define NVS_NAMESPACE_SYS     "sys"     // Tier 2: Subsystem & peripheral configs
 #define NVS_NAMESPACE_PREFS   "prefs"   // Tier 3: Workshop operator preferences
 #define PREF_NAMESPACE        NVS_NAMESPACE_PREFS // Authoritative operator preferences namespace
-#define CONFIG_NAMESPACE      "h5cfg"   // Legacy fallback alias
 
 // =============================================================================
-// 2. HARDWARE PINOUT & BOARD DEFINITIONS (whatELS Controller PCB)
+// 2. HARDWARE PINOUT & PERIPHERAL FLAGS
 // =============================================================================
-
-// GPIO Fast Helper Macros
-#define DHIGH(x) digitalWrite(x, HIGH)
-#define DLOW(x) digitalWrite(x, LOW)
-#define DELAY(x) vTaskDelay(x / portTICK_PERIOD_MS)
-
-// Spindle Optical Rotary Encoder
-#define ENC_A 14
-#define ENC_B 13
-
-// Main Lead Screw (Z) Stepper / Servo Pins
-#define Z_ENA 41
-#define Z_DIR 42
-#define Z_STEP 35
-#define Z_PULSE_A 18
-#define Z_PULSE_B 8
-
-// Cross-Slide Lead Screw (X) Stepper / Servo Pins
-#define X_ENA 16
-#define X_DIR 15
-#define X_STEP 7
-#define X_PULSE_A 47
-#define X_PULSE_B 21
-
-// whatELS Controller PCB Silkscreen Hardware Pin Headers (Reserved / Unpopulated)
-#define Y_ENA 1
-#define Y_DIR 2
-#define Y_STEP 17
-#define Y_PULSE_A 45
-#define Y_PULSE_B 48
-
-// DRO Linear Scales Pinouts (Quadrature Encoder interface)
-#define Z_SCALE_PIN_A (gpio_num_t)9
-#define Z_SCALE_PIN_B (gpio_num_t)12
-#define Z_SCALE_PCNT_UNIT 1
-#define Z_SCALE_PULSES_PER_MM 1250.67f
-
-#define X_SCALE_PIN_A (gpio_num_t)40
-#define X_SCALE_PIN_B (gpio_num_t)39
-#define X_SCALE_PCNT_UNIT 2
-#define X_SCALE_PULSES_PER_MM 501.2f
-
-// Analog / Contact Joystick Pins
-#define JOY_Z 4
-#define JOY_X 5
-#define JOY_Y 6 // Unpopulated H5 PCB silkscreen pin header
-#define JOY_BUTTON 38
-
-// Nextion LCD & PS/2 Keyboard Pins and UART Settings
-#define KEY_DATA 37
-#define KEY_CLOCK 36
-const long NEXTION_NORMAL_BAUD = 115200;
-const long NEXTION_FIRST_UPLOAD_BAUD = 9600;
-const long NEXTION_UPLOAD_BAUD = 115200;
-const int NEXTION_TFT_PACKET_SIZE = 4096;
-const unsigned long NEXTION_CONNECT_TIMEOUT_MS = 2000;
-const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
-#define LCD_HASH_INITIAL -3845709
 
 // USB Host Keyboard (Supported on ESP32-S3 and ESP32-S2)
 #ifndef ENABLE_USB_KEYBOARD
 #define ENABLE_USB_KEYBOARD 0
 #endif
 
-// Debug UART via MISC Header (for Rainbowlink v2 / bench debugging)
-#define DEBUG_UART_TX_PIN 10
-#define DEBUG_UART_RX_PIN 11
-#define DEBUG_UART_BAUD 115200
-
 // =============================================================================
-// 3. MOTION PHYSICS, LIMITS & DEFAULT MACHINE PARAMETERS
+// 3. MOTION PHYSICS & DEFAULT PARAMETERS
 // =============================================================================
 
-#define TIMER_FREQ 1000000 // 1MHz async timer frequency
-
-// Spindle Optical Rotary Encoder & PCNT Filters
-const int ENCODER_FILTER = 1;
-const int PCNT_LIM = 31000;
-const int PCNT_CLEAR = 30000;
-const long DUPR_MAX = 254000;
 const int32_t STARTS_MAX = 124;
-const long PASSES_MAX = 999;
-
-// Axis Identifiers
-const char NAME_Z = 'Z';
-const char NAME_X = 'X';
 
 // -----------------------------------------------------------------------------
 // Tier 2: Controller & Peripheral Configuration Structs
@@ -143,71 +67,23 @@ struct WifiConfig {
   long outgoingBufferSize = 100000;
 };
 
+struct MpgAxisConfig {
+  float ppr = 600.0f;
+};
+
 struct MpgConfig {
-  QuadratureEncoderConfig zHandwheel = { 600, Z_PULSE_A, Z_PULSE_B, false, false, -1 };
-  QuadratureEncoderConfig xHandwheel = { 600, X_PULSE_A, X_PULSE_B, false, false, -1 };
+  MpgAxisConfig zHandwheel = { 600.0f };
+  MpgAxisConfig xHandwheel = { 600.0f };
   unsigned long pulseWaitMs = 20;
-};
-
-struct MotionTimingConfig {
-  long directionSetupDelayUs = 10;   // Wait time after DIR toggle before STEP pulse
-  long steppedEnableDelayMs = 100;   // Driver power-on delay before motion
-  long jogHoldDelayMs = 1000;        // Hold duration before continuous jogging starts
-  long stepTimeMs = 500;
-  long delayBetweenStepsMs = 80;
-  bool enableContinuousMove = true;
-};
-
-struct GCodeConfig {
-  float linearInterpolationPrecision = 0.1f;
-  long waitEpsilonSteps = 10;
-  bool spindlePausesGcode = true;
-  int minRpm = 30;
-  long defaultFeedDuPerSec = 20000;
-  float minFeedDuPerSec = 167.0f;
-};
-
-struct JoystickConfig {
-  bool enabled = false;
-  bool zEnabled = true;
-  bool xEnabled = true;
-  bool buttonTogglesOnOff = false;
-  int centerSamples = 64;
-  int oversamples = 4;
-  int sampleIntervalMs = 20;
-  int adcMax = 4095;
-  int deadband = 250;
-  int pulseQueueLimit = 10000;
-  float normalRps = 1.0f;
-  float rapidRps = 8.0f;
-  float pitchChangesPerSec = 20.0f;
-  unsigned long pitchStatusHoldMs = 500;
-  unsigned long buttonDebounceMs = 30;
-  unsigned long buttonToggleMaxMs = 500;
-  int startupCenterToleranceMin = 32;
-  bool invertZ = false;
-  bool invertX = false;
-  bool invertButton = false;
-};
-
-struct NextionTheme {
-  uint16_t activeHighlight = 2016;  // RGB565 Green (0x07E0) for active states & highlights
-  uint16_t inactiveDim     = 25388; // RGB565 Dim Gray (0x632C) for inactive states
 };
 
 struct ControllerConfig {
   int swVersion = SOFTWARE_VERSION;
   WifiConfig wifi;
-  JoystickConfig joystick;
   MpgConfig mpg;
-  MotionTimingConfig timing;
-  GCodeConfig gcode;
-  NextionTheme theme;
 };
 
 extern ControllerConfig sysConfig;
-
-const float TPI_ROUND_EPSILON = 0.03f;
 
 // =============================================================================
 // 4. OPERATIONAL MODES, UNITS & STEP INCREMENTS
@@ -347,22 +223,13 @@ extern OperatorPreferences operatorPrefs;
 #define B_SPINDLE_UNITS 209
 #define B_PITCH 210
 
-// Numpad Entry Mode
-enum NumpadMode { PITCH, DIAMETER, LENGTH };
-extern NumpadMode numpadEntryMode;
-
-// Input Binding & Event Structs
+// Input Binding Struct
 struct KeyboardBinding {
   const char* id = nullptr;
   const char* label = nullptr;
-  byte actionCode = 0;
-  byte defaultCode = 0;
-  byte code = 0;
-};
-
-struct WebUiEvent {
-  byte actionCode = 0;
-  bool isPress = false;
+  uint8_t actionCode = 0;
+  uint8_t defaultCode = 0;
+  uint8_t code = 0;
 };
 
 #define KEY_BINDING(id, label, code) { id, label, code, code, code }
@@ -388,42 +255,8 @@ extern const int KEYBOARD_BINDING_COUNT;
 #define PREF_DEADBAND_ANGLE "db_angle"
 #define PREF_DEADBAND_TURNS "db_turns"
 
-// Machine Configuration Keys
-#define CFG_VERSION "v"
-#define CFG_STEP_TIME_MS "stepMs"
-#define CFG_DELAY_BETWEEN_STEPS_MS "stepDelay"
-#define CFG_ENABLE_CONTINUOUS_MOVE "contStep"
-#define CFG_PULSE_PER_REVOLUTION "pulseRev"
-#define CFG_PULSE_PER_REVOLUTION_Z "zPulseRev"
-#define CFG_PULSE_PER_REVOLUTION_X "xPulseRev"
-#define CFG_JOYSTICK_ENABLED "joyOn"
-#define CFG_JOYSTICK_Z_ENABLED "joyZOn"
-#define CFG_JOYSTICK_X_ENABLED "joyXOn"
-#define CFG_JOYSTICK_BUTTON_TOGGLES_ON_OFF "joyBtnOn"
-#define CFG_JOYSTICK_CENTER_SAMPLES "joyCenter"
-#define CFG_JOYSTICK_OVERSAMPLES "joyOver"
-#define CFG_JOYSTICK_SAMPLE_INTERVAL_MS "joySample"
-#define CFG_JOYSTICK_ADC_MAX "joyAdc"
-#define CFG_JOYSTICK_DEADBAND "joyDead"
-#define CFG_JOYSTICK_PULSE_QUEUE_LIMIT "joyQueue"
-#define CFG_JOYSTICK_NORMAL_RPS "joyNormal"
-#define CFG_JOYSTICK_RAPID_RPS "joyRapid"
-#define CFG_INVERT_JOYSTICK_Z "joyInvZ"
-#define CFG_INVERT_JOYSTICK_X "joyInvX"
-#define CFG_INVERT_JOYSTICK_BUTTON "joyInvB"
-
-// Network & WiFi Configuration Keys
-#define WCFG_VERSION "v"
-#define WCFG_ENABLED "en"
-#define WCFG_SSID "ssid"
-#define WCFG_PASSWORD "pwd"
-#define WCFG_HOSTNAME "hn"
-
-// Keyboard Configuration Keys
-#define KCFG_VERSION "v"
+// Keyboard Configuration Keys (Tier 2: Namespace "sys")
 #define KCFG_SHOW_KEY_PRESSES "showKeys"
-
-
 
 // =============================================================================
 // 7. GLOBAL RUNTIME STATE & LIFECYCLE FUNCTIONS
@@ -432,37 +265,26 @@ extern const int KEYBOARD_BINDING_COUNT;
 // Global Variables (extern declarations)
 extern bool SHOW_KEY_PRESSES;
 
-// Helpers
-long clampLongValue(long value, long minValue, long maxValue);
-int clampIntValue(int value, int minValue, int maxValue);
-float clampFloatValue(float value, float minValue, float maxValue);
-
-// Machine Configuration Lifecycle
-void setMachineConfigDefaults();
-void applyDerivedMachineConfig();
-void normalizeMachineConfig();
-void loadMachineConfig();
-
 // Active Lathe Machine Profile (Tier 1 Architecture)
 extern LatheConfiguration activeMachineProfile;
 void loadMachineProfile();
 void saveMachineProfile();
+void applyDerivedMachineConfig();
 void printMachineProfileBanner();
 
-// Keyboard Configuration Lifecycle
+// Keyboard Configuration Lifecycle (Tier 2: "sys")
 void setKeyboardConfigDefaults();
-const char* keyboardActionLabel(byte actionCode);
-byte keyboardActionForCode(byte physicalCode);
 bool validateKeyboardConfig(String* error);
 void loadKeyboardConfig();
 void saveKeyboardConfig();
 
-// WiFi Configuration Lifecycle
+// WiFi Configuration Lifecycle (Tier 2: "sys")
 void setWifiConfigDefaults();
 bool validateWifiConfig(String* error);
 void loadWifiConfig();
 void saveWifiConfig();
 
-// Measure / Display Configuration
-void setMeasure(MeasureUnit value);
-void setMeasure(int value);
+// MPG Handwheel Configuration Lifecycle (Tier 2: "sys")
+void setMpgConfigDefaults();
+void loadMpgConfig();
+void saveMpgConfig();

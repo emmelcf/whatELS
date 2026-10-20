@@ -1085,7 +1085,7 @@ static bool connectStationWifi() {
       ESP_LOGI(TAG, "WiFi connected successfully!");
       break;
     }
-    DELAY(500);
+    vTaskDelay(pdMS_TO_TICKS(500));
     taskYIELD();
   }
   if (WiFi.status() != WL_CONNECTED) {
@@ -1227,12 +1227,12 @@ void taskWiFi(void *param) {
     }
     if (firmwareUploadRestartPending && ((long)(millis() - firmwareUploadRestartAt) >= 0)) {
       firmwareUploadLog("restarting now");
-      DELAY(50);
+      vTaskDelay(pdMS_TO_TICKS(50));
       ESP.restart();
     }
     if (configRestartPending && ((long)(millis() - configRestartAt) >= 0)) {
       ESP_LOGI(TAG, "Machine config saved, restarting now");
-      DELAY(50);
+      vTaskDelay(pdMS_TO_TICKS(50));
       ESP.restart();
     }
 

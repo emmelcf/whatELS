@@ -9,7 +9,7 @@
 
 ## 2. Tooling & Execution Discipline
 - **Native Tools Over Shell**: Use native IDE tools (`grep_search`, `view_file`, `replace_file_content`, `write_to_file`) for all file inspection and editing. Reserve `run_command` strictly for `git`, `pio run`, etc.
-- **Grounding in Documentation**: Consult authoritative documents in `docs/` before suggesting designs or changes.
+- **Grounding in Active Documentation**: Consult authoritative active documents in `docs/` (such as [`docs/WHATELS_MASTER_ARCHITECTURE.md`](docs/WHATELS_MASTER_ARCHITECTURE.md)). Strictly NEVER use archived documents in `docs/archive/` to determine current system architecture.
 
 ## 3. Domain Rules & Skills
 - **Lathe Safety & Operator Invariants**: Follow [`.agents/rules/lathe_safety.md`](.agents/rules/lathe_safety.md) (`always_on`).

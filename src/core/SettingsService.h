@@ -42,6 +42,10 @@ public:
   static bool deletePreset(const char* slug, String* reply = nullptr);
   static bool setDefaultPreset(const char* slug, String* reply = nullptr);
   static bool resetToDefaultPreset(String* reply = nullptr);
+  static void loadMachineProfile();
+  static void saveMachineProfile();
+  static void applyDerivedMachineConfig();
+  static void printMachineProfileBanner();
 
   // --- Universal Wire Protocol Handlers ---
   // Handles SETTINGS.get or SETTINGS.get=<key>

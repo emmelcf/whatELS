@@ -12,7 +12,7 @@ description: Embedded C++ real-time invariants for src/ (ISR safety, SettingsSer
   - All machine parameters access state via `SettingsService` / canonical accessors (no raw legacy globals).
   - All persisted settings MUST use `PersistentSetting<T>` (`PersistentSetting.h`) for single-read RAM boot caching and dirty-checking. Never call raw `Preferences.put*()`.
 - **GPIO Pin Freezing:**
-  - Pin definitions in `src/core/Config.h` map to physical PCB traces. Never reassign without confirmation.
+  - Pin definitions in `src/core/BoardPins.h` (and re-exported by `src/core/Config.h`) map to physical PCB traces. Never reassign without confirmation.
 - **Hardware Flashing Protocol:**
   - USB keyboard emulation is disabled; ESP32-S3 USB CDC auto-resets via DTR/RTS (no manual button presses needed).
   - Autonomous agent compile & upload authorized: `pio run -e esp32s3` then `pio run -e esp32s3 -t upload`.

@@ -31,20 +31,20 @@ void setup() {
   } else {
     ESP_LOGE(TAG, "Failed to mount LittleFS!");
   }
-  ESP_LOGI(TAG, "Loading machine config...");
-  loadMachineConfig();
   ESP_LOGI(TAG, "Initializing SettingsService & Machine Profile...");
   SettingsService::init();
   ESP_LOGI(TAG, "Loading WiFi config...");
   loadWifiConfig();
   ESP_LOGI(TAG, "Loading keyboard config...");
   loadKeyboardConfig();
+  ESP_LOGI(TAG, "Loading MPG handwheel config...");
+  loadMpgConfig();
 
-  if (activeMachineProfile.xAxis.hasDroScale) {
+  if (SettingsService::hasCapability(CAP_DRO_X)) {
     ESP_LOGI(TAG, "Attaching X DRO scale...");
     xScale.attach();
   }
-  if (activeMachineProfile.zAxis.hasDroScale) {
+  if (SettingsService::hasCapability(CAP_DRO_Z)) {
     ESP_LOGI(TAG, "Attaching Z DRO scale...");
     zScale.attach();
   }
@@ -62,9 +62,10 @@ void setup() {
   stepperHal.configureAxis(AXIS_Z, Z_STEP, Z_DIR, Z_ENA, defaultTiming);
   stepperHal.configureAxis(AXIS_X, X_STEP, X_DIR, X_ENA, defaultTiming);
 
-  int indexPin = activeMachineProfile.spindle.encoder.hasIndex ? activeMachineProfile.spindle.encoder.indexPin : -1;
-  uint16_t spindlePpr = activeMachineProfile.spindle.encoder.ppr;
-  float pulleyRatio = activeMachineProfile.spindle.effectivePulleyRatio();
+  const LatheConfiguration& profile = SettingsService::getActiveProfile();
+  int indexPin = profile.spindle.encoder.hasIndex ? profile.spindle.encoder.indexPin : -1;
+  uint16_t spindlePpr = profile.spindle.encoder.ppr;
+  float pulleyRatio = profile.spindle.effectivePulleyRatio();
   encoderHal.init(ENC_A, ENC_B, indexPin, spindlePpr, pulleyRatio);
 
   MotionEngine& engine = MotionEngine::instance();

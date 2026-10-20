@@ -2,12 +2,16 @@
 #include "Config.h"
 #include "OperatorIntent.h"
 #include <esp_log.h>
+#include <LittleFS.h>
 #include "SystemSchemaJson.h"
 
 static const char* TAG = "SETTINGS";
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
 #include "motion/MotionConversions.h"
+#include "motion/DRO_Scale.h"
+
+LatheConfiguration activeMachineProfile = {};
 
 static ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
 static TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
@@ -176,6 +180,167 @@ void SettingsService::init() {
     currentThreadSetting.authorPitch = 1.0f;
     currentThreadSetting.dupr = 10000;
   }
+}
+
+void SettingsService::applyDerivedMachineConfig() {
+  ISpindleEncoderHAL* encHal = MotionEngine::instance().getEncoderHAL();
+  if (encHal) {
+    encHal->updateProfile(
+        activeMachineProfile.spindle.encoder.ppr,
+        activeMachineProfile.spindle.effectivePulleyRatio());
+  }
+
+  StepTimingConfig defaultTiming;
+  if (activeMachineProfile.zAxis.droScale.ppr > 0) {
+    zScale.setScaleFactor(static_cast<float>(activeMachineProfile.zAxis.droScale.ppr));
+  }
+  if (activeMachineProfile.xAxis.droScale.ppr > 0) {
+    xScale.setScaleFactor(static_cast<float>(activeMachineProfile.xAxis.droScale.ppr));
+  }
+  MotionEngine::instance().configureAxis(AXIS_Z, activeMachineProfile.zAxis.toAxisGeometry(), defaultTiming);
+  MotionEngine::instance().configureAxis(AXIS_X, activeMachineProfile.xAxis.toAxisGeometry(), defaultTiming);
+}
+
+void applyDerivedMachineConfig() {
+  SettingsService::applyDerivedMachineConfig();
+}
+
+void SettingsService::printMachineProfileBanner() {
+  ESP_LOGI(TAG, "whatELS Machine Profile: %s (%s) [Caps: 0x%08X]",
+           activeMachineProfile.profileId, activeMachineProfile.modelName, (unsigned int)activeMachineProfile.capabilities);
+  ESP_LOGI(TAG, "Spindle: Native PPR=%u, Ratio=%.2f -> Effective PPR=%.1f",
+           activeMachineProfile.spindle.encoder.ppr,
+           activeMachineProfile.spindle.pulleyRatio,
+           activeMachineProfile.spindle.effectivePpr());
+  ESP_LOGI(TAG, "Z-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)",
+           activeMachineProfile.zAxis.leadscrewPitchMm,
+           activeMachineProfile.zAxis.leadscrewPitchDu(),
+           activeMachineProfile.zAxis.stepsPerMm,
+           activeMachineProfile.zAxis.motorSteps());
+  ESP_LOGI(TAG, "X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)",
+           activeMachineProfile.xAxis.leadscrewPitchMm,
+           activeMachineProfile.xAxis.leadscrewPitchDu(),
+           activeMachineProfile.xAxis.stepsPerMm,
+           activeMachineProfile.xAxis.motorSteps());
+}
+
+void printMachineProfileBanner() {
+  SettingsService::printMachineProfileBanner();
+}
+
+void SettingsService::loadMachineProfile() {
+  ESP_LOGD(TAG, "Checking NVS 'machine'...");
+  Preferences pref;
+  pref.begin("machine", false);
+
+  String presetSlug = "";
+  if (pref.isKey("preset")) {
+    presetSlug = pref.getString("preset");
+  } else if (pref.isKey("prof_id")) {
+    presetSlug = pref.getString("prof_id");
+  }
+
+  char defaultSlug[32] = "wm210v_stock";
+  getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
+
+  const char* slugToLoad = (presetSlug.length() > 0) ? presetSlug.c_str() : defaultSlug;
+
+  LatheConfiguration loadedProfile;
+  if (loadProfileFromLittleFS(slugToLoad, &loadedProfile)) {
+    ESP_LOGI(TAG, "Loaded preset '%s' from LittleFS catalog", slugToLoad);
+    activeMachineProfile = loadedProfile;
+  } else {
+    ESP_LOGW(TAG, "Preset '%s' not found on LittleFS. Using ROM failsafe (WM210V)...", slugToLoad);
+    activeMachineProfile = getDefaultProfile();
+  }
+
+  // Apply sparse user overrides from NVS if explicitly customized
+  if (pref.isKey("model_name")) {
+    String modelName = pref.getString("model_name", activeMachineProfile.modelName);
+    strncpy(activeMachineProfile.modelName, modelName.c_str(), sizeof(activeMachineProfile.modelName) - 1);
+    activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
+  }
+
+  if (pref.isKey("screw_z_du")) {
+    int32_t screwZDu = pref.getInt("screw_z_du");
+    activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
+  }
+
+  if (pref.isKey("screw_x_du")) {
+    int32_t screwXDu = pref.getInt("screw_x_du");
+    activeMachineProfile.xAxis.leadscrewPitchMm = (float)screwXDu / 10000.0f;
+  }
+
+  if (pref.isKey("mot_steps_z")) {
+    activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
+  }
+
+  if (pref.isKey("mot_steps_x")) {
+    activeMachineProfile.xAxis.stepsPerMm = pref.getFloat("mot_steps_x");
+  }
+
+  if (pref.isKey("enc_ppr")) {
+    activeMachineProfile.spindle.encoder.ppr = pref.getUShort("enc_ppr");
+  }
+
+  if (pref.isKey("spindle_ratio")) {
+    activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
+  }
+
+  // Clean up any stale DRO flags from NVS; DROs are disabled by default
+  if (pref.isKey("has_dro_z")) {
+    pref.remove("has_dro_z");
+  }
+  if (pref.isKey("has_dro_x")) {
+    pref.remove("has_dro_x");
+  }
+
+  pref.end();
+
+  // Ensure capabilities bitmask stays strictly synchronized with physical hardware
+  if (activeMachineProfile.zAxis.hasDroScale) {
+    activeMachineProfile.capabilities |= CAP_DRO_Z;
+  } else {
+    activeMachineProfile.capabilities &= ~CAP_DRO_Z;
+  }
+  if (activeMachineProfile.xAxis.hasDroScale) {
+    activeMachineProfile.capabilities |= CAP_DRO_X;
+  } else {
+    activeMachineProfile.capabilities &= ~CAP_DRO_X;
+  }
+
+  printMachineProfileBanner();
+}
+
+void loadMachineProfile() {
+  SettingsService::loadMachineProfile();
+}
+
+void SettingsService::saveMachineProfile() {
+  ESP_LOGI(TAG, "Persisting sparse overrides to NVS 'machine'...");
+  Preferences pref;
+  pref.begin("machine", false);
+
+  pref.putString("preset", activeMachineProfile.profileId);
+  pref.putString("prof_id", activeMachineProfile.profileId);
+  pref.putString("model_name", activeMachineProfile.modelName);
+
+  if (activeMachineProfile.zAxis.hasDroScale) {
+    pref.putBool("has_dro_z", true);
+  } else if (pref.isKey("has_dro_z")) {
+    pref.remove("has_dro_z");
+  }
+  if (activeMachineProfile.xAxis.hasDroScale) {
+    pref.putBool("has_dro_x", true);
+  } else if (pref.isKey("has_dro_x")) {
+    pref.remove("has_dro_x");
+  }
+
+  pref.end();
+}
+
+void saveMachineProfile() {
+  SettingsService::saveMachineProfile();
 }
 
 const LatheConfiguration& SettingsService::getActiveProfile() {
@@ -1398,6 +1563,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     float val = atof(valStr);
     if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
     sysConfig.mpg.zHandwheel.ppr = val;
+    saveMpgConfig();
     reportOk(keyBuf, String(val, 2));
     return true;
   }
@@ -1406,6 +1572,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     float val = atof(valStr);
     if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
     sysConfig.mpg.xHandwheel.ppr = val;
+    saveMpgConfig();
     reportOk(keyBuf, String(val, 2));
     return true;
   }
