@@ -1,11 +1,9 @@
 #include <Arduino.h>
-#include <Preferences.h>
 #include <LittleFS.h>
 #include "Config.h"
 #include "WebServerModule.h"
 #include "DRO_Scale.h"
 #include "Debug.h"
-#include "UsbKeyboard.h"
 #include "SettingsService.h"
 #include "core/OperatorIntent.h"
 #include "modes/ModeRegistry.h"
@@ -28,6 +26,9 @@ void setup() {
   Serial.flush();
   if (LittleFS.begin(true)) {
     gcodeProgramCount = getGcodeProgramCount();
+    DEBUG_PRINTLN("LittleFS mounted.");
+  } else {
+    DEBUG_PRINTLN("Failed to mount LittleFS!");
   }
   DEBUG_PRINTLN("Loading configuration...");
   DEBUG_PRINTLN("Loading machine config...");
@@ -49,24 +50,6 @@ void setup() {
     zScale.attach();
   }
 
-  DEBUG_PRINTLN("pinMode setup...");
-  pinMode(ENC_A, INPUT_PULLUP);
-  pinMode(ENC_B, INPUT_PULLUP);
-
-  pinMode(Z_DIR, OUTPUT);
-  pinMode(Z_STEP, OUTPUT);
-  pinMode(Z_ENA, OUTPUT);
-  DHIGH(Z_STEP);
-
-  pinMode(X_DIR, OUTPUT);
-  pinMode(X_STEP, OUTPUT);
-  pinMode(X_ENA, OUTPUT);
-  DHIGH(X_STEP);
-
-
-
-
-
   // Always boot cleanly and safely into standard manual feed / DRO mode
   DEBUG_PRINTLN("Initializing ModeRegistry & standard modes...");
   ModeRegistry::initStandardModes();
@@ -76,12 +59,6 @@ void setup() {
   SettingsService::requestMode(static_cast<int>(LatheMode::NORMAL));
   DEBUG_PRINTLN("Default mode configured.");
   Serial.flush();
-
-  DEBUG_PRINTLN("LittleFS mounted.");
-  Serial.flush();
-
-
-
 
   // Initialize and wire MotionEngine to Core 1 ([CONC-01], Slice 3)
   DEBUG_PRINTLN("Initializing MotionEngine HAL and Core 1 Task...");
@@ -119,14 +96,12 @@ void loop() {
     return;
   }
 
-  SettingsService::applyCore1PendingLatches();
-
   LatheMode currentMode = static_cast<LatheMode>(SettingsService::getMode());
   IELSMode* activeMode = ModeRegistry::getActiveMode();
   if (activeMode) {
     bool isEngaged = SettingsService::isOn();
     long duprVal = SettingsService::getThreadSetting().dupr;
-    if (!isEngaged || (duprVal == 0 && currentMode != LatheMode::SLOT && currentMode != LatheMode::ASYNC)) {
+    if (!isEngaged || (duprVal == 0 && currentMode != LatheMode::ASYNC)) {
       if (activeMode->isRunning()) {
         activeMode->stop(StopType::NORMAL_STOP);
       }
