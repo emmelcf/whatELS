@@ -1,5 +1,7 @@
 #include "MotionEngine.h"
+#include "core/SettingsService.h"
 #include <algorithm>
+#include <cmath>
 
 #if defined(ESP32) || defined(ARDUINO)
 static void motionCore1TaskEntry(void* arg) {
@@ -170,7 +172,7 @@ bool MotionEngine::startSpindleSync(const FeedParameters& params) {
   int64_t startPulses = m_accumulatedSpindlePulses;
   int32_t effPpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
                        ? m_encoderHal->getCountsPerSpindleRev()
-                       : 4096;
+                       : static_cast<int32_t>(std::round(SettingsService::getActiveProfile().spindle.countsPerRev()));
   if (m_lastRpm >= 5.0f && effPpr > 0) {
     int64_t rem = startPulses % effPpr;
     if (rem < 0) rem += effPpr;
@@ -547,7 +549,7 @@ void MotionEngine::onMotionTick() {
       if (hasBound) {
         int32_t effPpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
                              ? m_encoderHal->getCountsPerSpindleRev()
-                             : 4096;
+                             : static_cast<int32_t>(std::round(SettingsService::getActiveProfile().spindle.countsPerRev()));
         int64_t limitPulse = m_sync[a].calculatePulsesForStep(
             boundStep,
             m_axes[a].geometry.motorStepsPerRev,
@@ -616,7 +618,7 @@ void MotionEngine::onMotionTick() {
         }
         int32_t effectivePpr = (m_encoderHal && m_encoderHal->getCountsPerSpindleRev() > 0)
                                    ? m_encoderHal->getCountsPerSpindleRev()
-                                   : 4096;
+                                   : static_cast<int32_t>(std::round(SettingsService::getActiveProfile().spindle.countsPerRev()));
         int32_t idealStep = m_sync[idx].computeIdealSyncSteps(
             effectivePulses,
             m_axes[idx].geometry.motorStepsPerRev,

@@ -91,7 +91,7 @@ void setup() {
   stepperHal.configureAxis(AXIS_X, X_STEP, X_DIR, X_ENA, defaultTiming);
 
   int indexPin = activeMachineProfile.spindle.encoder.hasIndex ? activeMachineProfile.spindle.encoder.indexPin : -1;
-  uint16_t spindlePpr = activeMachineProfile.spindle.encoder.ppr > 0 ? activeMachineProfile.spindle.encoder.ppr : 1024;
+  uint16_t spindlePpr = activeMachineProfile.spindle.encoder.ppr;
   float pulleyRatio = activeMachineProfile.spindle.pulleyRatio > 0.0f ? activeMachineProfile.spindle.pulleyRatio : 1.0f;
   encoderHal.init(ENC_A, ENC_B, indexPin, spindlePpr, pulleyRatio);
 

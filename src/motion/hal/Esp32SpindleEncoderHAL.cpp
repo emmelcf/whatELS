@@ -43,22 +43,7 @@ bool Esp32SpindleEncoderHAL::init(
     float pulleyRatio,
     uint16_t encoderTeeth,
     uint16_t spindleTeeth) {
-  m_nativePpr = (nativePpr > 0) ? nativePpr : 1024;
-  m_pulleyRatio = (pulleyRatio > 0.0f) ? pulleyRatio : 1.0f;
-  m_encoderTeeth = encoderTeeth;
-  m_spindleTeeth = spindleTeeth;
-
-  // Calculate 4x quadrature counts per physical spindle turn
-  float ratio = 1.0f;
-  if (m_spindleTeeth > 0 && m_encoderTeeth > 0) {
-    ratio = static_cast<float>(m_spindleTeeth) / static_cast<float>(m_encoderTeeth);
-  } else if (m_pulleyRatio > 0.0f) {
-    ratio = m_pulleyRatio;
-  }
-  m_countsPerSpindleRev = static_cast<float>(m_nativePpr) * 4.0f * ratio;
-  if (m_countsPerSpindleRev <= 0.0f) {
-    m_countsPerSpindleRev = 4096.0f;
-  }
+  updateProfile(nativePpr, pulleyRatio, encoderTeeth, spindleTeeth);
 
   pinMode(pinA, INPUT_PULLUP);
   pinMode(pinB, INPUT_PULLUP);
@@ -120,6 +105,25 @@ bool Esp32SpindleEncoderHAL::init(
   m_lastRpmCalcTimeUs = esp_timer_get_time();
 
   return true;
+}
+
+void Esp32SpindleEncoderHAL::updateProfile(
+    uint16_t nativePpr,
+    float pulleyRatio,
+    uint16_t encoderTeeth,
+    uint16_t spindleTeeth) {
+  m_nativePpr = nativePpr;
+  m_pulleyRatio = (pulleyRatio > 0.0f) ? pulleyRatio : 1.0f;
+  m_encoderTeeth = encoderTeeth;
+  m_spindleTeeth = spindleTeeth;
+
+  float ratio = 1.0f;
+  if (m_spindleTeeth > 0 && m_encoderTeeth > 0) {
+    ratio = static_cast<float>(m_spindleTeeth) / static_cast<float>(m_encoderTeeth);
+  } else if (m_pulleyRatio > 0.0f) {
+    ratio = m_pulleyRatio;
+  }
+  m_countsPerSpindleRev = static_cast<float>(m_nativePpr) * 4.0f * ratio;
 }
 
 int32_t IRAM_ATTR Esp32SpindleEncoderHAL::getPulseDelta() {

@@ -29,6 +29,15 @@ public:
       uint16_t spindleTeeth = 0) = 0;
 
   /**
+   * @brief Updates encoder geometry parameters on the fly without hardware re-init.
+   */
+  virtual void updateProfile(
+      uint16_t nativePpr,
+      float pulleyRatio,
+      uint16_t encoderTeeth = 0,
+      uint16_t spindleTeeth = 0) {}
+
+  /**
    * @brief Samples the delta pulses elapsed since the last read.
    * @details Called at high frequency (1 kHz - 10 kHz) in the motion control loop.
    *          Uses native 16-bit signed modular subtraction without resetting the PCNT hardware.
@@ -44,7 +53,7 @@ public:
   /**
    * @brief Returns total 4x quadrature counts per physical spindle revolution.
    */
-  virtual int32_t getCountsPerSpindleRev() const { return 4096; }
+  virtual int32_t getCountsPerSpindleRev() const { return 0; }
 
   /**
    * @brief Returns filtered real-time spindle rotational speed in RPM.

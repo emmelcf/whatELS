@@ -23,6 +23,12 @@ public:
       uint16_t encoderTeeth = 0,
       uint16_t spindleTeeth = 0) override;
 
+  void updateProfile(
+      uint16_t nativePpr,
+      float pulleyRatio,
+      uint16_t encoderTeeth = 0,
+      uint16_t spindleTeeth = 0) override;
+
   int32_t getPulseDelta() override;
   int64_t getAccumulatedPulses() const override;
   int32_t getCountsPerSpindleRev() const override { return static_cast<int32_t>(m_countsPerSpindleRev); }

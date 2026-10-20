@@ -1,6 +1,7 @@
 #pragma once
 #include "ISpindleEncoderHAL.h"
 #include <cstdint>
+#include <cmath>
 
 /**
  * @brief Test double for ISpindleEncoderHAL.
@@ -34,6 +35,17 @@ public:
     return true;
   }
 
+  void updateProfile(
+      uint16_t nativePpr,
+      float pulleyRatio,
+      uint16_t encoderTeeth = 0,
+      uint16_t spindleTeeth = 0) override {
+    m_nativePpr = nativePpr;
+    m_pulleyRatio = pulleyRatio;
+    m_encoderTeeth = encoderTeeth;
+    m_spindleTeeth = spindleTeeth;
+  }
+
   int32_t getPulseDelta() override {
     int32_t d = m_pendingDelta;
     m_pendingDelta = 0;
@@ -45,7 +57,10 @@ public:
   }
 
   int32_t getCountsPerSpindleRev() const override {
-    return static_cast<int32_t>(m_nativePpr) * 4;
+    float ratio = (m_spindleTeeth > 0 && m_encoderTeeth > 0)
+                      ? (static_cast<float>(m_spindleTeeth) / static_cast<float>(m_encoderTeeth))
+                      : (m_pulleyRatio > 0.0f ? m_pulleyRatio : 1.0f);
+    return static_cast<int32_t>(std::round(static_cast<float>(m_nativePpr) * 4.0f * ratio));
   }
 
   uint32_t getFilteredRpm() const override {

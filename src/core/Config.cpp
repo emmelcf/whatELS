@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 #include "Debug.h"
 #include "PersistentSetting.h"
+#include "motion/kernel/MotionEngine.h"
 
 EstopCode emergencyStop = EstopCode::NONE;
 void setEmergencyStop(EstopCode kind) {
@@ -110,6 +111,29 @@ void setMachineConfigDefaults() {
 }
 
 void applyDerivedMachineConfig() {
+  ISpindleEncoderHAL* encHal = MotionEngine::instance().getEncoderHAL();
+  if (encHal) {
+    encHal->updateProfile(
+        activeMachineProfile.spindle.encoder.ppr,
+        activeMachineProfile.spindle.pulleyRatio > 0.0f ? activeMachineProfile.spindle.pulleyRatio : 1.0f);
+  }
+
+  StepTimingConfig defaultTiming;
+  AxisGeometry zGeom;
+  zGeom.screwPitchDu = activeMachineProfile.zAxis.leadscrewPitchDu();
+  zGeom.motorStepsPerRev = activeMachineProfile.zAxis.motorSteps();
+  zGeom.backlashSteps = duToSteps(zGeom, activeMachineProfile.zAxis.backlashDu());
+  zGeom.maxVelocityMmSec = activeMachineProfile.zAxis.maxVelocityMmMin / 60.0f;
+  zGeom.maxAccelMmSec2 = activeMachineProfile.zAxis.maxAccelMmSec2;
+  MotionEngine::instance().configureAxis(AXIS_Z, zGeom, defaultTiming);
+
+  AxisGeometry xGeom;
+  xGeom.screwPitchDu = activeMachineProfile.xAxis.leadscrewPitchDu();
+  xGeom.motorStepsPerRev = activeMachineProfile.xAxis.motorSteps();
+  xGeom.backlashSteps = duToSteps(xGeom, activeMachineProfile.xAxis.backlashDu());
+  xGeom.maxVelocityMmSec = activeMachineProfile.xAxis.maxVelocityMmMin / 60.0f;
+  xGeom.maxAccelMmSec2 = activeMachineProfile.xAxis.maxAccelMmSec2;
+  MotionEngine::instance().configureAxis(AXIS_X, xGeom, defaultTiming);
 }
 
 void normalizeMachineConfig() {

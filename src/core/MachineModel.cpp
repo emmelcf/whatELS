@@ -52,12 +52,14 @@ KinematicsState MachineModel::captureKinematics() {
     k.spindle.rpm = tSnap.spindleRpm;
 
     const LatheConfiguration& profile = SettingsService::getActiveProfile();
-    int ppr = (int)round(profile.spindle.effectivePpr() * 2.0f);
-    if (ppr > 0) {
-      k.spindle.turns = (float)tSnap.spindlePulses / (float)ppr;
-      int64_t moduloPulses = tSnap.spindlePulses % ppr;
-      if (moduloPulses < 0) moduloPulses += ppr;
-      k.spindle.angle = (float)moduloPulses * 360.0f / (float)ppr;
+    int32_t cpr = (engine.getEncoderHAL() && engine.getEncoderHAL()->getCountsPerSpindleRev() > 0)
+                      ? engine.getEncoderHAL()->getCountsPerSpindleRev()
+                      : static_cast<int32_t>(round(profile.spindle.countsPerRev()));
+    if (cpr > 0) {
+      k.spindle.turns = (float)tSnap.spindlePulses / (float)cpr;
+      int64_t moduloPulses = tSnap.spindlePulses % cpr;
+      if (moduloPulses < 0) moduloPulses += cpr;
+      k.spindle.angle = (float)moduloPulses * 360.0f / (float)cpr;
     }
   }
 

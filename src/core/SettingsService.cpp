@@ -487,7 +487,7 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
 }
 
 float SettingsService::getDeadbandAngle() {
-  float cpr = activeMachineProfile.spindle.effectivePpr() * 2.0f;
+  float cpr = activeMachineProfile.spindle.countsPerRev();
   float derived = (cpr > 0.0f) ? (360.0f / cpr) : 0.05f;
   return _deadbandAngle.value_or(derived);
 }
@@ -497,7 +497,7 @@ bool SettingsService::isDeadbandAngleAuto() {
 }
 
 float SettingsService::getDeadbandTurns() {
-  float cpr = activeMachineProfile.spindle.effectivePpr() * 2.0f;
+  float cpr = activeMachineProfile.spindle.countsPerRev();
   float derived = (cpr > 0.0f) ? (2.0f / cpr) : 0.002f;
   return _deadbandTurns.value_or(derived);
 }
@@ -525,6 +525,7 @@ bool SettingsService::setScrewZDu(long du) {
   }
   pref.end();
 
+  applyDerivedMachineConfig();
   return true;
 }
 
@@ -547,6 +548,7 @@ bool SettingsService::setScrewXDu(long du) {
   }
   pref.end();
 
+  applyDerivedMachineConfig();
   return true;
 }
 
@@ -573,6 +575,7 @@ bool SettingsService::setMotorStepsZ(long steps) {
   }
   pref.end();
 
+  applyDerivedMachineConfig();
   return true;
 }
 
@@ -599,6 +602,7 @@ bool SettingsService::setMotorStepsX(long steps) {
   }
   pref.end();
 
+  applyDerivedMachineConfig();
   return true;
 }
 

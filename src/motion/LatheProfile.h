@@ -85,6 +85,11 @@ struct SpindleHardwareConfig {
   float effectivePpr() const {
     return (float)encoder.ppr * (pulleyRatio > 0.0f ? pulleyRatio : 1.0f);
   }
+
+  // Method helper: 4X quadrature Counts Per Spindle Rev (CPR)
+  float countsPerRev() const {
+    return effectivePpr() * 4.0f;
+  }
 };
 
 /**

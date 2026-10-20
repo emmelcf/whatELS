@@ -681,7 +681,9 @@ static bool handleSpindleSimTurn(const char* args, String* reply) {
   float deg = atof(args);
   ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
   if (hal) {
-    float cpr = SettingsService::getActiveProfile().spindle.effectivePpr() * 2.0f;
+    float cpr = (hal->getCountsPerSpindleRev() > 0)
+                    ? static_cast<float>(hal->getCountsPerSpindleRev())
+                    : SettingsService::getActiveProfile().spindle.countsPerRev();
     int32_t counts = lroundf(deg / 360.0f * cpr);
     hal->injectSimulatedPulses(counts);
   }
