@@ -5,6 +5,7 @@
 #include "SystemSchemaJson.h"
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
+#include "motion/MotionConversions.h"
 
 static ThreadSetting currentThreadSetting = { THREAD_METRIC, 0.0f, 0 };
 static TaperSetting currentTaperSetting = { TAPER_RATIO, 1.0f, 1.0f, 0 };
@@ -488,7 +489,8 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
 
 float SettingsService::getDeadbandAngle() {
   float cpr = activeMachineProfile.spindle.countsPerRev();
-  float derived = (cpr > 0.0f) ? (360.0f / cpr) : 0.05f;
+  if (cpr <= 0.0f) cpr = getDefaultProfile().spindle.countsPerRev();
+  float derived = 360.0f / cpr;
   return _deadbandAngle.value_or(derived);
 }
 
@@ -498,7 +500,8 @@ bool SettingsService::isDeadbandAngleAuto() {
 
 float SettingsService::getDeadbandTurns() {
   float cpr = activeMachineProfile.spindle.countsPerRev();
-  float derived = (cpr > 0.0f) ? (2.0f / cpr) : 0.002f;
+  if (cpr <= 0.0f) cpr = getDefaultProfile().spindle.countsPerRev();
+  float derived = 2.0f / cpr;
   return _deadbandTurns.value_or(derived);
 }
 
@@ -554,8 +557,8 @@ bool SettingsService::setScrewXDu(long du) {
 
 bool SettingsService::setMotorStepsZ(long steps) {
   if (steps < 10 || steps > 1000000) return false;
-  float currentStepsZ = (activeMachineProfile.zAxis.leadscrewPitchMm > 0) ? (activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm) : -1.0f;
-  if (fabsf(currentStepsZ - (float)steps) < 0.5f) {
+  long currentStepsZ = activeMachineProfile.zAxis.motorSteps();
+  if (currentStepsZ == steps) {
     DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_z");
     return true;
   }
@@ -567,8 +570,8 @@ bool SettingsService::setMotorStepsZ(long steps) {
   const LatheConfiguration* pBaseline = getActiveBaseline();
   Preferences pref;
   pref.begin("machine", false);
-  float baseSteps = (pBaseline && pBaseline->zAxis.leadscrewPitchMm > 0) ? (pBaseline->zAxis.stepsPerMm * pBaseline->zAxis.leadscrewPitchMm) : -1.0f;
-  if (fabsf(baseSteps - (float)steps) < 0.5f) {
+  long baseSteps = pBaseline ? pBaseline->zAxis.motorSteps() : -1;
+  if (baseSteps == steps) {
     pref.remove("mot_steps_z");
   } else {
     pref.putFloat("mot_steps_z", stepsPerMm);
@@ -581,8 +584,8 @@ bool SettingsService::setMotorStepsZ(long steps) {
 
 bool SettingsService::setMotorStepsX(long steps) {
   if (steps < 10 || steps > 1000000) return false;
-  float currentStepsX = (activeMachineProfile.xAxis.leadscrewPitchMm > 0) ? (activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm) : -1.0f;
-  if (fabsf(currentStepsX - (float)steps) < 0.5f) {
+  long currentStepsX = activeMachineProfile.xAxis.motorSteps();
+  if (currentStepsX == steps) {
     DEBUG_PRINTLN("[NVS] Suppressed redundant write for mot_steps_x");
     return true;
   }
@@ -594,8 +597,8 @@ bool SettingsService::setMotorStepsX(long steps) {
   const LatheConfiguration* pBaseline = getActiveBaseline();
   Preferences pref;
   pref.begin("machine", false);
-  float baseSteps = (pBaseline && pBaseline->xAxis.leadscrewPitchMm > 0) ? (pBaseline->xAxis.stepsPerMm * pBaseline->xAxis.leadscrewPitchMm) : -1.0f;
-  if (fabsf(baseSteps - (float)steps) < 0.5f) {
+  long baseSteps = pBaseline ? pBaseline->xAxis.motorSteps() : -1;
+  if (baseSteps == steps) {
     pref.remove("mot_steps_x");
   } else {
     pref.putFloat("mot_steps_x", stepsPerMm);
@@ -686,13 +689,13 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
   long absDu = abs(duprVal);
   if (operatorPrefs.measure == MeasureUnit::METRIC) {
     currentThreadSetting.format = THREAD_METRIC;
-    currentThreadSetting.authorPitch = absDu / 10000.0f;
+    currentThreadSetting.authorPitch = MotionConversions::duToMm(absDu);
   } else if (operatorPrefs.measure == MeasureUnit::TPI) {
     currentThreadSetting.format = THREAD_TPI;
-    currentThreadSetting.authorPitch = (absDu > 0) ? (float)round(254000.0 / (double)absDu) : 0.0f;
+    currentThreadSetting.authorPitch = (absDu > 0) ? MotionConversions::duprToTpi(absDu) : 0.0f;
   } else {
     currentThreadSetting.format = THREAD_INCH;
-    currentThreadSetting.authorPitch = absDu / 254000.0f;
+    currentThreadSetting.authorPitch = MotionConversions::duToInch(absDu);
   }
   currentThreadSetting.dupr = duprVal;
 
@@ -701,7 +704,7 @@ bool SettingsService::setFeedrateDupr(long duprVal, bool preserveDirection) {
 
 bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
   if (pitchMm <= 0.0f) return false;
-  long duVal = (long)round(pitchMm * 10000.0f);
+  long duVal = MotionConversions::mmToDu(pitchMm);
   if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
@@ -714,7 +717,7 @@ bool SettingsService::setFeedrateMm(float pitchMm, bool preserveDirection) {
 
 bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
   if (tpi <= 0.0f) return false;
-  long duVal = (long)round(254000.0 / (double)tpi);
+  long duVal = MotionConversions::tpiToDupr(tpi);
   if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
@@ -727,7 +730,7 @@ bool SettingsService::setFeedrateTpi(float tpi, bool preserveDirection) {
 
 bool SettingsService::setFeedrateInch(float pitchInch, bool preserveDirection) {
   if (pitchInch <= 0.0f) return false;
-  long duVal = (long)round(pitchInch * 254000.0f);
+  long duVal = MotionConversions::inchToDu(pitchInch);
   if (preserveDirection && (currentThreadSetting.dupr < 0)) {
     duVal = -abs(duVal);
   }
@@ -1146,11 +1149,11 @@ bool SettingsService::get(const char* key, String* reply) {
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevZ") == 0) {
-    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr, 2));
+    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr));
     if (!getAll) return true;
   }
   if (getAll || strcasecmp(key, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(key, "pulsePerRevX") == 0) {
-    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr, 2));
+    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr));
     if (!getAll) return true;
   }
 
@@ -1243,8 +1246,8 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     appendSetting("sys.wifi.hostname", sysConfig.wifi.hostname);
     appendSetting("sys.dro.zPulsesPerMm", String(activeMachineProfile.zAxis.droScale.ppr));
     appendSetting("sys.dro.xPulsesPerMm", String(activeMachineProfile.xAxis.droScale.ppr));
-    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr, 2));
-    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr, 2));
+    appendSetting("sys.mpg.zPulsesPerRev", String(sysConfig.mpg.zHandwheel.ppr));
+    appendSetting("sys.mpg.xPulsesPerRev", String(sysConfig.mpg.xHandwheel.ppr));
     return true;
   }
 
@@ -1375,6 +1378,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     int val = atoi(valStr);
     if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
     activeMachineProfile.zAxis.droScale.ppr = (uint16_t)val;
+    applyDerivedMachineConfig();
     reportOk(keyBuf, String(val));
     return true;
   }
@@ -1383,6 +1387,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     int val = atoi(valStr);
     if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
     activeMachineProfile.xAxis.droScale.ppr = (uint16_t)val;
+    applyDerivedMachineConfig();
     reportOk(keyBuf, String(val));
     return true;
   }

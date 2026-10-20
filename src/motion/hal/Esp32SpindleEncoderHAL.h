@@ -61,11 +61,11 @@ private:
   pcnt_channel_handle_t m_chanB{nullptr};
 
   int                   m_pinIndex{-1};
-  uint16_t              m_nativePpr{1024};
+  uint16_t              m_nativePpr{1200};
   float                 m_pulleyRatio{1.0f};
   uint16_t              m_encoderTeeth{0};
   uint16_t              m_spindleTeeth{0};
-  float                 m_countsPerSpindleRev{4096.0f};
+  float                 m_countsPerSpindleRev{4800.0f};
 
   int16_t               m_lastCount16{0};
   int64_t               m_accumulatedPulses{0};

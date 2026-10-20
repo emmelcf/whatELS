@@ -532,7 +532,7 @@ static CommandResult handleFeedTpi(const char* args) {
   SettingsService::setFeedrateTpi(tpi, false);
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
   if (gb && tpi > 0.0f) {
-    int32_t dupr = static_cast<int32_t>(std::round(254000.0f / tpi));
+    int32_t dupr = MotionConversions::tpiToDupr(tpi);
     gb->setFeedRate(dupr);
   }
   return CommandResult::ok("feedTpi");

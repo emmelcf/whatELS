@@ -106,7 +106,7 @@ public:
     m_filteredRpm = 0;
     m_angleDegrees = 0.0f;
     m_indexSynced = false;
-    m_nativePpr = 1024;
+    m_nativePpr = 1200;
     m_pulleyRatio = 1.0f;
     m_encoderTeeth = 0;
     m_spindleTeeth = 0;
@@ -125,11 +125,11 @@ public:
     m_pendingDelta += delta;
 
     // Update angular position if PPR is known
-    int32_t effectivePpr = m_nativePpr * 4;
-    if (effectivePpr > 0) {
-      int64_t mod = m_accumulatedPulses % effectivePpr;
-      if (mod < 0) mod += effectivePpr;
-      m_angleDegrees = (static_cast<float>(mod) / static_cast<float>(effectivePpr)) * 360.0f;
+    int32_t effectiveCpr = getCountsPerSpindleRev();
+    if (effectiveCpr > 0) {
+      int64_t mod = m_accumulatedPulses % effectiveCpr;
+      if (mod < 0) mod += effectiveCpr;
+      m_angleDegrees = (static_cast<float>(mod) / static_cast<float>(effectiveCpr)) * 360.0f;
     }
   }
 
@@ -156,7 +156,7 @@ private:
   uint32_t m_filteredRpm{0};
   float    m_angleDegrees{0.0f};
   bool     m_indexSynced{false};
-  uint16_t m_nativePpr{1024};
+  uint16_t m_nativePpr{1200};
   float    m_pulleyRatio{1.0f};
   uint16_t m_encoderTeeth{0};
   uint16_t m_spindleTeeth{0};
