@@ -377,11 +377,11 @@
     const spin = { active: false, motorOn: false, cw: true, rpm: 300 };
     const signedRpm = () => (spin.active && spin.motorOn ? (spin.cw ? 1 : -1) * spin.rpm : 0);
     const qsend = (cmd) => {
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       if (c && typeof c.sendRaw === 'function') c.sendRaw(cmd + '\n', '', true); // quiet: keep it out of the TX log
     };
     const supported = () => {
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       return !!(c && c.state && Array.isArray(c.state.features) && c.state.features.includes('spindleSim'));
     };
     const pushSim = () => { if (supported() || !spin.active) { if (supported()) qsend(`CMD.spindleSim=${spin.active ? 1 : 0},${signedRpm()}`); } };
@@ -480,7 +480,7 @@
       _hasFired: false
     };
 
-    const client = window.whatelsClient;
+    const client = window.whatElsClient;
     if (client) {
       client.addEventListener('telemetry', (e) => {
         const d = e.detail;

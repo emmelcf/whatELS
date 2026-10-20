@@ -240,7 +240,7 @@ The complete mapping of every button, touch gesture, keypad entry, and modal tri
 
 ### 8.2 Real-Scale Digital Twin Visualizer (`lathe-viz.js`)
 * A pure reactive SVG canvas engine docked beneath the primary controller face.
-* Subscribes to `window.whatELSClient`'s `'telemetry'` event.
+* Subscribes to `window.whatElsClient`'s `'telemetry'` event.
 * Ingests canonical deci-micron positions (`zDu`, `xDu`) and draws the lathe bed casting, chuck, workpiece, toolpost, and soft limit envelopes to true physical millimetric scale.
 * Operates strictly on canonical millimeters ($z\text{Du}/10000$, $x\text{Du}/10000$), completely immune to client-side display preferences ($\varnothing/R$, $\text{mm/in}$).
 

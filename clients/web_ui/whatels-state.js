@@ -209,7 +209,7 @@ function registerMachineStore() {
     // Store Actions
     // -------------------------------------------------------------
     cycleMeasure() {
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       if (c) {
         c.cycleMeasure();
       } else {
@@ -222,7 +222,7 @@ function registerMachineStore() {
     },
 
     cycleJogStep() {
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       if (c) {
         c.cycleStep();
       }
@@ -234,7 +234,7 @@ function registerMachineStore() {
 
     start() {
       this.isOn = true;
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       if (c) {
         c.startCycle();
       }
@@ -242,7 +242,7 @@ function registerMachineStore() {
 
     stop() {
       this.isOn = false;
-      const c = window.whatelsClient;
+      const c = window.whatElsClient;
       if (c) {
         c.stopCycle();
       }
@@ -297,7 +297,7 @@ function registerMachineStore() {
 
   function attachClient() {
     const s = window.Alpine && Alpine.store && Alpine.store('machine');
-    const c = window.whatelsClient;
+    const c = window.whatElsClient;
     if (s && c && !s._clientAttached) {
       s._clientAttached = true;
       c.addEventListener('telemetry', (e) => {

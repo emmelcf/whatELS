@@ -747,7 +747,7 @@
       btnMinus.addEventListener('click', function(){
         if(state.runState === 'running'){
           if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
-          if(window.whatELSClient) window.whatELSClient.nudgeFeed(-1);
+          if(window.whatElsClient) window.whatElsClient.nudgeFeed(-1);
           return;
         }
         if(state.mode === 'GEARBOX'){
@@ -789,7 +789,7 @@
       btnPlus.addEventListener('click', function(){
         if(state.runState === 'running'){
           if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
-          if(window.whatELSClient) window.whatELSClient.nudgeFeed(+1);
+          if(window.whatElsClient) window.whatElsClient.nudgeFeed(+1);
           return;
         }
         if(state.mode === 'GEARBOX'){
@@ -1423,8 +1423,8 @@
         bRun.addEventListener('click', function(){
           if(state.runState === 'stopped'){
             var bundle = buildInceptionBundle();
-            if(window.whatELSClient){
-              window.whatELSClient.startCycle(bundle);
+            if(window.whatElsClient){
+              window.whatElsClient.startCycle(bundle);
             }
             if(window.Alpine && Alpine.store('machine')){
               Alpine.store('machine').isOn = true;
@@ -1453,8 +1453,8 @@
         });
 
         bStop.addEventListener('click', function(){
-          if(window.whatELSClient){
-            window.whatELSClient.stopCycle();
+          if(window.whatElsClient){
+            window.whatElsClient.stopCycle();
           }
           if(window.Alpine && Alpine.store('machine')){
             Alpine.store('machine').isOn = false;
@@ -1486,7 +1486,7 @@
   // Spindle Encoder Simulation & Multi-Pass Cycle Stepper
   var simTimer = null;
   function syncSpindleSimulation(){
-    if(window.whatELSClient){
+    if(window.whatElsClient){
       if(simTimer){ clearInterval(simTimer); simTimer = null; }
       return;
     }
@@ -1708,7 +1708,7 @@
   });
   function syncModeToController(targetMode){
     if(state.runState !== 'running') return; // Zero wire traffic while idle!
-    if(!window.whatELSClient) return;
+    if(!window.whatElsClient) return;
     var modeMap = {
       'GEARBOX': 'GEARS',
       'JOYSTICK': 'JOYSTICK',
@@ -1723,16 +1723,16 @@
     var m = targetMode || state.mode;
     var actionKey = modeMap[m];
     if(m === 'GEARBOX'){
-      window.whatELSClient.setMode('gearbox');
+      window.whatElsClient.setMode('gearbox');
       var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
-      window.whatELSClient.setGearAxis(ax);
-      window.whatELSClient.setGearSync(state.gearboxMode === 'SYNC');
+      window.whatElsClient.setGearAxis(ax);
+      window.whatElsClient.setGearSync(state.gearboxMode === 'SYNC');
       var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
-      window.whatELSClient.setGearDir(dirVal);
+      window.whatElsClient.setGearDir(dirVal);
       return;
     }
     if(actionKey){
-      window.whatELSClient.setMode(actionKey);
+      window.whatElsClient.setMode(actionKey);
     }
   }
 
@@ -1743,14 +1743,14 @@
     if(state.mode === 'THREADING'){
       if(state.threadUnit === 'tpi'){
         var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
-        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedTpi(tpi);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedTpi(tpi);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpi;
         }
       } else {
         var pMm = targetPitch || state.pitch || 1.5;
-        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(pMm);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(pMm);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = pMm;
@@ -1763,7 +1763,7 @@
     if(state.mode === 'TAPER' || (state.mode === 'GEARBOX' && state.activeFeedAxis === 'Z+X')){
       if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
         var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = state.gearTaperPresetIdx;
           Alpine.store('machine').tpMode = 2;
@@ -1771,7 +1771,7 @@
           Alpine.store('machine').coneRatio = p.ratio;
         }
       } else if(state.gearTaperAuthMode === 'ANGLE'){
-        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 1;
@@ -1780,7 +1780,7 @@
         }
       } else {
         var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperRatio(rVal);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperRatio(rVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 0;
@@ -1789,7 +1789,7 @@
         }
       }
       var taperPitch = targetPitch || state.gearPitchZ || 0.15;
-      if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(taperPitch);
+      if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(taperPitch);
       return;
     }
 
@@ -1798,7 +1798,7 @@
       if(state.gearboxMode === 'ASYNC') return;
       if(state.gearThreadUnit === 'tpi'){
         var tpiVal = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
-        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedTpi(tpiVal);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedTpi(tpiVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpiVal;
@@ -1807,7 +1807,7 @@
       }
       var p = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
       if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(p);
+        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(p);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = p;
@@ -1825,7 +1825,7 @@
       }
     }
     if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-      if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(p);
+      if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(p);
       if(window.Alpine && Alpine.store('machine')){
         Alpine.store('machine').thFmt = 0;
         Alpine.store('machine').thPitch = p;
@@ -1878,8 +1878,8 @@
     clearTimeout(stepHoldTimer);
     if(state.runState === 'running') return;
     if(!stepDidHold){
-      if(window.whatELSClient){
-        window.whatELSClient.cycleStep();
+      if(window.whatElsClient){
+        window.whatElsClient.cycleStep();
       }
       var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
       state.stepIdx = (state.stepIdx + 1) % maxLen;
@@ -1918,8 +1918,8 @@
   $('xValue').addEventListener('click', function(){ openAxisOverlay('x'); });
   $('axisCancelBtn').addEventListener('click', function(){ $('axisOverlay').classList.remove('show'); });
   $('axisZeroBtn').addEventListener('click', function(){
-    if(window.whatELSClient){
-      window.whatELSClient.zeroAxis(axisTarget);
+    if(window.whatElsClient){
+      window.whatElsClient.zeroAxis(axisTarget);
     }
     if(axisTarget==='z') state.z = 0; else state.xDia = 0;
     if(window.Alpine && Alpine.store && Alpine.store('machine')){
@@ -1959,10 +1959,10 @@
     var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
     var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
     var curDu = 0;
-    if(window.whatELSClient){
-      curDu = isZ ? (window.whatELSClient.canonical.zDu !== undefined ? window.whatELSClient.canonical.zDu : Math.round(state.z * 10000.0))
-                      : (window.whatELSClient.canonical.xDu !== undefined ? window.whatELSClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
-      window.whatELSClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
+    if(window.whatElsClient){
+      curDu = isZ ? (window.whatElsClient.canonical.zDu !== undefined ? window.whatElsClient.canonical.zDu : Math.round(state.z * 10000.0))
+                      : (window.whatElsClient.canonical.xDu !== undefined ? window.whatElsClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
+      window.whatElsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
     } else {
       curDu = isZ ? Math.round(state.z * 10000.0) : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0);
     }
@@ -1984,8 +1984,8 @@
   $('limitClearBtn').addEventListener('click', function(){ 
     var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
     var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
-    if(window.whatELSClient){
-      window.whatELSClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
+    if(window.whatElsClient){
+      window.whatElsClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
     }
     state[limitTarget] = null;
     if(window.Alpine && Alpine.store && Alpine.store('machine')){
@@ -2057,8 +2057,8 @@
       btn.classList.add('pressed');
       holdTimer = setTimeout(function(){
         isContinuous = true;
-        if (window.whatELSClient) {
-          window.whatELSClient.jog(axis, dir, true);
+        if (window.whatElsClient) {
+          window.whatElsClient.jog(axis, dir, true);
         }
         repeatTimer = setInterval(doStep, 110);
       }, 300);
@@ -2070,13 +2070,13 @@
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
       if (isContinuous) {
-        if (window.whatELSClient) {
-          window.whatELSClient.jog(axis, dir, false);
+        if (window.whatElsClient) {
+          window.whatElsClient.jog(axis, dir, false);
         }
       } else {
         // Quick tap: issue discrete 1-step canonical command
-        if (window.whatELSClient) {
-          window.whatELSClient.jogStep(axis, dir);
+        if (window.whatElsClient) {
+          window.whatElsClient.jogStep(axis, dir);
         }
         doStep();
       }
@@ -2139,9 +2139,9 @@
       btn.classList.add('pressed');
       holdTimer = setTimeout(function(){
         isContinuous = true;
-        if (window.whatELSClient) {
-          window.whatELSClient.jog('z', zDir, true);
-          window.whatELSClient.jog('x', xDir, true);
+        if (window.whatElsClient) {
+          window.whatElsClient.jog('z', zDir, true);
+          window.whatElsClient.jog('x', xDir, true);
         }
         repeatTimer = setInterval(doStep, 110);
       }, 300);
@@ -2153,15 +2153,15 @@
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
       if (isContinuous) {
-        if (window.whatELSClient) {
-          window.whatELSClient.jog('z', zDir, false);
-          window.whatELSClient.jog('x', xDir, false);
+        if (window.whatElsClient) {
+          window.whatElsClient.jog('z', zDir, false);
+          window.whatElsClient.jog('x', xDir, false);
         }
       } else {
         // Quick tap: issue discrete 1-step canonical commands on both axes
-        if (window.whatELSClient) {
-          window.whatELSClient.jogStep('z', zDir);
-          window.whatELSClient.jogStep('x', xDir);
+        if (window.whatElsClient) {
+          window.whatElsClient.jogStep('z', zDir);
+          window.whatElsClient.jogStep('x', xDir);
         }
         doStep();
       }
@@ -3457,8 +3457,8 @@
       if(kpTarget==='coordZ'){
         state.z = mm;
         var zDu = Math.round(mm * 10000.0);
-        if(window.whatELSClient){
-          window.whatELSClient.setAxisPosDu('z', zDu);
+        if(window.whatElsClient){
+          window.whatElsClient.setAxisPosDu('z', zDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').zDu = zDu;
@@ -3468,8 +3468,8 @@
         state.xDia = state.xRep==='diameter' ? mm : mm*2;
         var radiusMm = state.xRep==='diameter' ? mm / 2.0 : mm;
         var xDu = Math.round(radiusMm * 10000.0);
-        if(window.whatELSClient){
-          window.whatELSClient.setAxisPosDu('x', xDu);
+        if(window.whatElsClient){
+          window.whatElsClient.setAxisPosDu('x', xDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').xDu = xDu;
@@ -3478,26 +3478,26 @@
       else if(kpTarget==='limitTarget'){
         var distMm = Math.abs(mm);
         state[limitTarget] = distMm;
-        if(window.whatELSClient){
+        if(window.whatElsClient){
           var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
           var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
           var targetCoordDu = 0;
           if(limitTarget === 'zLeft'){
-            var curZ = (window.whatELSClient.canonical && window.whatELSClient.canonical.zDu !== undefined) ? (window.whatELSClient.canonical.zDu / 10000.0) : state.z;
+            var curZ = (window.whatElsClient.canonical && window.whatElsClient.canonical.zDu !== undefined) ? (window.whatElsClient.canonical.zDu / 10000.0) : state.z;
             targetCoordDu = Math.round((curZ - distMm) * 10000.0);
           } else if(limitTarget === 'zRight'){
-            var curZ = (window.whatELSClient.canonical && window.whatELSClient.canonical.zDu !== undefined) ? (window.whatELSClient.canonical.zDu / 10000.0) : state.z;
+            var curZ = (window.whatElsClient.canonical && window.whatElsClient.canonical.zDu !== undefined) ? (window.whatElsClient.canonical.zDu / 10000.0) : state.z;
             targetCoordDu = Math.round((curZ + distMm) * 10000.0);
           } else if(limitTarget === 'xLeft'){
-            var curRad = (window.whatELSClient.canonical && window.whatELSClient.canonical.xDu !== undefined) ? (window.whatELSClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var curRad = (window.whatElsClient.canonical && window.whatElsClient.canonical.xDu !== undefined) ? (window.whatElsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
             var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
             targetCoordDu = Math.round((curRad - deltaRad) * 10000.0);
           } else if(limitTarget === 'xRight'){
-            var curRad = (window.whatELSClient.canonical && window.whatELSClient.canonical.xDu !== undefined) ? (window.whatELSClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var curRad = (window.whatElsClient.canonical && window.whatElsClient.canonical.xDu !== undefined) ? (window.whatElsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
             var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
             targetCoordDu = Math.round((curRad + deltaRad) * 10000.0);
           }
-          window.whatELSClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
+          window.whatElsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
         }
         if(window.Alpine && Alpine.store && Alpine.store('machine')){
           var m = Alpine.store('machine');
@@ -3515,8 +3515,8 @@
           JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = stepVal;
         }
         var stepDu = Math.round((state.unit === 'in' ? stepVal * 254000.0 : stepVal * 10000.0));
-        if(window.whatELSClient){
-          window.whatELSClient.setJogStepDu(stepDu);
+        if(window.whatElsClient){
+          window.whatElsClient.setJogStepDu(stepDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').jogStepDu = stepDu;
@@ -3879,7 +3879,7 @@
     // Initialize Service
     const ServiceClass = window.WhatelsService;
     if(ServiceClass){
-      window.whatelsClient = new ServiceClass({
+      window.whatElsClient = new ServiceClass({
         mode: savedBackend,
         host: savedHost,
         port: 81,
@@ -3887,7 +3887,7 @@
       });
 
       // Handle Connection Status Updates
-      window.whatelsClient.addEventListener('connection', function(e){
+      window.whatElsClient.addEventListener('connection', function(e){
         var detail = e.detail;
         if(detail.mode === 'emulator'){
           statusBadge.className = 'dev-status-badge emu';
@@ -3905,7 +3905,7 @@
       });
 
       // Handle Traffic Logging
-      window.whatELSClient.addEventListener('traffic', function(e){
+      window.whatElsClient.addEventListener('traffic', function(e){
         var item = e.detail;
 
         if(item.type === 'telemetry_packet'){
@@ -4037,7 +4037,7 @@
       });
 
       // Handle Telemetry Updates into Prototype State (Layer 1 / Layer 2 Decoupled)
-      window.whatELSClient.addEventListener('telemetry', function(e){
+      window.whatElsClient.addEventListener('telemetry', function(e){
         var data = e.detail;
         if(!data) return;
         var c = data.canonical;
@@ -4292,7 +4292,7 @@
       });
 
       // Connect initial
-      window.whatELSClient.connect();
+      window.whatElsClient.connect();
     }
 
     // Dev Console Button Actions
@@ -4301,8 +4301,8 @@
         savedBackend = 'emulator';
         localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
-        if(window.whatELSClient){
-          window.whatELSClient.setBackend('emulator');
+        if(window.whatElsClient){
+          window.whatElsClient.setBackend('emulator');
         }
       });
     }
@@ -4313,8 +4313,8 @@
         localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
         var host = hostInput ? hostInput.value.trim() : 'whatELS.local';
-        if(window.whatELSClient){
-          window.whatELSClient.setBackend('live', host, 81);
+        if(window.whatElsClient){
+          window.whatElsClient.setBackend('live', host, 81);
         }
       });
     }
@@ -4326,8 +4326,8 @@
         savedBackend = 'live';
         localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
-        if(window.whatELSClient){
-          window.whatELSClient.setBackend('live', host, 81);
+        if(window.whatElsClient){
+          window.whatElsClient.setBackend('live', host, 81);
         }
       });
     }
@@ -4348,8 +4348,8 @@
       chkLogStatus.addEventListener('change', function(){
         var active = chkLogStatus.checked;
         localStorage.setItem('whatELS_log_status_pushes', active);
-        if(window.whatELSClient){
-          window.whatELSClient.setLogStatusPushes(active);
+        if(window.whatElsClient){
+          window.whatElsClient.setLogStatusPushes(active);
         }
       });
     }

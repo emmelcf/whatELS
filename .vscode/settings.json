@@ -6,5 +6,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=${workspaceFolder}"
-  ]
+  ],
+  "livePreview.defaultPreviewPath": "/clients/web_ui/lathe_dro_whatels_controller.html"
 }
