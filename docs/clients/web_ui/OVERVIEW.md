@@ -1,11 +1,11 @@
-# NanoELS Web UI Client: Architecture & Implementation Specification
+# whatELS Web UI Client: Architecture & Implementation Specification
 
 > **Status:** Authoritative Reference Implementation  
 > **Client Type:** Modern Browser / Touchscreen DRO Interface (HTML5 / ES Modules / Alpine.js)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/clients/web_ui/OVERVIEW.md`  
-> **Primary Prototype File:** [`lathe_dro_nanoels_controller.html`](../../../clients/web_ui/lathe_dro_nanoels_controller.html)  
+> **Primary Prototype File:** [`lathe_dro_whatels_controller.html`](../../../clients/web_ui/lathe_dro_whatels_controller.html)  
 > **Companion Document:** [`INTERACTION_LEDGER.md`](./INTERACTION_LEDGER.md)  
 > **Core Architecture References:** [`ELS_CLIENT_ARCHITECTURE.md`](../../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md)
 
@@ -13,7 +13,7 @@
 
 ## 1. Executive Summary & Design Principles
 
-The **NanoELS Web UI** is the primary rich client interface for the NanoELS electronic leadscrew platform. Designed for modern touch displays ($800 \times 480$ landscape up to full $1080\text{p}$ shop tablets), it delivers a responsive digital readout (DRO), conversational machining wizards, electronic gearbox control, and a real-time digital twin visualizer.
+The **whatELS Web UI** is the primary rich client interface for the whatELS electronic leadscrew platform. Designed for modern touch displays ($800 \times 480$ landscape up to full $1080\text{p}$ shop tablets), it delivers a responsive digital readout (DRO), conversational machining wizards, electronic gearbox control, and a real-time digital twin visualizer.
 
 ### Governing Tenets
 1. **Zero-Build, 100% Offline Runtime & ROM Asset Embedding:**  
@@ -23,7 +23,7 @@ The **NanoELS Web UI** is the primary rich client interface for the NanoELS elec
 3. **Strict Client-Local Presentation Independence:**  
    Preferences like Metric vs. Imperial (`measure`) and Diameter vs. Radius (`dia`) are managed purely within the client store. Toggling display formats causes zero network traffic and zero cross-client side effects.
 4. **Isomorphic Simulator & Hardware Parity:**  
-   The client integrates an in-browser physics emulator (`nanoels-emulator.js`) that mirrors ESP32 kinematics and wire protocol, allowing 100% offline development and testing without physical lathe hardware.
+   The client integrates an in-browser physics emulator (`whatels-emulator.js`) that mirrors ESP32 kinematics and wire protocol, allowing 100% offline development and testing without physical lathe hardware.
 5. **Zero-Idle Network Traffic & Atomic Inception at START (ADR 15):**  
    While the lathe is stationary and idle (`runState === 'stopped'`), all conversational wizard setup, mode selection, Gearbox axis toggles, feed direction, and pitch adjustments are **strictly client-local presentation state**. The client emits zero mode or parameter packets while idle, eliminating cross-client interference, telemetry echo, and radio saturation. Physical motion is engaged exclusively through an atomic inception bundle dispatched upon tapping `START FEED` / `START CYCLE`. Feature shoulder limits (Turning, Facing) are staged locally and transmitted to the controller's hardware registers upon `START`, where they persist following cycle completion.
 
@@ -35,15 +35,15 @@ The client codebase is structured into cohesive, decoupled ES modules:
 
 ```
 clients/web_ui/
-├── lathe_dro_nanoels_controller.html  # Declarative HTML5 markup & Alpine bindings (~530 lines)
+├── lathe_dro_whatels_controller.html  # Declarative HTML5 markup & Alpine bindings (~530 lines)
 ├── alpine.min.js                      # Alpine.js v3.17.4 local offline runtime (~43 KB)
 ├── lathe-controller.css               # Design system tokens, styles, and touch targets (~1,250 lines)
-├── nanoels-service.js                 # Network transport abstraction & backend switcher (~380 lines)
-├── nanoels-state.js                   # Alpine.store('machine') 4-domain reactive model (~240 lines)
-├── nanoels-presets.js                 # Standard fastener thread tables & taper geometry (~350 lines)
-├── nanoels-formatters.js              # Pure render-time math formatters (du -> strings) (~90 lines)
+├── whatels-service.js                 # Network transport abstraction & backend switcher (~380 lines)
+├── whatels-state.js                   # Alpine.store('machine') 4-domain reactive model (~240 lines)
+├── whatels-presets.js                 # Standard fastener thread tables & taper geometry (~350 lines)
+├── whatels-formatters.js              # Pure render-time math formatters (du -> strings) (~90 lines)
 ├── lathe-controller.js                # Modal controllers, wizards, keypad & touch gestures (~4,000 lines)
-├── nanoels-emulator.js                # Offline physics & kinematics simulator (~500 lines)
+├── whatels-emulator.js                # Offline physics & kinematics simulator (~500 lines)
 └── dev/
     ├── lathe-viz.js                   # Digital twin SVG canvas renderer (~450 lines)
     └── lathe-viz-profiles.js          # Machine geometry profile library (~150 lines)
@@ -53,36 +53,36 @@ clients/web_ui/
 
 | File | Primary Role | Architectural Invariants |
 | :--- | :--- | :--- |
-| **`nanoels-service.js`** | **Transport & Network Adapter** | Manages WebSocket connection lifecycle, exponential reconnect backoff, backend routing (`mock` vs `bridge` vs `live`), command queuing, and promise-based settings transactions. |
-| **`nanoels-state.js`** | **Authoritative Reactive Store** | Implements `Alpine.store('machine')`. Ingests line-oriented domain telemetry, handles client-local presentation preferences, and triggers reactive DOM updates with zero DOM thrashing. |
-| **`nanoels-formatters.js`** | **Pure Presentation Math** | Pure functions converting integer deci-microns into formatted strings (`duToMm`, `duToInch`, `formatFeed`, `formatSurfaceSpeed`). Zero state mutations. |
-| **`nanoels-presets.js`** | **Machining Knowledge Base** | Immutable lookup tables for ISO Metric, Unified (UNC/UNF/UNEF), Pipe (NPT/BSPT) threads, and standard machine tapers (Morse, Brown & Sharpe, R8, ISO). |
+| **`whatels-service.js`** | **Transport & Network Adapter** | Manages WebSocket connection lifecycle, exponential reconnect backoff, backend routing (`mock` vs `bridge` vs `live`), command queuing, and promise-based settings transactions. |
+| **`whatels-state.js`** | **Authoritative Reactive Store** | Implements `Alpine.store('machine')`. Ingests line-oriented domain telemetry, handles client-local presentation preferences, and triggers reactive DOM updates with zero DOM thrashing. |
+| **`whatels-formatters.js`** | **Pure Presentation Math** | Pure functions converting integer deci-microns into formatted strings (`duToMm`, `duToInch`, `formatFeed`, `formatSurfaceSpeed`). Zero state mutations. |
+| **`whatels-presets.js`** | **Machining Knowledge Base** | Immutable lookup tables for ISO Metric, Unified (UNC/UNF/UNEF), Pipe (NPT/BSPT) threads, and standard machine tapers (Morse, Brown & Sharpe, R8, ISO). |
 | **`lathe-controller.js`** | **Ergonomics & Wizard Controller** | Manages calculator keypad buffer, conversational threading/turning wizards, settings modal, and sub-300ms D-pad gesture timing loops. |
-| **`nanoels-emulator.js`** | **Offline Simulator Engine** | Full software model of the ESP32 motion controller. Emulates stepper timing, encoder ticks, soft limits, and tool kinematics for offline browser testing. |
+| **`whatels-emulator.js`** | **Offline Simulator Engine** | Full software model of the ESP32 motion controller. Emulates stepper timing, encoder ticks, soft limits, and tool kinematics for offline browser testing. |
 | **`lathe-viz.js`** | **Digital Twin Visualizer** | Passive reactive SVG renderer that ingests canonical coordinates and draws the lathe bed, carriage, toolpost, and workpiece to true physical scale. |
 
 ---
 
-## 3. Client-Side Transport Layer (`nanoels-service.js`)
+## 3. Client-Side Transport Layer (`whatels-service.js`)
 
-The Web UI communicates with the controller via `NanoElsService`, which provides an event-driven network abstraction:
+The Web UI communicates with the controller via `WhatElsService`, which provides an event-driven network abstraction:
 
 ```
 [ Web UI View Logic ] 
         ▲
         │ (Events: 'telemetry', 'connected', 'status')
         ▼
-[ NanoElsService (nanoels-service.js) ]
+[ WhatElsService (whatels-service.js) ]
         │
    ┌────┴───────────────────────────┬───────────────────────────────┐
    ▼                                ▼                               ▼
 [ Live WebSocket Client ]   [ Local Serial Bridge ]     [ Software Emulator ]
-(ws://<esp32-ip>:81/canonical)  (ws://127.0.0.1:8765)    (nanoels-emulator.js)
+(ws://<esp32-ip>:81/canonical)  (ws://127.0.0.1:8765)    (whatels-emulator.js)
 ```
 
 ### 3.1 Backend Selection & Switching
 The client dynamically switches between three backends at runtime via `#devBackendSelect`:
-* **`'emulator'` (Default):** Connects to `window.nanoelsEmulator` in-memory. Zero network requirements.
+* **`'emulator'` (Default):** Connects to `window.WhatelsEmulator` in-memory. Zero network requirements.
 * **`'bridge'`:** Connects to `ws://127.0.0.1:8765/` (local USB-UART bridge for bench testing).
 * **`'live'`:** Connects to `ws://<host>:81/canonical` on the physical ESP32-S3 controller.
 
@@ -100,10 +100,10 @@ Machine shop electrical noise (spindle VFD switching, contactors) can induce tra
 ## 4. Inbound Telemetry Ingestion & Stream Translation
 
 ### 4.1 Telemetry Parsing Pipeline
-The controller pushes line-oriented ASCII key-value telemetry. `nanoels-service.js` parses incoming messages into typed state updates:
+The controller pushes line-oriented ASCII key-value telemetry. `whatels-service.js` parses incoming messages into typed state updates:
 
 ```javascript
-// nanoels-service.js inbound line parsing
+// whatels-service.js inbound line parsing
 handleIncomingMessage(line) {
   const [key, val] = line.trim().split('=');
   if (!key || val === undefined) return;
@@ -185,7 +185,7 @@ To achieve zero display lag, 100% visual fidelity, and exact hardware gesture ti
 └──────────────────────────────────────┘
             │
             ▼
-[ nanoelsService.send('CMD....') ]
+[ whatElsService.send('CMD....') ]
 ```
 
 ### The Boundary Rules:
@@ -233,14 +233,14 @@ The complete mapping of every button, touch gesture, keypad entry, and modal tri
 
 ## 8. Development Tooling Integration
 
-### 8.1 In-Browser Physics Simulator (`nanoels-emulator.js`)
+### 8.1 In-Browser Physics Simulator (`whatels-emulator.js`)
 * Fully emulates the ESP32 motion controller inside the browser tab.
 * Simulates stepper step generation, spindle encoder quadrature PCNT pulses, limit register trips, and thread helix synchronization.
 * Allows complete end-to-end testing of wizards, keypad interactions, and UI workflows without physical hardware.
 
 ### 8.2 Real-Scale Digital Twin Visualizer (`lathe-viz.js`)
 * A pure reactive SVG canvas engine docked beneath the primary controller face.
-* Subscribes to `window.nanoelsClient`'s `'telemetry'` event.
+* Subscribes to `window.whatELSClient`'s `'telemetry'` event.
 * Ingests canonical deci-micron positions (`zDu`, `xDu`) and draws the lathe bed casting, chuck, workpiece, toolpost, and soft limit envelopes to true physical millimetric scale.
 * Operates strictly on canonical millimeters ($z\text{Du}/10000$, $x\text{Du}/10000$), completely immune to client-side display preferences ($\varnothing/R$, $\text{mm/in}$).
 
@@ -250,7 +250,7 @@ The complete mapping of every button, touch gesture, keypad entry, and modal tri
 
 ### 9.1 Production Embedded Flash ROM Delivery
 To eliminate user data loss when upgrading firmware:
-1. **Pre-Build Compression:** A lightweight PlatformIO script gzips `lathe_dro_nanoels_controller.html`, `lathe-controller.css`, `lathe-controller.js`, `alpine.min.js`, etc. and outputs C++ byte arrays in `PROGMEM`.
+1. **Pre-Build Compression:** A lightweight PlatformIO script gzips `lathe_dro_whatels_controller.html`, `lathe-controller.css`, `lathe-controller.js`, `alpine.min.js`, etc. and outputs C++ byte arrays in `PROGMEM`.
 2. **Direct ROM Streaming:** The ESP32 web server serves these arrays directly out of flash memory using `server.send_P(200, contentType, data, len)` with `Content-Encoding: gzip`.
 3. **No LittleFS Overwrites:** Firmware upgrades require only flashing `firmware.bin`. User presets and uploaded machining programs in LittleFS are completely preserved.
 

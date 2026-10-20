@@ -3,7 +3,7 @@
 #include "ITransport.h"
 #include <WebSocketsServer.h>
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class WebSocketTransport : public ITransport {
@@ -38,4 +38,4 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

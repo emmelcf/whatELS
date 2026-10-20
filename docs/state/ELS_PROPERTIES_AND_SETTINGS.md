@@ -1,7 +1,7 @@
-# NanoELS Properties & Settings Architecture Specification
+# whatELS Properties & Settings Architecture Specification
 
 > **Status:** Authoritative Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_PROPERTIES_AND_SETTINGS.md`  
@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Architectural Role
 
-The **NanoELS Properties & Settings System** (`SettingsService`) is the centralized configuration engine, parameter registry, and persistence manager for the entire NanoELS motion platform.
+The **whatELS Properties & Settings System** (`SettingsService`) is the centralized configuration engine, parameter registry, and persistence manager for the entire whatELS motion platform.
 
 ### 1.1 The Core Problem
 In the original legacy `h5.ino` implementation and its initial modular extraction (`Config.cpp`), system settings suffered from three major architectural flaws:
@@ -32,7 +32,7 @@ In the original legacy `h5.ino` implementation and its initial modular extractio
 
 ## 2. The 4-Tier Properties Taxonomy
 
-Properties across the NanoELS ecosystem are partitioned into four distinct tiers of authority and ownership:
+Properties across the whatELS ecosystem are partitioned into four distinct tiers of authority and ownership:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -145,7 +145,7 @@ struct AxisHardwareConfig {
 
 #### 2. Unified & Extensible Encoder Hardware Abstraction & DRO Decoupling
 
-A core insight of the NanoELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
+A core insight of the whatELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
 
 Rather than duplicating disparate encoder structs, all pulse sensors reuse the authoritative `QuadratureEncoderConfig` (defined in `src/motion/LatheProfile.h`):
 
@@ -230,9 +230,9 @@ struct WifiConfig {
   bool enabled = true;
   String ssid = "";
   String password = "";
-  String hostname = "nanoels";
-  String setupApSsid = "NanoEls-Setup";
-  String setupApPassword = "nanoels-setup";
+  String hostname = "whatels";
+  String setupApSsid = "whatEls-Setup";
+  String setupApPassword = "whatels-setup";
 };
 
 struct MpgConfig {
@@ -298,14 +298,14 @@ extern OperatorPreferences operatorPrefs;
 ### 2.2 API-to-Flash NVS Key Mapping (15-Character Constraint)
 
 ESP32 non-volatile storage (NVS) enforces a strict hardware limit: **Key names must be ≤ 15 characters**.
-NanoELS cleanly bridges hierarchical API dot-paths with compact NVS keys by using the top-level domain as the NVS namespace:
+whatELS cleanly bridges hierarchical API dot-paths with compact NVS keys by using the top-level domain as the NVS namespace:
 
 | API Dot-Path | Flash Namespace | NVS Key (≤15 chars) | Type | Default Value | Description |
 | :--- | :---: | :---: | :---: | :--- | :--- |
 | **`sys.wifi.enabled`** | `"sys"` | `"wifi_en"` | bool | `true` | Network WiFi radio state |
 | **`sys.wifi.ssid`** | `"sys"` | `"wifi_ssid"` | string | `""` | Station WiFi SSID |
 | **`sys.wifi.password`** | `"sys"` | `"wifi_pwd"` | string | `""` | Station WPA2 password |
-| **`sys.wifi.hostname`** | `"sys"` | `"wifi_host"` | string | `"nanoels"` | mDNS discovery hostname |
+| **`sys.wifi.hostname`** | `"sys"` | `"wifi_host"` | string | `"whatels"` | mDNS discovery hostname |
 | **`sys.mpg.zPulsesPerRev`** | `"sys"` | `"mpg_z_ppr"` | float | `600.0` | Z carriage handwheel PPR |
 | **`sys.mpg.xPulsesPerRev`** | `"sys"` | `"mpg_x_ppr"` | float | `600.0` | X cross-slide handwheel PPR |
 | **`sys.timing.dirSetupUs`** | `"sys"` | `"dir_setup_us"` | long | `10` | DIR pin hold before STEP |
@@ -381,7 +381,7 @@ struct CachedProperty {
 };
 ```
 
-1. **Unmodified System:** When a user unpacks or initializes NanoELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
+1. **Unmodified System:** When a user unpacks or initializes whatELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
 3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
 
@@ -423,7 +423,7 @@ To eliminate repetitive manual `Preferences` operations, flash wear, and acciden
 
 In early firmware revisions, schema invalidation used a destructive "nuclear wipe" (`if (storedVer != EXPECTED) pref.clear();`). This was disastrous for operators because updating firmware wiped all calibrated axis steps, leadscrew pitch error compensation, and network credentials.
 
-The modern NanoELS architecture strictly forbids blind namespace wipes. It uses a **monotonic sequential migration engine** keyed directly to `SOFTWARE_VERSION` (defined in `Config.h`):
+The modern whatELS architecture strictly forbids blind namespace wipes. It uses a **monotonic sequential migration engine** keyed directly to `SOFTWARE_VERSION` (defined in `Config.h`):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -603,8 +603,8 @@ machine.x.maxRapidMmMin FLOAT   mm/min  50.0    5000.0    800.0              Cro
 TIER 2: CONTROLLER INFRASTRUCTURE
 ---------------------------------------------------------------------------------------------------------------------
 sys.wifi.enabled        BOOL    -       0       1         1                  Enable wireless network radio
-sys.wifi.ssid           STRING  -       -       -         "NanoELS-AP"       Network SSID name
-sys.wifi.hostname       STRING  -       -       -         "nanoels"          mDNS network address
+sys.wifi.ssid           STRING  -       -       -         "whatELS-AP"       Network SSID name
+sys.wifi.hostname       STRING  -       -       -         "whatels"          mDNS network address
 sys.dro.zPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   1250.67            Z optical linear scale calibration
 sys.dro.xPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   501.20             X optical linear scale calibration
 

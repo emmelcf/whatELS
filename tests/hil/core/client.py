@@ -1,4 +1,4 @@
-"""NanoELS WebSocket Client and Reactive State Mirror."""
+"""whatELS WebSocket Client and Reactive State Mirror."""
 
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ class ControllerState:
     raw: dict[str, str] = field(default_factory=dict)
 
 
-class NanoElsClient:
+class WhatElsClient:
     """Asynchronous WebSocket client connecting to ws://<host>:81/canonical."""
 
-    def __init__(self, host: str = "nanoels.local", port: int = 81):
-        # Normalize in case a full URI like 'ws://nanoels.local:81' or 'http://...' was passed
+    def __init__(self, host: str = "whatels.local", port: int = 81):
+        # Normalize in case a full URI like 'ws://whatels.local:81' or 'http://...' was passed
         clean_host = host.replace("http://", "").replace("https://", "").replace("ws://", "").replace("wss://", "")
         if "/" in clean_host:
             clean_host = clean_host.split("/")[0]
@@ -82,7 +82,7 @@ class NanoElsClient:
                 websockets.connect(self.uri, ping_interval=None, ping_timeout=None), timeout=timeout_s
             )
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to NanoELS at {self.uri}: {e}") from e
+            raise ConnectionError(f"Failed to connect to whatELS at {self.uri}: {e}") from e
 
         self._rx_task = asyncio.create_task(self._rx_loop())
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())

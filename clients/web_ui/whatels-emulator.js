@@ -1,9 +1,9 @@
 /**
- * NanoELS H5 Controller Firmware Emulator
- * Emulates the ESP32 NanoELS H5 firmware protocol (docs/h5.ino)
+ * whatELS Controller Firmware Emulator
+ * Emulates the ESP32 whatELS firmware protocol
  * Provides authentic bidirectional text-frame communication over a virtual transport.
  */
-class NanoelsEmulator {
+class WhatelsEmulator {
   constructor() {
     this.onmessage = null; // Callback: function(textData)
     this.timer = null;
@@ -817,4 +817,4 @@ class NanoelsEmulator {
   }
 }
 
-window.NanoelsEmulator = NanoelsEmulator;
+window.WhatelsEmulator = WhatelsEmulator;

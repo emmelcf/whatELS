@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ITransport {
@@ -14,4 +14,4 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

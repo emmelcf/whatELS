@@ -1,14 +1,14 @@
 /**
- * NanoELS Communication Service & Protocol Router
+ * whatELS Communication Service & Protocol Router
  * Bridges the UI to either a Live ESP32 WebSocket (ws://<host>:81)
- * or the in-browser NanoELS Firmware Emulator.
+ * or the in-browser whatELS Firmware Emulator.
  * Handles continuous movement heartbeats, packet logging, and telemetry parsing.
  */
-class NanoelsService extends EventTarget {
+class WhatelsService extends EventTarget {
   constructor(options = {}) {
     super();
     this.mode = options.mode || 'emulator'; // 'emulator' | 'live'
-    this.host = options.host || 'nanoels.local';
+    this.host = options.host || 'whatels.local';
     this.port = options.port || 81;
     this.logStatusPushes = options.logStatusPushes || false; // Suppressed by default for clean logs
 
@@ -177,11 +177,12 @@ class NanoelsService extends EventTarget {
   }
 
   _connectEmulator() {
-    if (!window.NanoelsEmulator) {
-      console.error('NanoelsEmulator class not found!');
+    const EmuClass = window.WhatelsEmulator;
+    if (!EmuClass) {
+      console.error('WhatelsEmulator class not found!');
       return;
     }
-    this.emulator = new window.NanoelsEmulator();
+    this.emulator = new EmuClass();
     this.emulator.onmessage = (event) => {
       this._handleIncoming(event.data);
     };
@@ -799,4 +800,4 @@ class NanoelsService extends EventTarget {
   }
 }
 
-window.NanoelsService = NanoelsService;
+window.WhatelsService = WhatelsService;

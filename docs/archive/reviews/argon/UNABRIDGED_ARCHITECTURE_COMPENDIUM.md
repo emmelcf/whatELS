@@ -1,7 +1,7 @@
-# NanoELS — Master System Architecture & Implementation Compendium (Unabridged)
+# whatELS — Master System Architecture & Implementation Compendium (Unabridged)
 
 > **Document Type:** Unabridged Engineering Compendium & Peer Review Submission  
-> **Target Platform:** NanoELS H5 Electronic Leadscrew & Lathe Controller (ESP32-S3)  
+> **Target Platform:** whatELS Electronic Leadscrew & Lathe Controller (ESP32-S3)  
 > **Authors:** Emil & Antigravity Pair-Programming Team  
 > **Date:** October 2026  
 > **Target Reviewer:** Google DeepMind / Google Research Argon Model (Large-Context Engineering Review)  
@@ -14,7 +14,7 @@
 **Role:** Principal Embedded Systems Architect, High-Reliability Real-Time Motion Control Engineer, and Safety-Critical Firmware Auditor.
 
 **Context:**  
-You are reviewing the complete, end-to-end software and motion architecture for **NanoELS**, an industrial-grade, open-source Electronic Leadscrew (ELS) and Digital Readout (DRO) controller designed for metalworking engine lathes. NanoELS replaces mechanical change gears, Norton gearboxes, and half-nut assemblies with an electronic leadscrew synchronized to a spindle quadrature encoder.
+You are reviewing the complete, end-to-end software and motion architecture for **whatELS**, an industrial-grade, open-source Electronic Leadscrew (ELS) and Digital Readout (DRO) controller designed for metalworking engine lathes. whatELS replaces mechanical change gears, Norton gearboxes, and half-nut assemblies with an electronic leadscrew synchronized to a spindle quadrature encoder.
 
 The controller runs on an **ESP32-S3** (dual-core 240 MHz Xtensa LX7 with FreeRTOS). It directly drives stepper/digital servo motors (Leadshine EM542S / TMC2209), samples a spindle optical encoder via dedicated hardware Pulse Counter (PCNT) units, interfaces with optical linear glass scales (DRO), monitors opto-isolated limit switches and hardware E-Stop lines, and serves a high-resolution touch Web DRO interface over WebSockets.
 
@@ -96,23 +96,23 @@ A clear checklist of specific items that should be adjusted in the specification
 
 ================================================================================
 # 1. MASTER SYSTEM ARCHITECTURE BLUEPRINT
-# Source: /home/emil/code/nanoels/docs/NANOELS_MASTER_ARCHITECTURE.md
+# Source: /home/emil/code/whatels/docs/WHATELS_MASTER_ARCHITECTURE.md
 ================================================================================
 
-# NanoELS H5 — Master System Architecture & Subsystem Specification
+# whatELS — Master System Architecture & Subsystem Specification
 
 > **Status:** Authoritative "Ground Floor" Master Architecture Blueprint  
-> **Target Platform:** NanoELS H5 Electronic Leadscrew & Multi-Client Suite (ESP32-S3)  
+> **Target Platform:** whatELS Electronic Leadscrew & Multi-Client Suite (ESP32-S3)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 8, 2026  
-> **Location:** `docs/NANOELS_MASTER_ARCHITECTURE.md`  
+> **Location:** `docs/WHATELS_MASTER_ARCHITECTURE.md`  
 > **Supersedes:** `ELS_DESIGN_NOTEBOOK.md` (as the root architectural index)
 
 ---
 
 ## 1. Executive System Vision & Core Tenets
 
-The **NanoELS H5 Architecture** modernizes an open-source embedded lathe controller into an industrial-grade, multi-client electronic leadscrew (ELS) and digital readout (DRO) platform.
+The **whatELS Architecture** modernizes an open-source embedded lathe controller into an industrial-grade, multi-client electronic leadscrew (ELS) and digital readout (DRO) platform.
 
 ### 1.1 The Evolutionary Leap
 * **From:** A monolithic Arduino sketch (`h5.ino`, ~370 KB) with 200+ unencapsulated procedural globals, hardwired Nextion LCD packets, and high-frequency stepper timer ISRs interleaved with serial communication.
@@ -245,7 +245,7 @@ To guarantee that firmware upgrades never destroy user calibrations, custom mach
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       NANOELS FLASH PARTITION ROLES                         │
+│                       WHATELS FLASH PARTITION ROLES                         │
 ├────────────────────────────────┬────────────────────────────────────────────┤
 │ 1. APPLICATION FLASH (`app0`)  │ • C++ Motion Core & Hard Real-Time Loops   │
 │    Firmware Binary (.bin)      │ • Embedded Gzipped Web UI (`PROGMEM`)      │
@@ -300,7 +300,7 @@ Below is the complete audit of all implementation and header files across `src/`
 To prevent architectural drift and maintain single-topic depth, all detailed implementation rules are partitioned into dedicated standalone specifications:
 
 ```
-NANOELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
+WHATELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │
 ├── 1. Core State & Concurrency Model
 │    └── ELS_CORE_STATE_MODEL.md
@@ -359,13 +359,13 @@ All contributors and AI pair-programming agents working in this repository MUST 
 
 ================================================================================
 # 2. HARDWARE ABSTRACTION LAYER (HAL) SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/motion/HAL_SPECIFICATION.md
+# Source: /home/emil/code/whatels/docs/motion/HAL_SPECIFICATION.md
 ================================================================================
 
-# NanoELS Hardware Abstraction Layer (HAL) Specification
+# whatELS Hardware Abstraction Layer (HAL) Specification
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Hardware Integrators, Motion Core  
 > **Location:** `docs/motion/HAL_SPECIFICATION.md`
 
@@ -373,7 +373,7 @@ All contributors and AI pair-programming agents working in this repository MUST 
 
 ## 1. Executive Summary & Architectural Role
 
-The **Hardware Abstraction Layer (HAL)** is the lowest software layer in the NanoELS motion controller. It provides deterministic, typed, non-blocking hardware interfaces to physical pins, timer peripherals, and hardware pulse counters on the ESP32-S3 microcontroller.
+The **Hardware Abstraction Layer (HAL)** is the lowest software layer in the whatELS motion controller. It provides deterministic, typed, non-blocking hardware interfaces to physical pins, timer peripherals, and hardware pulse counters on the ESP32-S3 microcontroller.
 
 ### 1.1 Strict Layer Boundaries & Invariants
 1. **Zero Domain Logic:** The HAL knows **nothing** about millimeters, inches, threads per inch, conical tapers, workpiece coordinates, or cutting cycles.
@@ -658,13 +658,13 @@ public:
 
 ================================================================================
 # 3. KINEMATIC MOTION ENGINE SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/motion/MOTION_ENGINE_SPECIFICATION.md
+# Source: /home/emil/code/whatels/docs/motion/MOTION_ENGINE_SPECIFICATION.md
 ================================================================================
 
-# NanoELS Motion Engine & Kinematic Core Specification
+# whatELS Motion Engine & Kinematic Core Specification
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Motion Control Specialists  
 > **Location:** `docs/motion/MOTION_ENGINE_SPECIFICATION.md`  
 > **Layer Dependency:** Built on `docs/motion/HAL_SPECIFICATION.md`
@@ -673,7 +673,7 @@ public:
 
 ## 1. Executive Summary & Architectural Scope
 
-The **Motion Engine (`MotionEngine`)** is the mathematical and kinematic core of NanoELS. It translates operator intent (commanded feed rates, leadscrew thread leads, target distances, virtual soft limits) into precisely timed, acceleration-profiled step pulse sequences executed via `IStepperHAL`.
+The **Motion Engine (`MotionEngine`)** is the mathematical and kinematic core of whatELS. It translates operator intent (commanded feed rates, leadscrew thread leads, target distances, virtual soft limits) into precisely timed, acceleration-profiled step pulse sequences executed via `IStepperHAL`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -983,13 +983,13 @@ private:
 
 ================================================================================
 # 4. MOTION ENGINE TO MODE INTEGRATION CONTRACT
-# Source: /home/emil/code/nanoels/docs/motion/MODE_INTEGRATION_CONTRACT.md
+# Source: /home/emil/code/whatels/docs/motion/MODE_INTEGRATION_CONTRACT.md
 ================================================================================
 
-# NanoELS Motion Engine to Mode Integration Contract
+# whatELS Motion Engine to Mode Integration Contract
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Motion Control Specialists, Mode Authors  
 > **Location:** `docs/motion/MODE_INTEGRATION_CONTRACT.md`  
 > **Predecessor Docs:** [`HAL_SPECIFICATION.md`](./HAL_SPECIFICATION.md), [`MOTION_ENGINE_SPECIFICATION.md`](./MOTION_ENGINE_SPECIFICATION.md)
@@ -1310,13 +1310,13 @@ When an operator nudges feed rate via Web UI:
 
 ================================================================================
 # 5. REAL-TIME CONCURRENCY, TIMING & CORE ARCHITECTURE
-# Source: /home/emil/code/nanoels/docs/motion/CONCURRENCY_AND_TIMING.md
+# Source: /home/emil/code/whatels/docs/motion/CONCURRENCY_AND_TIMING.md
 ================================================================================
 
-# NanoELS Concurrency, Real-Time Timing & Core Architecture
+# whatELS Concurrency, Real-Time Timing & Core Architecture
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture (ESP32-S3)  
+> **Target Version:** whatELS Modular Architecture (ESP32-S3)  
 > **Audience:** Firmware Engineers, Systems Architects, Motion Core  
 > **Location:** `docs/motion/CONCURRENCY_AND_TIMING.md`  
 > **Related Specifications:** [`HAL_SPECIFICATION.md`](./HAL_SPECIFICATION.md), [`MOTION_ENGINE_SPECIFICATION.md`](./MOTION_ENGINE_SPECIFICATION.md), [`MODE_INTEGRATION_CONTRACT.md`](./MODE_INTEGRATION_CONTRACT.md)
@@ -1488,7 +1488,7 @@ struct MotionCommandPacket {
 
 ### 4.2 Stepper Pulse Generation Strategies
 
-| Technique | Peripheral | Maximum Pulse Rate | Jitter | Use Case in NanoELS |
+| Technique | Peripheral | Maximum Pulse Rate | Jitter | Use Case in whatELS |
 |---|---|---|---|---|
 | **Hardware RMT** | ESP32-S3 RMT | Up to $1\text{ MHz}$ | $< 50\text{ ns}$ | Asynchronous velocity rapids & smooth continuous feed |
 | **GPTimer ISR** | ESP32-S3 64-bit Timer | Up to $100\text{ kHz}$ | $< 0.5\,\mu\text{s}$ | Spindle-synchronized Bresenham gearing & multi-axis coordinated vectoring |
@@ -1525,13 +1525,13 @@ To protect machine and operator in the event of hardware or software hangs:
 
 ================================================================================
 # 6. GENERALIZED MODE ARCHITECTURE SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/ELS_MODE_ARCHITECTURE.md
+# Source: /home/emil/code/whatels/docs/ELS_MODE_ARCHITECTURE.md
 ================================================================================
 
-# NanoELS Generalized Mode Architecture Specification
+# whatELS Generalized Mode Architecture Specification
 
 > **Status:** Draft / Proposal for Review  
-> **Target Version:** NanoELS H5 Modular Architecture (Firmware & Multi-Client Suite)  
+> **Target Version:** whatELS Modular Architecture (Firmware & Multi-Client Suite)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_MODE_ARCHITECTURE.md`  
@@ -1542,7 +1542,7 @@ To protect machine and operator in the event of hardware or software hangs:
 ## 1. Executive Summary & Problem Statement
 
 ### 1.1 Background & Motivation
-In the original NanoELS H5 implementation, operating modes (`MODE_NORMAL` / `gear`, `MODE_XGEAR`, `MODE_ASYNC`, `MODE_CONE`, `MODE_TURN`, `MODE_FACE`, `MODE_CUT`, `MODE_THREAD`, etc.) were tightly coupled to individual Nextion display pages and ad-hoc global variables in `h5.ino` and `Motion.cpp`. 
+In the original whatELS H5 implementation, operating modes (`MODE_NORMAL` / `gear`, `MODE_XGEAR`, `MODE_ASYNC`, `MODE_CONE`, `MODE_TURN`, `MODE_FACE`, `MODE_CUT`, `MODE_THREAD`, etc.) were tightly coupled to individual Nextion display pages and ad-hoc global variables in `h5.ino` and `Motion.cpp`. 
 
 While this 1:1 screen-to-mode mapping worked for a dedicated serial LCD, it breaks down as the system evolves:
 1. **Divergent Operator Workflows:** Modern operator interfaces (such as our Web DRO/Controller suite) naturally consolidate related functions (e.g., electronic leadscrew gearing, cross-slide gearing, async continuous feed, and diagonal/cone feed) into a unified **Electronic Gearbox** workspace.
@@ -2268,7 +2268,7 @@ When the controller examines registered modes against `LatheConfiguration.capabi
 
 ### 5.5 Client Translation Layer: Reshaping & Breaking Hierarchy for Presentation
 
-While the controller’s code-inferred hierarchy represents **mechanical and kinematic truth**, the **Client Translation Layer** (e.g. `nanoels-service.js` or UI view managers) has full authority to **reshape, recombine, or alias that hierarchy** for optimal user experience:
+While the controller’s code-inferred hierarchy represents **mechanical and kinematic truth**, the **Client Translation Layer** (e.g. `whatels-service.js` or UI view managers) has full authority to **reshape, recombine, or alias that hierarchy** for optimal user experience:
 
 1. **Recombining Unrelated Classes into Unified Workspaces:**
    - In the controller, `GearZMode` (spindle sync), `AsyncMode` (velocity timed), and `ConeMode` (linear vector interpolation) inherit from completely different kinematic kernels.
@@ -2583,13 +2583,13 @@ This architecture establishes:
 
 ================================================================================
 # 7. CORE STATE MODEL SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/ELS_CORE_STATE_MODEL.md
+# Source: /home/emil/code/whatels/docs/ELS_CORE_STATE_MODEL.md
 ================================================================================
 
-# NanoELS Core State Model Specification
+# whatELS Core State Model Specification
 
 > **Status:** Authoritative Specification  
-> **Target System:** NanoELS H5 Modular Architecture  
+> **Target System:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_CORE_STATE_MODEL.md`  
@@ -2599,7 +2599,7 @@ This architecture establishes:
 
 ## 1. Executive Summary & Architectural Role
 
-The **NanoELS Core State Model** (`MachineModel`) is the central, authoritative state container for the entire NanoELS electronic leadscrew platform.
+The **whatELS Core State Model** (`MachineModel`) is the central, authoritative state container for the entire whatELS electronic leadscrew platform.
 
 It is decoupled from both:
 * **Operating Modes (`ELS_MODE_ARCHITECTURE.md`):** Modes are active state machines and kinematic orchestrators that inspect and mutate state.
@@ -2671,14 +2671,14 @@ On dual-core ESP32 hardware:
 * To prevent temporal tearing and inconsistent multi-word reads across cores, state is sampled into **immutable value-semantic snapshots** captured at instant $t_0$.
 
 ### 2.7 Tiered Properties Taxonomy & Stateless Client Persistence
-Properties across the NanoELS ecosystem are partitioned into four distinct tiers of responsibility:
+Properties across the whatELS ecosystem are partitioned into four distinct tiers of responsibility:
 
 1. **Tier 1: Lathe Physical Machine Profile (`LATHE_MACHINE_PROFILE.md`):**
    * *Responsibility:* Physical lathe mechanics and drive geometry (`screwZDu`, `screwXDu`, `motorStepsZ`, `encoderPpr`, backlash, bed limits, swing).
    * *Storage & Mutability:* Commissioning calibration stored in NVS namespace `"machine"`. Defaults loaded from workshop machine presets (e.g. 7x14, 10x22, 14x40).
 2. **Tier 2: Controller Infrastructure & Network:**
    * *Responsibility:* ESP32 host hardware and network configuration (WiFi AP/STA mode, SSID, AP password, mDNS hostname, UART baud rate).
-   * *Storage & Mutability:* Network settings menu stored in NVS namespace `"sys"` / `"wifi"`. Defaults to standalone factory AP (`NanoELS-AP` on `192.168.4.1`, port 81).
+   * *Storage & Mutability:* Network settings menu stored in NVS namespace `"sys"` / `"wifi"`. Defaults to standalone factory AP (`whatELS-AP` on `192.168.4.1`, port 81).
 3. **Tier 3: Operational Preferences & Telemetry Tuning (`SettingsService`):**
    * *Responsibility:* Workshop behavioral tuning (startup units, jog step table, deadband overrides).
    * *Storage & Mutability:* Operator settings modal stored in NVS namespace `"prefs"`. Defaults dynamically derived from hardware (e.g. deadbands derived from encoder PPR).
@@ -3012,7 +3012,7 @@ The controller captures `MachineModel::captureAll()` at instant $t_0$ and stream
 
 ## 8. Client-Side Reactive Model (`Alpine.store('machine')`)
 
-In the browser and Web UI, [`nanoels-state.js`](../clients/web_ui/nanoels-state.js) implements an isomorphic reactive representation of `MachineModel`:
+In the browser and Web UI, [`whatels-state.js`](../clients/web_ui/whatels-state.js) implements an isomorphic reactive representation of `MachineModel`:
 
 ```javascript
 Alpine.store('machine', {
@@ -3064,7 +3064,7 @@ Alpine.store('machine', {
 
 ## 9. Summary & Cross-Index
 
-The **Core State Model** provides the unshakeable bedrock of the NanoELS ecosystem:
+The **Core State Model** provides the unshakeable bedrock of the whatELS ecosystem:
 1. **Deterministic Kinematics:** All physical motion operates in integer deci-microns and canonical radius.
 2. **Zero-Drift Intent:** Authoring units are preserved without floating-point conversion degradation.
 3. **Decoupled Concurrency:** Value-semantic snapshots prevent temporal tearing across dual ESP32 cores.
@@ -3079,13 +3079,13 @@ The **Core State Model** provides the unshakeable bedrock of the NanoELS ecosyst
 
 ================================================================================
 # 8. LATHE MACHINE PROFILE SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/LATHE_MACHINE_PROFILE.md
+# Source: /home/emil/code/whatels/docs/LATHE_MACHINE_PROFILE.md
 ================================================================================
 
-# NanoELS Lathe Machine Profile Specification
+# whatELS Lathe Machine Profile Specification
 
 > **Status:** Draft / Authoritative Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/LATHE_MACHINE_PROFILE.md`  
@@ -3393,7 +3393,7 @@ struct LatheConfiguration {
 
 ## 4. Lathe Profile Catalog Architecture & Storage Hierarchy
 
-To guarantee that firmware upgrades never destroy user calibrations or custom lathe configurations, NanoELS employs a decoupled storage hierarchy combining **compiled-in ROM System Templates** with **User-Dedicated LittleFS Storage**:
+To guarantee that firmware upgrades never destroy user calibrations or custom lathe configurations, whatELS employs a decoupled storage hierarchy combining **compiled-in ROM System Templates** with **User-Dedicated LittleFS Storage**:
 
 ### 4.1 The Three-Tier Fallback Hierarchy
 
@@ -3896,13 +3896,13 @@ To eliminate the need to update client code whenever firmware introduces a new m
 
 ================================================================================
 # 9. PROPERTIES & SETTINGS ARCHITECTURE SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/ELS_PROPERTIES_AND_SETTINGS.md
+# Source: /home/emil/code/whatels/docs/ELS_PROPERTIES_AND_SETTINGS.md
 ================================================================================
 
-# NanoELS Properties & Settings Architecture Specification
+# whatELS Properties & Settings Architecture Specification
 
 > **Status:** Authoritative Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_PROPERTIES_AND_SETTINGS.md`  
@@ -3912,7 +3912,7 @@ To eliminate the need to update client code whenever firmware introduces a new m
 
 ## 1. Executive Summary & Architectural Role
 
-The **NanoELS Properties & Settings System** (`SettingsService`) is the centralized configuration engine, parameter registry, and persistence manager for the entire NanoELS motion platform.
+The **whatELS Properties & Settings System** (`SettingsService`) is the centralized configuration engine, parameter registry, and persistence manager for the entire whatELS motion platform.
 
 ### 1.1 The Core Problem
 In the original legacy `h5.ino` implementation and its initial modular extraction (`Config.cpp`), system settings suffered from three major architectural flaws:
@@ -3933,7 +3933,7 @@ In the original legacy `h5.ino` implementation and its initial modular extractio
 
 ## 2. The 4-Tier Properties Taxonomy
 
-Properties across the NanoELS ecosystem are partitioned into four distinct tiers of authority and ownership:
+Properties across the whatELS ecosystem are partitioned into four distinct tiers of authority and ownership:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -4046,7 +4046,7 @@ struct AxisHardwareConfig {
 
 #### 2. Unified & Extensible Encoder Hardware Abstraction & DRO Decoupling
 
-A core insight of the NanoELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
+A core insight of the whatELS architecture is that **Spindle Encoders, DRO Linear Scales, and MPG Handwheels share the exact same physical and mathematical hardware abstraction**: they are all quadrature pulse sensors with Channel A, Channel B, pulse resolutions, and direction polarity. 
 
 Rather than duplicating disparate encoder structs, all pulse sensors reuse the authoritative `QuadratureEncoderConfig` (defined in `src/motion/LatheProfile.h`):
 
@@ -4131,9 +4131,9 @@ struct WifiConfig {
   bool enabled = true;
   String ssid = "";
   String password = "";
-  String hostname = "nanoels";
-  String setupApSsid = "NanoEls-Setup";
-  String setupApPassword = "nanoels-setup";
+  String hostname = "whatels";
+  String setupApSsid = "whatELS-Setup";
+  String setupApPassword = "whatels-setup";
 };
 
 struct MpgConfig {
@@ -4199,14 +4199,14 @@ extern OperatorPreferences operatorPrefs;
 ### 2.2 API-to-Flash NVS Key Mapping (15-Character Constraint)
 
 ESP32 non-volatile storage (NVS) enforces a strict hardware limit: **Key names must be ≤ 15 characters**.
-NanoELS cleanly bridges hierarchical API dot-paths with compact NVS keys by using the top-level domain as the NVS namespace:
+whatELS cleanly bridges hierarchical API dot-paths with compact NVS keys by using the top-level domain as the NVS namespace:
 
 | API Dot-Path | Flash Namespace | NVS Key (≤15 chars) | Type | Default Value | Description |
 | :--- | :---: | :---: | :---: | :--- | :--- |
 | **`sys.wifi.enabled`** | `"sys"` | `"wifi_en"` | bool | `true` | Network WiFi radio state |
 | **`sys.wifi.ssid`** | `"sys"` | `"wifi_ssid"` | string | `""` | Station WiFi SSID |
 | **`sys.wifi.password`** | `"sys"` | `"wifi_pwd"` | string | `""` | Station WPA2 password |
-| **`sys.wifi.hostname`** | `"sys"` | `"wifi_host"` | string | `"nanoels"` | mDNS discovery hostname |
+| **`sys.wifi.hostname`** | `"sys"` | `"wifi_host"` | string | `"whatels"` | mDNS discovery hostname |
 | **`sys.mpg.zPulsesPerRev`** | `"sys"` | `"mpg_z_ppr"` | float | `600.0` | Z carriage handwheel PPR |
 | **`sys.mpg.xPulsesPerRev`** | `"sys"` | `"mpg_x_ppr"` | float | `600.0` | X cross-slide handwheel PPR |
 | **`sys.timing.dirSetupUs`** | `"sys"` | `"dir_setup_us"` | long | `10` | DIR pin hold before STEP |
@@ -4282,7 +4282,7 @@ struct CachedProperty {
 };
 ```
 
-1. **Unmodified System:** When a user unpacks or initializes NanoELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
+1. **Unmodified System:** When a user unpacks or initializes whatELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
 3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
 
@@ -4324,7 +4324,7 @@ To eliminate repetitive manual `Preferences` operations, flash wear, and acciden
 
 In early firmware revisions, schema invalidation used a destructive "nuclear wipe" (`if (storedVer != EXPECTED) pref.clear();`). This was disastrous for operators because updating firmware wiped all calibrated axis steps, leadscrew pitch error compensation, and network credentials.
 
-The modern NanoELS architecture strictly forbids blind namespace wipes. It uses a **monotonic sequential migration engine** keyed directly to `SOFTWARE_VERSION` (defined in `Config.h`):
+The modern whatELS architecture strictly forbids blind namespace wipes. It uses a **monotonic sequential migration engine** keyed directly to `SOFTWARE_VERSION` (defined in `Config.h`):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -4504,8 +4504,8 @@ machine.x.maxRapidMmMin FLOAT   mm/min  50.0    5000.0    800.0              Cro
 TIER 2: CONTROLLER INFRASTRUCTURE
 ---------------------------------------------------------------------------------------------------------------------
 sys.wifi.enabled        BOOL    -       0       1         1                  Enable wireless network radio
-sys.wifi.ssid           STRING  -       -       -         "NanoELS-AP"       Network SSID name
-sys.wifi.hostname       STRING  -       -       -         "nanoels"          mDNS network address
+sys.wifi.ssid           STRING  -       -       -         "whatELS-AP"       Network SSID name
+sys.wifi.hostname       STRING  -       -       -         "whatels"          mDNS network address
 sys.dro.zPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   1250.67            Z optical linear scale calibration
 sys.dro.xPulsesPerMm    FLOAT   pls/mm  1.0     50000.0   501.20             X optical linear scale calibration
 
@@ -4691,26 +4691,26 @@ Clients dynamically inspect configuration schemas to auto-generate forms and han
 
 ================================================================================
 # 10. CLIENT ARCHITECTURE & WIRE PROTOCOL SPECIFICATION
-# Source: /home/emil/code/nanoels/docs/ELS_CLIENT_ARCHITECTURE.md
+# Source: /home/emil/code/whatels/docs/ELS_CLIENT_ARCHITECTURE.md
 ================================================================================
 
-# NanoELS Client Architecture & Protocol Specification
+# whatELS Client Architecture & Protocol Specification
 
 > **Status:** Authoritative Specification (Subsystems 5 & 6)  
-> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md)  
-> **Target Version:** NanoELS H5 Modular Multi-Client Suite  
+> **Master Blueprint:** [`WHATELS_MASTER_ARCHITECTURE.md`](./WHATELS_MASTER_ARCHITECTURE.md)  
+> **Target Version:** whatELS Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 13, 2026  
 > **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
-> **Referenced By:** `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `ELS_PRESET_CATALOG.md`
+> **Referenced By:** `WHATELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `ELS_PRESET_CATALOG.md`
 
 ---
 
 ## 1. Executive Summary & Core Role
 
-The **NanoELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the NanoELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
+The **whatELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the whatELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
 
-For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).
+For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`WHATELS_MASTER_ARCHITECTURE.md`](./WHATELS_MASTER_ARCHITECTURE.md).
 
 ### Governing Architectural Tenets
 1. **The Controller is the Sole Authority:**  
@@ -4724,7 +4724,7 @@ For the system-wide 6-subsystem architecture, dual-core concurrency model, and f
 5. **Zero-Build, 100% Offline Runtime & ROM Asset Embedding:**  
    The Web UI operates with zero npm build step or bundler dependencies. In production, assets are gzipped and embedded into firmware Flash ROM (`PROGMEM`) so firmware updates deliver UI updates simultaneously without touching the user's LittleFS filesystem. For rapid development, the controller supports serving hot-reloaded assets from LittleFS `/www/` or loaded directly via `file:///`.
 6. **Zero-WiFi Control Plane Mandate (Wired Physical Bus for Motion):**  
-   Executing real-time cutting cycles or emergency stops over wireless Wi-Fi in an industrial machine shop with heavy motor and VFD EMI noise introduces hazardous failure modes (packet drops, latency jitter, stalled cuts). The primary machine control plane between the operator console and the NanoELS core is strictly wired over physical UART serial (`Serial1`) or on-chip memory. Wi-Fi/WebSocket transports are dedicated to supervisory observation, parameter configuration, and DRO telemetry.
+   Executing real-time cutting cycles or emergency stops over wireless Wi-Fi in an industrial machine shop with heavy motor and VFD EMI noise introduces hazardous failure modes (packet drops, latency jitter, stalled cuts). The primary machine control plane between the operator console and the whatELS core is strictly wired over physical UART serial (`Serial1`) or on-chip memory. Wi-Fi/WebSocket transports are dedicated to supervisory observation, parameter configuration, and DRO telemetry.
 
 ---
 
@@ -4733,7 +4733,7 @@ For the system-wide 6-subsystem architecture, dual-core concurrency model, and f
 ```mermaid
 graph TD
     subgraph Client_Layer ["Client Layer (Heterogeneous Terminals)"]
-        WebUI["Modern Web / Touch UI\n(lathe_dro_nanoels_controller.html)"]
+        WebUI["Modern Web / Touch UI\n(lathe_dro_whatels_controller.html)"]
         DROTablet["Wireless DRO Display\n(Dedicated Tablet)"]
         GrblSender["CNC / GRBL Sender\n(Third-party G-Code Streamer)"]
         NextionLCD["Legacy Nextion LCD\n(Machine-Mounted Display)"]

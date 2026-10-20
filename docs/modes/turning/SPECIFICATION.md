@@ -63,7 +63,7 @@
 ```
 
 ### 4. Two-Way Pass Derivation Macro Bridge
-NanoELS core firmware executes discrete passes based on an integer `turnPasses`. Machinists think in maximum tool chip load (`MAX DOC`) and total stock to remove (`TOTAL DEPTH`). The system implements a **two-way coupled macro bridge**:
+whatELS core firmware executes discrete passes based on an integer `turnPasses`. Machinists think in maximum tool chip load (`MAX DOC`) and total stock to remove (`TOTAL DEPTH`). The system implements a **two-way coupled macro bridge**:
 
 1. **When Operator Modifies `MAX DOC` or `TOTAL DEPTH`:**
    $$\text{turnPasses} = \left\lceil \frac{\text{totalDepth}}{\text{maxDoc}} \right\rceil$$

@@ -59,7 +59,7 @@
     
     // Operating Mode & State
     mode: 'GEARBOX', // Default mode
-    runState: 'stopped', // strictly 'stopped' or 'running' (NanoELS hardware binary state)
+    runState: 'stopped', // strictly 'stopped' or 'running' (whatELS hardware binary state)
     perms: 0, // Live in-motion permission flags (K.perms)
     hasHydratedMode: false, // ADR 15: True once initial connection mode hydration completes
     
@@ -144,7 +144,7 @@
 
     // Message History Log
     msgLog: [
-      'SYSTEM BOOT: NANOELS H5 INITIALIZED',
+      'SYSTEM BOOT: whatELS INITIALIZED',
       'READY: GEARBOX SYNCHRONIZED TO SPINDLE'
     ]
   };
@@ -646,7 +646,6 @@
         var isSkim = (state.threadSkimStage === 'SKIMMING');
         var passLabel = isSkim ? 'SKIM PASS' : ('PASS ' + (curPass < 10 ? '0' : '') + curPass + ' / ' + (totPass < 10 ? '0' : '') + totPass);
         
-        // Quadratic infeed depth calculation matching NanoELS h5.ino line 9236
         var fraction = (totPass - curPass) / totPass;
         fraction = fraction * fraction;
         var curInfeed = isSkim ? 0 : state.threadTotalDepth * (1 - fraction);
@@ -748,7 +747,7 @@
       btnMinus.addEventListener('click', function(){
         if(state.runState === 'running'){
           if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
-          if(window.nanoelsClient) window.nanoelsClient.nudgeFeed(-1);
+          if(window.whatELSClient) window.whatELSClient.nudgeFeed(-1);
           return;
         }
         if(state.mode === 'GEARBOX'){
@@ -790,7 +789,7 @@
       btnPlus.addEventListener('click', function(){
         if(state.runState === 'running'){
           if(!canExecuteAction(PERM_LIVE_FEED_TRIM)) return;
-          if(window.nanoelsClient) window.nanoelsClient.nudgeFeed(+1);
+          if(window.whatELSClient) window.whatELSClient.nudgeFeed(+1);
           return;
         }
         if(state.mode === 'GEARBOX'){
@@ -1306,7 +1305,7 @@
     }
   }
 
-  // Universal Runstack: Binary START / STOP (matches NanoELS hardware state machine)
+  // Universal Runstack: Binary START / STOP (matches whatELS hardware state machine)
   function buildInceptionBundle(){
     var bundle = [];
     if(state.mode === 'GEARBOX'){
@@ -1424,8 +1423,8 @@
         bRun.addEventListener('click', function(){
           if(state.runState === 'stopped'){
             var bundle = buildInceptionBundle();
-            if(window.nanoelsClient){
-              window.nanoelsClient.startCycle(bundle);
+            if(window.whatELSClient){
+              window.whatELSClient.startCycle(bundle);
             }
             if(window.Alpine && Alpine.store('machine')){
               Alpine.store('machine').isOn = true;
@@ -1454,8 +1453,8 @@
         });
 
         bStop.addEventListener('click', function(){
-          if(window.nanoelsClient){
-            window.nanoelsClient.stopCycle();
+          if(window.whatELSClient){
+            window.whatELSClient.stopCycle();
           }
           if(window.Alpine && Alpine.store('machine')){
             Alpine.store('machine').isOn = false;
@@ -1487,7 +1486,7 @@
   // Spindle Encoder Simulation & Multi-Pass Cycle Stepper
   var simTimer = null;
   function syncSpindleSimulation(){
-    if(window.nanoelsClient){
+    if(window.whatELSClient){
       if(simTimer){ clearInterval(simTimer); simTimer = null; }
       return;
     }
@@ -1709,7 +1708,7 @@
   });
   function syncModeToController(targetMode){
     if(state.runState !== 'running') return; // Zero wire traffic while idle!
-    if(!window.nanoelsClient) return;
+    if(!window.whatELSClient) return;
     var modeMap = {
       'GEARBOX': 'GEARS',
       'JOYSTICK': 'JOYSTICK',
@@ -1724,16 +1723,16 @@
     var m = targetMode || state.mode;
     var actionKey = modeMap[m];
     if(m === 'GEARBOX'){
-      window.nanoelsClient.setMode('gearbox');
+      window.whatELSClient.setMode('gearbox');
       var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
-      window.nanoelsClient.setGearAxis(ax);
-      window.nanoelsClient.setGearSync(state.gearboxMode === 'SYNC');
+      window.whatELSClient.setGearAxis(ax);
+      window.whatELSClient.setGearSync(state.gearboxMode === 'SYNC');
       var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
-      window.nanoelsClient.setGearDir(dirVal);
+      window.whatELSClient.setGearDir(dirVal);
       return;
     }
     if(actionKey){
-      window.nanoelsClient.setMode(actionKey);
+      window.whatELSClient.setMode(actionKey);
     }
   }
 
@@ -1744,14 +1743,14 @@
     if(state.mode === 'THREADING'){
       if(state.threadUnit === 'tpi'){
         var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedTpi(tpi);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedTpi(tpi);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpi;
         }
       } else {
         var pMm = targetPitch || state.pitch || 1.5;
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(pMm);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(pMm);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = pMm;
@@ -1764,7 +1763,7 @@
     if(state.mode === 'TAPER' || (state.mode === 'GEARBOX' && state.activeFeedAxis === 'Z+X')){
       if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
         var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = state.gearTaperPresetIdx;
           Alpine.store('machine').tpMode = 2;
@@ -1772,7 +1771,7 @@
           Alpine.store('machine').coneRatio = p.ratio;
         }
       } else if(state.gearTaperAuthMode === 'ANGLE'){
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 1;
@@ -1781,7 +1780,7 @@
         }
       } else {
         var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setTaperRatio(rVal);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setTaperRatio(rVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').tpPreset = -1;
           Alpine.store('machine').tpMode = 0;
@@ -1790,7 +1789,7 @@
         }
       }
       var taperPitch = targetPitch || state.gearPitchZ || 0.15;
-      if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(taperPitch);
+      if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(taperPitch);
       return;
     }
 
@@ -1799,7 +1798,7 @@
       if(state.gearboxMode === 'ASYNC') return;
       if(state.gearThreadUnit === 'tpi'){
         var tpiVal = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedTpi(tpiVal);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedTpi(tpiVal);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 1;
           Alpine.store('machine').thPitch = tpiVal;
@@ -1808,7 +1807,7 @@
       }
       var p = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
       if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-        if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(p);
+        if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(p);
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').thFmt = 0;
           Alpine.store('machine').thPitch = p;
@@ -1826,7 +1825,7 @@
       }
     }
     if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-      if(isRunning && window.nanoelsClient) window.nanoelsClient.setFeedMm(p);
+      if(isRunning && window.whatELSClient) window.whatELSClient.setFeedMm(p);
       if(window.Alpine && Alpine.store('machine')){
         Alpine.store('machine').thFmt = 0;
         Alpine.store('machine').thPitch = p;
@@ -1879,8 +1878,8 @@
     clearTimeout(stepHoldTimer);
     if(state.runState === 'running') return;
     if(!stepDidHold){
-      if(window.nanoelsClient){
-        window.nanoelsClient.cycleStep();
+      if(window.whatELSClient){
+        window.whatELSClient.cycleStep();
       }
       var maxLen = state.unit === 'mm' ? JOG_STEPS_MM.length : JOG_STEPS_IN.length;
       state.stepIdx = (state.stepIdx + 1) % maxLen;
@@ -1919,8 +1918,8 @@
   $('xValue').addEventListener('click', function(){ openAxisOverlay('x'); });
   $('axisCancelBtn').addEventListener('click', function(){ $('axisOverlay').classList.remove('show'); });
   $('axisZeroBtn').addEventListener('click', function(){
-    if(window.nanoelsClient){
-      window.nanoelsClient.zeroAxis(axisTarget);
+    if(window.whatELSClient){
+      window.whatELSClient.zeroAxis(axisTarget);
     }
     if(axisTarget==='z') state.z = 0; else state.xDia = 0;
     if(window.Alpine && Alpine.store && Alpine.store('machine')){
@@ -1960,10 +1959,10 @@
     var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
     var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
     var curDu = 0;
-    if(window.nanoelsClient){
-      curDu = isZ ? (window.nanoelsClient.canonical.zDu !== undefined ? window.nanoelsClient.canonical.zDu : Math.round(state.z * 10000.0))
-                      : (window.nanoelsClient.canonical.xDu !== undefined ? window.nanoelsClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
-      window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
+    if(window.whatELSClient){
+      curDu = isZ ? (window.whatELSClient.canonical.zDu !== undefined ? window.whatELSClient.canonical.zDu : Math.round(state.z * 10000.0))
+                      : (window.whatELSClient.canonical.xDu !== undefined ? window.whatELSClient.canonical.xDu : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0));
+      window.whatELSClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, curDu);
     } else {
       curDu = isZ ? Math.round(state.z * 10000.0) : Math.round((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) * 10000.0);
     }
@@ -1985,8 +1984,8 @@
   $('limitClearBtn').addEventListener('click', function(){ 
     var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
     var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
-    if(window.nanoelsClient){
-      window.nanoelsClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
+    if(window.whatELSClient){
+      window.whatELSClient.clearAxisLimit(isZ ? 'z' : 'x', isMin);
     }
     state[limitTarget] = null;
     if(window.Alpine && Alpine.store && Alpine.store('machine')){
@@ -2058,8 +2057,8 @@
       btn.classList.add('pressed');
       holdTimer = setTimeout(function(){
         isContinuous = true;
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jog(axis, dir, true);
+        if (window.whatELSClient) {
+          window.whatELSClient.jog(axis, dir, true);
         }
         repeatTimer = setInterval(doStep, 110);
       }, 300);
@@ -2071,13 +2070,13 @@
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
       if (isContinuous) {
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jog(axis, dir, false);
+        if (window.whatELSClient) {
+          window.whatELSClient.jog(axis, dir, false);
         }
       } else {
         // Quick tap: issue discrete 1-step canonical command
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jogStep(axis, dir);
+        if (window.whatELSClient) {
+          window.whatELSClient.jogStep(axis, dir);
         }
         doStep();
       }
@@ -2140,9 +2139,9 @@
       btn.classList.add('pressed');
       holdTimer = setTimeout(function(){
         isContinuous = true;
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jog('z', zDir, true);
-          window.nanoelsClient.jog('x', xDir, true);
+        if (window.whatELSClient) {
+          window.whatELSClient.jog('z', zDir, true);
+          window.whatELSClient.jog('x', xDir, true);
         }
         repeatTimer = setInterval(doStep, 110);
       }, 300);
@@ -2154,15 +2153,15 @@
       clearTimeout(holdTimer);
       clearInterval(repeatTimer);
       if (isContinuous) {
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jog('z', zDir, false);
-          window.nanoelsClient.jog('x', xDir, false);
+        if (window.whatELSClient) {
+          window.whatELSClient.jog('z', zDir, false);
+          window.whatELSClient.jog('x', xDir, false);
         }
       } else {
         // Quick tap: issue discrete 1-step canonical commands on both axes
-        if (window.nanoelsClient) {
-          window.nanoelsClient.jogStep('z', zDir);
-          window.nanoelsClient.jogStep('x', xDir);
+        if (window.whatELSClient) {
+          window.whatELSClient.jogStep('z', zDir);
+          window.whatELSClient.jogStep('x', xDir);
         }
         doStep();
       }
@@ -2970,7 +2969,7 @@
       return;
     }
 
-    // Convert as late as possible for NanoELS controller
+    // Convert as late as possible for whatELS controller
     var finalAngle = convertTaperValue(authVal, auth, 'ANGLE');
     var finalRatio = convertTaperValue(authVal, auth, 'DECIMAL');
 
@@ -3458,8 +3457,8 @@
       if(kpTarget==='coordZ'){
         state.z = mm;
         var zDu = Math.round(mm * 10000.0);
-        if(window.nanoelsClient){
-          window.nanoelsClient.setAxisPosDu('z', zDu);
+        if(window.whatELSClient){
+          window.whatELSClient.setAxisPosDu('z', zDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').zDu = zDu;
@@ -3469,8 +3468,8 @@
         state.xDia = state.xRep==='diameter' ? mm : mm*2;
         var radiusMm = state.xRep==='diameter' ? mm / 2.0 : mm;
         var xDu = Math.round(radiusMm * 10000.0);
-        if(window.nanoelsClient){
-          window.nanoelsClient.setAxisPosDu('x', xDu);
+        if(window.whatELSClient){
+          window.whatELSClient.setAxisPosDu('x', xDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').xDu = xDu;
@@ -3479,26 +3478,26 @@
       else if(kpTarget==='limitTarget'){
         var distMm = Math.abs(mm);
         state[limitTarget] = distMm;
-        if(window.nanoelsClient){
+        if(window.whatELSClient){
           var isZ = (limitTarget === 'zLeft' || limitTarget === 'zRight');
           var isMin = (limitTarget === 'zLeft' || limitTarget === 'xLeft');
           var targetCoordDu = 0;
           if(limitTarget === 'zLeft'){
-            var curZ = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.zDu !== undefined) ? (window.nanoelsClient.canonical.zDu / 10000.0) : state.z;
+            var curZ = (window.whatELSClient.canonical && window.whatELSClient.canonical.zDu !== undefined) ? (window.whatELSClient.canonical.zDu / 10000.0) : state.z;
             targetCoordDu = Math.round((curZ - distMm) * 10000.0);
           } else if(limitTarget === 'zRight'){
-            var curZ = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.zDu !== undefined) ? (window.nanoelsClient.canonical.zDu / 10000.0) : state.z;
+            var curZ = (window.whatELSClient.canonical && window.whatELSClient.canonical.zDu !== undefined) ? (window.whatELSClient.canonical.zDu / 10000.0) : state.z;
             targetCoordDu = Math.round((curZ + distMm) * 10000.0);
           } else if(limitTarget === 'xLeft'){
-            var curRad = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.xDu !== undefined) ? (window.nanoelsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var curRad = (window.whatELSClient.canonical && window.whatELSClient.canonical.xDu !== undefined) ? (window.whatELSClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
             var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
             targetCoordDu = Math.round((curRad - deltaRad) * 10000.0);
           } else if(limitTarget === 'xRight'){
-            var curRad = (window.nanoelsClient.canonical && window.nanoelsClient.canonical.xDu !== undefined) ? (window.nanoelsClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
+            var curRad = (window.whatELSClient.canonical && window.whatELSClient.canonical.xDu !== undefined) ? (window.whatELSClient.canonical.xDu / 10000.0) : (state.xDia / 2.0);
             var deltaRad = (state.xRep === 'diameter') ? (distMm / 2.0) : distMm;
             targetCoordDu = Math.round((curRad + deltaRad) * 10000.0);
           }
-          window.nanoelsClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
+          window.whatELSClient.setAxisLimitDu(isZ ? 'z' : 'x', isMin, targetCoordDu);
         }
         if(window.Alpine && Alpine.store && Alpine.store('machine')){
           var m = Alpine.store('machine');
@@ -3516,8 +3515,8 @@
           JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = stepVal;
         }
         var stepDu = Math.round((state.unit === 'in' ? stepVal * 254000.0 : stepVal * 10000.0));
-        if(window.nanoelsClient){
-          window.nanoelsClient.setJogStepDu(stepDu);
+        if(window.whatELSClient){
+          window.whatELSClient.setJogStepDu(stepDu);
         }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').jogStepDu = stepDu;
@@ -3705,13 +3704,13 @@
 
   var ledgerContent = '' +
     '<h4>1. Single Hardware Register Truth & Radical Shop Safety</h4>' +
-    '<p>NanoELS controller firmware only supports a single pair of global limit registers per axis (<code>z_min</code>, <code>z_max</code>, <code>x_min</code>, <code>x_max</code>). To avoid false operator confidence, the UI refuses to run "ghost limits." What is shown on screen matches the physical hardware register. In Turning/Facing, setting a dimension updates the active limit register directly.</p>' +
+    '<p>whatELS controller firmware only supports a single pair of global limit registers per axis (<code>z_min</code>, <code>z_max</code>, <code>x_min</code>, <code>x_max</code>). To avoid false operator confidence, the UI refuses to run "ghost limits." What is shown on screen matches the physical hardware register. In Turning/Facing, setting a dimension updates the active limit register directly.</p>' +
     '<h4>2. Opt-In Limit Restoration Quality-of-Life (QoL)</h4>' +
-    '<p>By default (<code>RESTORE LIMITS: NO</code>), the system mirrors native NanoELS behavior: running a cycle permanently establishes new limit boundaries. For operators who previously set a chuck safety stop, toggling <code>RESTORE LIMITS: YES</code> directs the ESP32 to cache prior limits and restore them automatically upon cycle completion or abort.</p>' +
+    '<p>By default (<code>RESTORE LIMITS: NO</code>), the system mirrors native whatELS behavior: running a cycle permanently establishes new limit boundaries. For operators who previously set a chuck safety stop, toggling <code>RESTORE LIMITS: YES</code> directs the ESP32 to cache prior limits and restore them automatically upon cycle completion or abort.</p>' +
     '<h4>3. Dimension-First Turning & Facing Workflow</h4>' +
     '<p>Machinists think in part dimensions (e.g. 25mm long tenon) rather than machine stop coordinates. Typing <code>LENGTH = 25.0 mm</code> calculates <code>Z_MIN = Z_CURRENT - 25.0 mm</code> instantly, eliminating air-cutting jog math while updating the limit chip visibly.</p>' +
     '<h4>4. Derived Passes vs. Independent Locks</h4>' +
-    '<p>NanoELS calculates passes automatically based on <code>TOTAL DEPTH</code> and <code>MAX DOC</code>. Because pass count is mathematically constrained by machine rigidity ceilings, pass count is displayed as a derived calculation rather than an unconstrained input.</p>' +
+    '<p>whatELS calculates passes automatically based on <code>TOTAL DEPTH</code> and <code>MAX DOC</code>. Because pass count is mathematically constrained by machine rigidity ceilings, pass count is displayed as a derived calculation rather than an unconstrained input.</p>' +
     '<h4>5. Operator-Aligned Coordinate Directions</h4>' +
     '<p>From the operator apron perspective: <code>↑ TO CENTER (X−)</code> drives the cross-slide into the cut (reducing diameter), while <code>↓ RETRACT (X+)</code> backs the cross-slide toward the operator (increasing diameter). Northwest chamfer is <code>↖ Z− X−</code> (chuck and into cut).</p>' +
     '<h4>6. Tabular Monospace Readout Stability</h4>' +
@@ -3743,13 +3742,13 @@
   $('tabDocManual').addEventListener('click', function(){ showDocTab('manual'); });
   $('docClose').addEventListener('click', function(){ $('docOverlay').classList.remove('show'); });
 
-  // --- NanoELS Integration & Dev Console Controller ---
+  // --- whatELS Integration & Dev Console Controller ---
   function initDevConsoleAndService(){
-    var savedBackend = localStorage.getItem('nanoels_backend') || 'emulator';
-    var savedHost = localStorage.getItem('nanoels_host') || 'nanoels.local';
-    var savedLogStatus = localStorage.getItem('nanoels_log_status_pushes') === 'true';
-    var savedBufferSize = localStorage.getItem('nanoels_log_buffer') || '1000';
-    var savedHeight = localStorage.getItem('nanoels_log_height') || '200';
+    var savedBackend = localStorage.getItem('whatels_backend') || localStorage.getItem('whatELS_backend') || 'emulator';
+    var savedHost = localStorage.getItem('whatels_host') || localStorage.getItem('whatELS_host') || 'whatels.local';
+    var savedLogStatus = (localStorage.getItem('whatels_log_status_pushes') || localStorage.getItem('whatELS_log_status_pushes')) === 'true';
+    var savedBufferSize = localStorage.getItem('whatels_log_buffer') || localStorage.getItem('whatELS_log_buffer') || '1000';
+    var savedHeight = localStorage.getItem('whatels_log_height') || localStorage.getItem('whatELS_log_height') || '200';
 
     var btnEmulator = $('btnDevModeEmulator');
     var btnLive = $('btnDevModeLive');
@@ -3800,7 +3799,7 @@
         var h = b.dataset.logHeight;
         logWindow.style.height = h + 'px';
         heightBtns.forEach(function(btn){ btn.classList.toggle('active', btn === b); });
-        localStorage.setItem('nanoels_log_height', h);
+        localStorage.setItem('whatELS_log_height', h);
       });
     });
 
@@ -3814,7 +3813,7 @@
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         var finalH = parseInt(logWindow.style.height, 10);
-        localStorage.setItem('nanoels_log_height', finalH);
+        localStorage.setItem('whatELS_log_height', finalH);
         heightBtns.forEach(function(btn){
           btn.classList.toggle('active', btn.dataset.logHeight === finalH.toString());
         });
@@ -3857,7 +3856,7 @@
 
     if(selBufferSize){
       selBufferSize.addEventListener('change', function(){
-        localStorage.setItem('nanoels_log_buffer', selBufferSize.value);
+        localStorage.setItem('whatELS_log_buffer', selBufferSize.value);
         var maxLimit = parseInt(selBufferSize.value, 10);
         while(logWindow.children.length > maxLimit){
           if(logWindow.firstChild === activeStreamRow){
@@ -3878,8 +3877,9 @@
     updatePills(savedBackend);
 
     // Initialize Service
-    if(window.NanoelsService){
-      window.nanoelsClient = new window.NanoelsService({
+    const ServiceClass = window.WhatelsService;
+    if(ServiceClass){
+      window.whatelsClient = new ServiceClass({
         mode: savedBackend,
         host: savedHost,
         port: 81,
@@ -3887,7 +3887,7 @@
       });
 
       // Handle Connection Status Updates
-      window.nanoelsClient.addEventListener('connection', function(e){
+      window.whatelsClient.addEventListener('connection', function(e){
         var detail = e.detail;
         if(detail.mode === 'emulator'){
           statusBadge.className = 'dev-status-badge emu';
@@ -3905,7 +3905,7 @@
       });
 
       // Handle Traffic Logging
-      window.nanoelsClient.addEventListener('traffic', function(e){
+      window.whatELSClient.addEventListener('traffic', function(e){
         var item = e.detail;
 
         if(item.type === 'telemetry_packet'){
@@ -4037,7 +4037,7 @@
       });
 
       // Handle Telemetry Updates into Prototype State (Layer 1 / Layer 2 Decoupled)
-      window.nanoelsClient.addEventListener('telemetry', function(e){
+      window.whatELSClient.addEventListener('telemetry', function(e){
         var data = e.detail;
         if(!data) return;
         var c = data.canonical;
@@ -4292,17 +4292,17 @@
       });
 
       // Connect initial
-      window.nanoelsClient.connect();
+      window.whatELSClient.connect();
     }
 
     // Dev Console Button Actions
     if(btnEmulator){
       btnEmulator.addEventListener('click', function(){
         savedBackend = 'emulator';
-        localStorage.setItem('nanoels_backend', savedBackend);
+        localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
-        if(window.nanoelsClient){
-          window.nanoelsClient.setBackend('emulator');
+        if(window.whatELSClient){
+          window.whatELSClient.setBackend('emulator');
         }
       });
     }
@@ -4310,24 +4310,24 @@
     if(btnLive){
       btnLive.addEventListener('click', function(){
         savedBackend = 'live';
-        localStorage.setItem('nanoels_backend', savedBackend);
+        localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
-        var host = hostInput ? hostInput.value.trim() : 'nanoels.local';
-        if(window.nanoelsClient){
-          window.nanoelsClient.setBackend('live', host, 81);
+        var host = hostInput ? hostInput.value.trim() : 'whatELS.local';
+        if(window.whatELSClient){
+          window.whatELSClient.setBackend('live', host, 81);
         }
       });
     }
 
     if(btnConnect){
       btnConnect.addEventListener('click', function(){
-        var host = hostInput ? hostInput.value.trim() : 'nanoels.local';
-        localStorage.setItem('nanoels_host', host);
+        var host = hostInput ? hostInput.value.trim() : 'whatELS.local';
+        localStorage.setItem('whatELS_host', host);
         savedBackend = 'live';
-        localStorage.setItem('nanoels_backend', savedBackend);
+        localStorage.setItem('whatELS_backend', savedBackend);
         updatePills(savedBackend);
-        if(window.nanoelsClient){
-          window.nanoelsClient.setBackend('live', host, 81);
+        if(window.whatELSClient){
+          window.whatELSClient.setBackend('live', host, 81);
         }
       });
     }
@@ -4347,9 +4347,9 @@
     if(chkLogStatus){
       chkLogStatus.addEventListener('change', function(){
         var active = chkLogStatus.checked;
-        localStorage.setItem('nanoels_log_status_pushes', active);
-        if(window.nanoelsClient){
-          window.nanoelsClient.setLogStatusPushes(active);
+        localStorage.setItem('whatELS_log_status_pushes', active);
+        if(window.whatELSClient){
+          window.whatELSClient.setLogStatusPushes(active);
         }
       });
     }

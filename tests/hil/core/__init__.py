@@ -1,1 +1,1 @@
-"""NanoELS Hardware-in-the-Loop Test Core Framework."""
+"""whatELS Hardware-in-the-Loop Test Core Framework."""

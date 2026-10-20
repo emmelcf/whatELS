@@ -1,7 +1,7 @@
-# NanoELS Motion Engine to Mode Integration Contract
+# whatELS Motion Engine to Mode Integration Contract
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Motion Control Specialists, Mode Authors  
 > **Location:** `docs/motion/MODE_INTEGRATION_CONTRACT.md`  
 > **Predecessor Docs:** [`HAL_SPECIFICATION.md`](./HAL_SPECIFICATION.md), [`MOTION_ENGINE_SPECIFICATION.md`](./MOTION_ENGINE_SPECIFICATION.md)

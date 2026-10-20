@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary & Objective
 
-The **Hardware-in-the-Loop (HIL) Test Rig** is a proposed secondary companion device and verification pipeline designed to validate NanoELS motion generation down to physical digital outputs without modifying production firmware or state-change telemetry.
+The **Hardware-in-the-Loop (HIL) Test Rig** is a proposed secondary companion device and verification pipeline designed to validate whatELS motion generation down to physical digital outputs without modifying production firmware or state-change telemetry.
 
 Currently, the digital twin lathe visualizer (`clients/web_ui/dev/lathe-viz.js`) derives its carriage position from high-level state updates (`UI.z`, `UI.x`, or `MachineModel` kinematics) sent over WebSocket. This leaves a critical **verification gap**: any bugs occurring between high-level state computation and physical stepper pulse emission remain completely invisible.
 
@@ -18,7 +18,7 @@ This architecture introduces a **secondary ESP32-S3** acting as an automated sti
 Modifying the primary controller's state-change messaging or telemetry protocol to include step counters was explicitly ruled out:
 * Altering telemetry packet size, JSON/canonical formatting, or WebSocket push intervals introduces CPU and network overhead on ESP32 Core 0.
 * Changing execution timing can mask or trigger race conditions (Heisenbugs) in the motion planner and step execution loops.
-* **Requirement:** The primary NanoELS controller must run **100% unmodified production firmware** with standard telemetry.
+* **Requirement:** The primary whatELS controller must run **100% unmodified production firmware** with standard telemetry.
 
 ### 2.2 Blind Spots in Pure State-Based Visualization
 High-level state reporting can say an axis is at target position while physical steps were degraded or lost due to:
@@ -34,11 +34,11 @@ High-level state reporting can say an axis is at target position while physical 
 ```mermaid
 flowchart TB
     subgraph Browser["Host Browser (Web UI / Development PC)"]
-        DRO["Touch DRO UI<br/>(lathe_dro_nanoels_controller.html)"]
+        DRO["Touch DRO UI<br/>(lathe_dro_whatels_controller.html)"]
         Viz["Lathe Visualizer<br/>(lathe-viz.js)"]
     end
 
-    subgraph PrimaryESP["Target Device: Primary NanoELS ESP32-S3<br/>(Unmodified Production Firmware)"]
+    subgraph PrimaryESP["Target Device: Primary whatELS ESP32-S3<br/>(Unmodified Production Firmware)"]
         Core["ELS Motion Engine<br/>& State Management"]
         EncIn["Spindle & MPG Inputs<br/>(ENC_A, ENC_B, Z/X MPG)"]
         StepOut["Stepper Outputs<br/>(Z_STEP, Z_DIR, X_STEP, X_DIR)"]
@@ -97,7 +97,7 @@ Sniffs output pins from the primary controller:
 
 ## 5. Wiring Specification (Inter-ESP Interconnect)
 
-| Signal Name | Primary NanoELS Pin | Secondary Companion Pin | Purpose |
+| Signal Name | Primary whatELS Pin | Secondary Companion Pin | Purpose |
 | :--- | :--- | :--- | :--- |
 | **GND** | GND | GND | Common reference ground |
 | **Spindle Phase A** | GPIO 14 (`ENC_A`) | GPIO `<out_a>` | Injected spindle quadrature phase A |

@@ -4,7 +4,7 @@
  * Shared UI Protocol Definitions
  * 
  * This file acts as the Single Source of Truth for communication between the 
- * Main NanoELS Controller and the LVGL Display Sub-Project.
+ * Main whatELS Controller and the LVGL Display Sub-Project.
  * 
  * Using robust semantic strings prevents UI breakage if the UI is rearranged.
  */

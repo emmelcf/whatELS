@@ -9,9 +9,9 @@
 
 ## 1. Executive Summary & Design Philosophy
 
-The NanoELS operator interface bridges industrial metal lathe kinematics with modern digital control. A lathe is an unforgiving machine tool: spindle motors develop tremendous torque, carbide tools take heavy chip loads, and rotating workpieces pose severe mechanical hazards.
+The whatELS operator interface bridges industrial metal lathe kinematics with modern digital control. A lathe is an unforgiving machine tool: spindle motors develop tremendous torque, carbide tools take heavy chip loads, and rotating workpieces pose severe mechanical hazards.
 
-An operator interface on a lathe must never feel like an experimental consumer gadget. It must function as a rock-solid, predictable industrial instrument. These guidelines establish the universal human factors and safety invariants governing **every client interface** interacting with the NanoELS controller.
+An operator interface on a lathe must never feel like an experimental consumer gadget. It must function as a rock-solid, predictable industrial instrument. These guidelines establish the universal human factors and safety invariants governing **every client interface** interacting with the whatELS controller.
 
 ---
 
@@ -21,14 +21,14 @@ A digital interface must never mislead an operator about the physical machine's 
 
 ### 1. Single Binary Motion Truth (`isOn`)
 * The core motion firmware operates strictly on a binary state engine: `STOPPED` (`isOn == false`) or `RUNNING` (`isOn == true`).
-* **Prohibition of Fabricated "Software Pause":** There is no native pause state in NanoELS core firmware. Fabricating a software pause in a client UI is strictly prohibited. Pausing spindle-synchronized motion risks tool breakage, workpiece gouging, and positional drift. Motion is either actively engaged or safely halted.
+* **Prohibition of Fabricated "Software Pause":** There is no native pause state in whatELS core firmware. Fabricating a software pause in a client UI is strictly prohibited. Pausing spindle-synchronized motion risks tool breakage, workpiece gouging, and positional drift. Motion is either actively engaged or safely halted.
 
 ### 2. Limit Register Honesty (Zero "Ghost Limits")
-* NanoELS firmware maintains strictly a single pair of physical hardware limit registers per axis (`z_min`/`z_max`, `x_min`/`x_max`).
+* whatELS firmware maintains strictly a single pair of physical hardware limit registers per axis (`z_min`/`z_max`, `x_min`/`x_max`).
 * The UI must never display "ghost" limits or create a false sense of security. What is displayed on DRO limit chips must always reflect the exact boundary currently active in the motion controller.
 
 ### 3. No "Ghost Actions" During Autonomous Cycles
-* When NanoELS executes an automated multi-pass cycle (such as `THREADING`, `TURNING`, or `FACING`), trajectory planning and pass progression are executed autonomously by the motion core.
+* When whatELS executes an automated multi-pass cycle (such as `THREADING`, `TURNING`, or `FACING`), trajectory planning and pass progression are executed autonomously by the motion core.
 * Presenting a "Next Pass" or "Micro-Step" button provides a false illusion of control that the firmware cannot safely support mid-cut. During active cycles, the UI strictly displays cycle telemetry (`PASS 05 / 10`, current depth) and leaves the `STOP` button as the sole operator intervention.
 
 ---
@@ -50,7 +50,7 @@ A digital interface must never mislead an operator about the physical machine's 
   4. **Allowed Runtime Actions:** Only non-modal live trims (feed overrides, live `+`/`−` nudges, and the `STOP` button) remain interactive.
 
 ### 3. Anti-Trap Limit Contact Inference & Asymmetric Retreat Freedom
-* **Core Motion Behavior:** NanoELS firmware does not emit an alarm packet when a soft limit is contacted; it silently suppresses step pulses in the tripping direction (`delta = limit - pos = 0`).
+* **Core Motion Behavior:** whatELS firmware does not emit an alarm packet when a soft limit is contacted; it silently suppresses step pulses in the tripping direction (`delta = limit - pos = 0`).
 * **Client Responsibility:** The client interface must evaluate limit proximity from telemetry (`distanceToStop == 0`).
 * **Asymmetric Jog State Machine:** When a limit is hit, the UI blocks further jog commands into the boundary (styling the arrow red), while guaranteeing that the retreat jog control remains 100% enabled and accessible so the operator can immediately back away from the wall.
 

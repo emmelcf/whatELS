@@ -10,7 +10,7 @@
 #include "motion/kernel/MotionEngine.h"
 #include "core/OperatorIntent.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core {
 
 // =============================================================================
@@ -740,4 +740,4 @@ CommandResult CommandDispatcher::dispatch(const char* payload, size_t length, ui
 }
 
 } // namespace core
-} // namespace nanoels
+} // namespace whatels

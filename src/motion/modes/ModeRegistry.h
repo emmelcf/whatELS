@@ -5,7 +5,7 @@
 class UnifiedGearboxMode;
 
 /**
- * @brief Authoritative Mode Registry and State Manager for NanoELS.
+ * @brief Authoritative Mode Registry and State Manager for whatELS.
  * Decouples the motion loop and supervisory systems from concrete mode types.
  */
 class ModeRegistry {

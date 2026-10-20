@@ -7,12 +7,12 @@
 
 /**
  * =============================================================================
- * NanoELS - Central Hardware & Motion Configuration (H5 Architecture)
+ * whatELS - Central Hardware & Motion Configuration (Modular Architecture)
  * =============================================================================
  *
  * TABLE OF CONTENTS:
  *  1. System Versioning & Storage Namespaces
- *  2. Hardware Pinout & Board Definitions (NanoELS H5 PCB)
+ *  2. Hardware Pinout & Board Definitions (whatELS Controller PCB)
  *  3. Motion Physics, Limits & Default Machine Parameters
  *  4. Operational Modes, Units & Step Increments
  *  5. HMI & Input Action Codes
@@ -27,9 +27,9 @@
 
 #define SOFTWARE_VERSION 38
 #define HARDWARE_VERSION 5
-#define NANOELS_STRINGIFY_VALUE(value) #value
-#define NANOELS_STRINGIFY(value) NANOELS_STRINGIFY_VALUE(value)
-#define CONTROLLER_VERSION_TEXT "H" NANOELS_STRINGIFY(HARDWARE_VERSION) "V" NANOELS_STRINGIFY(SOFTWARE_VERSION)
+#define WHATELS_STRINGIFY_VALUE(value) #value
+#define WHATELS_STRINGIFY(value) WHATELS_STRINGIFY_VALUE(value)
+#define CONTROLLER_VERSION_TEXT "H" WHATELS_STRINGIFY(HARDWARE_VERSION) "V" WHATELS_STRINGIFY(SOFTWARE_VERSION)
 
 // Flash Storage Namespaces (4-tier taxonomy)
 #define NVS_NAMESPACE_MACHINE "machine" // Tier 1: Hardware geometry & pin limits
@@ -39,7 +39,7 @@
 #define CONFIG_NAMESPACE      "h5cfg"   // Legacy fallback alias
 
 // =============================================================================
-// 2. HARDWARE PINOUT & BOARD DEFINITIONS (NanoELS H5 PCB)
+// 2. HARDWARE PINOUT & BOARD DEFINITIONS (whatELS Controller PCB)
 // =============================================================================
 
 // GPIO Fast Helper Macros
@@ -65,7 +65,7 @@
 #define X_PULSE_A 47
 #define X_PULSE_B 21
 
-// NanoELS H5 PCB Silkscreen Hardware Pin Headers (Reserved / Unpopulated)
+// whatELS Controller PCB Silkscreen Hardware Pin Headers (Reserved / Unpopulated)
 #define Y_ENA 1
 #define Y_DIR 2
 #define Y_STEP 17
@@ -139,9 +139,9 @@ struct WifiConfig {
   bool enabled = true;
   String ssid = "";
   String password = "";
-  String hostname = "nanoels";
-  String setupApSsid = "NanoEls-H5-Setup";
-  String setupApPassword = "nanoels-h5";
+  String hostname = "whatels";
+  String setupApSsid = "whatELS-Setup";
+  String setupApPassword = "whatels-setup";
   long incomingBufferSize = 100000;
   long outgoingBufferSize = 100000;
 };

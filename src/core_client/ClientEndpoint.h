@@ -4,7 +4,7 @@
 #include "core/CommandDispatcher.h"
 #include "MachineModel.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ClientEndpoint {
@@ -27,4 +27,4 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

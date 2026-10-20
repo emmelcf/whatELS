@@ -1,6 +1,6 @@
-# NanoELS H5 — Electronic Lead Screw & Multi-Client Suite
+# whatELS — Electronic Lead Screw & Multi-Client Suite
 
-CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting up to 3 axes for metal lathes.
+Modern, high-performance CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting up to 3 axes for metal lathes.
 
 - **Electronic Gearing & Multi-Start Threading** with real-time spindle encoder synchronization
 - **Multi-Pass Canned Cycles** (Turning, Facing, Cones/Tapers, Cutoff, Spheres, Slotting)
@@ -13,7 +13,7 @@ CNC and electronic lead screw (ELS) controller based on the ESP32-S3 supporting 
 ## Project Structure
 
 ```text
-nanoels/
+whatELS/
 ├── platformio.ini           # PlatformIO build configuration (ESP32-S3, LittleFS)
 ├── README.md                # Project overview & build guide
 ├── todo/                    # Development roadmap, architecture backlog & specs
@@ -33,7 +33,7 @@ nanoels/
 │   └── web_ui/              # Modern 800×480 Touch DRO Web UI (Alpine.js, HTML5/CSS3)
 │
 ├── docs/                    # Authoritative system & architectural documentation
-│   ├── NANOELS_MASTER_ARCHITECTURE.md # Master 6-subsystem architecture blueprint
+│   ├── WHATELS_MASTER_ARCHITECTURE.md # Master 6-subsystem architecture blueprint
 │   ├── ELS_CLIENT_ARCHITECTURE.md    # Multi-client pipeline & WebSocket specification
 │   ├── ELS_CORE_STATE_MODEL.md       # Canonical deci-micron state invariants
 │   ├── LATHE_MACHINE_PROFILE.md      # Physical lathe geometry & axis definitions
@@ -89,12 +89,12 @@ pio device monitor -b 115200
 * **Cross-Slide Radius**: The controller tracks cross-slide position strictly in canonical radius (`xDu`). Diameter display ($\varnothing$) is a client-local presentation concern.
 * **Lossless Intent**: Operator authoring setpoints (e.g., integer TPI or custom taper ratios) are preserved alongside calculated steps to eliminate floating-point round-trip drift.
 * **Controller Authority**: The MCU is the sole authority for machine state and limit checking. Clients are reactive observers transmitting operator intent.
-* **Shop Safety Rules**: Detailed machinist safety, 800×480 touch target constraints, and operator frame-of-reference rules are maintained in [`.agents/rules/lathe_hmi_and_safety.md`](.agents/rules/lathe_hmi_and_safety.md).
+* **Shop Safety Rules**: Detailed machinist safety and operator frame-of-reference rules are maintained in [`.agents/rules/lathe_safety.md`](.agents/rules/lathe_safety.md), with 800×480 touch target and layout constraints documented in [`docs/clients/web_ui/ERGONOMICS.md`](docs/clients/web_ui/ERGONOMICS.md).
 
 ---
 
 ## License & Attribution
 
 * **Primary Firmware, Web UI & Architecture**: Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Free for personal, hobbyist, educational, and non-commercial research use. Commercial distribution, commercial services, or bundling into commercial hardware products is prohibited without explicit permission.
-* **Upstream Attribution**: Portions derived or ported from the original upstream [NanoELS project](https://github.com/kachurovskiy/nanoels) by Maxim Kachurovskiy remain subject to their original [MIT License](LICENSE). Preserved historical artifacts in [`reference/`](reference/) are governed by their original licenses.
+* **Upstream Attribution**: whatELS began as an architectural reimagining and complete redesign evolved from the original [NanoELS project](https://github.com/kachurovskiy/nanoels) by Maxim Kachurovskiy (and the foundational Electronic Leadscrew concepts pioneered by James Clough / Clough42). Historical portions remain subject to their original [MIT License](LICENSE). Preserved historical artifacts in [`reference/`](reference/) are governed by their original licenses.
 

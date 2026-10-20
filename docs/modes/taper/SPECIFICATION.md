@@ -52,7 +52,7 @@ Cross-slide motion direction is automatically resolved based on feed direction, 
 | **INVERTED** (Narrow at Chuck) | **EXTERNAL** (OD) | Toward Tailstock ($Z+$) | **`RETRACT`** ($X+$) | Diameter expands as tool approaches tail. |
 
 ### 4. Mode Disambiguation: Continuous Gearing vs. Multi-Pass Canned Cycle
-NanoELS firmware implements two operational workflows using `MODE_CONE`:
+whatELS firmware implements two operational workflows using `MODE_CONE`:
 1. **Continuous Angled Gearing (`GEARBOX -> AXIS: Z+X`):** Single continuous cut along the taper angle, bounded by machine soft limits.
 2. **Automated Multi-Pass Cycle (`TAPER`):** Autonomous multi-pass cycle taking multiple roughing passes parallel to the taper slope, followed by automated retract and rapid return.
 

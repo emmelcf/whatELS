@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "../motion/modes/IELSMode.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core {
 
 enum class CommandStatus : uint8_t {
@@ -42,4 +42,4 @@ public:
 };
 
 } // namespace core
-} // namespace nanoels
+} // namespace whatels

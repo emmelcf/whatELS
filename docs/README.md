@@ -1,13 +1,13 @@
-# NanoELS Documentation Index & Architecture Map
+# whatELS Documentation Index & Architecture Map
 
-> **Target Platform:** NanoELS H5 Electronic Leadscrew & Lathe Controller (ESP32-S3)  
+> **Target Platform:** whatELS Electronic Leadscrew & Lathe Controller (ESP32-S3)  
 > **Status:** Living Master Specification Index  
 > **Audience:** Firmware Developers, Motion Specialists, HMI/Client Engineers
 
 ---
 
 ## 1. System Master Blueprint
-- **[`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md):** The overarching system design, 6-subsystem topology, core partitioning invariants (Core 0 vs. Core 1), and inter-subsystem data flow.
+- **[`WHATELS_MASTER_ARCHITECTURE.md`](./WHATELS_MASTER_ARCHITECTURE.md):** The overarching system design, 6-subsystem topology, core partitioning invariants (Core 0 vs. Core 1), and inter-subsystem data flow.
 
 ---
 

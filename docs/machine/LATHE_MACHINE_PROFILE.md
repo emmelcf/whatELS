@@ -1,7 +1,7 @@
-# NanoELS Lathe Machine Profile Specification
+# whatELS Lathe Machine Profile Specification
 
 > **Status:** Draft / Authoritative Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/LATHE_MACHINE_PROFILE.md`  
@@ -309,7 +309,7 @@ struct LatheConfiguration {
 
 ## 4. Lathe Profile Catalog Architecture & Storage Hierarchy
 
-To guarantee that firmware upgrades never destroy user calibrations or custom lathe configurations, NanoELS employs a decoupled storage hierarchy combining **compiled-in ROM System Templates** with **User-Dedicated LittleFS Storage**:
+To guarantee that firmware upgrades never destroy user calibrations or custom lathe configurations, whatELS employs a decoupled storage hierarchy combining **compiled-in ROM System Templates** with **User-Dedicated LittleFS Storage**:
 
 ### 4.1 The Three-Tier Fallback Hierarchy
 

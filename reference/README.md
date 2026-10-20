@@ -42,6 +42,6 @@ Consult `h5_monolithic.ino` when:
 ## 4. Modern Evolution & Discrepancy Protocol
 
 While `reference/` serves as the baseline:
-1. **Behavioral Expansions:** NanoELS has intentionally expanded beyond the original sketch (e.g. multi-client WebSocket streaming, lock-free state engine, machine profile geometry, Touch DRO UI). Authoritative modern behaviors are described in [`docs/`](../docs/).
+1. **Behavioral Expansions:** whatELS has intentionally expanded beyond the original sketch (e.g. multi-client WebSocket streaming, lock-free state engine, machine profile geometry, Touch DRO UI). Authoritative modern behaviors are described in [`docs/`](../docs/).
 2. **If Uncertain, Ask:** If code in `src/` diverges from `reference/` and the rationale is not explicitly documented in `docs/`, developers and AI agents must **ask for clarification** rather than making assumptions or blindly reverting code.
 3. **Update Documentation:** Once user clarification resolves any discrepancy, the clarified behavior must immediately be recorded in the appropriate document under `docs/`.

@@ -347,7 +347,7 @@ void testInterCoreCommandQueue() {
 
 int main() {
   std::cout << "========================================================\n";
-  std::cout << " NanoELS Phase 2 — Automated E2E Motion Simulation Suite\n";
+  std::cout << " whatELS Phase 2 — Automated E2E Motion Simulation Suite\n";
   std::cout << "========================================================\n";
 
   testSpindleSyncGearing();

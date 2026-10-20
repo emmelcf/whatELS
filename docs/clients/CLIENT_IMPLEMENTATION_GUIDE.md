@@ -1,8 +1,8 @@
-# NanoELS Client Implementation Guide & Developer Reference
+# whatELS Client Implementation Guide & Developer Reference
 
 > **Status:** Working Draft / Architectural RFC & Developer Reference  
 > **Master Architecture:** [`docs/clients/ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)  
-> **Target Audience:** Firmware engineers, UI developers, and hardware adapter authors building or integrating new operator interfaces for NanoELS H5  
+> **Target Audience:** Firmware engineers, UI developers, and hardware adapter authors building or integrating new operator interfaces for whatELS  
 > **Location:** `docs/clients/CLIENT_IMPLEMENTATION_GUIDE.md`  
 > **Date:** October 2026  
 
@@ -10,7 +10,7 @@
 
 ## 1. Purpose & Scope
 
-This guide provides a comprehensive, step-by-step developer specification for creating and integrating a **new client type** into the NanoELS H5 modular controller architecture.
+This guide provides a comprehensive, step-by-step developer specification for creating and integrating a **new client type** into the whatELS modular controller architecture.
 
 It serves two primary goals:
 1. **Developer Reference:** Deliver a clear, end-to-end blueprint detailing every C++ interface, method contract, state change hook, and handshake requirement needed to implement a new client.
@@ -21,12 +21,12 @@ It serves two primary goals:
 
 ## 2. Core Architectural Philosophy
 
-Before writing code for a new client, understand the four foundational tenets governing NanoELS client interactions:
+Before writing code for a new client, understand the four foundational tenets governing whatELS client interactions:
 
 ```mermaid
 graph TD
     subgraph Client_Terminals ["Heterogeneous Physical Clients"]
-        WebUI["Modern Web UI / Touch DRO\n(lathe_dro_nanoels_controller.html)"]
+        WebUI["Modern Web UI / Touch DRO\n(lathe_dro_whatels_controller.html)"]
         SmartTouch["Dedicated Smart Touch Panel\n(Custom Hardware Console)"]
         NextionLCD["Constrained Serial Display\n(Nextion / Stone LCD)"]
         HILHarness["Automated Test Harness\n(Python HIL Suite)"]
@@ -105,7 +105,7 @@ The transport abstraction manages raw physical communication. It is completely a
 ```cpp
 // src/core_client/transports/ITransport.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 enum TransportType : uint8_t {
@@ -133,7 +133,7 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -144,7 +144,7 @@ Used exclusively by **Foreign / Constrained Clients**. Translates alien wire eve
 ```cpp
 // src/core_client/ICommandTranslator.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ICommandTranslator {
@@ -167,7 +167,7 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -178,7 +178,7 @@ Transforms the core's universal `MachineModel` into the specific format expected
 ```cpp
 // src/core_client/ITelemetrySerializer.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ITelemetrySerializer {
@@ -201,7 +201,7 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -213,7 +213,7 @@ $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translato
 ```cpp
 // src/core_client/ClientEndpoint.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ClientEndpoint {
@@ -251,7 +251,7 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -262,7 +262,7 @@ The static definition registered in the core that governs what a client type is 
 ```cpp
 // src/core_client/ClientProfile.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 enum ClientPermission : uint32_t {
@@ -286,7 +286,7 @@ struct ClientProfile {
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -297,7 +297,7 @@ The active connection record maintained in `ClientManager`'s active session tabl
 ```cpp
 // src/core_client/ActiveClientSession.h
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 struct ActiveClientSession {
@@ -314,7 +314,7 @@ struct ActiveClientSession {
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ---
@@ -323,7 +323,7 @@ struct ActiveClientSession {
 
 ### Scenario A: Implementing a Native Client Type (e.g., `smarttouch`)
 
-Native clients speak canonical NanoELS ASCII grammar directly (`CMD.*`, `SETTINGS.*`, `?get`). They require **zero translation code**.
+Native clients speak canonical whatELS ASCII grammar directly (`CMD.*`, `SETTINGS.*`, `?get`). They require **zero translation code**.
 
 #### Step 1: Define the Client Profile
 In your client's definition file or in a centralized profiles registry (`src/core_client/profiles/SmartTouchProfile.h`):
@@ -331,7 +331,7 @@ In your client's definition file or in a centralized profiles registry (`src/cor
 ```cpp
 #include "core_client/ClientProfile.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 const ClientProfile SMARTTOUCH_PROFILE = {
@@ -343,13 +343,13 @@ const ClientProfile SMARTTOUCH_PROFILE = {
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 #### Step 2: Register with Core Registry
 During controller initialization in `setup()`:
 ```cpp
-nanoels::core_client::ClientRegistry::instance().registerProfile(&SMARTTOUCH_PROFILE);
+whatels::core_client::ClientRegistry::instance().registerProfile(&SMARTTOUCH_PROFILE);
 ```
 
 #### Step 3: Implement Client-Side Handshake in Hardware Firmware
@@ -370,7 +370,7 @@ K.zDu=0|K.xDu=0|K.rpm=0|K.mode=50|K.on=0|...
 
 ### Scenario B: Implementing a Foreign / Constrained Translation Adapter (e.g., `nextion_lcd`)
 
-Constrained screens (like Nextion serial LCDs) cannot speak native NanoELS commands. You must write an **Adapter** that implements inbound translation and outbound serialization.
+Constrained screens (like Nextion serial LCDs) cannot speak native whatELS commands. You must write an **Adapter** that implements inbound translation and outbound serialization.
 
 #### Step 1: Create the Translation Adapter Class
 Under `src/core_client/clients/nextion/NextionAdapter.h`:
@@ -382,7 +382,7 @@ Under `src/core_client/clients/nextion/NextionAdapter.h`:
 #include "core_client/ICommandTranslator.h"
 #include "core_client/ITelemetrySerializer.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class NextionAdapter : public ClientEndpoint, 
@@ -439,7 +439,7 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels
 ```
 
 #### Step 2: Define the Profile with Factory Function
@@ -557,7 +557,7 @@ When integrating a client, developers must understand how physical data moves th
 
 ## 7. Machine State Model & Physical Units Reference
 
-All controller telemetry and state synchronization centers on [`MachineModel`](file:///home/emil/code/nanoels/src/core/MachineModel.h).
+All controller telemetry and state synchronization centers on [`MachineModel`](../../src/core/MachineModel.h).
 
 ### 7.1 The Four State Domains
 The controller splits state into 4 independent domains:
@@ -572,7 +572,7 @@ The controller splits state into 4 independent domains:
 ### 7.2 The Physical Unit Convention: Deci-Microns (`du`)
 
 > [!IMPORTANT]
-> **All linear dimensions inside NanoELS firmware and telemetry are stored in deci-microns (`du`).**  
+> **All linear dimensions inside whatELS firmware and telemetry are stored in deci-microns (`du`).**  
 > An integer deci-micron is one-tenth of a micron ($0.1\ \mu\text{m} = 0.0001\text{ mm}$).
 
 $$\mathbf{1.0\text{ mm} = 10,000\text{ du}} \qquad\qquad \mathbf{1.0\text{ in} = 254,000\text{ du}}$$
@@ -586,7 +586,7 @@ $$\mathbf{1.0\text{ mm} = 10,000\text{ du}} \qquad\qquad \mathbf{1.0\text{ in} =
 
 ## 8. Concurrency & Execution Best Practices (Do's and Don'ts)
 
-NanoELS operates on a dual-core ESP32-S3 microcontroller with strict real-time partitioning:
+whatELS operates on a dual-core ESP32-S3 microcontroller with strict real-time partitioning:
 * **Core 0:** High-priority motion pulse generation, hardware timer ISRs, and encoder pulse counting.
 * **Core 1:** FreeRTOS network tasks (`taskWiFi`), UART processing, client session management, and `CommandDispatcher`.
 
@@ -612,7 +612,7 @@ During the architectural audit, five significant implementation gaps and ambigui
 ### Gap 1: Duplicate `ClientEndpoint.h` Headers
 * **The Reality:** The repository contains two conflicting definitions:
   * `src/web/ClientEndpoint.h`: Legacy header in global namespace, defining `ITransport`, `ITelemetrySerializer`, `ICommandTranslator`, `DefaultCommandTranslator`, and `ClientEndpoint`.
-  * `src/core_client/ClientEndpoint.h`: Abstract base class in `namespace nanoels::core_client`, with different method signatures, including `src/core_client/transports/ITransport.h`.
+  * `src/core_client/ClientEndpoint.h`: Abstract base class in `namespace whatels::core_client`, with different method signatures, including `src/core_client/transports/ITransport.h`.
 * **Required Resolution:** Consolidate into a single authoritative set of headers under `src/core_client/`. Remove legacy duplicates in `src/web/`.
 
 ### Gap 2: `ClientManager` is Hardcoded to WebSockets Only
@@ -649,7 +649,7 @@ Use this checklist when introducing a new client:
 
 - [ ] **1. Define Client Name:** Choose a concise, concrete identifier (e.g. `smarttouch`, `mobile_dro`, `nextion_lcd`).
 - [ ] **2. Determine Translation Requirement:**
-  - Speaks native NanoELS commands? $\rightarrow$ Native client (`createEndpoint = nullptr`).
+  - Speaks native whatELS commands? $\rightarrow$ Native client (`createEndpoint = nullptr`).
   - Speaks foreign protocol or needs screen widget mapping? $\rightarrow$ Implement `ICommandTranslator` and `ITelemetrySerializer`.
 - [ ] **3. Consult Command Catalog:** Review [`CANONICAL_COMMAND_REFERENCE.md`](../protocol/CANONICAL_COMMAND_REFERENCE.md) to verify required commands, parameters, and return payloads.
 - [ ] **4. Define Permission Scope:** Select explicit permissions (`PERM_READ_TELEMETRY`, `PERM_JOG_PULSE`, `PERM_MOTION_START`, etc.). *Never grant `PERM_SIMULATION` to operator UIs.*

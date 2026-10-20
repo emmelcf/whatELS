@@ -1,4 +1,4 @@
-# NanoELS H5 — Tier 2 State Audit & Mapping Specification
+# whatELS — Tier 2 State Audit & Mapping Specification
 
 > **STATUS: ARCHIVED / HISTORICAL MIGRATION LEDGER**  
 > **Notice:** This document served as a transitional audit on October 8, 2026, mapping legacy globals (`Axis.h`, `Config.h`, `Motion.h`) into the new architectural domains. It is preserved for historical reference only.  
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary: Bridging Supervisory Intent (Core 0) & Real-Time Motion (Core 1)
 
-In the ongoing evolution of NanoELS H5 from a monolithic Arduino sketch into an industrial-grade, multi-client electronic leadscrew platform, configuration and state are divided into four hierarchical tiers:
+In the ongoing evolution of the original NanoELS H5 from a monolithic Arduino sketch into an industrial-grade, multi-client electronic leadscrew platform, configuration and state are divided into four hierarchical tiers:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐

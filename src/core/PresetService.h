@@ -4,7 +4,7 @@
 
 /**
  * @file PresetService.h
- * @brief Authoritative machining preset catalog service for NanoELS.
+ * @brief Authoritative machining preset catalog service for whatELS.
  * @details Implements the Preset Catalog specification defined in docs/ELS_PRESET_CATALOG.md.
  *          Resolves queries over ROM Flash PROGMEM standards and LittleFS user overrides.
  */

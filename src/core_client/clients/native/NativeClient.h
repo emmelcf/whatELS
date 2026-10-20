@@ -3,7 +3,7 @@
 #include "../../ClientEndpoint.h"
 #include "core/TelemetrySerializer.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class NativeClient : public ClientEndpoint {
@@ -22,8 +22,8 @@ public:
   bool broadcast(const MachineModel& model, uint8_t domainMask = DOMAIN_ALL) override;
   bool broadcastIfChanged(const MachineModel& model, uint8_t domainMask = DOMAIN_ALL) override;
 
-  static String serializeResponse(const nanoels::core::CommandResult& res);
+  static String serializeResponse(const whatels::core::CommandResult& res);
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

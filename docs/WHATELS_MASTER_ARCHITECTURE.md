@@ -1,17 +1,17 @@
-# NanoELS H5 — Master System Architecture & Subsystem Specification
+# whatELS — Master System Architecture & Subsystem Specification
 
 > **Status:** Authoritative "Ground Floor" Master Architecture Blueprint  
-> **Target Platform:** NanoELS H5 Electronic Leadscrew & Multi-Client Suite (ESP32-S3)  
+> **Target Platform:** whatELS Electronic Leadscrew & Multi-Client Suite (ESP32-S3)  
 > **Author:** Antigravity & Emil  
-> **Date:** October 8, 2026  
-> **Location:** `docs/NANOELS_MASTER_ARCHITECTURE.md`  
+> **Date:** October 8, 2026 (Updated October 2026)  
+> **Location:** `docs/WHATELS_MASTER_ARCHITECTURE.md`  
 > **Supersedes:** `ELS_DESIGN_NOTEBOOK.md` (as the root architectural index)
 
 ---
 
 ## 1. Executive System Vision & Core Tenets
 
-The **NanoELS H5 Architecture** modernizes an open-source embedded lathe controller into an industrial-grade, multi-client electronic leadscrew (ELS) and digital readout (DRO) platform.
+The **whatELS Architecture** modernizes and reimagines open-source embedded lathe control into an industrial-grade, multi-client electronic leadscrew (ELS) and digital readout (DRO) platform.
 
 ### 1.1 The Evolutionary Leap
 * **From:** A monolithic Arduino sketch (`h5.ino`, ~370 KB) with 200+ unencapsulated procedural globals, hardwired Nextion LCD packets, and high-frequency stepper timer ISRs interleaved with serial communication.
@@ -140,7 +140,7 @@ To guarantee that firmware upgrades never destroy user calibrations, custom mach
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       NANOELS FLASH PARTITION ROLES                         │
+│                       whatELS FLASH PARTITION ROLES                         │
 ├────────────────────────────────┬────────────────────────────────────────────┤
 │ 1. APPLICATION FLASH (`app0`)  │ • C++ Motion Core & Hard Real-Time Loops   │
 │    Firmware Binary (.bin)      │ • Embedded Gzipped Web UI (`PROGMEM`)      │
@@ -194,7 +194,7 @@ Below is the complete audit of all implementation and header files across `src/`
 To prevent architectural drift and maintain single-topic depth, all detailed implementation rules are partitioned into dedicated standalone specifications:
 
 ```
-NANOELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
+WHATELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │
 ├── 1. Motion Core & Hardware Timing (Core 1)
 │    └── motion/ (HAL_SPECIFICATION.md, MOTION_ENGINE_SPECIFICATION.md,

@@ -1,7 +1,7 @@
-# NanoELS — Master System & Motion Architecture Dossier
+# whatELS — Master System & Motion Architecture Dossier
 
 > **Document Type:** Consolidated Master Architecture Specification & Peer Review Dossier  
-> **Target Platform:** NanoELS H5 Electronic Leadscrew & Lathe Controller (ESP32-S3)  
+> **Target Platform:** whatELS Electronic Leadscrew & Lathe Controller (ESP32-S3)  
 > **Authors:** Emil & Antigravity  
 > **Date:** October 2026  
 > **Audience:** External Architecture Reviewers (Google Argon), Embedded Systems & CNC Specialists  
@@ -29,7 +29,7 @@
 # SECTION 0: REVIEW CHARTER & EVALUATION CRITERIA FOR ARGON
 
 ## 0.1 Context & Background
-NanoELS is an industrial-grade, open-source Electronic Leadscrew (ELS) and Digital Readout (DRO) controller designed for metalworking engine lathes. It replaces traditional cast-iron change gears, feed gearboxes, and half-nut mechanics with an electronically synchronized leadscrew and motorized cross-slide.
+whatELS is an industrial-grade, open-source Electronic Leadscrew (ELS) and Digital Readout (DRO) controller designed for metalworking engine lathes. It replaces traditional cast-iron change gears, feed gearboxes, and half-nut mechanics with an electronically synchronized leadscrew and motorized cross-slide.
 
 The hardware runs on the **ESP32-S3** (dual-core Xtensa LX7 @ 240 MHz with FreeRTOS). It interfaces with:
 - Dedicated **Pulse Counter (PCNT)** hardware reading a high-resolution spindle optical quadrature encoder ($1{,}024 - 2{,}048\text{ PPR}$, up to $3{,}000\text{ RPM} \implies 204.8\text{ kHz}$ edge rate).
@@ -63,7 +63,7 @@ Please evaluate the architecture presented in this dossier across the following 
 
 # SECTION 1: SYSTEM OVERVIEW & ARCHITECTURAL HIERARCHY
 
-The NanoELS motion subsystem is organized into three strictly decoupled layers:
+The whatELS motion subsystem is organized into three strictly decoupled layers:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -608,7 +608,7 @@ Governs which operator interventions are permitted while axes are cutting under 
 
 # SECTION 7: MASTER SYSTEM ARCHITECTURE (THE 6 SUBSYSTEMS)
 
-The NanoELS firmware is partitioned into 6 distinct architectural subsystems with strict boundary rules:
+The whatELS firmware is partitioned into 6 distinct architectural subsystems with strict boundary rules:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐

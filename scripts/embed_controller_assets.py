@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 scripts/embed_controller_assets.py
-Pre-build script for NanoELS.
+Pre-build script for whatELS.
 1. Reads data/presets/profiles.json and generates src/motion/SystemProfilesJson.h
 2. Gzips data/www/{index.html, style.css, app.js} and generates src/web/ControllerWebAssets.h
 """

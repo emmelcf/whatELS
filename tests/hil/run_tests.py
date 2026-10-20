@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NanoELS Hardware-in-the-Loop Test Runner.
+"""whatELS Hardware-in-the-Loop Test Runner.
 
 Discovers and executes end-to-end integration test suites over WebSocket.
 """
@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.base_test import HilTestCase, TestResult
-from core.client import NanoElsClient
+from core.client import WhatElsClient
 from core.reporter import emit_json_report, print_terminal_report
 
 
@@ -47,11 +47,11 @@ def discover_test_classes(filter_keyword: str = "") -> list[type[HilTestCase]]:
 
 
 async def main_async() -> int:
-    parser = argparse.ArgumentParser(description="NanoELS Hardware-in-the-Loop Test Runner")
+    parser = argparse.ArgumentParser(description="whatELS Hardware-in-the-Loop Test Runner")
     parser.add_argument(
         "--host",
-        default=os.environ.get("NANOELS_HOST", os.environ.get("NANOELS_URL", "ws://nanoels.local:81")),
-        help="Controller IP/Hostname or WebSocket URL (default: ws://nanoels.local:81)",
+        default=os.environ.get("WHATELS_HOST", "ws://whatels.local:81"),
+        help="Controller IP/Hostname or WebSocket URL (default: ws://whatels.local:81)",
     )
     parser.add_argument(
         "--port",
@@ -82,7 +82,7 @@ async def main_async() -> int:
         print(f"No test cases found matching: '{filter_term}'", file=sys.stderr)
         return 1
 
-    client = NanoElsClient(host=args.host, port=args.port)
+    client = WhatElsClient(host=args.host, port=args.port)
     try:
         await client.connect(timeout_s=4.0)
     except Exception as conn_err:

@@ -119,8 +119,8 @@ const defaultSection = 'control';
     const accessibilityPendingAxisValues = {};
     const accessibilityLastAxisValues = { x: '', y: '', z: '' };
     const activeControlActions = new Set();
-    const tftFirstUploadStorageKey = 'nanoels-h5.tft-first-upload';
-    const accessibilityStorageKey = 'nanoels-h5.accessibility';
+    const tftFirstUploadStorageKey = 'whatels.tft-first-upload';
+    const accessibilityStorageKey = 'whatels.accessibility';
     const accessibilityDefaults = {
       voiceFeedback: false,
       announceButtons: true,

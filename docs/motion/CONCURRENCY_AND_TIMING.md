@@ -1,7 +1,7 @@
-# NanoELS Concurrency, Real-Time Timing & Core Architecture
+# whatELS Concurrency, Real-Time Timing & Core Architecture
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture (ESP32-S3)  
+> **Target Version:** whatELS Modular Architecture (ESP32-S3)  
 > **Audience:** Firmware Engineers, Systems Architects, Motion Core  
 > **Location:** `docs/motion/CONCURRENCY_AND_TIMING.md`  
 > **Related Specifications:** [`HAL_SPECIFICATION.md`](./HAL_SPECIFICATION.md), [`MOTION_ENGINE_SPECIFICATION.md`](./MOTION_ENGINE_SPECIFICATION.md), [`MODE_INTEGRATION_CONTRACT.md`](./MODE_INTEGRATION_CONTRACT.md)
@@ -217,7 +217,7 @@ struct MotionCommandPacket {
 
 ### 4.2 Stepper Pulse Generation Strategies
 
-| Technique | Peripheral | Maximum Pulse Rate | Jitter | Use Case in NanoELS |
+| Technique | Peripheral | Maximum Pulse Rate | Jitter | Use Case in whatELS |
 |---|---|---|---|---|
 | **Hardware RMT** | ESP32-S3 RMT | Up to $1\text{ MHz}$ | $< 50\text{ ns}$ | Asynchronous velocity rapids & smooth continuous feed |
 | **GPTimer ISR** | ESP32-S3 64-bit Timer | Up to $100\text{ kHz}$ | $< 0.5\,\mu\text{s}$ | Spindle-synchronized Bresenham gearing & multi-axis coordinated vectoring |

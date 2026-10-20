@@ -436,7 +436,7 @@ static bool readWifiConfigFromRequest(String* error) {
 
   sysConfig.wifi.enabled = enabled;
   sysConfig.wifi.ssid = ssid;
-  sysConfig.wifi.hostname = hostname.length() > 0 ? hostname : "nanoels";
+  sysConfig.wifi.hostname = hostname.length() > 0 ? hostname : "whatels";
   if (clearPassword) {
     sysConfig.wifi.password = "";
   } else if (password.length() > 0) {
@@ -502,9 +502,9 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       String hydration = DroSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     }
-    nanoels::core_client::ClientManager::instance().onClientConnected(num, (const char*)payload);
+    whatels::core_client::ClientManager::instance().onClientConnected(num, (const char*)payload);
   } else if (type == WStype_DISCONNECTED) {
-    nanoels::core_client::ClientManager::instance().onClientDisconnected(num);
+    whatels::core_client::ClientManager::instance().onClientDisconnected(num);
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
       clientSessions[num].active = false;
       clientSessions[num].channel = CHANNEL_NONE;
@@ -542,7 +542,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
 
     // Modern Native Client routing via ClientManager
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
-      if (nanoels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
+      if (whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
         bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
                        (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
                        (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
@@ -1066,7 +1066,7 @@ static bool connectStationWifi() {
     WiFi.setHostname(sysConfig.wifi.hostname.c_str());
   } else {
     DEBUG_PRINTLN("sysConfig.wifi.hostname is empty! Falling back to default.");
-    WiFi.setHostname("nanoels");
+    WiFi.setHostname("whatels");
   }
 
   WiFi.mode(WIFI_STA);
@@ -1164,7 +1164,7 @@ void taskWiFi(void *param) {
 
   webSocket.begin();
   webSocket.onEvent(handleWebSocketEvent);
-  nanoels::core_client::ClientManager::instance().init(&webSocket);
+  whatels::core_client::ClientManager::instance().init(&webSocket);
 
   while (emergencyStop == EstopCode::NONE) {
     server.handleClient();

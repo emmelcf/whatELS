@@ -14,7 +14,7 @@
 static QueueHandle_t usbKeyQueue = NULL;
 
 // Translates standard USB HID Usage Page 0x07 keycodes to equivalent PS2KeyAdvanced scancodes
-// so existing NanoELS keybindings and numpad logic work seamlessly.
+// so existing whatELS keybindings and numpad logic work seamlessly.
 static uint8_t hidToPs2Code(uint8_t hidCode) {
   // Letters A-Z (HID 0x04..0x1D -> PS2_KEY_A..PS2_KEY_Z)
   if (hidCode >= 0x04 && hidCode <= 0x1D) {

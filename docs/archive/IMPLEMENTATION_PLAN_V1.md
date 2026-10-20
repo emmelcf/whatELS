@@ -1,7 +1,7 @@
-# NanoELS Modular Architecture Implementation Plan
+# whatELS Modular Architecture Implementation Plan
 
 > **Status:** Approved for Phased Execution  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Source Documents:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)  
 > **Location:** `docs/IMPLEMENTATION_PLAN.md`
 
@@ -9,7 +9,7 @@
 
 ## 1. Overview & Phased Roadmap Strategy
 
-To transform the NanoELS firmware and client ecosystem from its legacy monolithic structure into the modular architecture defined in `docs/`, the implementation is partitioned into three progressive phases.
+To transform the original NanoELS firmware and client ecosystem from its legacy monolithic structure into the modular architecture defined in `docs/`, the implementation is partitioned into three progressive phases.
 
 Because this represents a significant engineering effort across firmware C++ (ESP32-S3), wire protocols, and frontend JavaScript, **each phase is structured into discrete, single-conversation milestones**. Each conversation milestone produces compilable, testable code without breaking existing lathe operation.
 
@@ -110,12 +110,12 @@ Replace rigid compile-time `#define` flags (`HAS_DRO_X`, `ACTIVE_Y`, etc.) with 
 ### Session 1.5: Client-Side Capability Hydration & UI Gating (Web UI & Simulator)
 * **Goal:** Update the Web UI client and emulator to dynamically adapt layout and controls based on reported `P.caps`.
 * **Frontend Scope:**
-  1. **Store Extension ([`nanoels-state.js`](../clients/web_ui/nanoels-state.js)):**
+  1. **Store Extension ([`whatels-state.js`](../clients/web_ui/whatels-state.js)):**
      - Parse `P.caps` into a reactive capability object (`$store.machine.capabilities`).
      - Provide helper method `$store.machine.hasCap(flagName)`.
-  2. **Simulator Parity ([`nanoels-emulator.js`](../clients/web_ui/nanoels-emulator.js)):**
+  2. **Simulator Parity ([`whatels-emulator.js`](../clients/web_ui/whatels-emulator.js)):**
      - Emulate `P.caps` and wire `CMD.machine.*` responses for offline browser testing.
-  3. **Adaptive UI Controls ([`lathe_dro_nanoels_controller.html`](../clients/web_ui/lathe_dro_nanoels_controller.html)):**
+  3. **Adaptive UI Controls ([`lathe_dro_whatels_controller.html`](../clients/web_ui/lathe_dro_whatels_controller.html)):**
      - Visually gate cross-slide power feed / facing buttons if `!hasCap('CAP_MOTOR_X')`.
      - Toggle DRO indicator badges (`DRO X`, `DRO Z`) based on `CAP_DRO_*`.
      - Link machine profile dimensions directly to the Digital Twin visualizer ([`lathe-viz.js`](../clients/web_ui/dev/lathe-viz.js)).

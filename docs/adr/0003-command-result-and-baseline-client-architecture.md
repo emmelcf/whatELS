@@ -90,7 +90,7 @@ graph TD
 `CommandDispatcher` ceases all string formatting and returns a strongly typed domain object:
 
 ```cpp
-namespace nanoels {
+namespace whatels {
 
 enum class CommandStatus : uint8_t {
   OK = 0,            // Command recognized and executed successfully
@@ -121,7 +121,7 @@ struct CommandResult {
   bool isHandled() const { return status != CommandStatus::UNRECOGNIZED; }
 };
 
-} // namespace nanoels
+} // namespace whatels
 ```
 
 ### 3.2 Single-Gate Dispatcher & Fault Containment

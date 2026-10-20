@@ -1,7 +1,7 @@
-# NanoELS Web UI: UI Interaction to Wire Command Ledger
+# whatELS Web UI: UI Interaction to Wire Command Ledger
 
 > **Status:** Authoritative Specification  
-> **Client:** NanoELS Web UI / Touch DRO Interface  
+> **Client:** whatELS Web UI / Touch DRO Interface  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/clients/web_ui/INTERACTION_LEDGER.md`  
@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary & Safety Policy
 
-This document provides the exhaustive, 1-to-1 mapping of every interactive element on the NanoELS Web UI prototype ([`lathe_dro_nanoels_controller.html`](../../../clients/web_ui/lathe_dro_nanoels_controller.html)) to its JavaScript handler, emitted wire command, and motion controller kinematic effect.
+This document provides the exhaustive, 1-to-1 mapping of every interactive element on the whatELS Web UI prototype ([`lathe_dro_whatels_controller.html`](../../../clients/web_ui/lathe_dro_whatels_controller.html)) to its JavaScript handler, emitted wire command, and motion controller kinematic effect.
 
 ### Universal Safety Invariants:
 1. **Running Motion Lockout (`state.runState === 'running'`):**  

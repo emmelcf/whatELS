@@ -1,4 +1,4 @@
-# NanoELS H5 — Operational Mode Catalog & Specifications
+# whatELS — Operational Mode Catalog & Specifications
 ## Architecture, Kinematics, Execution FSMs & Deck Interaction Specifications
 
 > **Companion Architecture Documents:**

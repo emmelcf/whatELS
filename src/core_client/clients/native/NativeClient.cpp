@@ -1,11 +1,11 @@
 #include "NativeClient.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
-String NativeClient::serializeResponse(const nanoels::core::CommandResult& res) {
+String NativeClient::serializeResponse(const whatels::core::CommandResult& res) {
   switch (res.status) {
-    case nanoels::core::CommandStatus::OK: {
+    case whatels::core::CommandStatus::OK: {
       if (res.payload.length() == 0) {
         return "OK:CMD." + String(res.command) + "\n";
       }
@@ -19,7 +19,7 @@ String NativeClient::serializeResponse(const nanoels::core::CommandResult& res) 
       return "OK:CMD." + String(res.command) + ":" + res.payload + "\n";
     }
 
-    case nanoels::core::CommandStatus::FAILED: {
+    case whatels::core::CommandStatus::FAILED: {
       if (res.payload.length() == 0) {
         return "ERR:CMD." + String(res.command) + "_FAILED\n";
       }
@@ -31,7 +31,7 @@ String NativeClient::serializeResponse(const nanoels::core::CommandResult& res) 
       return "ERR:" + res.payload + "\n";
     }
 
-    case nanoels::core::CommandStatus::UNRECOGNIZED:
+    case whatels::core::CommandStatus::UNRECOGNIZED:
     default:
       return "CMD.error=unknown_command\n";
   }
@@ -40,7 +40,7 @@ String NativeClient::serializeResponse(const nanoels::core::CommandResult& res) 
 bool NativeClient::handleIncoming(const char* payload, size_t length) {
   if (!payload || length == 0) return false;
 
-  nanoels::core::CommandResult result = nanoels::core::CommandDispatcher::dispatch(payload, length);
+  whatels::core::CommandResult result = whatels::core::CommandDispatcher::dispatch(payload, length);
   String wireFrame = serializeResponse(result);
   if (wireFrame.length() > 0 && _transport && _transport->isConnected()) {
     _transport->sendText(wireFrame.c_str());
@@ -75,4 +75,4 @@ bool NativeClient::broadcastIfChanged(const MachineModel& model, uint8_t domainM
 }
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

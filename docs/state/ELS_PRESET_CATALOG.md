@@ -1,7 +1,7 @@
-# NanoELS Machining Preset Catalog & Storage Architecture
+# whatELS Machining Preset Catalog & Storage Architecture
 
 > **Status:** Authoritative Specification (Subsystems 5, 6 & Core Storage)  
-> **Target Version:** NanoELS H5 Modular Multi-Client Suite  
+> **Target Version:** whatELS Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 14, 2026  
 > **Location:** `docs/ELS_PRESET_CATALOG.md`  
@@ -11,14 +11,14 @@
 
 ## 1. Executive Summary & Design Principles
 
-The **NanoELS Machining Preset Catalog** provides a unified, domain-extensible repository of machining specifications (threads, tapers, tooling, feeds/speeds, and custom shop recipes). It serves as the single point of truth across all operator interfaces (Web UI, Nextion LCD, wireless DRO tablets, and hardware pendants).
+The **whatELS Machining Preset Catalog** provides a unified, domain-extensible repository of machining specifications (threads, tapers, tooling, feeds/speeds, and custom shop recipes). It serves as the single point of truth across all operator interfaces (Web UI, Nextion LCD, wireless DRO tablets, and hardware pendants).
 
 ### Governing Architectural Tenets
 
 1. **The Controller is the Master Authority:**  
    Machining presets belong to the lathe, not a browser's ephemeral `localStorage`. Switching between a workshop tablet, phone, or Nextion LCD yields identical engineering values, tolerances, and custom shop presets.
 2. **Zero Manual Authoring (Upstream Provenance Mandate):**  
-   NanoELS core developers do not hand-type or manually curate thousands of complex engineering tolerance numbers. Standard catalog datasets are ingested automatically from authoritative, machine-verified, open-source engineering engines (specifically **ThreadBuddy** for threads and **DIN 228 / ISO 296 / ASME B5.10** for tapers) via automated extraction pipelines.
+   whatELS core developers do not hand-type or manually curate thousands of complex engineering tolerance numbers. Standard catalog datasets are ingested automatically from authoritative, machine-verified, open-source engineering engines (specifically **ThreadBuddy** for threads and **DIN 228 / ISO 296 / ASME B5.10** for tapers) via automated extraction pipelines.
 3. **Two-Tier Storage Topology (ROM Flash vs LittleFS):**  
    - **Tier 1 (Factory ROM):** Standard international standards are compiled directly into microcontroller Flash ROM (`PROGMEM`) via `scripts/embed_controller_assets.py`. Upgrading standard tables occurs seamlessly with regular firmware updates via USB/OTA without touching or re-flashing the LittleFS partition.
    - **Tier 2 (Operator LittleFS):** Custom shop presets, shop favorites, and user overrides reside in LittleFS (`/presets/user/`). The filesystem is never wiped or required for basic factory operation.
@@ -76,7 +76,7 @@ flowchart LR
         Embed["scripts/embed_controller_assets.py\n(Asset Compressor & Header Gen)"]
     end
 
-    subgraph Controller ["NanoELS Controller Storage"]
+    subgraph Controller ["whatELS Controller Storage"]
         ROM["SystemPresetsJson.h (PROGMEM)\n(Compiled in Firmware Flash)"]
         LFS["LittleFS /presets/user/\n(User Custom Overrides)"]
     end
@@ -208,7 +208,7 @@ PRESET.get path=<domain>/<catalog>[/<item_id>] [$select=<fields>] [$filter=<expr
 
 In conformance with **Tenet 2 (Strict Layer Decoupling)** of [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), the core returns raw canonical values. The Client Translation Layer translates this data to suit each client interface:
 
-### 1. Rich Touch Web UI (`lathe_dro_nanoels_controller.html`)
+### 1. Rich Touch Web UI (`lathe_dro_whatels_controller.html`)
 - Directly consumes the structured JSON objects over WebSocket.
 - Renders:
   - **Stock Prep Card:** Directs operator: *"Turn stock OD to 11.88 mm – 11.96 mm"*.

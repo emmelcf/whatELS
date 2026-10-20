@@ -1,5 +1,5 @@
 /**
- * Pure Render-Time Formatters for NanoELS
+ * Pure Render-Time Formatters for whatELS
  * Converts canonical integer deci-microns (du) and authoring setpoints into display strings.
  * Zero DOM dependencies, zero side effects, zero floating-point accumulation drift.
  */

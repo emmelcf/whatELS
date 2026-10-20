@@ -1,7 +1,7 @@
-# NanoELS Core State Model Specification
+# whatELS Core State Model Specification
 
 > **Status:** Authoritative Specification  
-> **Target System:** NanoELS H5 Modular Architecture  
+> **Target System:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_CORE_STATE_MODEL.md`  
@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Architectural Role
 
-The **NanoELS Core State Model** (`MachineModel`) is the central, authoritative state container for the entire NanoELS electronic leadscrew platform.
+The **whatELS Core State Model** (`MachineModel`) is the central, authoritative state container for the entire whatELS electronic leadscrew platform.
 
 It is decoupled from both:
 * **Operating Modes (`ELS_MODE_ARCHITECTURE.md`):** Modes are active state machines and kinematic orchestrators that inspect and mutate state.
@@ -83,14 +83,14 @@ On dual-core ESP32 hardware:
 * To prevent temporal tearing and inconsistent multi-word reads across cores, state is sampled into **immutable value-semantic snapshots** captured at instant $t_0$.
 
 ### 2.7 Tiered Properties Taxonomy & Stateless Client Persistence
-Properties across the NanoELS ecosystem are partitioned into four distinct tiers of responsibility:
+Properties across the whatELS ecosystem are partitioned into four distinct tiers of responsibility:
 
 1. **Tier 1: Lathe Physical Machine Profile (`LATHE_MACHINE_PROFILE.md`):**
    * *Responsibility:* Physical lathe mechanics and drive geometry (`screwZDu`, `screwXDu`, `motorStepsZ`, `encoderPpr`, backlash, bed limits, swing).
    * *Storage & Mutability:* Commissioning calibration stored in NVS namespace `"machine"`. Defaults loaded from workshop machine presets (e.g. 7x14, 10x22, 14x40).
 2. **Tier 2: Controller Infrastructure & Network:**
    * *Responsibility:* ESP32 host hardware and network configuration (WiFi AP/STA mode, SSID, AP password, mDNS hostname, UART baud rate).
-   * *Storage & Mutability:* Network settings menu stored in NVS namespace `"sys"` / `"wifi"`. Defaults to standalone factory AP (`NanoELS-AP` on `192.168.4.1`, port 81).
+   * *Storage & Mutability:* Network settings menu stored in NVS namespace `"sys"` / `"wifi"`. Defaults to standalone factory AP (`whatELS-AP` on `192.168.4.1`, port 81).
 3. **Tier 3: Operational Preferences & Telemetry Tuning (`SettingsService`):**
    * *Responsibility:* Workshop behavioral tuning (startup units, jog step table, deadband overrides).
    * *Storage & Mutability:* Operator settings modal stored in NVS namespace `"prefs"`. Defaults dynamically derived from hardware (e.g. deadbands derived from encoder PPR).
@@ -437,7 +437,7 @@ The controller captures `MachineModel::captureAll()` at instant $t_0$ and stream
 
 ## 8. Client-Side Reactive Model (`Alpine.store('machine')`)
 
-In the browser and Web UI, [`nanoels-state.js`](../clients/web_ui/nanoels-state.js) implements an isomorphic reactive representation of `MachineModel`:
+In the browser and Web UI, [`whatels-state.js`](../clients/web_ui/whatels-state.js) implements an isomorphic reactive representation of `MachineModel`:
 
 ```javascript
 Alpine.store('machine', {
@@ -489,7 +489,7 @@ Alpine.store('machine', {
 
 ## 9. Summary & Cross-Index
 
-The **Core State Model** provides the unshakeable bedrock of the NanoELS ecosystem:
+The **Core State Model** provides the unshakeable bedrock of the whatELS ecosystem:
 1. **Deterministic Kinematics:** All physical motion operates in integer deci-microns and canonical radius.
 2. **Zero-Drift Intent:** Authoring units are preserved without floating-point conversion degradation.
 3. **Decoupled Concurrency:** Value-semantic snapshots prevent temporal tearing across dual ESP32 cores.

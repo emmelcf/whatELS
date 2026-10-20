@@ -1,9 +1,9 @@
-# NanoELS State, Properties & Persistence Subsystem
+# whatELS State, Properties & Persistence Subsystem
 
 > **Location:** `docs/state/`  
 > **Target Subsystems:** Subsystem 3 (Core State Model), Subsystem 4 (Properties & NVS Engine)
 
-This directory contains the authoritative specifications for the NanoELS state models, properties hierarchy, and serialization mechanisms:
+This directory contains the authoritative specifications for the whatELS state models, properties hierarchy, and serialization mechanisms:
 
 1. **[`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md):**  
    - Canonical 4-domain state partition: Kinematics (`K`), Intent (`I`), Cycle (`C`), and Properties (`P`).

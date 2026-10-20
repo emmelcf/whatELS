@@ -172,7 +172,7 @@ void loadMachineConfig() {
 
 void printMachineProfileBanner() {
   Serial.println("\n==================================================================");
-  Serial.printf(" NanoELS Machine Profile: %s (%s)\n", activeMachineProfile.profileId, activeMachineProfile.modelName);
+  Serial.printf(" whatELS Machine Profile: %s (%s)\n", activeMachineProfile.profileId, activeMachineProfile.modelName);
   Serial.printf(" Capabilities: 0x%08X\n", (unsigned int)activeMachineProfile.capabilities);
   Serial.print(" Active Flags: [");
   bool first = true;
@@ -414,7 +414,7 @@ void setWifiConfigDefaults() {
   sysConfig.wifi.enabled = true;
   sysConfig.wifi.ssid = "";
   sysConfig.wifi.password = "";
-  sysConfig.wifi.hostname = "nanoels";
+  sysConfig.wifi.hostname = "whatels";
 }
 
 bool validateWifiConfig(String* error) {
@@ -443,7 +443,7 @@ static PersistentSetting<String> s_wifiSsid("sys", "wifi_ssid", "", [](const Str
 static PersistentSetting<String> s_wifiPassword("sys", "wifi_pwd", "", [](const String& val) {
   sysConfig.wifi.password = val;
 });
-static PersistentSetting<String> s_wifiHostname("sys", "wifi_host", "nanoels", [](const String& val) {
+static PersistentSetting<String> s_wifiHostname("sys", "wifi_host", "whatels", [](const String& val) {
   sysConfig.wifi.hostname = val;
 });
 
@@ -456,7 +456,7 @@ void loadWifiConfig() {
     if (oldWifi.isKey("ssid")) {
       String oldSsid = oldWifi.getString("ssid", "");
       String oldPwd = oldWifi.getString("pwd", "");
-      String oldHn = oldWifi.getString("hn", "nanoels");
+      String oldHn = oldWifi.getString("hn", "whatels");
       bool oldEn = oldWifi.getBool("en", true);
       oldWifi.end();
 

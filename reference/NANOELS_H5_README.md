@@ -1,4 +1,4 @@
-# NanoEls H5
+# whatELS
 
 Latest version of the electronic lead screw controller for metal lathes - https://www.youtube.com/watch?v=dgiMwlfZPNg
 
@@ -558,10 +558,10 @@ To create a full image for first-time USB flashing, use the Arduino build output
 
 Troubleshooting:
 
-- Arduino IDE doesn't detect NanoEls H5: try a different USB cable
+- Arduino IDE doesn't detect whatELS: try a different USB cable
 - Arduino IDE fails to upload the sketch: make sure you plugged the extension into the `COM` port, **not** the `USB` port on the ESP32
 - WiFi firmware upload fails with an OTA partition or space error: upload over USB after selecting an OTA-capable partition scheme. USB is also required when changing the partition scheme.
-- Not sure which COM port is NanoEls H5: unplug it, check the list of available ports in Arduino IDE, plug H5 in, see new port that appeared is H5
+- Not sure which COM port is whatELS: unplug it, check the list of available ports in Arduino IDE, plug H5 in, see new port that appeared is H5
 - `ImportError: No module named serial` error on Linux: try `sudo apt install python3-serial`
 
 ## Upload screen from MicroSD card

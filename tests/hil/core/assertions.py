@@ -1,4 +1,4 @@
-"""Domain assertion primitives for NanoELS HIL tests."""
+"""Domain assertion primitives for whatELS HIL tests."""
 
 from __future__ import annotations
 from typing import TYPE_CHECKING

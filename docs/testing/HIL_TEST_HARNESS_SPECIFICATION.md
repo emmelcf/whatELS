@@ -1,4 +1,4 @@
-# NanoELS Hardware-in-the-Loop (HIL) & WebSocket Test Harness Specification
+# whatELS Hardware-in-the-Loop (HIL) & WebSocket Test Harness Specification
 
 > **Status:** Authoritative Specification & Implementation Blueprint (v2.0)  
 > **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Motion Engine), Subsystem 3 (Unified Gearbox Mode), Subsystem 5 (Command Dispatcher), Subsystem 6 (Client Adapters & Testing)[cite: 1, 2, 5]  
@@ -13,7 +13,7 @@
 
 ## 1. Executive Summary & Objective
 
-This specification defines the architecture, wire protocols, firmware prerequisite fixes, test authoring DSL, and firmware simulation hooks for the **NanoELS Hardware-in-the-Loop (HIL) Test Harness**[cite: 1].
+This specification defines the architecture, wire protocols, firmware prerequisite fixes, test authoring DSL, and firmware simulation hooks for the **whatELS Hardware-in-the-Loop (HIL) Test Harness**[cite: 1].
 
 While unit tests (`test/test_motion_e2e.cpp`) verify kinematic algorithms in synthetic isolation on the host, this harness verifies the **complete, live compiled firmware** running on physical ESP32-S3 hardware across the external network boundary (`ws://<ip>:81/canonical`)[cite: 1]. It treats the controller as a black box, verifying[cite: 1]:
 1. Inbound network framing, sanitization, In-Motion Safety Gatekeeper (`[SAFE-01]`), and command dispatching on Core 0[cite: 1, 4].
@@ -33,7 +33,7 @@ To test spindle-synchronized motion without requiring physical lathe rotation or
 │  tests/hil/run_tests.py           │  Core 0 (Networking & Dispatch):   │
 │   ├── TestRunner / CLI Filter     │   ├── WebServerModule (:81/ws)     │
 │   ├── TestSuites (26 Tests)       │   ├── CommandDispatcher.cpp        │
-│   └── NanoElsClient (Async WS)    │   │    └── [SAFE-01] Gatekeeper    │
+│   └── WhatElsClient (Async WS)    │   │    └── [SAFE-01] Gatekeeper    │
 │        ├── 500ms Heartbeat Task   │   └── MachineModel / Serializer    │
 │        └── ACK / ERR Synchronizer │            │ (Inter-core Queue)    │
 │            │                      │            ▼                       │
@@ -219,7 +219,7 @@ To guarantee that a disconnected or crashed test script never leaves physical st
        }
    }
    ```
-3. **Client Background Keepalive:** Because cutting moves regularly take $2.0\text{s}\text{–}5.0\text{s}$, `NanoElsClient` runs an asynchronous background task (`_heartbeat_loop`) that sends `CMD.ping\n` every $500\text{ ms}$ while simulation is active, unless explicitly paused via `client.suppress_heartbeat(True)` during watchdog timeout tests.
+3. **Client Background Keepalive:** Because cutting moves regularly take $2.0\text{s}\text{–}5.0\text{s}$, `WhatElsClient` runs an asynchronous background task (`_heartbeat_loop`) that sends `CMD.ping\n` every $500\text{ ms}$ while simulation is active, unless explicitly paused via `client.suppress_heartbeat(True)` during watchdog timeout tests.
 
 ---
 
@@ -228,7 +228,7 @@ To guarantee that a disconnected or crashed test script never leaves physical st
 To ensure deterministic HIL execution and full Gearbox $Z+X$ coverage, the following fixes must be applied to `src/web/CommandDispatcher.cpp`[cite: 4]:
 
 1. **Consistent `OK:CMD.<name>\n` Replies Across All Handlers:**
-   Currently, several handlers (`handleAxisZero`, `handleAxisPosDu`, `handleAxisLimitDu`, `handleAxisClearLimit`, `handleJogStep`, `handleJogHold`, `handleJogRelease`, `handleJogStepDu`, `handleFeedStepDu`, `handleFeedStepCycle`, `handleFeedDupr`, `handleFeedMm`, `handleFeedTpi`, `handleFeedNudge`, `handleTaperRatio`, `handleTaperAngle`, `handleOn`) cast `(void)reply;` and return `true` silently[cite: 4]. Every handler that returns `true` MUST populate `*reply = "OK:CMD.<name>\n";` (and `*reply = "ERR:...\n";` on `false`) so `NanoElsClient.send()` can await command completion deterministically before inspecting state.
+   Currently, several handlers (`handleAxisZero`, `handleAxisPosDu`, `handleAxisLimitDu`, `handleAxisClearLimit`, `handleJogStep`, `handleJogHold`, `handleJogRelease`, `handleJogStepDu`, `handleFeedStepDu`, `handleFeedStepCycle`, `handleFeedDupr`, `handleFeedMm`, `handleFeedTpi`, `handleFeedNudge`, `handleTaperRatio`, `handleTaperAngle`, `handleOn`) cast `(void)reply;` and return `true` silently[cite: 4]. Every handler that returns `true` MUST populate `*reply = "OK:CMD.<name>\n";` (and `*reply = "ERR:...\n";` on `false`) so `WhatElsClient.send()` can await command completion deterministically before inspecting state.
 2. **Dual-Axis `axis:ZX` Support in `handleStartFeed()`:**
    In `handleStartFeed()`, `axis` is currently parsed into a single-axis `AxisId` (`AXIS_Z` or `AXIS_X`), losing `"ZX"` when `CMD.startFeed=axis:ZX,...` is called[cite: 4]. Update `handleStartFeed()` to extract the raw axis string (`"Z"`, `"X"`, or `"ZX"`), call `gb->setActiveAxis(axStr)`, and invoke `gb->startFeed(...)` with secondary taper coordination enabled when `strcasecmp(axStr, "ZX") == 0`.
 3. **Soft Limit Index Alignment (`handleAxisLimitDu` & `handleAxisClearLimit`):**
@@ -250,7 +250,7 @@ tests/hil/
 ├── run_tests.py                   # Main test runner CLI and dynamic test discoverer
 ├── core/
 │   ├── __init__.py
-│   ├── client.py                  # NanoElsClient: Async WS, ACK sync, 500ms heartbeat & state mirror
+│   ├── client.py                  # WhatElsClient: Async WS, ACK sync, 500ms heartbeat & state mirror
 │   ├── assertions.py              # Domain assertion helpers (assert_pos_du, assert_halted, etc.)
 │   ├── base_test.py               # HilTestCase abstract base class
 │   └── reporter.py                # ANSI Terminal & JSON reporting formatters
@@ -267,9 +267,9 @@ tests/hil/
 
 ---
 
-## 4. `NanoElsClient` Specification & State Engine
+## 4. `WhatElsClient` Specification & State Engine
 
-`NanoElsClient` manages the asynchronous WebSocket transport, command ACK synchronization, 500 ms simulation heartbeat, incoming 50 Hz packet deserialization, and predicate waiting[cite: 1].
+`WhatElsClient` manages the asynchronous WebSocket transport, command ACK synchronization, 500 ms simulation heartbeat, incoming 50 Hz packet deserialization, and predicate waiting[cite: 1].
 
 ### 4.1 Internal State Representation
 
@@ -314,15 +314,15 @@ class ControllerState:
 
 ### 4.2 Core Async Client API & Deterministic ACK Synchronization
 
-To prevent stale-cache race conditions (where `wait_for()` evaluates cached state before the ESP32 has processed a newly transmitted command), `NanoElsClient.send()` awaits the controller's `OK:` or `ERR:` response frame and optionally waits for the next fresh 50 Hz telemetry snapshot (`telemetry_seq` increment).
+To prevent stale-cache race conditions (where `wait_for()` evaluates cached state before the ESP32 has processed a newly transmitted command), `WhatElsClient.send()` awaits the controller's `OK:` or `ERR:` response frame and optionally waits for the next fresh 50 Hz telemetry snapshot (`telemetry_seq` increment).
 
 ```python
 class CommandRejectedError(RuntimeError):
     """Raised when the controller replies with ERR:<reason>."""
     pass
 
-class NanoElsClient:
-    def __init__(self, host: str = "nanoels.local", port: int = 81):
+class WhatElsClient:
+    def __init__(self, host: str = "whatels.local", port: int = 81):
         self.uri = f"ws://{host}:{port}/canonical"
         self.state = ControllerState()
         self._ws = None
@@ -524,7 +524,7 @@ class HilTestCase(ABC):
     description: str = ""
     timeout_s: float = 15.0
 
-    def __init__(self, client: NanoElsClient):
+    def __init__(self, client: WhatElsClient):
         self.client = client
 
     async def setup(self) -> None:
@@ -559,7 +559,7 @@ class HilTestCase(ABC):
 
 ## 6. Authoritative Test Catalog & Real-Life Machining Scenarios (26 Tests)
 
-Every test in the NanoELS HIL suite verifies a specific physical machining behavior across the external WebSocket boundary (`ws://<ip>:81/canonical`)[cite: 1].
+Every test in the whatELS HIL suite verifies a specific physical machining behavior across the external WebSocket boundary (`ws://<ip>:81/canonical`)[cite: 1].
 
 ---
 
@@ -970,7 +970,7 @@ Every test in the NanoELS HIL suite verifies a specific physical machining behav
 The test harness is executed via `run_tests.py`[cite: 1]:
 
 ```bash
-# Run all 26 tests against default hostname (nanoels.local)
+# Run all 26 tests against default hostname (whatels.local)
 python3 tests/hil/run_tests.py
 
 # Run against a specific IP address

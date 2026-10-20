@@ -1,6 +1,6 @@
 #include "ClientManager.h"
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 ClientManager::ClientManager() : _server(nullptr) {
@@ -79,4 +79,4 @@ ClientEndpoint* ClientManager::getEndpoint(uint8_t num) {
 }
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

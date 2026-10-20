@@ -1,8 +1,8 @@
-# NanoELS Client Architecture & Protocol Specification
+# whatELS Client Architecture & Protocol Specification
 
 > **Status:** Authoritative Specification (Subsystems 5 & 6)  
 > **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md)  
-> **Target Version:** NanoELS H5 Modular Multi-Client Suite  
+> **Target Version:** whatELS Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 13, 2026  
 > **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary & Core Role
 
-The **NanoELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the NanoELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
+The **whatELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the whatELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
 
 For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).  
 For the developer implementation walkthrough and interface reference, see: 👉 [`CLIENT_IMPLEMENTATION_GUIDE.md`](./CLIENT_IMPLEMENTATION_GUIDE.md).
@@ -29,7 +29,7 @@ For the developer implementation walkthrough and interface reference, see: 👉 
 5. **Zero-Build, 100% Offline Runtime & ROM Asset Embedding:**  
    The Web UI operates with zero npm build step or bundler dependencies. In production, assets are gzipped and embedded into firmware Flash ROM (`PROGMEM`) so firmware updates deliver UI updates simultaneously without touching the user's LittleFS filesystem. For rapid development, the controller supports serving hot-reloaded assets from LittleFS `/www/` or loaded directly via `file:///`.
 6. **Zero-WiFi Control Plane Mandate (Wired Physical Bus for Motion):**  
-   Executing real-time cutting cycles or emergency stops over wireless Wi-Fi in an industrial machine shop with heavy motor and VFD EMI noise introduces hazardous failure modes (packet drops, latency jitter, stalled cuts). The primary machine control plane between the operator console and the NanoELS core is strictly wired over physical UART serial (`Serial1`) or on-chip memory. Wi-Fi/WebSocket transports are dedicated to supervisory observation, parameter configuration, and DRO telemetry.
+   Executing real-time cutting cycles or emergency stops over wireless Wi-Fi in an industrial machine shop with heavy motor and VFD EMI noise introduces hazardous failure modes (packet drops, latency jitter, stalled cuts). The primary machine control plane between the operator console and the whatELS core is strictly wired over physical UART serial (`Serial1`) or on-chip memory. Wi-Fi/WebSocket transports are dedicated to supervisory observation, parameter configuration, and DRO telemetry.
 
 ---
 
@@ -38,7 +38,7 @@ For the developer implementation walkthrough and interface reference, see: 👉 
 ```mermaid
 graph TD
     subgraph Client_Layer ["Client Layer (Heterogeneous Terminals)"]
-        WebUI["Modern Web / Touch UI\n(lathe_dro_nanoels_controller.html)"]
+        WebUI["Modern Web / Touch UI\n(lathe_dro_whatels_controller.html)"]
         DROTablet["Wireless DRO Display\n(Dedicated Tablet)"]
         GrblSender["CNC / GRBL Sender\n(Third-party G-Code Streamer)"]
         SerialPendant["Serial Pendant / Future Adapters\n(External Client Shim)"]

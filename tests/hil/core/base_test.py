@@ -8,7 +8,7 @@ import time
 import traceback
 from typing import Any
 
-from .client import NanoElsClient
+from .client import WhatElsClient
 
 
 @dataclass
@@ -23,13 +23,13 @@ class TestResult:
 
 
 class HilTestCase(ABC):
-    """Abstract base class for all NanoELS hardware-in-the-loop test cases."""
+    """Abstract base class for all whatELS hardware-in-the-loop test cases."""
 
     name: str = "unnamed_test"
     description: str = ""
     timeout_s: float = 10.0
 
-    def __init__(self, client: NanoElsClient):
+    def __init__(self, client: WhatElsClient):
         self.client = client
         self.details: dict[str, Any] = {}
 

@@ -1,4 +1,4 @@
-# NanoELS Canonical Command & Protocol Wire Reference
+# whatELS Canonical Command & Protocol Wire Reference
 
 > **Status:** Authoritative Wire Specification  
 > **Target Subsystem:** Subsystem 5 (Command Dispatcher & Transport) & Subsystem 6 (Client Adapters)  
@@ -10,7 +10,7 @@
 
 ## 1. Overview & Syntax Rules
 
-The **NanoELS Canonical Command Surface** is the single authoritative wire interface for controlling the NanoELS motion controller. All transports (WebSocket, physical UART Serial, USB CDC) and all client endpoints (`NativeClient`, `NextionAdapter`, HIL test harness) converge on this command dictionary via [`CommandDispatcher::dispatch()`](file:///home/emil/code/nanoels/src/core/CommandDispatcher.h).
+The **whatELS Canonical Command Surface** is the single authoritative wire interface for controlling the whatELS motion controller. All transports (WebSocket, physical UART Serial, USB CDC) and all client endpoints (`NativeClient`, `NextionAdapter`, HIL test harness) converge on this command dictionary via [`CommandDispatcher::dispatch()`](../../src/core/CommandDispatcher.h).
 
 ### Command Grammar
 Every canonical message is an ASCII string terminated by a newline (`\n` or `\r\n`):

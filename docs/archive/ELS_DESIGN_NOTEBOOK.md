@@ -1,9 +1,9 @@
-# NanoELS H5 — Architectural Decision Record (ADR) & Historical Solutions Log
+# whatELS - Architectural Decision Record (ADR) & Historical Solutions Log
 
-> **Master Blueprint Reference:** The live, authoritative master system blueprint, 6-subsystem topology, file mapping, and contributor invariants are maintained in [**`NANOELS_MASTER_ARCHITECTURE.md`**](./NANOELS_MASTER_ARCHITECTURE.md).  
+> **Master Blueprint Reference:** The live, authoritative master system blueprint, 6-subsystem topology, file mapping, and contributor invariants are maintained in [**`WHATELS_MASTER_ARCHITECTURE.md`**](./WHATELS_MASTER_ARCHITECTURE.md).  
 > **Document Role:** Architectural Decision Record (ADR), Evolutionary History & Engineering Solutions Log  
 > **Status:** Living Historical Ledger  
-> **Target Platform:** NanoELS H5 Core Motion Controller & Multi-Client Suite  
+> **Target Platform:** whatELS Core Motion Controller & Multi-Client Suite  
 > **Date:** October 8, 2026  
 > **Location:** `docs/ELS_DESIGN_NOTEBOOK.md`
 
@@ -44,7 +44,7 @@ The primary goal was to bring a modern, high-resolution touch UI / tablet DRO (a
 ### Phase 2: The Breakthrough — True Architectural Modernization
 As work progressed, a crucial realization emerged: **Restricting the new modern UI and system capabilities to only what the old Russian `.ino` supported was holding the entire project back.**
 * Instead of merely putting a cosmetic web facade over legacy Arduino quirks, the decision was made to **redesign both the UI and the underlying controller functionality from first principles**.
-* The platform was reconceptualized as a modern, industrial-grade, multi-client motion system built on the **6 decoupled foundational subsystems** defined in [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).
+* The platform was reconceptualized as a modern, industrial-grade, multi-client motion system built on the **6 decoupled foundational subsystems** defined in [`WHATELS_MASTER_ARCHITECTURE.md`](./WHATELS_MASTER_ARCHITECTURE.md).
 
 ---
 

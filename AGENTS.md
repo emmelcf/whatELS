@@ -1,25 +1,19 @@
-# NanoELS Development Protocols & Agent Rules
+# whatELS Development Protocols & Agent Rules
 
 ## 1. True Pair Programming Protocol
-- **Discuss Before Writing Code**: When exploratory questions, ideas, or architectural topics are raised:
-  - **STOP**: Do NOT edit files, run implementation tools, or treat ideas as pre-approved.
-  - Review relevant specifications in `docs/` first.
-  - Analyze trade-offs, ergonomic impacts, and options in chat.
-  - Present choices and **wait for explicit user alignment and consent** before touching code.
-- **Lock-Step Alignment**: Never jump ahead or assume direction. Work iteratively:
-  $$\text{Agree on Concept} \longrightarrow \text{Approve Plan} \longrightarrow \text{Execute Slice}$$
-- **Micro-Commits & Revert Safety**: Commit focused milestones upon explicit agreement. Never execute blanket rollbacks (`git restore .`, `git reset --hard`).
+- **Discuss Before Writing Code**: On exploratory questions, ideas, or architectural topics: STOP, discuss trade-offs in chat, present choices, and wait for explicit alignment before touching code.
+- **Lock-Step Alignment**: Agree on Concept $\longrightarrow$ Approve Plan $\longrightarrow$ Execute Slice.
+- **Workflow Integrity & Honesty**: Report unaltered truth. If a feature, edge case, or decision was missed, state it plainly ("We missed [X]") and propose the fix before executing.
+- **Micro-Commits & Revert Safety**: Commit focused milestones upon explicit agreement. Indiscriminate blanket rollbacks (`git restore .`, `git reset --hard`) are strictly prohibited.
+- **Systemic Persistence**: When behavioral constraints or workflow agreements are established, codify them immediately into rules or docs.
 
 ## 2. Tooling & Execution Discipline
-- **Prefer IDE Tools Over Terminal Commands**:
-  - Use native IDE tools (`grep_search`, `list_dir`, `view_file`, `replace_file_content`, `write_to_file`) for all file inspection, search, and editing.
-  - Do NOT use bash commands (`cat`, `ls`, `find`, `grep`, `sed`) when native tools exist.
-  - Reserve `run_command` strictly for operations that genuinely require shell execution (e.g., `git`, `pio run`).
-- **Grounding in Documentation**:
-  - Always consult authoritative documents in `docs/` (e.g., `NANOELS_MASTER_ARCHITECTURE.md`, `docs/clients/ELS_CLIENT_ARCHITECTURE.md`) before suggesting designs or changes.
+- **Native Tools Over Shell**: Use native IDE tools (`grep_search`, `view_file`, `replace_file_content`, `write_to_file`) for all file inspection and editing. Reserve `run_command` strictly for `git`, `pio run`, etc.
+- **Grounding in Documentation**: Consult authoritative documents in `docs/` before suggesting designs or changes.
 
-## 3. Domain Rules & Specialized Runbooks
-- **Web UI & 800×480 Ergonomics**: Follow [`.agents/rules/lathe_hmi_and_safety.md`](file:///home/emil/code/nanoels/.agents/rules/lathe_hmi_and_safety.md)
-- **Firmware Safety & Motion Core**: Follow [`.agents/rules/firmware_and_hardware_verification.md`](file:///home/emil/code/nanoels/.agents/rules/firmware_and_hardware_verification.md)
-- **Firmware Verification**: Use skill `firmware-build-verify` (`pio run -e esp32s3`)
-- **Web UI Preview**: Use skill `web-ui-preview`
+## 3. Domain Rules & Skills
+- **Lathe Safety & Operator Invariants**: Follow [`.agents/rules/lathe_safety.md`](.agents/rules/lathe_safety.md) (`always_on`).
+- **Web UI & 800×480 Ergonomics**: Follow [`docs/clients/web_ui/ERGONOMICS.md`](docs/clients/web_ui/ERGONOMICS.md).
+- **Firmware Invariants**: Follow [`.agents/rules/firmware_and_hardware_verification.md`](.agents/rules/firmware_and_hardware_verification.md) (on demand).
+- **Reference Codebase**: Follow [`.agents/rules/reference_codebase_context.md`](.agents/rules/reference_codebase_context.md) (on demand).
+- **Skills**: `firmware-build-verify`, `web-ui-preview`.

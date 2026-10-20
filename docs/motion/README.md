@@ -1,14 +1,14 @@
-# NanoELS Motion Subsystem Architecture & Specification Index
+# whatELS Motion Subsystem Architecture & Specification Index
 
 > **Status:** Authoritative Motion Subsystem Documentation  
-> **Target Platform:** NanoELS H5 Modular Firmware (ESP32-S3)  
+> **Target Platform:** whatELS Modular Firmware (ESP32-S3)  
 > **Location:** `docs/motion/README.md`
 
 ---
 
 ## 1. Overview & Architectural Hierarchy
 
-The NanoELS motion subsystem provides deterministic, CNC-grade motion control for lathe leadscrew and cross-slide axes, supporting continuous power feeds, spindle-synchronized electronic gearing, multi-pass threading, and multi-stop electronic bed dogs.
+The whatELS motion subsystem provides deterministic, CNC-grade motion control for lathe leadscrew and cross-slide axes, supporting continuous power feeds, spindle-synchronized electronic gearing, multi-pass threading, and multi-stop electronic bed dogs.
 
 The subsystem is architected into three strictly decoupled layers:
 

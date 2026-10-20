@@ -1,4 +1,4 @@
-# NanoELS Phase 1 — Motion Core Implementation Plan & Execution Ledger
+# whatELS Phase 1 — Motion Core Implementation Plan & Execution Ledger
 
 > **Status:** Completed & Archived Historical Runbook  
 > **Target Subsystems:** Subsystem 1 (HAL & Hardware Timing), Subsystem 2 (Kinematic Motion Engine), Subsystem 3 (Mode Contract)  

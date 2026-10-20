@@ -1,4 +1,4 @@
-# NanoELS Phase 2 — End-to-End Motion Integration, Stepper HAL & Legacy Decommissioning Plan
+# whatELS Phase 2 — End-to-End Motion Integration, Stepper HAL & Legacy Decommissioning Plan
 
 > **Status:** Completed & Archived Historical Runbook  
 > **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Core 1 Real-Time Wiring), Subsystem 3 (Mode Migration & Legacy Retirement)  
@@ -112,7 +112,7 @@ With **Phase 1** complete, the modular kinematic kernel, thread synchronizer, mu
 
 ### Slice 5: Legacy Motion Core Decommissioning & Cleanup
 - **Primary Goal:** Eliminate legacy technical debt by safely deleting monolithic procedural files and cutting over remaining consumers.
-- **Governing Specs:** [`NANOELS_MASTER_ARCHITECTURE.md`](../NANOELS_MASTER_ARCHITECTURE.md)
+- **Governing Specs:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md)
 - **Target Files:**
   - Delete `src/motion/Motion.cpp` and `src/motion/Motion.h`.
   - Delete `src/motion/Axis.cpp` and `src/motion/Axis.h`.

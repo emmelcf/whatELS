@@ -140,7 +140,7 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
 ---
 
 ## 6. References
-* [`docs/NANOELS_MASTER_ARCHITECTURE.md`](../NANOELS_MASTER_ARCHITECTURE.md)
+* [`docs/WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md)
 * [`docs/ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md)
 * [`docs/ELS_CORE_STATE_MODEL.md`](../ELS_CORE_STATE_MODEL.md)
 * [`docs/ELS_CLIENT_ARCHITECTURE.md`](../ELS_CLIENT_ARCHITECTURE.md)

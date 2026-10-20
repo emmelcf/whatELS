@@ -4,7 +4,7 @@
 
 /**
  * @file LatheProfile.h
- * @brief Authoritative Machine Profile and Hardware Capabilities specification for NanoELS.
+ * @brief Authoritative Machine Profile and Hardware Capabilities specification for whatELS.
  * @details Implements the Lathe Machine Profile architecture defined in LATHE_MACHINE_PROFILE.md.
  */
 

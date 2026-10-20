@@ -377,11 +377,11 @@
     const spin = { active: false, motorOn: false, cw: true, rpm: 300 };
     const signedRpm = () => (spin.active && spin.motorOn ? (spin.cw ? 1 : -1) * spin.rpm : 0);
     const qsend = (cmd) => {
-      const c = window.nanoelsClient;
+      const c = window.whatelsClient;
       if (c && typeof c.sendRaw === 'function') c.sendRaw(cmd + '\n', '', true); // quiet: keep it out of the TX log
     };
     const supported = () => {
-      const c = window.nanoelsClient;
+      const c = window.whatelsClient;
       return !!(c && c.state && Array.isArray(c.state.features) && c.state.features.includes('spindleSim'));
     };
     const pushSim = () => { if (supported() || !spin.active) { if (supported()) qsend(`CMD.spindleSim=${spin.active ? 1 : 0},${signedRpm()}`); } };
@@ -480,8 +480,9 @@
       _hasFired: false
     };
 
-    if (window.nanoelsClient) {
-      window.nanoelsClient.addEventListener('telemetry', (e) => {
+    const client = window.whatelsClient;
+    if (client) {
+      client.addEventListener('telemetry', (e) => {
         const d = e.detail;
         if (!d) return;
         core._hasFired = true;
@@ -502,7 +503,7 @@
         if (d.connected !== undefined) core.connected = d.connected;
         if (d.backend !== undefined) core.backend = d.backend;
       });
-      window.nanoelsClient.addEventListener('connection', (e) => {
+      client.addEventListener('connection', (e) => {
         if (e.detail) {
           core.connected = !!e.detail.connected;
           core.backend = e.detail.mode || 'live';

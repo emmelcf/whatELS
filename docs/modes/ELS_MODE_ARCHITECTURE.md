@@ -1,7 +1,7 @@
-# NanoELS Generalized Mode Architecture Specification
+# whatELS Generalized Mode Architecture Specification
 
 > **Status:** Draft / Proposal for Review  
-> **Target Version:** NanoELS H5 Modular Architecture (Firmware & Multi-Client Suite)  
+> **Target Version:** whatELS Modular Architecture (Firmware & Multi-Client Suite)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
 > **Location:** `docs/ELS_MODE_ARCHITECTURE.md`  
@@ -743,7 +743,7 @@ When the controller examines registered modes against `LatheConfiguration.capabi
 
 ### 5.5 Client Translation Layer: Reshaping & Breaking Hierarchy for Presentation
 
-While the controller’s code-inferred hierarchy represents **mechanical and kinematic truth**, the **Client Translation Layer** (e.g. `nanoels-service.js` or UI view managers) has full authority to **reshape, recombine, or alias that hierarchy** for optimal user experience:
+While the controller’s code-inferred hierarchy represents **mechanical and kinematic truth**, the **Client Translation Layer** (e.g. `whatels-service.js` or UI view managers) has full authority to **reshape, recombine, or alias that hierarchy** for optimal user experience:
 
 1. **Recombining Unrelated Classes into Unified Workspaces:**
    - In the controller, `GearZMode` (spindle sync), `AsyncMode` (velocity timed), and `ConeMode` (linear vector interpolation) inherit from completely different kinematic kernels.

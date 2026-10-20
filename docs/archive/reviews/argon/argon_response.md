@@ -1,7 +1,7 @@
-# NanoELS H5 — Architectural Peer Review & Safety Audit
+# whatELS — Architectural Peer Review & Safety Audit
 
 > **Document Type:** Principal Embedded Systems & Motion Control Peer Review  
-> **Target System:** NanoELS H5 Modular Architecture (ESP32-S3)[cite: 1]  
+> **Target System:** whatELS Modular Architecture (ESP32-S3)[cite: 1]  
 > **Reviewed Compendium:** `UNABRIDGED_ARCHITECTURE_COMPENDIUM.md`[cite: 1]  
 > **Date:** October 15, 2026  
 
@@ -11,7 +11,7 @@
 
 **Overall Architectural Readiness Score: 86% Ready for Physical Lathe Iron**
 
-The **NanoELS H5** architecture is an exceptionally well-structured embedded systems specification[cite: 1]. The decomposition of a monolithic procedural sketch into a 6-subsystem architecture, the strict core isolation between Core 0 (supervisory/network) and Core 1 (hard real-time kinematics), the canonical integer deci-micron (`du`) coordinate system, the lossless operator intent state model (`K`, `I`, `C`, `P`), and the sparse NVS override persistence engine represent top-tier CNC controller design[cite: 1].
+The **whatELS** architecture is an exceptionally well-structured embedded systems specification[cite: 1]. The decomposition of a monolithic procedural sketch into a 6-subsystem architecture, the strict core isolation between Core 0 (supervisory/network) and Core 1 (hard real-time kinematics), the canonical integer deci-micron (`du`) coordinate system, the lossless operator intent state model (`K`, `I`, `C`, `P`), and the sparse NVS override persistence engine represent top-tier CNC controller design[cite: 1].
 
 However, before commissioning this firmware on physical lathe iron with high-torque servos or closed-loop steppers, **three physical-safety `BLOCKER` issues and five `CRITICAL` concurrency/timing hazards must be resolved:**
 
@@ -126,7 +126,7 @@ However, before commissioning this firmware on physical lathe iron with high-tor
 | **`[KIN-04]`** | **`ENHANCEMENT`** | `SpindleSyncParams`, `VelocityFeedParams`, `StrokeParams` (`MODE_INTEGRATION_CONTRACT.md` §2.2) | **Missing Dual-Axis / Taper Primitive Parameters:** Motion primitive structs only specify a single `AxisId` with no ratio fields for `ZX` cones or tapered threads[cite: 1]. | Add `enableSecondaryAxis`, `secondaryAxis`, `secondaryRatioNum`, and `secondaryRatioDen` to motion primitive structs (See **Fix `[KIN-04]`**). |
 | **`[KIN-05]`** | **`ENHANCEMENT`** | `AxisState` Conversions (`MOTION_ENGINE_SPECIFICATION.md` §2.3) | **Truncation Drift in `stepsToDu` and `duToSteps`:** C++ integer division truncates toward zero, losing 1 step on round-trip conversion for fractional `du/step` pitches[cite: 1]. | Use symmetric half-way rounding (`(num >= 0 ? num + den/2 : num - den/2) / den`) in both conversion functions (See **Fix `[KIN-05]`**). |
 | **`[HAL-02]`** | **`ENHANCEMENT`** | `StepTimingConfig` (`HAL_SPECIFICATION.md` §2.1 & `LATHE_MACHINE_PROFILE.md` §3.3) | **Pulse Width Unit Mismatch (`us` vs `ns`) & Non-Blocking `enableDelayMs`:** `StepTimingConfig` uses `uint16_t` $\mu\text{s}$ while `AxisHardwareConfig` uses $\text{ns}$; `enableDelayMs` needs non-blocking arming[cite: 1]. | Standardize on nanoseconds (`stepPulseWidthNs`) and track `m_enableTimestampUs` to gate step output asynchronously until `enableDelayMs` elapses[cite: 1]. |
-| **`[SAFE-02]`** | **`ENHANCEMENT`** | Zero-WiFi Control Plane Mandate (`NANOELS_MASTER_ARCHITECTURE.md` §1.3 & `ELS_CLIENT_ARCHITECTURE.md` §5.3) | **Specification Contradiction on Wi-Fi Motion Commands:** §1.3 forbids motion commands over Wi-Fi while §10.1 defines `CMD.startFeed` and `CMD.jogHold` over WebSockets[cite: 1]. | Clarify that autonomous on-chip cycles may be started/stopped over WS, and enforce a strict $200\text{ ms}$ Core 1 heartbeat lease timer for `CMD.jogHold`[cite: 1]. |
+| **`[SAFE-02]`** | **`ENHANCEMENT`** | Zero-WiFi Control Plane Mandate (`WHATELS_MASTER_ARCHITECTURE.md` §1.3 & `ELS_CLIENT_ARCHITECTURE.md` §5.3) | **Specification Contradiction on Wi-Fi Motion Commands:** §1.3 forbids motion commands over Wi-Fi while §10.1 defines `CMD.startFeed` and `CMD.jogHold` over WebSockets[cite: 1]. | Clarify that autonomous on-chip cycles may be started/stopped over WS, and enforce a strict $200\text{ ms}$ Core 1 heartbeat lease timer for `CMD.jogHold`[cite: 1]. |
 | **`[STATE-01]`** | **`NOTE`** | `MotionTelemetrySnapshot`, `StatusSnapshot`, `KinematicsState` (`ELS_CORE_STATE_MODEL.md` §4.2, §5.2) | **Triple Struct Redundancy for Kinematics:** Three separate structs define Core 1 $\to$ Core 0 kinematic state with slightly different field names[cite: 1]. | Unify into a single canonical `KinematicsState` struct used directly by `TelemetryMailbox` and `MachineModel`[cite: 1]. |
 
 ---

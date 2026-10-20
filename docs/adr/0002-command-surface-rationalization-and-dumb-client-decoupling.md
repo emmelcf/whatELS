@@ -101,7 +101,7 @@ For clients that lack local state retention (such as the Nextion LCD or simple s
                                     │
                                     ▼
 +─────────────────────────────────────────────────────────────────────────+
-| CANONICAL CORE CONTROLLER (NanoELS Motion Kernel)                       |
+| CANONICAL CORE CONTROLLER (whatELS Motion Kernel)                       |
 | - CommandDispatcher: Pure, atomic, stateless ingress                    |
 | - State Model: IDLE vs. IN_MOTION (no idle tab awareness)               |
 | - Kinematic Kernel: Motion::startFeed(req), stepVelocity, stepSync      |

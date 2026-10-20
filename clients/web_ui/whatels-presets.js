@@ -1,5 +1,5 @@
 /**
- * Standard Machining Presets for NanoELS Lathe Controller
+ * Standard Machining Presets for whatELS Lathe Controller
  * Collets, spindles, standard taper pins, and threading standards.
  */
 (function(window) {

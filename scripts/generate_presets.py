@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 scripts/generate_presets.py
-Generates canonical, granular machining preset JSON files for NanoELS.
+Generates canonical, granular machining preset JSON files for whatELS.
 Standards:
   - ISO 261 / ISO 965-1 (Metric Coarse & Fine Threads)
   - ASME B1.1 (Unified National UNC & UNF Threads)

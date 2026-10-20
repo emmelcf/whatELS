@@ -28,7 +28,7 @@ def print_terminal_report(results: list[TestResult], target: str) -> None:
 
     print()
     print("=" * 80)
-    print(f"{BOLD}{CYAN}                    NANOELS HARDWARE-IN-THE-LOOP TEST SUITE{RESET}")
+    print(f"{BOLD}{CYAN}                    WHATELS HARDWARE-IN-THE-LOOP TEST SUITE{RESET}")
     print(f"Target: {target} | Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     print(f"{BOLD}{'TEST NAME':<34} {'STATUS':<9} {'DURATION':<10} {'DETAILS'}{RESET}")

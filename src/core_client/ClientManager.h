@@ -5,7 +5,7 @@
 #include "transports/WebSocketTransport.h"
 #include <WebSocketsServer.h>
 
-namespace nanoels {
+namespace whatels {
 namespace core_client {
 
 class ClientManager {
@@ -35,4 +35,4 @@ public:
 };
 
 } // namespace core_client
-} // namespace nanoels
+} // namespace whatels

@@ -1,7 +1,7 @@
-# NanoELS Motion Engine & Kinematic Core Specification
+# whatELS Motion Engine & Kinematic Core Specification
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Motion Control Specialists  
 > **Location:** `docs/motion/MOTION_ENGINE_SPECIFICATION.md`  
 > **Layer Dependency:** Built on `docs/motion/HAL_SPECIFICATION.md`
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary & Architectural Scope
 
-The **Motion Engine (`MotionEngine`)** is the mathematical and kinematic core of NanoELS. It translates operator intent (commanded feed rates, leadscrew thread leads, target distances, virtual soft limits) into precisely timed, acceleration-profiled step pulse sequences executed via `IStepperHAL`.
+The **Motion Engine (`MotionEngine`)** is the mathematical and kinematic core of whatELS. It translates operator intent (commanded feed rates, leadscrew thread leads, target distances, virtual soft limits) into precisely timed, acceleration-profiled step pulse sequences executed via `IStepperHAL`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

@@ -20,7 +20,7 @@ enum LimitDirection : uint8_t {
 
 /**
  * @file SettingsService.h
- * @brief Authoritative configuration manager and parameter broker for NanoELS H5.
+ * @brief Authoritative configuration manager and parameter broker for whatELS.
  * @details Implements the 4-tier properties taxonomy, active lathe machine profile,
  *          sparse NVS overrides, and universal reset architecture.
  */

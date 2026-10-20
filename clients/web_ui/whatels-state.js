@@ -1,5 +1,5 @@
 /**
- * Alpine Reactive Store for NanoELS MachineModel
+ * Alpine Reactive Store for whatELS MachineModel
  * Mirrors the ESP32 MachineModel (Kinematics, Intent, Cycle, Properties)
  * Pure unidirectional data flow with zero floating-point accumulation drift.
  */
@@ -209,8 +209,9 @@ function registerMachineStore() {
     // Store Actions
     // -------------------------------------------------------------
     cycleMeasure() {
-      if (window.nanoelsClient) {
-        window.nanoelsClient.cycleMeasure();
+      const c = window.whatelsClient;
+      if (c) {
+        c.cycleMeasure();
       } else {
         this.measure = this.measure === 0 ? 1 : 0;
       }
@@ -221,8 +222,9 @@ function registerMachineStore() {
     },
 
     cycleJogStep() {
-      if (window.nanoelsClient) {
-        window.nanoelsClient.cycleStep();
+      const c = window.whatelsClient;
+      if (c) {
+        c.cycleStep();
       }
     },
 
@@ -232,15 +234,17 @@ function registerMachineStore() {
 
     start() {
       this.isOn = true;
-      if (window.nanoelsClient) {
-        window.nanoelsClient.startCycle();
+      const c = window.whatelsClient;
+      if (c) {
+        c.startCycle();
       }
     },
 
     stop() {
       this.isOn = false;
-      if (window.nanoelsClient) {
-        window.nanoelsClient.stopCycle();
+      const c = window.whatelsClient;
+      if (c) {
+        c.stopCycle();
       }
     },
 
@@ -293,15 +297,16 @@ function registerMachineStore() {
 
   function attachClient() {
     const s = window.Alpine && Alpine.store && Alpine.store('machine');
-    if (s && window.nanoelsClient && !s._clientAttached) {
+    const c = window.whatelsClient;
+    if (s && c && !s._clientAttached) {
       s._clientAttached = true;
-      window.nanoelsClient.addEventListener('telemetry', (e) => {
+      c.addEventListener('telemetry', (e) => {
         if (e.detail) {
           s.updateFromTelemetry(e.detail);
         }
       });
 
-      window.nanoelsClient.addEventListener('connection', (e) => {
+      c.addEventListener('connection', (e) => {
         s.connected = !!e.detail.connected;
         if (e.detail.mode) s.backend = e.detail.mode;
       });

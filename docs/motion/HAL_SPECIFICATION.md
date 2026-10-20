@@ -1,7 +1,7 @@
-# NanoELS Hardware Abstraction Layer (HAL) Specification
+# whatELS Hardware Abstraction Layer (HAL) Specification
 
 > **Status:** Authoritative Engineering Specification  
-> **Target Version:** NanoELS H5 Modular Architecture  
+> **Target Version:** whatELS Modular Architecture  
 > **Audience:** Firmware Engineers, Hardware Integrators, Motion Core  
 > **Location:** `docs/motion/HAL_SPECIFICATION.md`
 
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary & Architectural Role
 
-The **Hardware Abstraction Layer (HAL)** is the lowest software layer in the NanoELS motion controller. It provides deterministic, typed, non-blocking hardware interfaces to physical pins, timer peripherals, and hardware pulse counters on the ESP32-S3 microcontroller.
+The **Hardware Abstraction Layer (HAL)** is the lowest software layer in the whatELS motion controller. It provides deterministic, typed, non-blocking hardware interfaces to physical pins, timer peripherals, and hardware pulse counters on the ESP32-S3 microcontroller.
 
 ### 1.1 Strict Layer Boundaries & Invariants
 1. **Zero Domain Logic:** The HAL knows **nothing** about millimeters, inches, threads per inch, conical tapers, workpiece coordinates, or cutting cycles.

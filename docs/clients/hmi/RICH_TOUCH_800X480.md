@@ -1,4 +1,4 @@
-# NanoELS H5 — Rich Touch HMI Profile (800×480 Capacitive Touch)
+# whatELS — Rich Touch HMI Profile (800×480 Capacitive Touch)
 ## Industrial Ergonomics, Canvas Topology & Human-Machine Interface Standards
 *Target Devices:* 5.0"–7.0" 800×480 Landscape Capacitive Panels (Web UI Browser, Native ESP32-S3 LVGL 9, Companion Tablets)
 
@@ -11,7 +11,7 @@
 Operating an electronic leadscrew on a manual metal lathe involves high spindle speeds, sharp carbide tooling, and tight clearances near chuck jaws. The HMI enforces four non-negotiable physical safety invariants:
 
 1. **Radical Hardware Transparency:**
-   * NanoELS firmware maintains strictly a single pair of physical hardware limit registers per axis (`z_min`/`z_max`, `x_min`/`x_max`).
+   * whatELS firmware maintains strictly a single pair of physical hardware limit registers per axis (`z_min`/`z_max`, `x_min`/`x_max`).
    * The HMI must never render "ghost" limits or synthetic software safety envelopes that the motion controller does not physically enforce. What displays on the DRO limit chips reflects the exact hardware boundary active in the motion core.
 2. **Dimension-First Machining Intent:**
    * Machinists think in drawing dimensions (e.g., "turn a 25.0 mm shoulder" or "face 1.5 mm off the stock"), not arbitrary machine coordinates.

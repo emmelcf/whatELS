@@ -1,4 +1,4 @@
-# NanoELS Historical & Architectural Audit Archive
+# whatELS Historical & Architectural Audit Archive
 
 > **Location:** `docs/archive/`  
 > **Status:** Read-Only Historical Snapshots & Completed Audits

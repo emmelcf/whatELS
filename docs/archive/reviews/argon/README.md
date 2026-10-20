@@ -10,7 +10,7 @@ This directory preserves the historical documents and comprehensive response dos
 | :--- | :--- |
 | [`argon_response.md`](./argon_response.md) | Initial architectural audit response and structured breakdown of all findings. |
 | [`CONSOLIDATED_REVIEW_DOSSIER.md`](./CONSOLIDATED_REVIEW_DOSSIER.md) | Master system and motion architecture dossier submitted for peer review. |
-| [`UNABRIDGED_ARCHITECTURE_COMPENDIUM.md`](./UNABRIDGED_ARCHITECTURE_COMPENDIUM.md) | Complete unabridged architecture compendium covering all 6 NanoELS subsystems. |
+| [`UNABRIDGED_ARCHITECTURE_COMPENDIUM.md`](./UNABRIDGED_ARCHITECTURE_COMPENDIUM.md) | Complete unabridged architecture compendium covering all 6 whatELS subsystems. |
 
 ---
 
