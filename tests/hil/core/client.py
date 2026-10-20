@@ -40,7 +40,7 @@ class ControllerState:
     tp_val: float = 0.0
 
     # Properties Domain (P.*)
-    screw_z_du: int = 40000
+    screw_z_du: int = 20000
     motor_steps_z: int = 800
     encoder_ppr: int = 1200  # Default 1200 lines (4x quadrature = 4800 counts/spindle rev)
 

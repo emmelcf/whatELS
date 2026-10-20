@@ -715,11 +715,11 @@ class WhatelsEmulator {
              `P.abs=1\n` +
              `P.zDro=0\n` +
              `P.xDro=0\n` +
-             `P.screwZDu=40000\n` +
-             `P.screwXDu=40000\n` +
+             `P.screwZDu=20000\n` +
+             `P.screwXDu=20000\n` +
              `P.motorStepsZ=800\n` +
              `P.motorStepsX=800\n` +
-             `P.encoderPpr=2400\n`;
+             `P.encoderPpr=1200\n`;
     }
     return out;
   }
@@ -766,8 +766,8 @@ class WhatelsEmulator {
   _emitSettingsGet(key) {
     const k = key.toLowerCase();
     const props = {
-      screwZDu: 40000,
-      screwXDu: 40000,
+      screwZDu: 20000,
+      screwXDu: 20000,
       motorStepsZ: 800,
       motorStepsX: 800,
       encoderPpr: 1200,

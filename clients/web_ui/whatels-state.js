@@ -61,11 +61,11 @@ function registerMachineStore() {
     abs: true,          // Absolute vs Incremental
     zDro: false,        // Physical optical/magnetic DRO active
     xDro: false,
-    screwZDu: 40000,
-    screwXDu: 40000,
+    screwZDu: 20000,
+    screwXDu: 20000,
     motorStepsZ: 800,
     motorStepsX: 800,
-    encoderPpr: 2400,
+    encoderPpr: 1200,
 
     // Connection & UI diagnostics
     connected: false,
