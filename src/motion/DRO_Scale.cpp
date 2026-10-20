@@ -99,3 +99,13 @@ void DRO_Scale::clearCount() {
     }
     positionOffset = 0.0f;
 }
+
+void DRO_Scale::setScaleFactor(float factor) {
+    if (factor > 0.0f) {
+        scaleFactor = factor;
+    }
+}
+
+float DRO_Scale::getScaleFactor() const {
+    return scaleFactor;
+}

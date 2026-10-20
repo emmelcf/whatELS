@@ -33,6 +33,8 @@ public:
     // --- New Functions for Known Diameter ---
     float getRawPosition();  // Gets the raw, un-offseted position
     void setPosition(float desiredPosition); // Calculates and sets the new offset
+    void setScaleFactor(float factor);       // Updates scale factor (pulses/mm)
+    float getScaleFactor() const;            // Gets current scale factor
 };
 
 extern DRO_Scale xScale;
