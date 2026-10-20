@@ -265,11 +265,11 @@ struct MachineProperties {
   bool  isAbsoluteMode;     // True for absolute machine coords, false for incremental DRO
   bool  zDroActive;         // True if physical glass/magnetic scale is reading Z
   bool  xDroActive;         // True if physical glass/magnetic scale is reading X
-  long  screwZDu;           // Physical Z leadscrew pitch in deci-microns (e.g. 40000 = 4.0mm)
+  long  screwZDu;           // Physical Z leadscrew pitch in deci-microns (e.g. 20000 = 2.0mm)
   long  screwXDu;           // Physical X leadscrew pitch in deci-microns
   long  motorStepsZ;        // Microsteps per revolution on Z motor
   long  motorStepsX;        // Microsteps per revolution on X motor
-  long  encoderPpr;         // Spindle encoder pulses per revolution (e.g. 2400)
+  long  encoderPpr;         // Spindle encoder pulses per revolution (e.g. 1200, 4800 CPR)
   float deadbandAngle;      // Dynamic deadband threshold for spindle angle telemetry
   bool  deadbandAngleAuto;  // True if deadband is auto-derived from encoder PPR
   float deadbandTurns;      // Dynamic deadband threshold for spindle turns telemetry
@@ -421,7 +421,7 @@ I.thPitch=1.500
 I.feedRev=0
 C.opIdx=3
 C.passes=6
-P.screwZDu=40000
+P.screwZDu=20000
 ```
 
 ### 7.2 Multi-Domain Pull Hydration (`CMD.get=`)
@@ -465,9 +465,9 @@ Alpine.store('machine', {
   opIdx: 0,
 
   // Domain 'P': Properties
-  screwZDu: 40000,
+  screwZDu: 20000,
   motorStepsZ: 800,
-  encoderPpr: 2400,
+  encoderPpr: 1200,
 
   // Client-Local Presentation Settings (Zero Wire Traffic)
   measure: 0,  // 0: Metric (mm), 1: Imperial (in)

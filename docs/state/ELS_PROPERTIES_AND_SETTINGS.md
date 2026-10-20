@@ -482,7 +482,7 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `MOTOR_STEPS_Z` | `machine.z.motorSteps` | `steps/rev` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `z.motorSteps` / `activeMachineProfile`. |
 | `MOTOR_STEPS_X` | `machine.x.motorSteps` | `steps/rev` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `x.motorSteps` / `activeMachineProfile`. |
 | `ENCODER_PPR` | `machine.spindle.encoderPpr` | `ppr` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.spindle.effectivePpr()`. |
-| `ENCODER_BACKLASH` | `machine.spindle.backlash` | `pulses` | **KEEP & MODERNIZE:** Encoder edge filter on spindle direction reverse. |
+| `ENCODER_BACKLASH` | `machine.spindle.backlash` | `pulses` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Spindle sync uses direct phase accumulator tracking without synthetic backlash compensation. |
 | `BACKLASH_DU_Z` | `machine.z.backlashDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.backlashDu()`. |
 | `BACKLASH_DU_X` | `machine.x.backlashDu` | `du` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.xAxis.backlashDu()`. |
 | `MAX_TRAVEL_MM_Z` | `machine.dimensions.maxZTravelMm` | `mm` | **RETIRED & SUPERSEDED:** Removed from `Config.h`. Sourced directly from `activeMachineProfile.zAxis.limits.travelMaxMm`. |
@@ -503,8 +503,8 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `wifi_ssid` | `sys.wifi.ssid` | string | **KEEP:** Network credentials. |
 | `wifi_password` | `sys.wifi.password` | string | **KEEP:** Network credentials (write-only / masked). |
 | `wifi_hostname` | `sys.wifi.hostname` | string | **KEEP:** mDNS network discovery hostname. |
-| `Z_SCALE_PULSES_PER_MM` | `sys.dro.zPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
-| `X_SCALE_PULSES_PER_MM` | `sys.dro.xPulsesPerMm` | float | **KEEP:** Optical scale quadrature calibration factor. |
+| `Z_SCALE_PULSES_PER_MM` | `sys.dro.zPulsesPerMm` | float | **KEEP & DYNAMIC:** Optical scale quadrature calibration factor. Dynamically updates `zScale` via `applyDerivedMachineConfig()`. |
+| `X_SCALE_PULSES_PER_MM` | `sys.dro.xPulsesPerMm` | float | **KEEP & DYNAMIC:** Optical scale quadrature calibration factor. Dynamically updates `xScale` via `applyDerivedMachineConfig()`. |
 | `PULSE_PER_REV_Z/X` | `sys.mpg.zPulsesPerRev` | float | **KEEP:** Manual Pulse Generator handwheel encoder resolution. |
 | `JOYSTICK_*` (15 fields) | `sys.joystick.*` | mixed | **ENCAPSULATED:** Removed loose globals from `Config.h`/`Config.cpp`. Encapsulated into `struct JoystickConfig joystickConfig` in `src/input/Input.h`. |
 | `keyboardBindings[]` | `sys.keys.bindings` | table | **KEEP:** USB keyboard physical key mapping table. |
@@ -546,6 +546,8 @@ The legacy `h5.ino` code and early `Config.cpp` module contained over 45 propert
 | `joystickConfig`<br>`DEFAULT_JOYSTICK_*` (18 macros) | Joystick alias and default macros in `Config.h` | **DISCARD MACROS:** Sourced directly from `sysConfig.joystick.*` and standard `JoystickConfig{}` defaults. |
 | `CFG_SCREW_Z/X_DU`<br>`CFG_MOTOR_STEPS_Z/X`<br>`CFG_SPEED_START_Z/X` (20 axis iron keys) | Dead axis iron NVS keys in `Config.h` | **DISCARD DEAD KEYS:** Machine iron settings are managed through JSON machine profiles (`activeMachineProfile`). |
 | `PREF_DUPR`<br>`PREF_POS_Z/X`<br>`PREF_LEFT/RIGHT_STOP_*` (25 volatile keys) | Legacy `h5.ino` volatile coordinates/stops NVS keys | **DISCARD DEAD KEYS:** Kinematics are strictly volatile in RAM and reset to origin on boot per ADR 12. |
+| `ENCODER_BACKLASH`<br>`AXIS_ENCODER_BACKLASH`<br>`DEFAULT_ENCODER_PPR` | Dead spindle and encoder fallback globals in `Config.h` | **DISCARD AS GLOBALS:** Removed unused loose globals and macros from `Config.h`/`Config.cpp`. Sourced cleanly from `activeMachineProfile.spindle`. |
+| `SAFE_DISTANCE_DU`<br>`SLOT_LEFT_REDUCTION_DU` | Dead cycle fallback globals in `Config.h` / `Config.cpp` | **DISCARD AS GLOBALS:** Fully removed from `Config.h`/`Config.cpp`. Managed exclusively as runtime cycle/intent parameters. |
 
 ---
 
