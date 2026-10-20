@@ -117,9 +117,6 @@ const unsigned long NEXTION_ACK_TIMEOUT_MS = 5000;
 #define TIMER_FREQ 1000000 // 1MHz async timer frequency
 
 // Spindle Optical Rotary Encoder & PCNT Filters
-const int DEFAULT_ENCODER_PPR = 1200;
-const int DEFAULT_ENCODER_BACKLASH = 3;
-const int DEFAULT_AXIS_ENCODER_BACKLASH = 0;
 const int ENCODER_FILTER = 1;
 const int PCNT_LIM = 31000;
 const int PCNT_CLEAR = 30000;
@@ -210,8 +207,6 @@ struct ControllerConfig {
 
 extern ControllerConfig sysConfig;
 
-const long DEFAULT_SAFE_DISTANCE_DU = 5000;
-const long DEFAULT_SLOT_LEFT_REDUCTION_DU = 0;
 const float TPI_ROUND_EPSILON = 0.03f;
 
 // =============================================================================
@@ -395,13 +390,9 @@ extern const int KEYBOARD_BINDING_COUNT;
 
 // Machine Configuration Keys
 #define CFG_VERSION "v"
-#define CFG_ENCODER_BACKLASH "encBacklash"
-#define CFG_AXIS_ENCODER_BACKLASH "axisEncBacklash"
 #define CFG_STEP_TIME_MS "stepMs"
 #define CFG_DELAY_BETWEEN_STEPS_MS "stepDelay"
 #define CFG_ENABLE_CONTINUOUS_MOVE "contStep"
-#define CFG_SAFE_DISTANCE_DU "safeDistDu"
-#define CFG_SLOT_LEFT_REDUCTION_DU "slotLeftDu"
 #define CFG_PULSE_PER_REVOLUTION "pulseRev"
 #define CFG_PULSE_PER_REVOLUTION_Z "zPulseRev"
 #define CFG_PULSE_PER_REVOLUTION_X "xPulseRev"
@@ -439,12 +430,6 @@ extern const int KEYBOARD_BINDING_COUNT;
 // =============================================================================
 
 // Global Variables (extern declarations)
-extern int ENCODER_BACKLASH;
-extern int AXIS_ENCODER_BACKLASH;
-
-extern long SAFE_DISTANCE_DU;
-extern long SLOT_LEFT_REDUCTION_DU;
-
 extern bool SHOW_KEY_PRESSES;
 
 // Helpers

@@ -92,28 +92,14 @@ void setup() {
 
   int indexPin = activeMachineProfile.spindle.encoder.hasIndex ? activeMachineProfile.spindle.encoder.indexPin : -1;
   uint16_t spindlePpr = activeMachineProfile.spindle.encoder.ppr;
-  float pulleyRatio = activeMachineProfile.spindle.pulleyRatio > 0.0f ? activeMachineProfile.spindle.pulleyRatio : 1.0f;
+  float pulleyRatio = activeMachineProfile.spindle.effectivePulleyRatio();
   encoderHal.init(ENC_A, ENC_B, indexPin, spindlePpr, pulleyRatio);
 
   MotionEngine& engine = MotionEngine::instance();
   engine.setStepperHAL(&stepperHal);
   engine.setEncoderHAL(&encoderHal);
 
-  AxisGeometry zGeom;
-  zGeom.screwPitchDu = activeMachineProfile.zAxis.leadscrewPitchDu();
-  zGeom.motorStepsPerRev = activeMachineProfile.zAxis.motorSteps();
-  zGeom.backlashSteps = duToSteps(zGeom, activeMachineProfile.zAxis.backlashDu());
-  zGeom.maxVelocityMmSec = activeMachineProfile.zAxis.maxVelocityMmMin / 60.0f;
-  zGeom.maxAccelMmSec2 = activeMachineProfile.zAxis.maxAccelMmSec2;
-  engine.configureAxis(AXIS_Z, zGeom, defaultTiming);
-
-  AxisGeometry xGeom;
-  xGeom.screwPitchDu = activeMachineProfile.xAxis.leadscrewPitchDu();
-  xGeom.motorStepsPerRev = activeMachineProfile.xAxis.motorSteps();
-  xGeom.backlashSteps = duToSteps(xGeom, activeMachineProfile.xAxis.backlashDu());
-  xGeom.maxVelocityMmSec = activeMachineProfile.xAxis.maxVelocityMmMin / 60.0f;
-  xGeom.maxAccelMmSec2 = activeMachineProfile.xAxis.maxAccelMmSec2;
-  engine.configureAxis(AXIS_X, xGeom, defaultTiming);
+  applyDerivedMachineConfig();
 
   engine.startTask(22, 1);
   DEBUG_PRINTLN("MotionEngine task started on Core 1 (priority 22).");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "kernel/AxisState.h"
 
 /**
  * @file LatheProfile.h
@@ -81,9 +82,14 @@ struct SpindleHardwareConfig {
   uint8_t                 vfdModbusAddress; // RS-485 Modbus RTU address
   float                   vfdMaxHz;         // Maximum inverter frequency (e.g. 60Hz, 400Hz)
 
+  // Method helper: Effective Spindle Pulley Ratio
+  float effectivePulleyRatio() const {
+    return pulleyRatio > 0.0f ? pulleyRatio : 1.0f;
+  }
+
   // Method helper: Effective Spindle PPR = native PPR * pulley ratio
   float effectivePpr() const {
-    return (float)encoder.ppr * (pulleyRatio > 0.0f ? pulleyRatio : 1.0f);
+    return (float)encoder.ppr * effectivePulleyRatio();
   }
 
   // Method helper: 4X quadrature Counts Per Spindle Rev (CPR)
@@ -163,6 +169,17 @@ struct AxisHardwareConfig {
   }
   long accelerationSteps() const {
     return (long)round(maxAccelMmSec2 * stepsPerMm);
+  }
+
+  // Pure kinematic kernel geometry derivation
+  AxisGeometry toAxisGeometry() const {
+    AxisGeometry g;
+    g.screwPitchDu = leadscrewPitchDu();
+    g.motorStepsPerRev = motorSteps();
+    g.backlashSteps = duToSteps(g, backlashDu());
+    g.maxVelocityMmSec = maxVelocityMmMin / 60.0f;
+    g.maxAccelMmSec2 = maxAccelMmSec2;
+    return g;
   }
 };
 

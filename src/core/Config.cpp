@@ -4,6 +4,7 @@
 #include "Debug.h"
 #include "PersistentSetting.h"
 #include "motion/kernel/MotionEngine.h"
+#include "motion/DRO_Scale.h"
 
 EstopCode emergencyStop = EstopCode::NONE;
 void setEmergencyStop(EstopCode kind) {
@@ -13,15 +14,8 @@ void setEmergencyStop(EstopCode kind) {
 LatheConfiguration activeMachineProfile = {};
 
 // Variable Definitions
-int ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
-int AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
-
 ControllerConfig sysConfig = {};
 OperatorPreferences operatorPrefs = {};
-
-
-long SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
-long SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
 
 bool SHOW_KEY_PRESSES = false;
 
@@ -101,11 +95,7 @@ float clampFloatValue(float value, float minValue, float maxValue) {
 }
 
 void setMachineConfigDefaults() {
-  ENCODER_BACKLASH = DEFAULT_ENCODER_BACKLASH;
-  AXIS_ENCODER_BACKLASH = DEFAULT_AXIS_ENCODER_BACKLASH;
   sysConfig.timing = MotionTimingConfig{};
-  SAFE_DISTANCE_DU = DEFAULT_SAFE_DISTANCE_DU;
-  SLOT_LEFT_REDUCTION_DU = DEFAULT_SLOT_LEFT_REDUCTION_DU;
   sysConfig.mpg = MpgConfig{};
   sysConfig.joystick = JoystickConfig{};
 }
@@ -115,33 +105,23 @@ void applyDerivedMachineConfig() {
   if (encHal) {
     encHal->updateProfile(
         activeMachineProfile.spindle.encoder.ppr,
-        activeMachineProfile.spindle.pulleyRatio > 0.0f ? activeMachineProfile.spindle.pulleyRatio : 1.0f);
+        activeMachineProfile.spindle.effectivePulleyRatio());
   }
 
   StepTimingConfig defaultTiming;
-  AxisGeometry zGeom;
-  zGeom.screwPitchDu = activeMachineProfile.zAxis.leadscrewPitchDu();
-  zGeom.motorStepsPerRev = activeMachineProfile.zAxis.motorSteps();
-  zGeom.backlashSteps = duToSteps(zGeom, activeMachineProfile.zAxis.backlashDu());
-  zGeom.maxVelocityMmSec = activeMachineProfile.zAxis.maxVelocityMmMin / 60.0f;
-  zGeom.maxAccelMmSec2 = activeMachineProfile.zAxis.maxAccelMmSec2;
-  MotionEngine::instance().configureAxis(AXIS_Z, zGeom, defaultTiming);
-
-  AxisGeometry xGeom;
-  xGeom.screwPitchDu = activeMachineProfile.xAxis.leadscrewPitchDu();
-  xGeom.motorStepsPerRev = activeMachineProfile.xAxis.motorSteps();
-  xGeom.backlashSteps = duToSteps(xGeom, activeMachineProfile.xAxis.backlashDu());
-  xGeom.maxVelocityMmSec = activeMachineProfile.xAxis.maxVelocityMmMin / 60.0f;
-  xGeom.maxAccelMmSec2 = activeMachineProfile.xAxis.maxAccelMmSec2;
-  MotionEngine::instance().configureAxis(AXIS_X, xGeom, defaultTiming);
+  if (activeMachineProfile.zAxis.droScale.ppr > 0) {
+    zScale.setScaleFactor(static_cast<float>(activeMachineProfile.zAxis.droScale.ppr));
+  }
+  if (activeMachineProfile.xAxis.droScale.ppr > 0) {
+    xScale.setScaleFactor(static_cast<float>(activeMachineProfile.xAxis.droScale.ppr));
+  }
+  MotionEngine::instance().configureAxis(AXIS_Z, activeMachineProfile.zAxis.toAxisGeometry(), defaultTiming);
+  MotionEngine::instance().configureAxis(AXIS_X, activeMachineProfile.xAxis.toAxisGeometry(), defaultTiming);
 }
 
 void normalizeMachineConfig() {
-  ENCODER_BACKLASH = clampIntValue(ENCODER_BACKLASH, 0, 30000);
-  AXIS_ENCODER_BACKLASH = clampIntValue(AXIS_ENCODER_BACKLASH, 0, 30000);
   sysConfig.timing.stepTimeMs = clampLongValue(sysConfig.timing.stepTimeMs, 1, 10000);
   sysConfig.timing.delayBetweenStepsMs = clampLongValue(sysConfig.timing.delayBetweenStepsMs, 0, 10000);
-  SAFE_DISTANCE_DU = clampLongValue(SAFE_DISTANCE_DU, 0, 10000000);
   sysConfig.mpg.zHandwheel.ppr = clampFloatValue(sysConfig.mpg.zHandwheel.ppr, 1.0, 100000.0);
   sysConfig.mpg.xHandwheel.ppr = clampFloatValue(sysConfig.mpg.xHandwheel.ppr, 1.0, 100000.0);
   sysConfig.joystick.centerSamples = clampIntValue(sysConfig.joystick.centerSamples, 1, 1024);
@@ -152,7 +132,6 @@ void normalizeMachineConfig() {
   sysConfig.joystick.pulseQueueLimit = clampIntValue(sysConfig.joystick.pulseQueueLimit, 1, 1000000);
   sysConfig.joystick.normalRps = clampFloatValue(sysConfig.joystick.normalRps, 0.01, 1000.0);
   sysConfig.joystick.rapidRps = clampFloatValue(sysConfig.joystick.rapidRps, 0.01, 1000.0);
-  SLOT_LEFT_REDUCTION_DU = clampLongValue(SLOT_LEFT_REDUCTION_DU, 0, 10000000);
   applyDerivedMachineConfig();
 }
 
@@ -164,13 +143,9 @@ void loadMachineConfig() {
   cfg.begin(CONFIG_NAMESPACE);
 
   DEBUG_PRINTLN("loading fields...");
-  ENCODER_BACKLASH = cfg.getInt(CFG_ENCODER_BACKLASH, ENCODER_BACKLASH);
-  AXIS_ENCODER_BACKLASH = cfg.getInt(CFG_AXIS_ENCODER_BACKLASH, AXIS_ENCODER_BACKLASH);
   sysConfig.timing.stepTimeMs = cfg.getLong(CFG_STEP_TIME_MS, sysConfig.timing.stepTimeMs);
   sysConfig.timing.delayBetweenStepsMs = cfg.getLong(CFG_DELAY_BETWEEN_STEPS_MS, sysConfig.timing.delayBetweenStepsMs);
   sysConfig.timing.enableContinuousMove = cfg.getBool(CFG_ENABLE_CONTINUOUS_MOVE, sysConfig.timing.enableContinuousMove);
-  SAFE_DISTANCE_DU = cfg.getLong(CFG_SAFE_DISTANCE_DU, SAFE_DISTANCE_DU);
-  SLOT_LEFT_REDUCTION_DU = cfg.getLong(CFG_SLOT_LEFT_REDUCTION_DU, SLOT_LEFT_REDUCTION_DU);
   float legacyPulsePerRevolution = cfg.getFloat(CFG_PULSE_PER_REVOLUTION, -1.0);
   sysConfig.mpg.zHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_Z, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.zHandwheel.ppr);
   sysConfig.mpg.xHandwheel.ppr = cfg.getFloat(CFG_PULSE_PER_REVOLUTION_X, legacyPulsePerRevolution >= 1.0 ? legacyPulsePerRevolution : sysConfig.mpg.xHandwheel.ppr);
@@ -217,12 +192,12 @@ void printMachineProfileBanner() {
                 activeMachineProfile.zAxis.leadscrewPitchMm,
                 activeMachineProfile.zAxis.leadscrewPitchDu(),
                 activeMachineProfile.zAxis.stepsPerMm,
-                (long)round(activeMachineProfile.zAxis.stepsPerMm * activeMachineProfile.zAxis.leadscrewPitchMm));
+                activeMachineProfile.zAxis.motorSteps());
   Serial.printf(" X-Axis: Pitch=%.3f mm (%ld du), Steps/mm=%.2f (motorSteps=%ld)\n",
                 activeMachineProfile.xAxis.leadscrewPitchMm,
                 activeMachineProfile.xAxis.leadscrewPitchDu(),
                 activeMachineProfile.xAxis.stepsPerMm,
-                (long)round(activeMachineProfile.xAxis.stepsPerMm * activeMachineProfile.xAxis.leadscrewPitchMm));
+                activeMachineProfile.xAxis.motorSteps());
   Serial.println("==================================================================\n");
 }
 
