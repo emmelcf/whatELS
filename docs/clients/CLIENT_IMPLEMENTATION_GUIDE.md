@@ -609,11 +609,9 @@ During the architectural audit, five significant implementation gaps and ambigui
 > [!WARNING]
 > Developers implementing new clients or refactoring `src/core_client/` should review these open items before modifying production code.
 
-### Gap 1: Duplicate `ClientEndpoint.h` Headers
-* **The Reality:** The repository contains two conflicting definitions:
-  * `src/web/ClientEndpoint.h`: Legacy header in global namespace, defining `ITransport`, `ITelemetrySerializer`, `ICommandTranslator`, `DefaultCommandTranslator`, and `ClientEndpoint`.
-  * `src/core_client/ClientEndpoint.h`: Abstract base class in `namespace whatels::core_client`, with different method signatures, including `src/core_client/transports/ITransport.h`.
-* **Required Resolution:** Consolidate into a single authoritative set of headers under `src/core_client/`. Remove legacy duplicates in `src/web/`.
+### Gap 1: Duplicate `ClientEndpoint.h` Headers (RESOLVED)
+* **Status:** Resolved in `src/web/` refactor.
+* **Resolution:** Removed the legacy duplicates `src/web/ClientEndpoint.h` and `src/web/CommandDispatcher.h`. The authoritative base class resides in `src/core_client/ClientEndpoint.h`, command dispatching in `src/core/CommandDispatcher.h`, and telemetry serialization implementations in `src/core_client/ClientSerializers.h`.
 
 ### Gap 2: `ClientManager` is Hardcoded to WebSockets Only
 * **The Reality:** In `src/core_client/ClientManager.h`, the connection table is hardcoded to:
@@ -637,9 +635,9 @@ During the architectural audit, five significant implementation gaps and ambigui
   * Use **Channel-Shared Serialization** for native clients sharing the same domain mask.
   * Delegate to `endpoint->broadcastIfChanged(model)` for translation adapters with screen diff caches.
 
-### Gap 5: Legacy Session Logic in `WebServerModule.cpp`
-* **The Reality:** `src/web/WebServerModule.cpp` still maintains `clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX]` and performs manual string parsing on incoming WebSocket packets before delegating to `ClientManager`.
-* **The Required Resolution:** Strip session management out of `WebServerModule.cpp`. It should simply pass incoming byte buffers into `ClientManager::onClientMessage(handle, payload, length)`.
+### Gap 5: Legacy Session Logic in `WebServerModule.cpp` (RESOLVED)
+* **Status:** Resolved in `src/web/` refactor.
+* **Resolution:** Stripped out legacy session arrays and manual command parsing from `src/web/WebServerModule.cpp`. `WebServerModule` now directly routes all incoming WebSocket frames cleanly to `ClientManager::handleWebSocketEvent(num, type, payload, length)`.
 
 ---
 

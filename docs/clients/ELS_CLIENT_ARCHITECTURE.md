@@ -124,7 +124,7 @@ $$\text{ClientEndpoint} = \text{Transport} + \text{Serializer} + \text{Translato
 ### C++ Interface Definitions
 
 ```cpp
-// src/web/ClientEndpoint.h
+// src/core/CommandDispatcher.h
 
 enum class CommandStatus : uint8_t {
     OK = 0,            // Command recognized and executed successfully
@@ -213,8 +213,8 @@ When multiple clients connect via WebSockets, they may require different data fo
 | URL Path | Channel Type | Serializer Used | Location & Role | Target Client |
 | :--- | :--- | :--- | :--- | :--- |
 | `ws://<ip>:81/` or `/canonical` | `CHANNEL_CANONICAL` | **`TelemetrySerializer`** (`K.*`, `I.*`, `C.*`, `P.*`) | `src/core/TelemetrySerializer.h` (Universal Core Serializer) | Rich Web UI / Multi-Axis HMI / Native Display |
-| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | `src/web/ClientEndpoint.h` (Third-Party G-Code Serializer) | CNC Senders (UGS, CNCjs, OpenBuilds) |
-| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | `src/web/ClientEndpoint.h` (Minimal Coordinates Serializer) | Minimal Wireless DRO Readouts |
+| `ws://<ip>:81/grbl` | `CHANNEL_GRBL` | `GrblSerializer` (`<Idle\|WPos:...\|FS:...>`) | `src/core_client/ClientSerializers.h` (Third-Party G-Code Serializer) | CNC Senders (UGS, CNCjs, OpenBuilds) |
+| `ws://<ip>:81/dro` | `CHANNEL_DRO` | `DroSerializer` (`K.zDu`, `K.xDu`, `K.rpm`) | `src/core_client/ClientSerializers.h` (Minimal Coordinates Serializer) | Minimal Wireless DRO Readouts |
 
 - **Zero Runtime Overhead**: The channel is assigned **once** during the HTTP upgrade handshake. Runtime packets require no subscription parsing.
 - **Active Channel Bitmask (`activeChannelMask`)**: The controller tracks which channels have active listeners. Formats with zero connected listeners are **never serialized**, burning zero CPU cycles.
