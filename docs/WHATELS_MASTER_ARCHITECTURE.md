@@ -154,13 +154,12 @@ To guarantee that firmware upgrades never destroy user calibrations, custom mach
 │ 3. USER FILESYSTEM (LittleFS)  │ • User Custom Lathe Profiles (`/presets/`) │
 │    Dedicated Operator Storage  │ • User Lathecode & G-Code Programs (`/`)   │
 │    NEVER WIPED BY FIRMWARE     │ • User Tool Libraries & Wear Offsets       │
-│                                │ • (Optional Dev Mode: `/www/` live assets) │
 └────────────────────────────────┴────────────────────────────────────────────┘
 ```
 
-* **Single-Binary OTA Deployment:** All firmware logic, the complete responsive Web UI (`clients/web_ui/`), and built-in factory lathe templates are compiled directly into `firmware.bin`. Updating via USB or Web OTA (`/update`) flashes only the application partition, guaranteeing that backend kinematics and frontend UI update atomically with zero version desynchronization.
+* **Single-Binary OTA Deployment:** All firmware logic, the complete setup Web UI (`data/www/`), and built-in factory lathe templates are compiled directly into `firmware.bin`. Updating via USB or Web OTA (`/firmware/upload`) flashes only the application partition, guaranteeing that backend kinematics and frontend UI update atomically with zero version desynchronization.
 * **Preservation of User Files:** The LittleFS filesystem partition is **never formatted, wiped, or overwritten during firmware updates**. Custom user presets and uploaded machining files remain 100% persistent across firmware releases.
-* **Developer Hot-Reload Mode:** During Web UI development, if `/www/index.html` exists on LittleFS, `WebServerModule.cpp` serves that loose file instead, allowing rapid iteration without recompiling firmware. If absent (production), assets are served directly from flash ROM via `send_P` with `Content-Encoding: gzip`.
+* **Guaranteed ROM Asset Delivery:** All web portal assets (`index.html`, `style.css`, `app.js`) are served directly out of flash ROM (`send_P`) with gzip encoding. Stale filesystem files cannot shadow or break the controller web interface.
 * **Drop-In Protocol Alignment:** The web client connects to the controller WebSocket endpoint and exchanges canonical ASCII line commands (`CMD.*`, `SETTINGS.*`) and domain telemetry frames (`K`, `I`, `C`, `P`).
 
 ---

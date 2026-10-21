@@ -488,47 +488,18 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
 }
 
 static void handleClientIndex() {
-  if (LittleFS.exists("/www/index.html")) {
-    File file = LittleFS.open("/www/index.html", "r");
-    if (file) {
-      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      server.sendHeader("Pragma", "no-cache");
-      server.sendHeader("Expires", "0");
-      server.streamFile(file, "text/html");
-      file.close();
-      return;
-    }
-  }
   server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send_P(200, "text/html", (const char*)WWW_INDEX_HTML_GZ, WWW_INDEX_HTML_GZ_LEN);
 }
 
 static void handleClientStyle() {
-  if (LittleFS.exists("/www/style.css")) {
-    File file = LittleFS.open("/www/style.css", "r");
-    if (file) {
-      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      server.streamFile(file, "text/css");
-      file.close();
-      return;
-    }
-  }
   server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send_P(200, "text/css", (const char*)WWW_STYLE_CSS_GZ, WWW_STYLE_CSS_GZ_LEN);
 }
 
 static void handleClientAppJs() {
-  if (LittleFS.exists("/www/app.js")) {
-    File file = LittleFS.open("/www/app.js", "r");
-    if (file) {
-      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      server.streamFile(file, "application/javascript");
-      file.close();
-      return;
-    }
-  }
   server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send_P(200, "application/javascript", (const char*)WWW_APP_JS_GZ, WWW_APP_JS_GZ_LEN);
@@ -536,14 +507,6 @@ static void handleClientAppJs() {
 
 static void handleSchemaGet() {
   server.sendHeader("Cache-Control", "public, max-age=86400");
-  if (LittleFS.exists("/schemas/lathe-profile.schema.json")) {
-    File file = LittleFS.open("/schemas/lathe-profile.schema.json", "r");
-    if (file) {
-      server.streamFile(file, "application/json");
-      file.close();
-      return;
-    }
-  }
   server.send(200, "application/json", LATHE_PROFILE_SCHEMA_JSON);
 }
 
@@ -924,7 +887,6 @@ void taskWiFi(void *param) {
   webBuffersReady = true;
 
   registerWebRoutes();
-  server.serveStatic("/", LittleFS, "/www/");
   server.begin();
 
   if (!wsMutex) {
