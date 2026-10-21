@@ -7,6 +7,7 @@
 - **Native Tools Over Shell**: Inspect and edit files strictly with native IDE tools. Never use shell commands (`cat`, `sed`, redirects) on files; reserve `run_command` for `git`, `gh`, `pio`, and `python3` (for `tests/hil/` and `scripts/`).
 - **Active Docs Grounding**: Consult active `docs/` (e.g. [`docs/WHATELS_MASTER_ARCHITECTURE.md`](docs/WHATELS_MASTER_ARCHITECTURE.md)). Never use `docs/archive/` as architectural truth.
 - **Systemic Persistence**: Codify agreed behavioral rules or architecture immediately into `docs/` or `.agents/`.
+- **Browser Subagent Protocol**: Always execute `/home/emil/.local/bin/google-chrome "$URL"` before invoking `browser` subagent. Subagents operate visual-first; if state is ambiguous or failing, they must message the main agent (`send_message`) for guidance rather than reading source files independently, leveraging the main agent's broader architectural context.
 
 ## 2. Zero-Hack Mandate & Scope Lock
 - Adhere strictly to all active architectural decisions in `docs/adr/` — especially foundational invariants ADR-0001 (Unified Gearbox), ADR-0002 (Dumb Client), and ADR-0003 (Command Result). Zero inline hacks, zero client kinematics, zero arbitrary delays (`delay()`, `time.sleep()`).
