@@ -15,5 +15,10 @@ description: Embedded C++ real-time invariants for src/ (ISR safety, SettingsSer
   - Pin definitions in `src/core/BoardPins.h` (and re-exported by `src/core/Config.h`) map to physical PCB traces. Never reassign without confirmation.
 - **Hardware Flashing Protocol:**
   - ESP32-S3 USB CDC auto-resets via DTR/RTS without boot buttons.
-  - Flashing procedure and verification is governed by `firmware-build-verify` skill.
+  - Flashing (`pio run -e esp32s3 -t upload`) automatically builds all dependencies before uploading.
+- **Firmware-First Testing Invariant (Upload-Before-UI Gate):**
+  - If any C++ files (`src/`), embedded assets (`data/presets/`, `SystemPresetsJson.h`), or `platformio.ini` are modified:
+    1. **Upload Firmware:** Run `pio run -e esp32s3 -t upload` (builds and flashes in one step; wait 5–10s for reboot and Wi-Fi re-association).
+    2. **Verify Firmware (HIL):** Run `controller-hil-test` (`python3 tests/hil/run_tests.py`) over WebSocket to verify motion, state, and protocol contracts.
+    3. **UI Gate:** Testing or previewing the UI (`web-ui-preview`) is strictly prohibited until steps 1 and 2 pass. Never test UI against an un-flashed or unverified controller.
 

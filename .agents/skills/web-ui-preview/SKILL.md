@@ -15,11 +15,11 @@ Pre-requisite: Review [docs/clients/web_ui/ERGONOMICS.md](../../../docs/clients/
 - **Availability Check:** If port 3000 is unreachable, prompt operator to start the Live Preview extension.
 
 ## 2. Firmware Flashing Gate
-- If changes involve C++ code in `src/`, compile and flash first:
+- If changes involve C++ code in `src/` or firmware assets, flash first (upload automatically builds before flashing):
   ```bash
-  pio run -e esp32s3 && pio run -e esp32s3 -t upload
+  pio run -e esp32s3 -t upload
   ```
-- Wait 5–10s for controller reboot and Wi-Fi reconnection (`whatels.local`) before testing.
+- Wait 5–10s for controller reboot and Wi-Fi reconnection (`whatels.local`) and verify via `controller-hil-test` before previewing UI.
 
 ## 3. Browser Subagent Execution
 - **Strict Viewport:** `800×480` (standard physical touch screen).

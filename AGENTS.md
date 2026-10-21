@@ -15,7 +15,7 @@
 ## 3. Four-Gate Engineering Pipeline
 1. **Grill & Align (`grill-with-docs`)**: Pre-read repo/docs. Run Frontier Batch rounds (3–5 questions `❓` with recommendations `➡️`). Zero code until operator aligns.
 2. **Spec & Tickets (`to-spec` $\longrightarrow$ `to-tickets`)**: Publish specification to GitHub Issues with explicit HIL test seams (`tests/hil/suites/test_*.py`). Decompose into atomic child tickets.
-3. **Execution (`implement`)**: Execute ticket via `tdd` against HIL seams, PlatformIO build, Live Preview (`web-ui-preview`), and WebSocket HIL verify (`controller-hil-test`).
+3. **Execution (`implement`)**: Execute ticket via `tdd`: if C++/firmware touched, upload to hardware (`pio run -t upload`), verify over WebSocket (`controller-hil-test`), and only then verify UI (`web-ui-preview`).
 4. **Verification & Commit (`code-review` $\longrightarrow$ `atomic-commit`)**: Audit diff against spec/standards. Propose Conventional Commits for operator approval.
 
 ## 4. Key References
