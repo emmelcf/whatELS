@@ -1,6 +1,6 @@
 ---
 name: triage-finding
-description: Log a discovered bug, architectural tech-debt, or future feature idea directly to GitHub Issues without derailing the active implementation task. Invoke whenever an out-of-scope issue is spotted or when the user says "log this bug/feature".
+description: Capture out-of-scope bugs, tech debt, or feature ideas as structured GitHub Issues without derailing active work.
 ---
 
 # Triage Finding Skill (Zero-Distraction Issue Capture)

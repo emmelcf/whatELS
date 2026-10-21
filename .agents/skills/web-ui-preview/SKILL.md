@@ -1,9 +1,8 @@
 ---
 name: web-ui-preview
 description: >-
-  Previews and verifies the whatELS Touch DRO Web Client (clients/web_ui/).
-  Use when modifying HTML, CSS, or JS in clients/web_ui/ to inspect layout,
-  verify console errors, or validate telemetry against live hardware or emulator.
+  Previews the Touch DRO Web Client (clients/web_ui/). Use when editing UI code to inspect
+  the 800×480 layout or verify console errors against hardware or emulator.
 ---
 
 # Web UI Preview & Verification Runbook

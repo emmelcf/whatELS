@@ -1,6 +1,6 @@
 ---
 name: atomic-commit
-description: Inspect the working tree, verify documentation parity and test status, split entangled changes into logical decoupled groups, and propose Conventional Commits for operator confirmation.
+description: Stage decoupled Conventional Commits, verifying doc parity, test status, and generated asset sync before proposing commands.
 ---
 
 # Atomic Commit & Git Hygiene Skill
@@ -17,7 +17,7 @@ description: Inspect the working tree, verify documentation parity and test stat
 
 3. **Decompose into Atomic Commit Units:**
    Group files so each commit does **one logical thing** and leaves the repository buildable:
-   - **Group 1:** `docs/adr/*`, `docs/specs/*`, `docs/GLOSSARY.md` -> `docs(<scope>): ...`
+   - **Group 1:** `docs/adr/*`, `docs/GLOSSARY.md`, active `docs/` -> `docs(<scope>): ...`
    - **Group 2:** `src/*` (Firmware core/kernel/modes) + `docs/motion|modes|protocol/*` -> `feat|fix|refactor(<scope>): ...`
    - **Group 3:** `clients/web_ui/*`, `data/www/*` -> `feat|fix(webui): ...`
    - **Group 4:** `tests/hil/*`, `test/*` -> `test(hil): ...`
