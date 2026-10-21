@@ -30,3 +30,6 @@ src/web/ControllerWebAssets.h
 agy-conv-fix
 __pycache__/
 *.pyc
+
+# Agent skill manager lockfile
+skills-lock.json
