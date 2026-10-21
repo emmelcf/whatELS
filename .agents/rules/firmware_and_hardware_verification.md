@@ -14,6 +14,6 @@ description: Embedded C++ real-time invariants for src/ (ISR safety, SettingsSer
 - **GPIO Pin Freezing:**
   - Pin definitions in `src/core/BoardPins.h` (and re-exported by `src/core/Config.h`) map to physical PCB traces. Never reassign without confirmation.
 - **Hardware Flashing Protocol:**
-  - USB keyboard emulation is disabled; ESP32-S3 USB CDC auto-resets via DTR/RTS (no manual button presses needed).
-  - Autonomous agent compile & upload authorized: `pio run -e esp32s3` then `pio run -e esp32s3 -t upload`.
-  - Allow 5–10s for board reboot and Wi-Fi reconnection (`whatels.local`).
+  - ESP32-S3 USB CDC auto-resets via DTR/RTS without boot buttons.
+  - Flashing procedure and verification is governed by `firmware-build-verify` skill.
+

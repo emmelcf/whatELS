@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: Physical lathe operator safety, coordinate frames of reference (Z/X), limit registers, and anti-trap jog recovery.
+---
+
 # Lathe Operator Safety & Motion Invariants
 
 - **Operator Frame of Reference:**

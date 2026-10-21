@@ -1,6 +1,6 @@
 ---
-trigger: always_on
-description: Enforces documentation co-execution, ADR lifecycle, and atomic Conventional Commits.
+trigger: model_decision
+description: Documentation co-execution requirements (docs/ sync on protocol/state changes) and Conventional Commit scopes.
 ---
 
 # Documentation & Git Hygiene Rules

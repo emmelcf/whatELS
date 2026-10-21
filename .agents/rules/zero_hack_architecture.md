@@ -1,6 +1,6 @@
 ---
 trigger: always_on
-description: Enforces ADR adherence, strict layer boundaries, and forbids quick fixes across firmware, web_ui, and Python HIL tests.
+description: Dual-core ISR/mailbox boundaries, dumb-client protocol contract, and generated asset parity.
 ---
 
 # Zero-Hack Architectural Invariants
@@ -18,5 +18,3 @@ description: Enforces ADR adherence, strict layer boundaries, and forbids quick 
 3. **Generated Asset Parity (`data/` & `scripts/`):**
    - Never hand-edit generated headers such as `src/web/SystemPresetsJson.h`. Modify source JSONs in `data/presets/` or `data/schemas/` and run `scripts/generate_presets.py` or `scripts/embed_controller_assets.py`.
 
-4. **No Unrecorded Side-Quests:**
-   - If you encounter a bug, protocol discrepancy, or missing test outside the current ticket scope, invoke the `triage-finding` skill immediately. Never bundle unrelated fixes into the active working tree.
