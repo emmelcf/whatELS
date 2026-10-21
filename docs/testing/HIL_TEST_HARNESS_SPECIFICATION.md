@@ -13,7 +13,7 @@
 
 ## 1. Executive Summary & Objective
 
-This specification defines the architecture, wire protocols, firmware prerequisite fixes, test authoring DSL, and firmware simulation hooks for the **whatELS Hardware-in-the-Loop (HIL) Test Harness**[cite: 1].
+This specification defines the architecture, wire protocols, firmware behavioral invariants, test authoring DSL, and simulation hooks for the **whatELS Hardware-in-the-Loop (HIL) Test Harness**[cite: 1].
 
 While unit tests (`test/test_motion_e2e.cpp`) verify kinematic algorithms in synthetic isolation on the host, this harness verifies the **complete, live compiled firmware** running on physical ESP32-S3 hardware across the external network boundary (`ws://<ip>:81/canonical`)[cite: 1]. It treats the controller as a black box, verifying[cite: 1]:
 1. Inbound network framing, sanitization, In-Motion Safety Gatekeeper (`[SAFE-01]`), and command dispatching on Core 0[cite: 1, 4].
@@ -52,7 +52,7 @@ To test spindle-synchronized motion without requiring physical lathe rotation or
 
 ---
 
-## 2. Firmware Simulation Injection Contract & Prerequisite Fixes
+## 2. Firmware Simulation Injection Contract & Protocol Invariants
 
 To execute automated tests against physical hardware sitting on a developer's bench without mechanical spindle rotation, the firmware provides a thread-safe software injection bridge directly into `ISpindleEncoderHAL`[cite: 1].
 
@@ -223,18 +223,18 @@ To guarantee that a disconnected or crashed test script never leaves physical st
 
 ---
 
-### 2.4 Required Firmware Prerequisite Fixes in `CommandDispatcher.cpp`
+### 2.4 Firmware Protocol Invariants for HIL Execution
 
-To ensure deterministic HIL execution and full Gearbox $Z+X$ coverage, the following fixes must be applied to `src/core/CommandDispatcher.cpp`[cite: 4]:
+To ensure deterministic HIL execution and complete multi-axis test coverage, the firmware maintains the following core invariants:
 
-1. **Consistent `OK:CMD.<name>\n` Replies Across All Handlers:**
-   Currently, several handlers (`handleAxisZero`, `handleAxisPosDu`, `handleAxisLimitDu`, `handleAxisClearLimit`, `handleJogStep`, `handleJogHold`, `handleJogRelease`, `handleJogStepDu`, `handleFeedStepDu`, `handleFeedStepCycle`, `handleFeedDupr`, `handleFeedMm`, `handleFeedTpi`, `handleFeedNudge`, `handleTaperRatio`, `handleTaperAngle`, `handleOn`) cast `(void)reply;` and return `true` silently[cite: 4]. Every handler that returns `true` MUST populate `*reply = "OK:CMD.<name>\n";` (and `*reply = "ERR:...\n";` on `false`) so `WhatElsClient.send()` can await command completion deterministically before inspecting state.
-2. **Dual-Axis `axis:ZX` Support in `handleStartFeed()`:**
-   In `handleStartFeed()`, `axis` is currently parsed into a single-axis `AxisId` (`AXIS_Z` or `AXIS_X`), losing `"ZX"` when `CMD.startFeed=axis:ZX,...` is called[cite: 4]. Update `handleStartFeed()` to extract the raw axis string (`"Z"`, `"X"`, or `"ZX"`), call `gb->setActiveAxis(axStr)`, and invoke `gb->startFeed(...)` with secondary taper coordination enabled when `strcasecmp(axStr, "ZX") == 0`.
-3. **Soft Limit Index Alignment (`handleAxisLimitDu` & `handleAxisClearLimit`):**
-   Ensure semantic limit tokens (`L`/`R` for $Z$, `U`/`D` for $X$) and numeric indices (`0` vs `1`) map consistently to `LimitDirection::LIMIT_LEFT_OR_UP` (`m_limits[0]`, negative travel stop) and `LimitDirection::LIMIT_RIGHT_OR_DOWN` (`m_limits[1]`, positive travel stop)[cite: 4, 5].
-4. **Low-Latency WebSocket Socket Options:**
-   Disable Wi-Fi modem sleep (`esp_wifi_set_ps(WIFI_PS_NONE)`) and set `TCP_NODELAY` on the WebSocket server socket so 50 Hz telemetry frames and `CMD.stop` packets are never delayed by TCP Nagle buffering or DTIM beacon intervals.
+1. **Consistent `OK:CMD.<name>\n` Acknowledgments Across All Handlers:**
+   Every command dispatched through `CommandDispatcher` (`src/core/CommandDispatcher.cpp`) emits an immediate, deterministic acknowledgment (`OK:CMD.<name>\n` on success or `ERR:CMD.<name>=<reason>\n` on failure), allowing `WhatElsClient.send()` to await command completion deterministically before sampling telemetry.
+2. **Dual-Axis `axis:ZX` Coordination in `handleStartFeed()`:**
+   `CommandDispatcher` supports multi-axis feeds (`axis:ZX`, `axis:Z+X`, or `axis:TAPER`), activating `UnifiedGearboxMode` with dual-axis coordination enabled for synchronized conical threading and taper turning.
+3. **Deterministic Soft Limit Mapping (`handleAxisLimitDu` & `handleAxisClearLimit`):**
+   Semantic limit tokens (`L`/`R` for $Z$, `U`/`D` for $X$) and numeric indices (`0` vs `1`) map deterministically to `LimitDirection::LIMIT_LEFT_OR_UP` (`m_limits[0]`, negative travel stop) and `LimitDirection::LIMIT_RIGHT_OR_DOWN` (`m_limits[1]`, positive travel stop).
+4. **Low-Latency Telemetry & Network Power Management:**
+   Wi-Fi modem sleep is disabled (`WiFi.setSleep(false); esp_wifi_set_ps(WIFI_PS_NONE)`) on boot to prevent DTIM beacon latency spikes, ensuring 50 Hz telemetry frames and `CMD.stop` emergency packets arrive in sub-50 ms without buffering delays.
 
 ---
 
