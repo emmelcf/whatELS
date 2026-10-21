@@ -3,9 +3,10 @@
 #include <esp_log.h>
 
 static const char* TAG = "WEB";
-#include "CommandDispatcher.h"
+#include "core/CommandDispatcher.h"
 #include "core/TelemetrySerializer.h"
-#include "ClientEndpoint.h"
+#include "core_client/ClientSerializers.h"
+#include "core/WifiService.h"
 #include "SettingsService.h"
 #include "ControllerWebAssets.h"
 #include "SystemSchemaJson.h"
@@ -47,9 +48,6 @@ bool firmwareUploadRestartPending = false;
 unsigned long firmwareUploadRestartAt = 0;
 bool configRestartPending = false;
 unsigned long configRestartAt = 0;
-bool keyboardCaptureActive = false;
-byte keyboardCaptureReleaseCode = 0;
-unsigned long keyboardCaptureUntil = 0;
 
 bool bufferAvailable(CircleBuffer* b) {
   return b->head != b->tail;
@@ -229,27 +227,6 @@ static bool readBoolConfigArg(const char* name, bool* value, String* error) {
   return true;
 }
 
-
-
-static bool readKeyboardConfigFromRequest(String* error) {
-  if (!readBoolConfigArg("showKeyPresses", &SHOW_KEY_PRESSES, error)) return false;
-
-  for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    if (!server.hasArg(keyboardBindings[i].id)) {
-      if(error) *error = String("Missing keyboard value: ") + keyboardBindings[i].id;
-      return false;
-    }
-    long value;
-    if (!parseLongValue(server.arg(keyboardBindings[i].id), &value) || value < 1 || value > 255) {
-      if(error) *error = String(keyboardBindings[i].label) + " must use key code 1..255";
-      return false;
-    }
-    keyboardBindings[i].code = byte(value);
-  }
-
-  return validateKeyboardConfig(error);
-}
-
 static void appendUiLine(String* response, const char* name, const String& value) {
   appendConfigLine(response, name, webSafeText(value));
 }
@@ -293,10 +270,10 @@ static void dispatchTelemetry() {
     canonicalPayload = TelemetrySerializer::buildTelemetry(current, changedDomains);
   }
   if ((activeChannelMask & CHANNEL_GRBL) && (changedDomains & DOMAIN_KINEMATICS)) {
-    grblPayload = GrblSerializer::buildStatus(current);
+    grblPayload = whatels::core_client::GrblSerializer::buildStatus(current);
   }
   if ((activeChannelMask & CHANNEL_DRO) && (changedDomains & DOMAIN_KINEMATICS)) {
-    droPayload = DroSerializer::buildStatus(current);
+    droPayload = whatels::core_client::DroSerializer::buildStatus(current);
   }
 
   for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
@@ -324,72 +301,22 @@ void requestWebUiMoveRelease() {
   MotionEngine::instance().stopAll();
 }
 
-static bool handleWebUiEventCommand(uint8_t num, uint8_t* payload, size_t length) {
-  // Delegate to CanonicalCommandTranslator for sanitized parsing and canonical dispatch
-  CanonicalCommandTranslator translator(num);
-  String reply = "";
-  if (translator.translateAndDispatch((const char*)payload, length, &reply)) {
-    if (reply.length() > 0) {
-      webSocket.sendTXT(num, reply);
-    }
-    bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
-                   (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
-                   (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
-                   (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0) ||
-                   (length >= 16 && strncasecmp((const char*)payload, "CMD.settings.get", 16) == 0);
-    if (!isQuery) {
-      machineStatusForcePublish = true;
-    }
-    return true;
-  }
-  return false;
-}
-
-static void startKeyboardCapture() {
-  keyboardCaptureActive = true;
-  keyboardCaptureReleaseCode = 0;
-  keyboardCaptureUntil = millis() + 30000;
-}
-
-static void stopKeyboardCapture() {
-  keyboardCaptureActive = false;
-  keyboardCaptureReleaseCode = 0;
-}
-
-bool shouldConsumeKeyboardCapture(byte physicalCode, bool isPress) {
-  if (keyboardCaptureReleaseCode != 0 && physicalCode == keyboardCaptureReleaseCode && !isPress) {
-    keyboardCaptureReleaseCode = 0;
-    return true;
-  }
-  if (!keyboardCaptureActive) return false;
-  if (long(millis() - keyboardCaptureUntil) > 0) {
-    stopKeyboardCapture();
-    return false;
-  }
-  if (isPress) {
-    keyboardCaptureActive = false;
-    keyboardCaptureReleaseCode = physicalCode;
-  }
-  return true;
-}
-
-static String getKeyboardConfigResponse() {
-  String response = "";
-  response.reserve(1200);
-  appendConfigLine(&response, "showKeyPresses", SHOW_KEY_PRESSES);
-  for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-    appendConfigLine(&response, keyboardBindings[i].id, int(keyboardBindings[i].code));
-  }
-  return response;
-}
-
 
 
 static String getWifiMode() {
-  if (!sysConfig.wifi.enabled) return "off";
-  if (wifiSetupApActive) return "setup-ap";
-  if (wifiStationConnected) return "station";
-  return "starting";
+  return whatels::core::WifiService::instance().getModeString();
+}
+
+static void handleWifiScan() {
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  std::vector<whatels::core::WifiScanResult> scan = whatels::core::WifiService::instance().scanNetworks();
+  String json = "[";
+  for (size_t i = 0; i < scan.size(); ++i) {
+    if (i > 0) json += ",";
+    json += "{\"ssid\":\"" + scan[i].ssid + "\",\"rssi\":" + String(scan[i].rssi) + ",\"open\":" + (scan[i].open ? "true" : "false") + "}";
+  }
+  json += "]";
+  server.send(200, "application/json", json);
 }
 
 static String getWifiConfigResponse() {
@@ -497,10 +424,10 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       String hydration = TelemetrySerializer::buildTelemetry(hydrationModel, DOMAIN_ALL);
       webSocket.sendTXT(num, hydration);
     } else if (ch == CHANNEL_GRBL) {
-      String hydration = GrblSerializer::buildStatus(hydrationModel);
+      String hydration = whatels::core_client::GrblSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     } else if (ch == CHANNEL_DRO) {
-      String hydration = DroSerializer::buildStatus(hydrationModel);
+      String hydration = whatels::core_client::DroSerializer::buildStatus(hydrationModel);
       webSocket.sendTXT(num, hydration);
     }
     whatels::core_client::ClientManager::instance().onClientConnected(num, (const char*)payload);
@@ -541,7 +468,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       return;
     }
 
-    // Modern Native Client routing via ClientManager
+    // Native Client routing via ClientManager
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
       if (whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
         bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
@@ -554,9 +481,6 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
         }
         return;
       }
-    }
-
-    if (handleWebUiEventCommand(num, payload, length)) {
       return;
     }
     webSocket.sendTXT(num, "CMD.error=unknown_command\n");
@@ -809,62 +733,6 @@ static bool machineConfigChangeBlocked() {
   return SettingsService::isOn() || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
 }
 
-
-
-static void handleKeyboardConfigGet() {
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send(200, "text/plain", getKeyboardConfigResponse());
-}
-
-static void handleKeyboardConfigSave() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before changing keyboard config");
-    return;
-  }
-
-  String error = "";
-  if (!readKeyboardConfigFromRequest(&error)) {
-    loadKeyboardConfig();
-    server.send(400, "text/plain", error);
-    return;
-  }
-
-  saveKeyboardConfig();
-  server.send(200, "text/plain", "Keyboard config saved");
-}
-
-static void handleKeyboardConfigReset() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before resetting keyboard config");
-    return;
-  }
-
-  setKeyboardConfigDefaults();
-  saveKeyboardConfig();
-  server.send(200, "text/plain", "Keyboard config reset");
-}
-
-static void handleKeyboardCapture() {
-  bool enabled = false;
-  String error = "";
-  if (!readBoolConfigArg("enabled", &enabled, &error)) {
-    server.send(400, "text/plain", error);
-    return;
-  }
-  if (enabled && machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before learning keyboard keys");
-    return;
-  }
-
-  if (enabled) {
-    startKeyboardCapture();
-    server.send(200, "text/plain", "Keyboard capture started");
-  } else {
-    stopKeyboardCapture();
-    server.send(200, "text/plain", "Keyboard capture stopped");
-  }
-}
-
 static void handleWifiGet() {
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send(200, "text/plain", getWifiConfigResponse());
@@ -1034,111 +902,19 @@ static void registerWebRoutes() {
   server.on("/gcode/get", HTTP_GET, handleGcodeGet);
   server.on("/gcode/remove", HTTP_POST, handleGcodeRemove);
 
-  server.on("/keyboard-config", HTTP_GET, handleKeyboardConfigGet);
-  server.on("/keyboard-config", HTTP_POST, handleKeyboardConfigSave);
-  server.on("/keyboard-config/reset", HTTP_POST, handleKeyboardConfigReset);
-  server.on("/keyboard-capture", HTTP_POST, handleKeyboardCapture);
   server.on("/wifi", HTTP_GET, handleWifiGet);
   server.on("/wifi", HTTP_POST, handleWifiSave);
   server.on("/wifi/reset", HTTP_POST, handleWifiReset);
+  server.on("/api/wifi/scan", HTTP_GET, handleWifiScan);
   server.on("/firmware/upload", HTTP_POST, handleFirmwareUploadResult, handleFirmwareUpload);
   server.on("/status", HTTP_GET, handleStatus);
 }
 
-static String getStationWifiError() {
-  if (WiFi.status() == WL_NO_SSID_AVAIL) return "No SSID";
-  if (WiFi.status() == WL_CONNECT_FAILED) return "WiFi failed";
-  if (WiFi.status() == WL_CONNECTION_LOST) return "WiFi lost";
-  if (WiFi.status() == WL_DISCONNECTED) return "WiFi disconnected";
-  return "WiFi error";
-}
-
-static bool connectStationWifi() {
-  wifiSetupApActive = false;
-  wifiStationConnected = false;
-  wifiIpAddress = "";
-
-  if (sysConfig.wifi.ssid.length() == 0) {
-    setWiFiStatus("No SSID");
-    return false;
-  }
-
-  if (sysConfig.wifi.hostname.length() > 0) {
-    ESP_LOGI(TAG, "Setting WiFi hostname to: %s", sysConfig.wifi.hostname.c_str());
-    WiFi.setHostname(sysConfig.wifi.hostname.c_str());
-  } else {
-    ESP_LOGW(TAG, "sysConfig.wifi.hostname is empty! Falling back to default 'whatels'");
-    WiFi.setHostname("whatels");
-  }
-
-  WiFi.mode(WIFI_STA);
-  
-  if (sysConfig.wifi.hostname.length() > 0) {
-    WiFi.setHostname(sysConfig.wifi.hostname.c_str());
-  }
-  
-  ESP_LOGI(TAG, "Connecting to WiFi SSID: %s", sysConfig.wifi.ssid.c_str());
-  WiFi.begin(sysConfig.wifi.ssid.c_str(), sysConfig.wifi.password.c_str());
-  setWiFiStatus("Connecting");
-  for (int i = 0; i < 40; i++) {
-    if (WiFi.status() == WL_CONNECTED) {
-      ESP_LOGI(TAG, "WiFi connected successfully!");
-      break;
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));
-    taskYIELD();
-  }
-  if (WiFi.status() != WL_CONNECTED) {
-    String errorMsg = getStationWifiError();
-    ESP_LOGE(TAG, "WiFi connection failed. Status: %d, Error: %s", WiFi.status(), errorMsg.c_str());
-    setWiFiStatus(errorMsg);
-    return false;
-  }
-
-  wifiStationConnected = true;
-  wifiIpAddress = WiFi.localIP().toString();
-
-  // Disable Wi-Fi modem sleep for low-latency telemetry and HIL testing
-  WiFi.setSleep(false);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  
-  if (sysConfig.wifi.hostname.length() > 0) {
-    if (MDNS.begin(sysConfig.wifi.hostname.c_str())) {
-      ESP_LOGI(TAG, "mDNS responder started: http://%s.local", sysConfig.wifi.hostname.c_str());
-    } else {
-      ESP_LOGE(TAG, "Error setting up mDNS responder!");
-    }
-  }
-
-  setWiFiStatus("See " + wifiIpAddress);
-  ESP_LOGI(TAG, "Web UI available at: http://%s", wifiIpAddress.c_str());
-  return true;
-}
-
-static bool startSetupAccessPoint() {
-  WiFi.disconnect(true);
-  ESP_LOGI(TAG, "Starting Setup Access Point...");
-  WiFi.mode(WIFI_AP);
-  wifiSetupApActive = WiFi.softAP(sysConfig.wifi.setupApSsid.c_str(), sysConfig.wifi.setupApPassword.c_str());
-  wifiStationConnected = false;
-  if (!wifiSetupApActive) {
-    ESP_LOGE(TAG, "WiFi softAP creation failed!");
-    wifiIpAddress = "";
-    setWiFiStatus("WiFi AP failed");
-    return false;
-  }
-  wifiIpAddress = WiFi.softAPIP().toString();
-  ESP_LOGI(TAG, "WiFi softAP created successfully. SSID: %s, Pass: %s, URL: http://%s",
-           sysConfig.wifi.setupApSsid.c_str(), sysConfig.wifi.setupApPassword.c_str(), wifiIpAddress.c_str());
-
-  setWiFiStatus("Setup " + wifiIpAddress);
-  return true;
-}
-
 void taskWiFi(void *param) {
   ESP_LOGI(TAG, "Starting WiFi task...");
-  if (!connectStationWifi() && !startSetupAccessPoint()) {
-    ESP_LOGE(TAG, "Both Station and AP modes failed to start. Stopping WiFi task.");
+  whatels::core::WifiService& wifiSvc = whatels::core::WifiService::instance();
+  if (!wifiSvc.begin()) {
+    ESP_LOGE(TAG, "WiFi service failed to start. Stopping WiFi task.");
     vTaskDelete(NULL);
     return;
   }
@@ -1159,8 +935,28 @@ void taskWiFi(void *param) {
   webSocket.onEvent(handleWebSocketEvent);
   whatels::core_client::ClientManager::instance().init(&webSocket);
 
+  static bool s_wasConnected = false;
+
   while (emergencyStop == EstopCode::NONE) {
     server.handleClient();
+    wifiSvc.update();
+
+    wifiStationConnected = wifiSvc.isStationConnected();
+    wifiSetupApActive = wifiSvc.isApActive();
+    wifiIpAddress = wifiSvc.getIpAddress();
+    wifiStatus = wifiSvc.getStatusString();
+
+    if (s_wasConnected && !wifiStationConnected && !wifiSetupApActive) {
+      requestWebUiMoveRelease();
+      webSocketClientCount = 0;
+      activeChannelMask = CHANNEL_NONE;
+      for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
+        clientSessions[i].active = false;
+        clientSessions[i].channel = CHANNEL_NONE;
+      }
+    }
+    s_wasConnected = wifiStationConnected;
+
     if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
       webSocket.loop();
       dispatchTelemetry();
@@ -1178,53 +974,7 @@ void taskWiFi(void *param) {
                  wifiIpAddress.c_str(), webSocketClientCount, (unsigned int)ESP.getFreeHeap());
       }
     }
-    // WiFi connection watchdog & exponential backoff retry strategy
-    const unsigned long WIFI_DISCONNECT_DEBOUNCE_MS = 2500;
-    const unsigned long WIFI_RETRY_INITIAL_INTERVAL_MS = 3000;
-    const unsigned long WIFI_RETRY_MAX_INTERVAL_MS = 30000;
-    static unsigned long wifiDisconnectStartedAt = 0;
-    static unsigned long wifiNextRetryAt = 0;
-    static unsigned long wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
 
-    if (wifiStationConnected) {
-      if (WiFi.status() != WL_CONNECTED) {
-        if (wifiDisconnectStartedAt == 0) {
-          wifiDisconnectStartedAt = millis();
-        } else if (millis() - wifiDisconnectStartedAt >= WIFI_DISCONNECT_DEBOUNCE_MS) {
-          ESP_LOGW(TAG, "WiFi connection lost! Confirmed disconnected after debounce.");
-          requestWebUiMoveRelease();
-          webSocketClientCount = 0;
-          activeChannelMask = CHANNEL_NONE;
-          for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
-            clientSessions[i].active = false;
-            clientSessions[i].channel = CHANNEL_NONE;
-          }
-          wifiStationConnected = false;
-          wifiIpAddress = "";
-          wifiDisconnectStartedAt = 0;
-          wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
-          wifiNextRetryAt = millis() + wifiRetryIntervalMs;
-          setWiFiStatus("WiFi lost");
-        }
-      } else {
-        wifiDisconnectStartedAt = 0;
-      }
-    } else if (!wifiSetupApActive && sysConfig.wifi.ssid.length() > 0) {
-      if (WiFi.status() == WL_CONNECTED) {
-        wifiStationConnected = true;
-        wifiIpAddress = WiFi.localIP().toString();
-        wifiDisconnectStartedAt = 0;
-        wifiRetryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
-        setWiFiStatus("See " + wifiIpAddress);
-        ESP_LOGI(TAG, "WiFi reconnected successfully!");
-      } else if ((long)(millis() - wifiNextRetryAt) >= 0) {
-        ESP_LOGD(TAG, "WiFi retrying connection (interval %lu ms)...", wifiRetryIntervalMs);
-        setWiFiStatus("WiFi retry (" + String(wifiRetryIntervalMs / 1000) + "s)");
-        WiFi.reconnect();
-        wifiRetryIntervalMs = min(wifiRetryIntervalMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
-        wifiNextRetryAt = millis() + wifiRetryIntervalMs;
-      }
-    }
     if (firmwareUploadRestartPending && ((long)(millis() - firmwareUploadRestartAt) >= 0)) {
       firmwareUploadLog("restarting now");
       vTaskDelay(pdMS_TO_TICKS(50));

@@ -142,7 +142,7 @@ static const char LATHE_PROFILE_SCHEMA_JSON[] PROGMEM = R"rawliteral({json_conte
 
 def generate_presets_header(project_dir):
     presets_dir = os.path.join(project_dir, "data", "presets")
-    out_h = os.path.join(project_dir, "src", "web", "SystemPresetsJson.h")
+    out_h = os.path.join(project_dir, "src", "core", "SystemPresetsJson.h")
 
     # If presets dir does not exist, run generator
     threads_dir = os.path.join(presets_dir, "threads")

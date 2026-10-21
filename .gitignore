@@ -24,6 +24,7 @@ tutorials/
 # Auto-generated build assets
 src/motion/SystemProfilesJson.h
 src/motion/SystemSchemaJson.h
+src/core/SystemPresetsJson.h
 src/web/ControllerWebAssets.h
 
 agy-conv-fix

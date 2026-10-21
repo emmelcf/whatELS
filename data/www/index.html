@@ -3,425 +3,436 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>whatELS</title>
-  <link rel="icon" href="data:;base64,">
+  <title>whatELS — Controller Setup & Configuration</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚙️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="page-shell">
-    <nav class="section-tabs" aria-label="Main sections">
-      <a href="#control" data-section-link="control">Control</a>
-      <a href="#gcode" data-section-link="gcode">GCode</a>
-      <a href="#updates" data-section-link="updates">Updates</a>
-      <a href="#wifi" data-section-link="wifi">WiFi</a>
-      <a href="#system" data-section-link="system">System</a>
-      <a href="#ui" data-section-link="ui">UI</a>
-      <a href="#settings" data-section-link="settings">Settings</a>
-      <a href="#keyboard" data-section-link="keyboard">Keyboard</a>
-      <a href="#logs" data-section-link="logs">Logs</a>
+  <div class="app-layout">
+    <!-- TOP HEADER -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-logo">what<span class="brand-accent">ELS</span></span>
+        <span class="brand-sub">Setup & Diagnostics</span>
+      </div>
+
+      <div class="header-telemetry">
+        <div class="status-pill status-ws" id="wsStatusPill">
+          <span class="status-dot"></span>
+          <span id="wsStatusText">Connecting...</span>
+        </div>
+        <div class="status-pill status-lathe" id="latheStatusPill">
+          <span class="status-dot"></span>
+          <span id="latheStatusText">STOPPED</span>
+        </div>
+        <div class="header-badge" id="wifiIpBadge" title="Controller IP">
+          <span class="badge-icon">🌐</span>
+          <span id="wifiIpText">--</span>
+        </div>
+        <div class="header-badge" id="heapBadge" title="Free Heap Memory">
+          <span class="badge-icon">⚡</span>
+          <span id="heapText">-- KB</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="wifi" role="tab" aria-selected="true" id="tabBtnWifi">
+        <span class="tab-icon">📶</span>
+        <span class="tab-title">WiFi & Network</span>
+      </button>
+      <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false" id="tabBtnSettings">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-title">Machine Settings</span>
+      </button>
+      <button class="tab-btn" data-tab="firmware" role="tab" aria-selected="false" id="tabBtnFirmware">
+        <span class="tab-icon">🚀</span>
+        <span class="tab-title">Firmware & System</span>
+      </button>
     </nav>
 
-    <main>
-      <section id="section-control" class="app-section" data-section="control">
-        <div class="section-stack control-stack">
-          <section id="control-status" class="panel control-status-panel" aria-label="Controller status">
-            <div class="control-status-grid">
-              <div class="control-status-item control-status-button" data-control-shortcut-panel="modes" role="button" tabindex="0" aria-label="Open Modes">
-                <span class="control-status-label">Mode</span>
-                <span id="control-mode" class="control-status-value">--</span>
-                <span id="control-mode-pitch" class="control-mode-pitch">--</span>
-              </div>
-              <div class="control-status-item control-status-button" data-control-shortcut-action="88" data-control-shortcut-label="Zero X" role="button" tabindex="0" aria-label="Zero X">
-                <span class="control-status-label">X</span>
-                <span id="control-x" class="control-status-value">--</span>
-                <span id="control-x-inline-stops" class="control-axis-stops">--</span>
-              </div>
-              <div class="control-status-item control-status-button" data-control-shortcut-action="90" data-control-shortcut-label="Zero Z" role="button" tabindex="0" aria-label="Zero Z">
-                <span class="control-status-label">Z</span>
-                <span id="control-z" class="control-status-value">--</span>
-                <span id="control-z-inline-stops" class="control-axis-stops">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-y" data-control-shortcut-action="72" data-control-shortcut-label="Zero Y" role="button" tabindex="0" aria-label="Zero Y" hidden>
-                <span class="control-status-label">Y</span>
-                <span id="control-y" class="control-status-value">--</span>
-                <span id="control-y-inline-stops" class="control-axis-stops">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="OFF" role="button" tabindex="0" aria-label="Stop controller">
-                <span class="control-status-label">State</span>
-                <span id="control-state" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="82" data-control-shortcut-label="Reverse" role="button" tabindex="0" aria-label="Reverse pitch">
-                <span class="control-status-label">Pitch</span>
-                <span id="control-pitch" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="77" data-control-shortcut-label="Units" role="button" tabindex="0" aria-label="Change units">
-                <span class="control-status-label">Units</span>
-                <span id="control-measure" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="64" data-control-shortcut-label="Step" role="button" tabindex="0" aria-label="Change step">
-                <span class="control-status-label">Step</span>
-                <span id="control-step" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="Stop" role="button" tabindex="0" aria-label="Zero turns and angle">
-                <span class="control-status-label">Turns</span>
-                <span id="control-turns" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-button control-status-extra" data-control-shortcut-action="27" data-control-shortcut-label="Stop" role="button" tabindex="0" aria-label="Zero turns and angle">
-                <span class="control-status-label">Angle</span>
-                <span id="control-angle" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-status-extra">
-                <span class="control-status-label">RPM</span>
-                <span id="control-rpm" class="control-status-value">--</span>
-              </div>
-              <div class="control-status-item control-message control-extra-toggle" data-control-extra-toggle role="button" tabindex="0" aria-label="Show or hide controller details" aria-expanded="false">
-                <div class="control-message-heading">
-                  <span class="control-status-label">Message</span>
-                  <span class="control-action-status" data-control-action-status role="status" aria-live="polite"></span>
+    <!-- MAIN CONTENT VIEW -->
+    <main class="content-container">
+      
+      <!-- TAB 1: WIFI & NETWORK -->
+      <section class="tab-panel active" id="panel-wifi" role="tabpanel">
+        <div class="panel-grid">
+          
+          <!-- Current Connection Card -->
+          <div class="card status-card">
+            <div class="card-header">
+              <h3>Live Network Status</h3>
+              <span class="badge-pill" id="wifiStateBadge">Checking...</span>
+            </div>
+            <div class="card-body">
+              <div class="kv-grid">
+                <div class="kv-item">
+                  <span class="kv-label">Operating Mode</span>
+                  <span class="kv-val mono" id="statusMode">--</span>
                 </div>
-                <span id="control-message" class="control-status-value">--</span>
+                <div class="kv-item">
+                  <span class="kv-label">Active IP Address</span>
+                  <span class="kv-val mono accent" id="statusIp">--</span>
+                </div>
+                <div class="kv-item">
+                  <span class="kv-label">Connected SSID</span>
+                  <span class="kv-val mono" id="statusSsid">--</span>
+                </div>
+                <div class="kv-item">
+                  <span class="kv-label">mDNS Hostname</span>
+                  <span class="kv-val mono" id="statusHostname">whatels.local</span>
+                </div>
               </div>
             </div>
-          </section>
-
-          <div class="control-mobile-tabs" role="tablist" aria-label="Control groups">
-            <button type="button" class="control-mobile-tab active" data-control-panel-tab="jog">Jog</button>
-            <button type="button" class="control-mobile-tab" data-control-panel-tab="run">Run</button>
-            <button type="button" class="control-mobile-tab" data-control-panel-tab="numpad">Numpad</button>
-            <button type="button" class="control-mobile-tab" data-control-panel-tab="stops">Stops</button>
-            <button type="button" class="control-mobile-tab" data-control-panel-tab="modes">Modes</button>
           </div>
-          <div class="control-grid">
-            <section class="panel control-panel active" data-control-panel="jog">
-              <h3>Jog</h3>
-              <div class="control-jog-grid">
-                <button type="button" class="control-button hold control-jog-arrow control-jog-up" data-control-action="23" data-control-hold="1" data-control-label="X Forward" aria-label="Jog X forward" title="X Forward">
-                  <span class="control-jog-symbol">↑</span>
-                  <span class="control-jog-axis">X</span>
-                </button>
-                <button type="button" class="control-button hold control-jog-arrow control-jog-left" data-control-action="21" data-control-hold="1" data-control-label="Z Left" aria-label="Jog Z left" title="Z Left">
-                  <span class="control-jog-symbol">←</span>
-                  <span class="control-jog-axis">Z</span>
-                </button>
-                <div class="control-jog-center" aria-hidden="true"></div>
-                <button type="button" class="control-button hold control-jog-arrow control-jog-right" data-control-action="22" data-control-hold="1" data-control-label="Z Right" aria-label="Jog Z right" title="Z Right">
-                  <span class="control-jog-symbol">→</span>
-                  <span class="control-jog-axis">Z</span>
-                </button>
-                <button type="button" class="control-button hold control-jog-arrow control-jog-down" data-control-action="24" data-control-hold="1" data-control-label="X Back" aria-label="Jog X back" title="X Back">
-                  <span class="control-jog-symbol">↓</span>
-                  <span class="control-jog-axis">X</span>
-                </button>
-                <button type="button" class="control-button hold control-jog-arrow control-jog-y-forward control-y" data-control-action="85" data-control-hold="1" data-control-label="Y Forward" aria-label="Jog Y forward" title="Y Forward" hidden>
-                  <span class="control-jog-symbol">↑</span>
-                  <span class="control-jog-axis">Y</span>
-                </button>
-                <button type="button" class="control-button hold control-jog-arrow control-jog-y-back control-y" data-control-action="74" data-control-hold="1" data-control-label="Y Back" aria-label="Jog Y back" title="Y Back" hidden>
-                  <span class="control-jog-symbol">↓</span>
-                  <span class="control-jog-axis">Y</span>
-                </button>
+
+          <!-- Network Scanner Card -->
+          <div class="card scan-card">
+            <div class="card-header">
+              <h3>Available Wi-Fi Networks</h3>
+              <button class="btn btn-sm btn-secondary" id="btnScanWifi" type="button">
+                <span class="btn-spinner" id="scanSpinner" hidden></span>
+                <span>Scan Nearby</span>
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="network-list" id="networkList">
+                <p class="placeholder-text">Click "Scan Nearby" to discover local 2.4GHz Wi-Fi networks.</p>
               </div>
-            </section>
+            </div>
+          </div>
 
-            <section class="panel control-panel" data-control-panel="run">
-              <h3>Operation</h3>
-              <div class="control-button-grid">
-                <button type="button" class="control-button" data-control-action="30">ON</button>
-                <button type="button" class="control-button danger" data-control-action="27">OFF</button>
-                <button type="button" class="control-button neutral" data-control-action="64">Step</button>
-                <button type="button" class="control-button" data-control-action="95">Plus</button>
-                <button type="button" class="control-button" data-control-action="60">Minus</button>
-                <button type="button" class="control-button neutral" data-control-action="82">Reverse</button>
-                <button type="button" class="control-button neutral" data-control-action="77">Units</button>
-                <button type="button" class="control-button neutral" data-control-action="12">Display</button>
-                <button type="button" class="control-button neutral" data-control-action="84">Starts</button>
+          <!-- Configuration Form Card -->
+          <div class="card form-card">
+            <div class="card-header">
+              <h3>Station Configuration</h3>
+            </div>
+            <div class="card-body">
+              <form id="wifiForm">
+                <div class="form-group toggle-group">
+                  <label for="inputWifiEnabled">Enable Wi-Fi Subsystem</label>
+                  <label class="switch">
+                    <input type="checkbox" id="inputWifiEnabled" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+
+                <div class="form-group">
+                  <label for="inputWifiSsid">Network SSID</label>
+                  <input type="text" id="inputWifiSsid" placeholder="e.g. Workshop_WiFi" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                  <label for="inputWifiPassword">Password</label>
+                  <div class="password-wrapper">
+                    <input type="password" id="inputWifiPassword" placeholder="Enter WPA2 Key">
+                    <button type="button" class="btn-toggle-pwd" id="btnTogglePwd" title="Show/Hide Password">👁</button>
+                  </div>
+                  <small class="field-hint">Leave blank to keep existing password stored in NVS.</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="inputWifiHostname">Controller Hostname</label>
+                  <input type="text" id="inputWifiHostname" placeholder="whatels" value="whatels">
+                  <small class="field-hint">Accessible on local network as http://&lt;hostname&gt;.local</small>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" id="btnSaveWifi">Save & Connect</button>
+                  <button type="button" class="btn btn-danger" id="btnResetWifi">Reset to AP Defaults</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- TAB 2: MACHINE SETTINGS -->
+      <section class="tab-panel" id="panel-settings" role="tabpanel">
+        <div class="settings-toolbar">
+          <div class="toolbar-info">
+            <span class="info-label">Settings Source:</span>
+            <span class="info-badge">NVS Flash + Live Cache</span>
+            <span class="dirty-badge" id="dirtyBadge" hidden>Unsaved Changes</span>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary btn-sm" id="btnReloadSettings" type="button">Reload</button>
+            <button class="btn btn-primary btn-sm" id="btnSaveAllSettings" type="button">Save to Flash</button>
+          </div>
+        </div>
+
+        <div class="settings-groups">
+          
+          <!-- TIER 1: MACHINE GEOMETRY & MECHANICS -->
+          <div class="settings-group-card">
+            <div class="group-header">
+              <div class="group-title">
+                <span class="group-icon">📐</span>
+                <h4>Machine Geometry & Lead Screws (Tier 1)</h4>
               </div>
-            </section>
-
-            <section class="panel control-panel" data-control-panel="numpad">
-              <h3>Numpad</h3>
-              <div class="control-numpad">
-                <button type="button" class="control-button neutral" data-control-action="49">1</button>
-                <button type="button" class="control-button neutral" data-control-action="50">2</button>
-                <button type="button" class="control-button neutral" data-control-action="51">3</button>
-                <button type="button" class="control-button neutral" data-control-action="52">4</button>
-                <button type="button" class="control-button neutral" data-control-action="53">5</button>
-                <button type="button" class="control-button neutral" data-control-action="54">6</button>
-                <button type="button" class="control-button neutral" data-control-action="55">7</button>
-                <button type="button" class="control-button neutral" data-control-action="56">8</button>
-                <button type="button" class="control-button neutral" data-control-action="57">9</button>
-                <button type="button" class="control-button neutral" data-control-action="48">0</button>
-                <button type="button" class="control-button neutral control-wide" data-control-action="28">Backspace</button>
+              <span class="group-meta">Hardware kinematic constants</span>
+            </div>
+            <div class="settings-grid">
+              
+              <div class="setting-item" data-key="machine.screw_z_du">
+                <div class="setting-info">
+                  <label for="set_screw_z">Z Lead Screw Pitch</label>
+                  <span class="setting-desc">Distance carriage travels per 1 screw revolution</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_screw_z" step="0.001" min="0.1" max="50.0" data-scale="10000">
+                  <span class="setting-unit">mm/rev</span>
+                </div>
               </div>
-            </section>
 
-            <section class="panel control-panel" data-control-panel="stops">
-              <h3>Stops and Axes</h3>
-              <div class="control-button-grid">
-                <button type="button" class="control-button warning" data-control-action="65">Z Left Stop</button>
-                <button type="button" class="control-button warning" data-control-action="68">Z Right Stop</button>
-                <button type="button" class="control-button neutral" data-control-action="90">Zero Z</button>
-                <button type="button" class="control-button warning" data-control-action="87">X Forward Stop</button>
-                <button type="button" class="control-button warning" data-control-action="83">X Rear Stop</button>
-                <button type="button" class="control-button neutral" data-control-action="88">Zero X</button>
-                <button type="button" class="control-button warning control-y" data-control-action="73" hidden>Y Forward Stop</button>
-                <button type="button" class="control-button warning control-y" data-control-action="75" hidden>Y Back Stop</button>
-                <button type="button" class="control-button neutral control-y" data-control-action="72" hidden>Zero Y</button>
-                <button type="button" class="control-button neutral" data-control-action="81">Enable Z</button>
-                <button type="button" class="control-button neutral" data-control-action="67">Enable X</button>
-                <button type="button" class="control-button neutral control-y" data-control-action="89" hidden>Enable Y</button>
-                <button type="button" class="control-button neutral" data-control-action="79">Diameter</button>
+              <div class="setting-item" data-key="machine.screw_x_du">
+                <div class="setting-info">
+                  <label for="set_screw_x">X Cross-Slide Pitch</label>
+                  <span class="setting-desc">Distance cross-slide travels per 1 screw revolution</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_screw_x" step="0.001" min="0.1" max="50.0" data-scale="10000">
+                  <span class="setting-unit">mm/rev</span>
+                </div>
               </div>
-            </section>
 
-            <section class="panel control-panel" data-control-panel="modes">
-              <h3>Modes</h3>
-              <div class="control-button-grid">
-                <button type="button" class="control-button mode" data-control-action="97">Gear</button>
-                <button type="button" class="control-button mode" data-control-action="109">XGear</button>
-                <button type="button" class="control-button mode" data-control-action="108">Joy</button>
-                <button type="button" class="control-button mode" data-control-action="98">Turn</button>
-                <button type="button" class="control-button mode" data-control-action="99">Face</button>
-                <button type="button" class="control-button mode" data-control-action="100">Cone</button>
-                <button type="button" class="control-button mode" data-control-action="101">Cut</button>
-                <button type="button" class="control-button mode" data-control-action="110">Slot</button>
-                <button type="button" class="control-button mode" data-control-action="102">Thread</button>
-                <button type="button" class="control-button mode" data-control-action="104">Ellip</button>
-                <button type="button" class="control-button mode" data-control-action="105">GCode</button>
-                <button type="button" class="control-button mode" data-control-action="103">Async</button>
-                <button type="button" class="control-button mode control-y" data-control-action="106" hidden>Y</button>
+              <div class="setting-item" data-key="machine.z.motorSteps">
+                <div class="setting-info">
+                  <label for="set_steps_z">Z Motor Steps / Rev</label>
+                  <span class="setting-desc">Full steps × microstepping × pulley ratio (e.g. 200 × 4 = 800)</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_steps_z" step="1" min="1" max="1000000">
+                  <span class="setting-unit">steps</span>
+                </div>
               </div>
-            </section>
-          </div>
-          <div class="control-bottom-bar">
-            <button type="button" id="control-fullscreen" class="control-button control-fullscreen-button" aria-label="Fullscreen">Full</button>
-            <div class="control-bottom-state control-status-button" data-control-shortcut-action="27" data-control-shortcut-label="OFF" role="button" tabindex="0" aria-label="Stop controller">
-              <span class="control-status-label">State</span>
-              <span id="control-bottom-state" class="control-status-value">--</span>
+
+              <div class="setting-item" data-key="machine.x.motorSteps">
+                <div class="setting-info">
+                  <label for="set_steps_x">X Motor Steps / Rev</label>
+                  <span class="setting-desc">Full steps × microstepping × pulley ratio</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_steps_x" step="1" min="1" max="1000000">
+                  <span class="setting-unit">steps</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="machine.spindle.ppr">
+                <div class="setting-info">
+                  <label for="set_spindle_ppr">Spindle Encoder PPR</label>
+                  <span class="setting-desc">Physical pulses per spindle revolution before quadrature</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_spindle_ppr" step="1" min="10" max="10000">
+                  <span class="setting-unit">ppr</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="machine.spindle.ratio">
+                <div class="setting-info">
+                  <label for="set_spindle_ratio">Spindle Pulley Ratio</label>
+                  <span class="setting-desc">Spindle to encoder belt ratio (1.000 for direct drive)</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_spindle_ratio" step="0.001" min="0.01" max="10.0">
+                  <span class="setting-unit">:1</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="machine.z.backlashDu">
+                <div class="setting-info">
+                  <label for="set_backlash_z">Z Backlash Compensation</label>
+                  <span class="setting-desc">Carriage lost motion on direction reversal</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_backlash_z" step="0.001" min="0.0" max="5.0" data-scale="10000">
+                  <span class="setting-unit">mm</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="machine.x.backlashDu">
+                <div class="setting-info">
+                  <label for="set_backlash_x">X Backlash Compensation</label>
+                  <span class="setting-desc">Cross-slide lost motion on direction reversal</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_backlash_x" step="0.001" min="0.0" max="5.0" data-scale="10000">
+                  <span class="setting-unit">mm</span>
+                </div>
+              </div>
+
             </div>
-            <div class="control-bottom-rpm">
-              <span class="control-status-label">RPM</span>
-              <span id="control-bottom-rpm" class="control-status-value">--</span>
-            </div>
-            <button type="button" class="control-button control-bottom-button" data-control-action="30">ON</button>
-            <button type="button" class="control-button control-bottom-button danger" data-control-action="27">OFF</button>
           </div>
+
+          <!-- TIER 2: SYSTEM & PERIPHERALS -->
+          <div class="settings-group-card">
+            <div class="group-header">
+              <div class="group-title">
+                <span class="group-icon">🎛️</span>
+                <h4>System & Peripherals (Tier 2)</h4>
+              </div>
+              <span class="group-meta">DRO optical scales & MPG handwheels</span>
+            </div>
+            <div class="settings-grid">
+              
+              <div class="setting-item" data-key="sys.dro.zPulsesPerMm">
+                <div class="setting-info">
+                  <label for="set_dro_z">Z DRO Scale Resolution</label>
+                  <span class="setting-desc">Optical glass scale pulses per mm (e.g. 200 for 5µm scale)</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_dro_z" step="1" min="1" max="100000">
+                  <span class="setting-unit">pulses/mm</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="sys.dro.xPulsesPerMm">
+                <div class="setting-info">
+                  <label for="set_dro_x">X DRO Scale Resolution</label>
+                  <span class="setting-desc">Optical glass scale pulses per mm</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_dro_x" step="1" min="1" max="100000">
+                  <span class="setting-unit">pulses/mm</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="sys.mpg.zPulsesPerRev">
+                <div class="setting-info">
+                  <label for="set_mpg_z">Z MPG Handwheel PPR</label>
+                  <span class="setting-desc">Pulses per click/revolution of manual pulse generator</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_mpg_z" step="1" min="1" max="10000">
+                  <span class="setting-unit">ppr</span>
+                </div>
+              </div>
+
+              <div class="setting-item" data-key="sys.mpg.xPulsesPerRev">
+                <div class="setting-info">
+                  <label for="set_mpg_x">X MPG Handwheel PPR</label>
+                  <span class="setting-desc">Pulses per click/revolution of manual pulse generator</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <input type="number" id="set_mpg_x" step="1" min="1" max="10000">
+                  <span class="setting-unit">ppr</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- TIER 3: OPERATOR PREFERENCES -->
+          <div class="settings-group-card">
+            <div class="group-header">
+              <div class="group-title">
+                <span class="group-icon">👤</span>
+                <h4>Operator Preferences (Tier 3)</h4>
+              </div>
+              <span class="group-meta">User defaults & display behavior</span>
+            </div>
+            <div class="settings-grid">
+              
+              <div class="setting-item" data-key="prefs.startupMeasure">
+                <div class="setting-info">
+                  <label for="set_units">Startup Unit Standard</label>
+                  <span class="setting-desc">Default measurement system initialized on boot</span>
+                </div>
+                <div class="setting-input-wrap">
+                  <select id="set_units">
+                    <option value="0">Metric (mm)</option>
+                    <option value="1">Imperial (Inches)</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </section>
 
-      <section id="section-gcode" class="app-section" data-section="gcode">
-        <div class="section-stack">
-          <section class="panel">
-            <h3>Stored GCode</h3>
-            <div id="gcode-list"></div>
-            <p id="free-space"></p>
-          </section>
-          <section class="panel">
-            <h3>Add GCode</h3>
-            <p class="section-note">Generate compatible files with <a href="https://kachurovskiy.com/lathecode/" target="_blank">lathecode</a>.</p>
-            <input type="text" id="gcode-name" placeholder="GCode name" required minlength="2">
-            <textarea id="gcode-content" placeholder="GCode content" required minlength="2"></textarea>
-            <div class="checkbox-container">
-              <button id="add-gcode">Save</button>
-              <input type="checkbox" id="remove-comments" checked>
-              <label for="remove-comments">Remove comments before saving</label>
+      <!-- TAB 3: FIRMWARE & SYSTEM -->
+      <section class="tab-panel" id="panel-firmware" role="tabpanel">
+        <div class="panel-grid">
+          
+          <!-- System Information Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3>System Overview</h3>
             </div>
-          </section>
+            <div class="card-body">
+              <div class="kv-grid">
+                <div class="kv-item">
+                  <span class="kv-label">Firmware Target</span>
+                  <span class="kv-val mono">ESP32-S3 (Dual-Core 240MHz)</span>
+                </div>
+                <div class="kv-item">
+                  <span class="kv-label">Core Architecture</span>
+                  <span class="kv-val mono">whatELS 6-Subsystem Engine</span>
+                </div>
+                <div class="kv-item">
+                  <span class="kv-label">Active Lathe Profile</span>
+                  <span class="kv-val mono" id="infoPreset">--</span>
+                </div>
+                <div class="kv-item">
+                  <span class="kv-label">Free Heap RAM</span>
+                  <span class="kv-val mono accent" id="infoHeap">--</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- OTA Upload Card -->
+          <div class="card ota-card">
+            <div class="card-header">
+              <h3>Over-The-Air (OTA) Firmware Upgrade</h3>
+              <span class="badge-pill info">Target: app0</span>
+            </div>
+            <div class="card-body">
+              <p class="ota-intro">Upload a compiled <code>firmware.bin</code> to upgrade both the real-time kinematics and embedded web assets atomically.</p>
+              
+              <div class="warning-callout" id="otaRunningWarning" hidden>
+                ⚠️ Lathe motion is currently engaged. Please STOP the lathe before initiating an update.
+              </div>
+
+              <form id="otaForm" method="POST" action="/firmware/upload" enctype="multipart/form-data">
+                <div class="file-drop-zone" id="dropZone">
+                  <span class="drop-icon">📦</span>
+                  <p class="drop-prompt">Select or drag & drop <code>firmware.bin</code></p>
+                  <input type="file" id="firmwareFile" name="update" accept=".bin" required>
+                  <span class="selected-file-name" id="fileNameDisplay"></span>
+                </div>
+
+                <div class="progress-bar-container" id="uploadProgressContainer" hidden>
+                  <div class="progress-bar" id="uploadProgressBar"></div>
+                  <span class="progress-label" id="uploadProgressLabel">0%</span>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" id="btnUploadFirmware" disabled>Flash Firmware</button>
+                  <button type="button" class="btn btn-secondary" id="btnRestartController">Restart Controller</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
         </div>
       </section>
 
-      <section id="section-updates" class="app-section" data-section="updates">
-        <div class="section-header">
-          <p class="section-note">Keep this page open until an upload finishes.</p>
-        </div>
-        <div class="section-stack">
-          <section class="panel">
-            <h3>Nextion TFT Upload</h3>
-            <div id="tft-upload-controls">
-              <label for="tft-file" id="tft-browse" class="button-like">Browse</label>
-              <input type="file" id="tft-file" accept=".tft">
-              <input type="checkbox" id="tft-first-upload" checked>
-              <label for="tft-first-upload">First upload / factory display (9600 baud)</label>
-            </div>
-            <progress id="tft-progress" value="0" max="100" hidden></progress>
-            <p id="tft-status"></p>
-          </section>
-          <section class="panel">
-            <h3>ESP32 Firmware Upload</h3>
-            <div id="firmware-upload-controls">
-              <label for="firmware-file" id="firmware-browse" class="button-like">Browse</label>
-              <input type="file" id="firmware-file" accept=".bin,application/octet-stream">
-            </div>
-            <progress id="firmware-progress" value="0" max="100" hidden></progress>
-            <p id="firmware-status"></p>
-          </section>
-        </div>
-      </section>
-
-      <section id="section-wifi" class="app-section" data-section="wifi">
-        <form id="wifi-form" class="config-section">
-          <div class="config-grid" style="margin-bottom: 10px;">
-            <label class="config-checkbox" for="wifi-enabled">
-              <input type="checkbox" id="wifi-enabled">
-              <span>WiFi enabled</span>
-            </label>
-          </div>
-          <div class="config-grid" style="margin-bottom: 10px;">
-            <label class="config-field" for="wifi-ssid">
-              <span>Network name</span>
-              <input type="text" id="wifi-ssid" maxlength="32" autocomplete="off">
-            </label>
-            <label class="config-field" for="wifi-password">
-              <span>Password</span>
-              <input type="password" id="wifi-password" maxlength="63" autocomplete="new-password" placeholder="Leave unchanged">
-            </label>
-            <label class="config-field" for="wifi-hostname">
-              <span>Hostname</span>
-              <input type="text" id="wifi-hostname" maxlength="32" autocomplete="off" placeholder="whatels">
-            </label>
-          </div>
-          <div class="config-grid">
-            <label class="config-checkbox" for="wifi-clear-password">
-              <input type="checkbox" id="wifi-clear-password">
-              <span>Clear saved password</span>
-            </label>
-          </div>
-          <div class="config-actions">
-            <button id="save-wifi" type="submit">Save and restart</button>
-            <button id="reset-wifi" type="button" class="secondary">Forget network</button>
-            <span id="wifi-status" class="action-status" role="status" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-      <section id="section-system" class="app-section" data-section="system">
-        <div class="section-stack">
-          <section class="config-section system-info-settings">
-            <h3>System Information</h3>
-            <div class="config-grid">
-              <label class="config-field">
-                <span class="config-label">Version</span>
-                <span class="config-unit" id="sysinfo-version">Loading...</span>
-              </label>
-              <label class="config-field">
-                <span class="config-label">ESP32 Chip</span>
-                <span class="config-unit" id="sysinfo-chip">Loading...</span>
-              </label>
-              <label class="config-field">
-                <span class="config-label">Flash Size</span>
-                <span class="config-unit" id="sysinfo-flash">Loading...</span>
-              </label>
-              <label class="config-field">
-                <span class="config-label">Free Heap Memory</span>
-                <span class="config-unit" id="sysinfo-heap">Loading...</span>
-              </label>
-            </div>
-            <div class="config-actions">
-              <button id="refresh-sysinfo" type="button" class="secondary">Refresh Info</button>
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section id="section-ui" class="app-section" data-section="ui">
-        <div class="section-stack">
-          <details class="config-section settings-group accessibility-settings" open>
-            <summary>Accessibility (7)</summary>
-            <div class="config-grid">
-              <label class="config-checkbox" for="accessibility-voice-feedback">
-                <input type="checkbox" id="accessibility-voice-feedback">
-                <span>Voice feedback</span>
-              </label>
-              <label class="config-checkbox" for="accessibility-announce-buttons">
-                <input type="checkbox" id="accessibility-announce-buttons">
-                <span>Announce button presses</span>
-              </label>
-              <label class="config-checkbox" for="accessibility-announce-status">
-                <input type="checkbox" id="accessibility-announce-status">
-                <span>Announce controller status changes</span>
-              </label>
-              <label class="config-checkbox" for="accessibility-announce-warnings">
-                <input type="checkbox" id="accessibility-announce-warnings">
-                <span>Announce warnings and errors</span>
-              </label>
-              <label class="config-checkbox" for="accessibility-announce-axis">
-                <input type="checkbox" id="accessibility-announce-axis">
-                <span>Announce axis position changes</span>
-              </label>
-              <label class="config-checkbox" for="accessibility-quiet-hold">
-                <input type="checkbox" id="accessibility-quiet-hold">
-                <span>Quiet while holding jog buttons</span>
-              </label>
-              <label class="config-field" for="accessibility-speech-rate">
-                <span class="config-label">Speech speed</span>
-                <select id="accessibility-speech-rate">
-                  <option value="1">1x</option>
-                  <option value="1.5">1.5x</option>
-                  <option value="2">2x</option>
-                  <option value="3">3x</option>
-                </select>
-              </label>
-            </div>
-            <div class="config-actions">
-              <button id="accessibility-test-voice" type="button" class="secondary">Test voice</button>
-              <span id="accessibility-status" class="action-status" role="status" aria-live="polite"></span>
-            </div>
-          </details>
-        </div>
-      </section>
-
-      <section id="section-settings" class="app-section" data-section="settings">
-        <form id="config-form">
-          <div id="config-fields"></div>
-          <div class="config-actions sticky-actions">
-            <button id="save-config" type="submit">Save and restart</button>
-            <button id="reset-config" type="button" class="secondary">Reset defaults</button>
-            <span id="config-status" class="action-status" role="status" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-      <section id="section-keyboard" class="app-section" data-section="keyboard">
-        <form id="keyboard-form">
-          <section class="config-section">
-            <label class="config-checkbox" for="keyboard-show-keys">
-              <input type="checkbox" id="keyboard-show-keys">
-              <span>Show key presses on screen</span>
-            </label>
-            <small class="config-help">Last physical key code: <span id="keyboard-last-key">none</span></small>
-          </section>
-          <div id="keyboard-fields"></div>
-          <div class="config-actions sticky-actions">
-            <button id="save-keyboard" type="submit">Save keyboard</button>
-            <button id="reset-keyboard" type="button" class="secondary">Reset keyboard</button>
-            <span id="keyboard-status" class="action-status" role="status" aria-live="polite"></span>
-          </div>
-        </form>
-      </section>
-
-      <section id="section-logs" class="app-section" data-section="logs">
-        <div id="log"></div>
-        <div id="command-container">
-          <input type="text" id="command" placeholder="Enter command" value="?" minlength="1" required>
-          <button id="send">Send</button>
-        </div>
-        <details class="panel">
-          <summary>Supported websocket commands</summary>
-          <ul>
-            <li><code>?</code> requests controller status</li>
-            <li><code>@21:1</code> presses direct action code 21; <code>@21:0</code> releases it without keyboard remapping</li>
-            <li><code>=20</code> sends key code 20 as if it is pressed on the keyboard</li>
-            <li><code>!</code> turns the controller off</li>
-            <li><code>~</code> turns the controller on</li>
-            <li><code>""</code> removes all GCode</li>
-          </ul>
-        </details>
-      </section>
     </main>
 
-    <footer class="app-footer">
-      <p>whatELS <span id="footer-version"></span>. Trusted local network only. Stop the controller before uploads or settings changes.</p>
-    </footer>
+    <!-- TOAST NOTIFICATION -->
+    <div class="toast" id="toastNotification" role="alert" aria-live="assertive" hidden>
+      <span class="toast-icon" id="toastIcon">ℹ️</span>
+      <span class="toast-message" id="toastMessage">Action completed</span>
+    </div>
   </div>
 
   <script src="/app.js"></script>

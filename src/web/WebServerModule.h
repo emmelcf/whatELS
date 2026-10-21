@@ -59,9 +59,6 @@ extern unsigned long firmwareUploadRestartAt;
 extern bool configRestartPending;
 extern unsigned long configRestartAt;
 
-extern bool keyboardCaptureActive;
-extern byte keyboardCaptureReleaseCode;
-extern unsigned long keyboardCaptureUntil;
 
 bool bufferAvailable(CircleBuffer* b);
 bool writeBuffer(CircleBuffer* b, char c);

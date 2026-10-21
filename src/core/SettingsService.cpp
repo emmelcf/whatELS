@@ -1279,6 +1279,14 @@ bool SettingsService::get(const char* key, String* reply) {
     appendSetting("sys.wifi.hostname", sysConfig.wifi.hostname);
     if (!getAll) return true;
   }
+  if (getAll || strcasecmp(key, "sys.wifi.hasPassword") == 0) {
+    appendSetting("sys.wifi.hasPassword", sysConfig.wifi.password.length() > 0 ? "1" : "0");
+    if (!getAll) return true;
+  }
+  if (!getAll && strcasecmp(key, "sys.wifi.password") == 0) {
+    appendSetting("sys.wifi.password", sysConfig.wifi.password.length() > 0 ? "********" : "");
+    return true;
+  }
   if (getAll || strcasecmp(key, "sys.dro.zPulsesPerMm") == 0) {
     appendSetting("sys.dro.zPulsesPerMm", String(activeMachineProfile.zAxis.droScale.ppr));
     if (!getAll) return true;
@@ -1503,6 +1511,13 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     sysConfig.wifi.ssid = valStr;
     saveWifiConfig();
     reportOk(keyBuf, sysConfig.wifi.ssid);
+    return true;
+  }
+
+  if (strcasecmp(keyBuf, "sys.wifi.password") == 0) {
+    sysConfig.wifi.password = valStr;
+    saveWifiConfig();
+    reportOk(keyBuf, "********");
     return true;
   }
 
