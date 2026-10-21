@@ -1,0 +1,31 @@
+name: Bug / Protocol Defect
+description: Report a deterministic firmware, WebUI, or HIL regression failure
+labels: ["type:bug"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Subsystem Scope
+      options:
+        - motion-kernel (src/motion/kernel / Trajectory / ISR)
+        - hal (Esp32StepperHAL / Esp32SpindleEncoderHAL / DRO)
+        - modes (src/motion/modes/* UnifiedGearbox / Primitives)
+        - protocol (CommandDispatcher / TelemetryMailbox / WebSocket)
+        - webui (clients/web_ui Alpine.js Controller / Emulator)
+        - hil-harness (tests/hil Python Test Harness)
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Observed Behavior vs. Spec Invariant
+      description: Cite the violated spec section (e.g., docs/modes/gearbox/SPECIFICATION.md) and actual telemetry/behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: hil_repro
+    attributes:
+      label: HIL Test Seam / Reproduction Steps
+      description: Which test suite in tests/hil/suites/ reproduces this, or what new test assertion is required?
+    validations:
+      required: true

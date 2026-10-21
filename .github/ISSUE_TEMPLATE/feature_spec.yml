@@ -1,0 +1,22 @@
+name: Feature / Mode Specification Ticket
+description: Actionable implementation ticket derived from a /grill-with-docs & /to-spec session
+labels: ["type:feature-spec"]
+body:
+  - type: input
+    id: spec_path
+    attributes:
+      label: Authoritative Spec & ADR Path
+      placeholder: "docs/specs/example-spec.md | docs/adr/0004-example.md"
+    validations:
+      required: true
+  - type: textarea
+    id: test_seams
+    attributes:
+      label: Required Verification Gates
+      value: |
+        - [ ] Firmware build passes (`firmware-build-verify`)
+        - [ ] Python HIL suite passes (`tests/hil/run_tests.py` via `controller-hil-test`)
+        - [ ] Web UI verified in Antigravity Live Preview (`web-ui-preview`)
+        - [ ] `docs/` updated in lockstep
+    validations:
+      required: true
