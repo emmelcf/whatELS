@@ -52,9 +52,8 @@ A list of implementation decisions that were made. This can include:
 - API contracts
 - Specific interactions
 
-Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
-
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
+- **Mandatory Contract Precision**: In Spec-Driven Development (SDD), you MUST explicitly define the public interfaces, method/function signatures, TypeScript/JSDoc types, and C++ struct/header declarations. Prose describes intent; code contracts eliminate ambiguity. The implementer should never have to guess a method name, argument shape, or return type.
+- Include the explicit target file paths where interfaces and types are housed, and link directly to the authoritative specification documents or ADRs in `docs/`.
 
 ## Testing Decisions
 

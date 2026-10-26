@@ -32,6 +32,7 @@ Break the work into **tracer bullet** tickets.
 - A completed slice is demoable or verifiable on its own
 - Each slice is sized to fit in a single fresh context window
 - Any prefactoring should be done first
+- **Zero-Ambiguity Interface Slicing**: Every ticket MUST include the exact, copy-pasteable public interface, method signatures, C++ struct/header declarations, error types, and test assertions required for its slice. If an implementing agent in a fresh context window would have to guess whether a method is named `jogHold()` vs `startJog()` or what argument shape it takes, the ticket is incomplete.
 
 </vertical-slice-rules>
 
