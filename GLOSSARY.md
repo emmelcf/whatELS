@@ -50,6 +50,14 @@ _Avoid_: Shim, bridge, wrapper
 The communications driver running within an Operator Client (e.g., browser WebSocket or WebSerial) that moves raw frames to and from the controller.
 _Avoid_: Firmware transport, ITransport, controller transport
 
+**WebSerial Transport**:
+An external Client Transport utilizing the browser W3C WebSerial API (`navigator.serial`) for low-latency, EMI-immune communication over physical USB CDC or UART serial connections.
+_Avoid_: Web USB, serial socket, browser COM
+
+**WhatelsClient SDK**:
+A reusable, transport-agnostic client protocol gateway and command dispatcher abstraction for Operator Clients, isolating wire transport streaming from UI presentation and view-models.
+_Avoid_: Web service, UI wrapper, controller shim
+
 **Controller Transport**:
 A firmware-side hardware or network driver (`ITransport`) managing physical byte streams (USB CDC, UART, WebSocket server) on the MCU.
 _Avoid_: Client transport, web transport

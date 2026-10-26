@@ -15,7 +15,8 @@
 The **whatELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the whatELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
 
 For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).  
-For the developer implementation walkthrough and interface reference, see: 👉 [`CLIENT_IMPLEMENTATION_GUIDE.md`](./CLIENT_IMPLEMENTATION_GUIDE.md).
+For the developer implementation walkthrough and interface reference, see: 👉 [`CLIENT_IMPLEMENTATION_GUIDE.md`](./CLIENT_IMPLEMENTATION_GUIDE.md).  
+For the universal, language-agnostic Client SDK specification and transport contracts, see: 👉 [`sdk/CLIENT_SDK_SPECIFICATION.md`](./sdk/CLIENT_SDK_SPECIFICATION.md).
 
 ### Governing Architectural Tenets
 1. **The Controller is the Sole Authority:**  

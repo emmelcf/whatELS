@@ -29,64 +29,100 @@ The **whatELS Web UI** is the primary rich client interface for the whatELS elec
 
 ---
 
-## 2. Codebase Organization & ES Module Decomposition
+## 2. Client Component Architecture & Codebase Organization
 
-The client codebase is structured into cohesive, decoupled ES modules:
+The Web UI application is structured into three distinct functional components:
+
+1. **Primary Control Interface (Production)**:  
+   The core Touch DRO, conversational machining wizards (Threading, Turning, Facing), and electronic gearbox controls designed for $800 \times 480$ landscape displays up to full $1080\text{p}$ tablets.
+2. **Dev Console (Optional Development Tool)**:  
+   A collapsible bottom drawer allowing developers to switch communication backends (`Emulator`, `WebSocket`, `WebSerial`), monitor raw incoming/outgoing protocol traffic, and inject test events. Disabled in production builds.
+3. **Lathe Visualizer (Optional Digital Twin)**:  
+   A reactive SVG physical bed and tool simulator (`dev/lathe-viz.js`) rendering the lathe bed, carriage, toolpost, and workpiece to true physical scale.
+
+### Directory Layout & Multi-Language Client SDK
+
+To ensure that any operator client (Web UI, future desktop wrappers, C++ pendants, or automated test runners) can reuse the controller communication engine without UI entanglement, protocol logic is isolated into a multi-language SDK under `clients/sdk/` (see [ADR 0004](../../adr/0004-pluggable-transports-and-webserial.md)):
 
 ```
-clients/web_ui/
-├── lathe_dro_whatels_controller.html  # Declarative HTML5 markup & Alpine bindings (~530 lines)
-├── alpine.min.js                      # Alpine.js v3.17.4 local offline runtime (~43 KB)
-├── lathe-controller.css               # Design system tokens, styles, and touch targets (~1,250 lines)
-├── whatels-service.js                 # Network transport abstraction & backend switcher (~380 lines)
-├── whatels-state.js                   # Alpine.store('machine') 4-domain reactive model (~240 lines)
-├── whatels-presets.js                 # Standard fastener thread tables & taper geometry (~350 lines)
-├── whatels-formatters.js              # Pure render-time math formatters (du -> strings) (~90 lines)
-├── lathe-controller.js                # Modal controllers, wizards, keypad & touch gestures (~4,000 lines)
-├── whatels-emulator.js                # Offline physics & kinematics simulator (~500 lines)
-└── dev/
-    ├── lathe-viz.js                   # Digital twin SVG canvas renderer (~450 lines)
-    └── lathe-viz-profiles.js          # Machine geometry profile library (~150 lines)
+clients/
+├── sdk/
+│   ├── js/                                # JavaScript SDK (Browser, Electron, Node.js)
+│   │   ├── transports/
+│   │   │   ├── client-transport.js        # Base ClientTransport abstract contract
+│   │   │   ├── websocket-transport.js     # WebSocket client (ws://host:81/canonical)
+│   │   │   ├── webserial-transport.js     # W3C WebSerial transport (USB CDC / UART)
+│   │   │   └── emulator-transport.js      # In-browser physics emulator adapter
+│   │   └── whatels-client.js              # Transport-agnostic Protocol Gateway & SDK
+│   ├── cpp/                               # Reserved for future C++ Client SDK (Pendants/SBCs)
+│   └── python/                            # Reserved for future/unified Python Client SDK
+└── web_ui/                                # Touch DRO Web Client Implementation
+    ├── lathe_dro_whatels_controller.html  # Declarative HTML5 markup & Alpine bindings
+    ├── alpine.min.js                      # Alpine.js v3.17.4 local offline runtime
+    ├── lathe-controller.css               # Design system tokens, styles, and touch targets
+    ├── whatels-service.js                 # UI Service adapting WhatelsClient to Alpine store
+    ├── whatels-state.js                   # Alpine.store('machine') 4-domain reactive model
+    ├── whatels-presets.js                 # Standard fastener thread tables & taper geometry
+    ├── whatels-formatters.js              # Pure render-time math formatters (du -> strings)
+    ├── lathe-controller.js                # Modal controllers, wizards, keypad & touch gestures
+    ├── whatels-emulator.js                # Offline physics & kinematics simulator
+    └── dev/
+        ├── lathe-viz.js                   # Digital twin SVG canvas renderer
+        └── lathe-viz-profiles.js          # Machine geometry profile library
 ```
 
 ### Module Responsibilities:
 
 | File | Primary Role | Architectural Invariants |
 | :--- | :--- | :--- |
-| **`whatels-service.js`** | **Transport & Network Adapter** | Manages WebSocket connection lifecycle, exponential reconnect backoff, backend routing (`mock` vs `bridge` vs `live`), command queuing, and promise-based settings transactions. |
+| **`clients/sdk/js/whatels-client.js`** | **Controller Protocol SDK** | Exposes strongly-typed methods for controller commands (`startFeed`, `stop`, `jogHold`, `axisZero`), manages response matching, 200ms safety heartbeats, and parses domain snapshots (`K`, `I`, `C`, `P`). |
+| **`clients/sdk/js/transports/`** | **Pluggable Transports** | Concrete implementations of `ClientTransport` (`WebSocketTransport`, `WebSerialTransport`, `EmulatorTransport`). Manages raw byte/line I/O without domain awareness. |
+| **`whatels-service.js`** | **UI Store Adapter** | Bridges `WhatelsClient` events to `Alpine.store('machine')`, coordinates reconnect status badges, and manages Dev Console activity. |
 | **`whatels-state.js`** | **Authoritative Reactive Store** | Implements `Alpine.store('machine')`. Ingests line-oriented domain telemetry, handles client-local presentation preferences, and triggers reactive DOM updates with zero DOM thrashing. |
 | **`whatels-formatters.js`** | **Pure Presentation Math** | Pure functions converting integer deci-microns into formatted strings (`duToMm`, `duToInch`, `formatFeed`, `formatSurfaceSpeed`). Zero state mutations. |
 | **`whatels-presets.js`** | **Machining Knowledge Base** | Immutable lookup tables for ISO Metric, Unified (UNC/UNF/UNEF), Pipe (NPT/BSPT) threads, and standard machine tapers (Morse, Brown & Sharpe, R8, ISO). |
 | **`lathe-controller.js`** | **Ergonomics & Wizard Controller** | Manages calculator keypad buffer, conversational threading/turning wizards, settings modal, and sub-300ms D-pad gesture timing loops. |
 | **`whatels-emulator.js`** | **Offline Simulator Engine** | Full software model of the ESP32 motion controller. Emulates stepper timing, encoder ticks, soft limits, and tool kinematics for offline browser testing. |
-| **`lathe-viz.js`** | **Digital Twin Visualizer** | Passive reactive SVG renderer that ingests canonical coordinates and draws the lathe bed, carriage, toolpost, and workpiece to true physical scale. |
+| **`dev/lathe-viz.js`** | **Digital Twin Visualizer** | Passive reactive SVG renderer that ingests canonical coordinates and draws the lathe bed, carriage, toolpost, and workpiece to true physical scale. |
 
 ---
 
-## 3. Client-Side Transport Layer (`whatels-service.js`)
+## 3. Client-Side Transport Layer & SDK Architecture
 
-The Web UI communicates with the controller via `WhatElsService`, which provides an event-driven network abstraction:
+The client stack follows a strictly decoupled 3-tier pipeline:
 
 ```
-[ Web UI View Logic ] 
-        ▲
-        │ (Events: 'telemetry', 'connected', 'status')
-        ▼
-[ WhatElsService (whatels-service.js) ]
-        │
-   ┌────┴───────────────────────────┬───────────────────────────────┐
-   ▼                                ▼                               ▼
-[ Live WebSocket Client ]   [ Local Serial Bridge ]     [ Software Emulator ]
-(ws://<esp32-ip>:81/canonical)  (ws://127.0.0.1:8765)    (whatels-emulator.js)
+[ Web UI View Logic / Alpine Store ]
+               ▲
+               │ (Domain Events: 'telemetry', 'connection', 'error')
+               ▼
+[ WhatelsClient SDK (clients/sdk/js/whatels-client.js) ]
+               │
+               ▼ (send(line) / onLine(line))
+┌──────────────────────────────────────────────────────────────┐
+│                  Pluggable Transports                        │
+│ ┌─────────────────────────┬────────────────────────────────┐ │
+│ │ WebSocketTransport      │ WebSerialTransport             │ │
+│ │ (ws://<ip>:81/canonical)│ (navigator.serial USB CDC/UART)│ │
+│ ├─────────────────────────┼────────────────────────────────┤ │
+│ │ EmulatorTransport       │ Future Transports (REST/IPC)   │ │
+│ │ (in-memory simulator)   │                                │ │
+│ └─────────────────────────┴────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Backend Selection & Switching
-The client dynamically switches between three backends at runtime via `#devBackendSelect`:
-* **`'emulator'` (Default):** Connects to `window.WhatelsEmulator` in-memory. Zero network requirements.
-* **`'bridge'`:** Connects to `ws://127.0.0.1:8765/` (local USB-UART bridge for bench testing).
-* **`'live'`:** Connects to `ws://<host>:81/canonical` on the physical ESP32-S3 controller.
+### 3.1 Backend Selection & Configuration
+1. **Development Mode**:  
+   The bottom Dev Console drawer provides 1-click toggling between `Emulator`, `WebSocket`, and `WebSerial`, along with manual host/baud overrides and live raw frame inspection.
+2. **Production Mode**:  
+   When the Dev Console is closed/disabled, transport selection and parameters (Transport Type: `WebSocket` vs `WebSerial`, Baud Rate: default `115200`, Controller IP) are managed in a dedicated **Connection Settings Section** of the main Settings Modal (`#modalSettings`) and saved to browser `localStorage`.
 
-### 3.2 Transient EMI & Network Resilience
+### 3.2 W3C WebSerial Lifecycle & Permissions
+* **Explicit User Pairing**: Per browser security restrictions, the initial pairing requires an operator click ("Connect USB Serial") triggering `navigator.serial.requestPort()`.
+* **Silent Auto-Reconnect**: Previously paired ports are queried silently via `navigator.serial.getPorts()`. On subsequent page loads, the client auto-connects to the remembered port without prompting.
+* **Line Framing**: Raw byte streams are decoded and chunked through a newline transformer pipeline into clean `\n`-delimited ASCII lines.
+
+### 3.3 Transient EMI & Network Resilience (WebSocket)
 Machine shop electrical noise (spindle VFD switching, contactors) can induce transient WiFi frame drops:
 * **Exponential Backoff Reconnect:** On disconnect, retries back off progressively ($1\text{s} \to 2\text{s} \to 4\text{s} \to 8\text{s} \to 15\text{s}$ ceiling).
 * **State Resynchronization (Hydration):** Upon successful socket reconnection, the client automatically dispatches:
