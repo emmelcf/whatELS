@@ -1,11 +1,15 @@
 {
+  "$schema": "https://antigravity.google/schemas/v1/settings.json",
   "files.associations": {
     "*.h": "cpp"
   },
+  "livePreview.defaultPreviewPath": "/clients/web_ui/lathe_dro_whatels_controller.html",
+  "platformio-ide.intelliSenseEngine": "clangd",
+  "C_Cpp.intelliSenseEngine": "disabled",
   "clangd.arguments": [
     "--background-index",
-    "--query-driver=**",
-    "--compile-commands-dir=${workspaceFolder}"
+    "--query-driver=/home/emil/.platformio/packages/toolchain-*/bin/*,/home/emil/.platformio/packages/tool-*/bin/*",
+    "--compile-commands-dir=/home/emil/code/whatels/.cache/clangd"
   ],
-  "livePreview.defaultPreviewPath": "/clients/web_ui/lathe_dro_whatels_controller.html"
+  "clangd.path": "/home/emil/.platformio/packages/tool-clangd-esp/bin/clangd"
 }
