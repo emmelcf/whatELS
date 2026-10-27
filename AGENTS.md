@@ -12,6 +12,7 @@ All instructions follow this strict priority ladder. Never break a higher tier t
 ### Tier 2: Operational Standards (Default rules; pragmatic exceptions permitted)
 - **Native Tools vs. Shell**: Default strictly to native IDE tools (`read_file`, `edit_file`, `write_file`).
   *Pragmatic exception*: Read-only shell commands (`find`, `grep`) are permitted for paths outside workspace root (e.g. `/etc`, `~/.config`) or repository-wide text searches without interrupting operator.
+- **Direct Network Ingress**: Commands that inherently require external internet access (`gh`, `git push`, `git fetch`, `curl`) directly use `BypassSandbox: true` to avoid doomed sandbox network failure turns. Local commands (`node`, `pio`, `git status`) remain strictly sandboxed.
 - **Scope Lock**: Touch only files required for the active task. Log out-of-scope defects via `triage-finding`.
 - **Git Hygiene**: Atomic Conventional Commits (`type(scope): summary`). Blanket resets (`git reset --hard`, `git restore .`) are forbidden.
 
