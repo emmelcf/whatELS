@@ -113,6 +113,8 @@ Tool preference:
 
 ## Phase 5: Fix + regression test
 
+Mechanical bugs (typos, off-by-one indices, missing null checks) within spec are fixed autonomously. If the diagnosis reveals that the fix requires changing behavioral specs, API contracts, or architectural boundaries: **PULL THE EMERGENCY BRAKE** (4-point brief: Issue, Root Cause, Options, Recommendation) and present the diagnosis to the operator before touching code.
+
 Write the regression test **before the fix**, but only if there is a **correct seam** for it.
 
 A correct seam is one where the test exercises the **real bug pattern** as it occurs at the call site. If the only available seam is too shallow (single-caller test when the bug needs multiple callers, unit test that can't replicate the chain that triggered the bug), a regression test there gives false confidence.

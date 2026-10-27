@@ -18,3 +18,7 @@ description: Dual-core ISR/mailbox boundaries, dumb-client protocol contract, an
 3. **Generated Asset Parity (`data/` & `scripts/`):**
    - Never hand-edit generated headers such as `src/web/SystemPresetsJson.h`. Modify source JSONs in `data/presets/` or `data/schemas/` and run `scripts/generate_presets.py` or `scripts/embed_controller_assets.py`.
 
+4. **Engineering Integrity & Emergency Brake:**
+   - Expediency is never an excuse to compromise code quality. Zero silent error swallowing (including empty `catch` blocks), zero symptom-masking delays, and zero mutating foreign instance state.
+   - If avoiding an architectural compromise requires altering an established contract or boundary: **PULL THE EMERGENCY BRAKE** (state issue, root cause, options, recommendation) and wait for operator decision.
+

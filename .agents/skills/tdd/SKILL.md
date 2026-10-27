@@ -33,6 +33,7 @@ When the shape of that interface is itself in question (how deep the module is, 
 
 ## Rules of the loop
 
+- **Spec-Driven Compliance:** In SDD, tests verify fidelity to the spec. Tests NEVER drive unapproved architectural, contract, or semantic changes. If passing a test requires altering an API contract or architectural boundary, **PULL THE EMERGENCY BRAKE** (4-point brief) rather than changing the architecture.
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
 - **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.

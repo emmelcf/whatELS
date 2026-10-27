@@ -14,10 +14,12 @@ Executes the implementation of an approved ticket or specification.
    - If a ticket reference is provided (e.g. `#42`), fetch it via `gh issue view <number>`.
    - Announce the ticket title, target scope, and acceptance criteria before modifying code.
 
-2. **TDD Loop (`tdd`):**
-   - Identify or create the pre-agreed HIL test seam in `tests/hil/suites/test_*.py`.
-   - Write the failing test case asserting expected telemetry or motion behavior.
-   - Implement the minimal firmware (C++) or client (JS) code required to turn the test green.
+2. **Execution & Spec-Driven Development (SDD):**
+   - Identify or create the pre-agreed test seam (e.g. `tests/hil/suites/test_*.py` or `tests/clients/*.test.mjs`).
+   - Write tests that assert expected telemetry, protocol, or motion behavior defined in the spec.
+   - Implement the minimal firmware (C++) or client (JS) code required to turn the tests green.
+   - **Autonomy Grant:** The agent has full local autonomy to write tests, implement code, fix compiler errors/typos, adjust parameters, and turn tests green within the agreed spec.
+   - **Emergency Brake Tripwire:** Tests verify fidelity to the spec; tests NEVER drive unapproved architectural or semantic changes. If complying with a test reveals an omission, contradiction, requires altering an API contract, or an external tool/environment fails: **PULL THE EMERGENCY BRAKE** (4-point brief: Issue, Root Cause, Options, Recommendation) and wait for operator decision.
 
 3. **Pre-Commit Quality Gates (Strict Sequence):**
    - **Phase A — Firmware Upload:** If any C++ files (`src/`), embedded assets (`data/presets/`, `SystemPresetsJson.h`), or `platformio.ini` changed, run `pio run -e esp32s3 -t upload` (builds and flashes in one command; wait 5–10s for reboot/Wi-Fi).
