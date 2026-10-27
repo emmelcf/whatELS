@@ -12,11 +12,11 @@ class WhatelsService extends EventTarget {
     this.port = options.port || 81;
     this.logStatusPushes = options.logStatusPushes || false; // Suppressed by default for clean logs
 
-    this.ws = null;
-    this.emulator = null;
+    this.transport = options.transport || null;
+    this._customTransport = !!options.transport;
+    this._transportCleanup = null;
     this.heartbeatTimer = null;
     this.activeHolds = new Set();
-    this.reconnectTimer = null;
     this._settingsTransactions = [];
 
     // Normalized controller state (UI display strings)
@@ -144,91 +144,106 @@ class WhatelsService extends EventTarget {
     }
   }
 
+  _setupTransport() {
+    if (this._transportCleanup) {
+      this._transportCleanup();
+      this._transportCleanup = null;
+    }
+
+    if (!this.transport || (!this._customTransport && this.transport._targetMode !== this.mode)) {
+      if (this.mode === 'emulator') {
+        const EmuTransport = (typeof globalThis !== 'undefined' && globalThis.EmulatorTransport) ||
+                             (typeof window !== 'undefined' && window.EmulatorTransport);
+        if (!EmuTransport) {
+          console.error('EmulatorTransport class not found!');
+          return;
+        }
+        this.transport = new EmuTransport();
+      } else {
+        const WsTransport = (typeof globalThis !== 'undefined' && globalThis.WebSocketTransport) ||
+                            (typeof window !== 'undefined' && window.WebSocketTransport);
+        if (!WsTransport) {
+          console.error('WebSocketTransport class not found!');
+          return;
+        }
+        this.transport = new WsTransport({
+          host: this.host,
+          port: this.port,
+          path: '/canonical',
+          autoReconnect: true
+        });
+      }
+      this.transport._targetMode = this.mode;
+    }
+
+    const onLine = (event) => {
+      this._handleIncoming(event.detail);
+    };
+
+    const onStatus = (event) => {
+      const detail = event.detail || {};
+      const status = detail.status;
+      if (status === 'connected') {
+        this.state.connected = true;
+        this.state.features = [];
+        if (this.mode === 'emulator') {
+          this._log('SYS', 'Emulator connected', 'Internal virtual ESP32 initialized');
+          this._emit('connection', { connected: true, mode: 'emulator', host: 'Local Emulator' });
+          this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
+          this.sendRaw('?sysinfo\n', 'Query emulator sysinfo');
+        } else {
+          const wsUrl = `ws://${this.host}:${this.port}/canonical`;
+          this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established (Channel: Canonical)');
+          this._emit('connection', { connected: true, mode: 'live', host: this.host });
+          this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
+        }
+      } else if (status === 'connecting') {
+        this.state.connected = false;
+        this._emit('connection', { connected: false, connecting: true, mode: this.mode, host: this.host });
+      } else if (status === 'disconnected') {
+        this.state.connected = false;
+        this._stopHeartbeat();
+        const label = this.mode === 'emulator' ? 'Emulator' : 'WebSocket';
+        this._log('SYS', `${label} disconnected`, 'Connection closed');
+        this._emit('connection', { connected: false, mode: this.mode, host: this.host });
+      }
+    };
+
+    const onError = (event) => {
+      const err = event.detail;
+      this._log('ERR', `${this.mode === 'emulator' ? 'Emulator' : 'WebSocket'} error`, (err && err.message) || 'Connection error');
+    };
+
+    this.transport.addEventListener('line', onLine);
+    this.transport.addEventListener('status', onStatus);
+    this.transport.addEventListener('error', onError);
+
+    this._transportCleanup = () => {
+      if (this.transport) {
+        this.transport.removeEventListener('line', onLine);
+        this.transport.removeEventListener('status', onStatus);
+        this.transport.removeEventListener('error', onError);
+      }
+    };
+  }
+
   connect() {
     this.disconnect();
-    if (this.mode === 'emulator') {
-      this._connectEmulator();
-    } else {
-      this._connectWebSocket();
+    this._setupTransport();
+    if (this.transport) {
+      this.transport.connect({ host: this.host, port: this.port }).catch(() => {});
     }
   }
 
   disconnect() {
-    clearTimeout(this.reconnectTimer);
     this._stopHeartbeat();
 
-    if (this.ws) {
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
-      try { this.ws.close(); } catch(e) {}
-      this.ws = null;
-    }
-
-    if (this.emulator) {
-      this.emulator.stop();
-      this.emulator.onmessage = null;
-      this.emulator = null;
+    if (this.transport) {
+      this.transport.disconnect().catch(() => {});
     }
 
     this.state.connected = false;
     this._emit('connection', { connected: false, mode: this.mode, host: this.host });
-  }
-
-  _connectEmulator() {
-    const EmuClass = window.WhatelsEmulator;
-    if (!EmuClass) {
-      console.error('WhatelsEmulator class not found!');
-      return;
-    }
-    this.emulator = new EmuClass();
-    this.emulator.onmessage = (event) => {
-      this._handleIncoming(event.data);
-    };
-    this.state.connected = true;
-    this._log('SYS', 'Emulator connected', 'Internal virtual ESP32 initialized');
-    this._emit('connection', { connected: true, mode: 'emulator', host: 'Local Emulator' });
-    this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
-    this.sendRaw('?sysinfo\n', 'Query emulator sysinfo');
-  }
-
-  _connectWebSocket() {
-    const wsUrl = `ws://${this.host}:${this.port}/canonical`;
-    this._log('SYS', `Connecting to ${wsUrl}...`, 'Opening WebSocket connection');
-    this._emit('connection', { connected: false, connecting: true, mode: 'live', host: this.host });
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-      this.ws.onopen = () => {
-        this.state.connected = true;
-        this.state.features = [];
-        this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established (Channel: Canonical)');
-        this._emit('connection', { connected: true, mode: 'live', host: this.host });
-        this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
-      };
-
-      this.ws.onmessage = (event) => {
-        this._handleIncoming(event.data);
-      };
-
-      this.ws.onerror = (err) => {
-        this._log('ERR', 'WebSocket error', err.message || 'Connection error');
-      };
-
-      this.ws.onclose = () => {
-        this.state.connected = false;
-        this._stopHeartbeat();
-        this._log('SYS', 'WebSocket disconnected', 'Connection closed');
-        this._emit('connection', { connected: false, mode: 'live', host: this.host });
-        // Auto-reconnect after 3 seconds if still in live mode
-        if (this.mode === 'live') {
-          this.reconnectTimer = setTimeout(() => this.connect(), 3000);
-        }
-      };
-    } catch (err) {
-      this._log('ERR', 'Failed to initialize WebSocket', err.message);
-    }
   }
 
   // --- Outbound Action API ---
@@ -240,10 +255,10 @@ class WhatelsService extends EventTarget {
       this._log('TX', data.trim(), annotation, isTelemetryPing);
     }
 
-    if (this.mode === 'emulator' && this.emulator) {
-      this.emulator.send(data);
-    } else if (this.mode === 'live' && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(data);
+    if (this.transport && this.transport.isConnected()) {
+      this.transport.send(data).catch((err) => {
+        this._log('ERR', 'Transport send failure', err.message);
+      });
     }
   }
 
@@ -800,4 +815,9 @@ class WhatelsService extends EventTarget {
   }
 }
 
-window.WhatelsService = WhatelsService;
+if (typeof globalThis !== 'undefined') {
+  globalThis.WhatelsService = WhatelsService;
+}
+if (typeof window !== 'undefined') {
+  window.WhatelsService = WhatelsService;
+}
