@@ -29,6 +29,10 @@ export class WebSocketTransport extends ClientTransport {
     this._connectPromise = null;
   }
 
+  get type() {
+    return 'websocket';
+  }
+
   /**
    * Calculates exponential reconnect delay in milliseconds (1s -> 2s -> 4s -> 8s -> 15s).
    * @param {number} attempt
@@ -141,7 +145,9 @@ export class WebSocketTransport extends ClientTransport {
             const delay = this._getReconnectDelay(this._reconnectAttempts++);
             this._reconnectTimer = setTimeout(() => {
               if (this.autoReconnect && !this._manualDisconnect && !this.isConnected()) {
-                this.connect().catch(() => {});
+                this.connect().catch((err) => {
+                  this._emitError(err instanceof Error ? err : new Error(String(err)));
+                });
               }
             }, delay);
           }
@@ -171,8 +177,8 @@ export class WebSocketTransport extends ClientTransport {
       this.ws.onclose = null;
       try {
         this.ws.close();
-      } catch (e) {
-        // Ignore close errors
+      } catch (err) {
+        this._emitError(err instanceof Error ? err : new Error(`WebSocket close error: ${err}`));
       }
       this.ws = null;
     }

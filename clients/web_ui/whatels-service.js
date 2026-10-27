@@ -150,12 +150,13 @@ class WhatelsService extends EventTarget {
       this._transportCleanup = null;
     }
 
-    if (!this.transport || (!this._customTransport && this.transport._targetMode !== this.mode)) {
+    const targetType = this.mode === 'emulator' ? 'emulator' : 'websocket';
+    if (!this.transport || (!this._customTransport && this.transport.type !== targetType)) {
       if (this.mode === 'emulator') {
         const EmuTransport = (typeof globalThis !== 'undefined' && globalThis.EmulatorTransport) ||
                              (typeof window !== 'undefined' && window.EmulatorTransport);
         if (!EmuTransport) {
-          console.error('EmulatorTransport class not found!');
+          this._log('ERR', 'Transport error', 'EmulatorTransport class not found');
           return;
         }
         this.transport = new EmuTransport();
@@ -163,7 +164,7 @@ class WhatelsService extends EventTarget {
         const WsTransport = (typeof globalThis !== 'undefined' && globalThis.WebSocketTransport) ||
                             (typeof window !== 'undefined' && window.WebSocketTransport);
         if (!WsTransport) {
-          console.error('WebSocketTransport class not found!');
+          this._log('ERR', 'Transport error', 'WebSocketTransport class not found');
           return;
         }
         this.transport = new WsTransport({
@@ -173,7 +174,6 @@ class WhatelsService extends EventTarget {
           autoReconnect: true
         });
       }
-      this.transport._targetMode = this.mode;
     }
 
     const onLine = (event) => {
@@ -231,7 +231,9 @@ class WhatelsService extends EventTarget {
     this.disconnect();
     this._setupTransport();
     if (this.transport) {
-      this.transport.connect({ host: this.host, port: this.port }).catch(() => {});
+      this.transport.connect({ host: this.host, port: this.port }).catch((err) => {
+        this._log('ERR', 'Connection failed', (err && err.message) || String(err));
+      });
     }
   }
 
@@ -239,7 +241,9 @@ class WhatelsService extends EventTarget {
     this._stopHeartbeat();
 
     if (this.transport) {
-      this.transport.disconnect().catch(() => {});
+      this.transport.disconnect().catch((err) => {
+        this._log('ERR', 'Disconnect error', (err && err.message) || String(err));
+      });
     }
 
     this.state.connected = false;

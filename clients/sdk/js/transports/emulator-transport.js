@@ -15,6 +15,11 @@ export class EmulatorTransport extends ClientTransport {
     super();
     this.options = options;
     this.emulator = null;
+    this._rxBuffer = '';
+  }
+
+  get type() {
+    return 'emulator';
   }
 
   /**
@@ -39,10 +44,14 @@ export class EmulatorTransport extends ClientTransport {
       this.emulator = EmuSource;
     }
 
+    this._rxBuffer = '';
     this.emulator.onmessage = (event) => {
       const data = (event && typeof event.data !== 'undefined') ? event.data : event;
       if (typeof data === 'string') {
-        const lines = data.split('\n');
+        this._rxBuffer += data;
+        const lines = this._rxBuffer.split('\n');
+        this._rxBuffer = lines.pop();
+
         for (const line of lines) {
           const cleanLine = line.replace(/\r$/, '');
           if (cleanLine.length > 0) {
@@ -55,8 +64,10 @@ export class EmulatorTransport extends ClientTransport {
     if (typeof this.emulator.start === 'function') {
       try {
         this.emulator.start();
-      } catch (e) {
-        // Ignore if start fails or not required
+      } catch (err) {
+        const errorObj = err instanceof Error ? err : new Error(`Emulator start failed: ${err}`);
+        this._emitError(errorObj);
+        throw errorObj;
       }
     }
 
@@ -72,13 +83,14 @@ export class EmulatorTransport extends ClientTransport {
       if (typeof this.emulator.stop === 'function') {
         try {
           this.emulator.stop();
-        } catch (e) {
-          // Ignore teardown errors
+        } catch (err) {
+          this._emitError(err instanceof Error ? err : new Error(`Emulator stop failed: ${err}`));
         }
       }
       this.emulator.onmessage = null;
       this.emulator = null;
     }
+    this._rxBuffer = '';
 
     this._emitStatus('disconnected', { mode: 'emulator' });
   }

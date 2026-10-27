@@ -208,3 +208,59 @@ test('WhatelsService delegates I/O through ClientTransport', async (t) => {
   assert.equal(service.state.connected, false);
 });
 
+test('Transports expose standard type property and handle streaming chunks and errors', async (t) => {
+  const base = new ClientTransport();
+  assert.equal(base.type, 'base');
+
+  const ws = new WebSocketTransport();
+  assert.equal(ws.type, 'websocket');
+
+  // Emulator chunking & type
+  class ChunkingEmulator {
+    constructor() {
+      this.onmessage = null;
+    }
+    start() {}
+    stop() {}
+  }
+  const emu = new ChunkingEmulator();
+  const emuTransport = new EmulatorTransport({ emulator: emu });
+  assert.equal(emuTransport.type, 'emulator');
+
+  await emuTransport.connect();
+
+  const lines = [];
+  emuTransport.addEventListener('line', (e) => lines.push(e.detail));
+
+  // Deliver partial chunks
+  emu.onmessage({ data: 'K.zDu=123' });
+  assert.deepEqual(lines, []); // Not complete yet
+
+  emu.onmessage({ data: '45\nK.xDu=678' });
+  assert.deepEqual(lines, ['K.zDu=12345']);
+
+  emu.onmessage({ data: '90\n' });
+  assert.deepEqual(lines, ['K.zDu=12345', 'K.xDu=67890']);
+
+  await emuTransport.disconnect();
+
+  // Test error propagation on emulator start failure
+  class FaultyEmulator {
+    start() {
+      throw new Error('Hardware init failure');
+    }
+  }
+  const faultTransport = new EmulatorTransport({ emulator: new FaultyEmulator() });
+  let caughtError = null;
+  faultTransport.addEventListener('error', (e) => {
+    caughtError = e.detail;
+  });
+
+  await assert.rejects(async () => {
+    await faultTransport.connect();
+  }, /Hardware init failure/);
+
+  assert.ok(caughtError);
+  assert.match(caughtError.message, /Hardware init failure/);
+});
+

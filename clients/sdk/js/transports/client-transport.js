@@ -38,6 +38,14 @@ export class ClientTransport extends EventTarget {
   }
 
   /**
+   * Transport discriminator string (e.g. 'websocket', 'emulator', 'webserial').
+   * @returns {string}
+   */
+  get type() {
+    return 'base';
+  }
+
+  /**
    * Transmits a line of text to the controller.
    * Implementations MUST ensure line terminates with a single '\n'.
    * @param {string} line
