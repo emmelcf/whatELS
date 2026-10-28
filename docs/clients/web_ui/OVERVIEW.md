@@ -127,7 +127,7 @@ Machine shop electrical noise (spindle VFD switching, contactors) can induce tra
 * **Exponential Backoff Reconnect:** On disconnect, retries back off progressively ($1\text{s} \to 2\text{s} \to 4\text{s} \to 8\text{s} \to 15\text{s}$ ceiling).
 * **State Resynchronization (Hydration):** Upon successful socket reconnection, the client automatically dispatches:
   ```text
-  CMD.get=K,I,C,P\n
+  CMD.state=ALL\n
   ```
   This immediately repopulates all 4 domains in a single atomic snapshot, preventing stale UI state.
 

@@ -17,7 +17,7 @@ Every canonical message is an ASCII string terminated by a newline (`\n` or `\r\
 
 $$\texttt{<NAMESPACE>.<action>[=<arguments>]}\backslash\text{n}$$
 
-* **Namespaces:** `CMD`, `SETTINGS`, `PRESET`, `MODE`, `CLIENT`, and queries (`?get`, `?sysinfo`).
+* **Namespaces:** `CMD`, `SETTINGS`, `PRESET`, `MODE`, `CLIENT`, and queries (`?sysinfo`).
 * **Argument Formatting:** Arguments may be formatted as comma-separated key-value pairs (e.g. `CMD.startFeed=axis:Z,feed:0.15,dir:+`) or comma-separated positional tokens (e.g. `CMD.jogStep=Z,100`).
 * **Case Sensitivity:** Command names are case-insensitive (`CMD.stop` == `cmd.STOP`). Axis names (`Z`, `X`) and units (`mm`, `tpi`, `du`) accept uppercase or lowercase.
 
@@ -269,13 +269,13 @@ Queries controller hardware, build version, and compiled feature flags.
   SYSINFO.features=spindleSim
   ```
 
-### 4.2 State Hydration Query (`?get` / `?state`)
+### 4.2 State Hydration Query (`CMD.state`)
 Requests an immediate atomic snapshot of machine state without waiting for a motion event.
-* **Syntax:** `?get` or `?get=<domains>`
-* **Domain Flags:** `K` (Kinematics), `I` (Intent), `C` (Cycle), `P` (Properties), `ALL`.
+* **Syntax:** `CMD.state` or `CMD.state=<domains>`
+* **Domain Flags:** `K` (Kinematics), `I` (Intent), `C` (Cycle), `P` (Properties), `ALL`. Tokens must be strict uppercase and comma-separated.
 * **Examples:**
-  * `?get=ALL` — Hydrates all four domains.
-  * `?get=K,I` — Hydrates coordinates and setup parameters only.
+  * `CMD.state` or `CMD.state=ALL` — Hydrates all four domains.
+  * `CMD.state=K,I` — Hydrates coordinates and setup parameters only.
 * **Response:** Universal canonical telemetry string:
   ```text
   K.zDu=0|K.xDu=0|K.rpm=0|K.mode=50|K.on=0|I.pitchDu=1500|I.axis=Z|P.leadscrewPitch=40000\n

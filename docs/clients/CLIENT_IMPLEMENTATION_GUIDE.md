@@ -87,7 +87,7 @@ The controller MCU owns all machine state, kinematics, and parameter validation.
 The core does not use vague categories like "pendant" or "tablet" to guess capabilities. A client announces its specific product/application name (e.g. `webui`, `smarttouch`, `nextion_lcd`, `hil_harness`). The core looks up that name in its **Client Profile Registry** to look up its allowed transports, permission scopes, and optional translation adapter.
 
 ### 3. Native Baseline vs. Translation Adapters
-* **Native Clients (`NativeClient`):** Speak the controller's native canonical grammar directly (`CMD.*`, `SETTINGS.*`, `?get`). No translation layer sits between the transport and `CommandDispatcher`.
+* **Native Clients (`NativeClient`):** Speak the controller's native canonical grammar directly (`CMD.*`, `SETTINGS.*`). No translation layer sits between the transport and `CommandDispatcher`.
 * **Foreign / Constrained Clients (`ClientEndpoint` + Adapters):** Cannot speak native commands (e.g. Nextion LCD sending raw component IDs, or GRBL senders streaming `G0 Z10`). They require a **Translation Layer** to synthesize canonical commands on ingress and decompose core telemetry on egress.
 
 ### 4. Authoritative Session Allocation
@@ -323,7 +323,7 @@ struct ActiveClientSession {
 
 ### Scenario A: Implementing a Native Client Type (e.g., `smarttouch`)
 
-Native clients speak canonical whatELS ASCII grammar directly (`CMD.*`, `SETTINGS.*`, `?get`). They require **zero translation code**.
+Native clients speak canonical whatELS ASCII grammar directly (`CMD.*`, `SETTINGS.*`). They require **zero translation code**.
 
 #### Step 1: Define the Client Profile
 In your client's definition file or in a centralized profiles registry (`src/core_client/profiles/SmartTouchProfile.h`):

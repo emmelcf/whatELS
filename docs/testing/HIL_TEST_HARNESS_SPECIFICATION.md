@@ -337,7 +337,7 @@ class WhatElsClient:
         self._ws = await asyncio.wait_for(websockets.connect(self.uri, ping_interval=None), timeout=timeout_s)
         self._rx_task = asyncio.create_task(self._rx_loop())
         self._hb_task = asyncio.create_task(self._heartbeat_loop())
-        await self.send("?get=ALL", expect_ack=False)
+        await self.send("CMD.state=ALL", expect_ack=False)
         await self.wait_for(lambda s: s.telemetry_seq > 0, timeout_s=timeout_s, description="initial hydration")
 
     async def disconnect(self) -> None:

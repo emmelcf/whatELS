@@ -107,7 +107,7 @@ The WebSerial transport communicates over USB CDC or UART serial using the brows
 ### 2.3 Wire Protocol Parity (Canonical Line-Oriented Text)
 
 WebSerial and WebSocket use the **exact same canonical text grammar**:
-* **Commands**: `CMD.startFeed=axis:Z,sync:1,feed:0.150,dir:-1\n`, `CMD.stop\n`, `CMD.get=K,I,C,P\n`
+* **Commands**: `CMD.startFeed=axis:Z,sync:1,feed:0.150,dir:-1\n`, `CMD.stop\n`, `CMD.state=ALL\n`
 * **Telemetry**: `K.zDu=125400\n`, `K.rpm=620\n`, `I.thPitch=1.5\n`
 * **Handshake**: `CLIENT.hello type=webui,ver=1.0.0,label="Web UI"\n`
 

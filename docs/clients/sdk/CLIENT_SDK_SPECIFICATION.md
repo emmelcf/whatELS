@@ -184,7 +184,7 @@ sequenceDiagram
     Note over Core: Lookup profile, check permissions, allocate authoritative session_id
     Core-->>SDK: OK:CLIENT.hello session_id=<id>,type=<profile>,controllerVer=<ver>,perms=<mask\n
     Note over SDK: Authoritative session allocated.<br/>Immediately request complete domain hydration.
-    SDK->>Core: CMD.get=K,I,C,P\n
+    SDK->>Core: CMD.state=ALL\n
     Core-->>SDK: [Atomic Multi-Domain Snapshot Frames K.*, I.*, C.*, P.*]
     Note over SDK: Client is now fully hydrated and transitions to READY state.
 ```
@@ -195,8 +195,8 @@ sequenceDiagram
 2. **Controller Acknowledgement**:
    - Controller returns: `OK:CLIENT.hello session_id=<uint8>,type=<profile_name>,controllerVer=<ver>,perms=<hex_mask>\n`
    - SDK stores the authoritative `sessionId` and granted `perms` mask.
-3. **Immediate Hydration (`CMD.get=K,I,C,P`)**:
-   - To eliminate split-brain initialization and display races, the SDK must immediately request a complete atomic snapshot of all four domains.
+3. **Immediate Hydration (`CMD.state=ALL`)**:
+   - To eliminate split-brain initialization and display races, the SDK must immediately request a complete atomic snapshot of all domains.
 
 ---
 
@@ -441,7 +441,7 @@ Every language implementation (`clients/sdk/js/`, `clients/sdk/cpp/`, `clients/s
 - [ ] **Zero Kinematics**: Contains no step math, ratio calculations, or lead-angle formulas.
 - [ ] **Pure Deci-microns**: Stores and transmits positions strictly in integer `du` ($10{,}000\text{ du} = 1\text{ mm}$).
 - [ ] **Strict Line Framing**: All emitted packets end with `\n`. Inbound lines are correctly assembled across arbitrary chunk boundaries.
-- [ ] **Authoritative Handshake**: Issues `CLIENT.hello` immediately on open, followed by `CMD.get=K,I,C,P`.
+- [ ] **Authoritative Handshake**: Issues `CLIENT.hello` immediately on open, followed by `CMD.state=ALL`.
 - [ ] **Heartbeat Safety**: Periodic $\le 200\text{ ms}$ jog heartbeat loop active during `jogHold`; unconditionally aborted on stop or disconnect.
 - [ ] **Diagnostic Immunity**: Gracefully ignores and emits `#` log comments without throwing syntax errors.
 

@@ -94,7 +94,7 @@ graph TD
 
 #### 2. Native Baseline Client vs. Alien Adapters
 * **Native Baseline Client (Zero-Translation)**:
-  - Native clients (such as the Touch DRO Web UI and Python HIL Test Suite) speak the controller's native command surface (`CMD.*`, `SETTINGS.*`, `?get`).
+  - Native clients (such as the Touch DRO Web UI and Python HIL Test Suite) speak the controller's native command surface (`CMD.*`, `SETTINGS.*`).
   - No protocol translation takes place. Commands pass directly into `CommandDispatcher`, and execution results are returned via universal canonical serialization.
 * **Alien Adapters (`ICommandTranslator` & `ITelemetrySerializer`)**:
   - Translates foreign wire protocols (e.g. GRBL G-code streaming for CNC senders, or binary packets for dumb serial screens) into native `CommandDispatcher` invocations and maps responses back into the client's expected grammar (`ok`, `error:20`).
@@ -223,7 +223,7 @@ When multiple clients connect via WebSockets, they may require different data fo
 
 ### 3.2 Unicast Request-Response vs. Channel Broadcast Separation
 1. **Unicast Request-Response (1-to-1)**:
-   - Queries (`?get=...`, `?sysinfo`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
+   - Queries (`CMD.state=...`, `?sysinfo`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
    - Prevents network amplification ($O(N^2)$ traffic) when multiple displays are active.
    - New connections receive an immediate unicast hydration frame without disturbing existing screens.
 2. **Channel Broadcast (1-to-Many)**:
@@ -560,10 +560,10 @@ C.opIdx=3
 C.passes=6
 ```
 
-#### Multi-Domain Pull Hydration (`?get=` or `CMD.get=`)
+#### Multi-Domain Pull Hydration (`CMD.state=`)
 When a client connects or refreshes, it requests an atomic snapshot of required domains in a single command:
 ```text
-CMD.get=K,I,C,P\n
+CMD.state=ALL\n
 ```
 The controller returns an atomic snapshot captured at instant $t_0$, completely eliminating torn-frame read hazards.
 
@@ -653,8 +653,8 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 * `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
   - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
 * `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
-* `?state` / `?get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Identity, `S` Spindle, `T` Threading, `L` Limits, `O` Operations).
-* `CMD.get=K,I,C,P`: Atomic snapshot hydration across requested domains.
+* `CMD.state` / `CMD.state=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Intent, `C` Cycle, `P` Properties).
+* `CMD.state=<domains>`: Atomic snapshot hydration across requested domains (e.g. `CMD.state=K,I`).
 
 ### 10.3 Decommissioned Legacy Commands & Deprecated Modal Staging
 

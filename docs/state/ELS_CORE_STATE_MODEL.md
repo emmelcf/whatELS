@@ -424,12 +424,14 @@ C.passes=6
 P.screwZDu=20000
 ```
 
-### 7.2 Multi-Domain Pull Hydration (`CMD.get=`)
-When any client connects, reconnects, or shifts pages, it requests an atomic point-in-time snapshot of the required domains:
+### 7.2 Multi-Domain Pull Hydration (`CMD.state=`)
+When any client connects, reconnects, or shifts pages, it requests an atomic point-in-time snapshot of all domains:
 
 ```text
-CMD.get=K,I,C,P\n
+CMD.state=ALL\n
 ```
+
+Clients may also query specific domains selectively (e.g. `CMD.state=K,I`).
 
 The controller captures `MachineModel::captureAll()` at instant $t_0$ and streams the requested domains sequentially in a single transaction, completely eliminating torn-frame read hazards.
 

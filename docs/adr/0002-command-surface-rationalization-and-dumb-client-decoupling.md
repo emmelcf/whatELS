@@ -61,7 +61,7 @@ The core controller command surface is strictly rationalized around atomic inten
 | **Dynamic In-Cut Nudge** | `CMD.feedNudge=<+1\|-1>` | Adjusts active feedrate under chip load. |
 | **Coordinate & Limits** | `CMD.axisZero=<axis>`<br>`CMD.axisPosDu=<axis>,<posDu>`<br>`CMD.axisLimitDu=<axis>,<L\|R>,<posDu>`<br>`CMD.axisClearLimit=<axis>,<L\|R>` | Origin datum setting and software travel limit registers. |
 | **Persistent Settings** | `SETTINGS.get=*`<br>`SETTINGS.set=<key>,<val>` | Core machine configuration (leadscrews, steps, encoder PPR). |
-| **Hydration & Telemetry** | `CMD.get=K,I,C,P`<br>`?sysinfo` | Atomic multi-domain state snapshots and firmware capability queries. |
+| **Hydration & Telemetry** | `CMD.state=ALL`<br>`?sysinfo` | Atomic multi-domain state snapshots and firmware capability queries. |
 
 ### 3.2 Idle Machine State vs. Client View State
 
