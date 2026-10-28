@@ -189,7 +189,7 @@ class WhatelsService extends EventTarget {
         if (this.mode === 'emulator') {
           this._log('SYS', 'Emulator connected', 'Internal virtual ESP32 initialized');
           this._emit('connection', { connected: true, mode: 'emulator', host: 'Local Emulator' });
-          this.sendRaw('?get=ALL\n', 'Hydrate all state domains');
+          this.sendRaw('CMD.state=ALL\n', 'Hydrate all state domains');
           this.sendRaw('?sysinfo\n', 'Query emulator sysinfo');
         } else {
           const wsUrl = `ws://${this.host}:${this.port}/canonical`;
@@ -497,7 +497,7 @@ class WhatelsService extends EventTarget {
   }
 
   queryState(domains = 'ALL') {
-    this.sendRaw(`?get=${domains}\n`, `Query state [${domains}]`);
+    this.sendRaw(`CMD.state=${domains}\n`, `Query state [${domains}]`);
   }
 
   // Settings Transaction API (Unicast Request-Response)

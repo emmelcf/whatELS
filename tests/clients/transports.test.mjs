@@ -73,8 +73,8 @@ test('EmulatorTransport wraps emulator and routes lines', async (t) => {
   assert.deepEqual(lines, ['K.rpm=1200']);
 
   // Send line through transport
-  await transport.send('?get=ALL');
-  assert.deepEqual(mockEmu.sent, ['?get=ALL\n']);
+  await transport.send('CMD.state=ALL');
+  assert.deepEqual(mockEmu.sent, ['CMD.state=ALL\n']);
 
   await transport.disconnect();
   assert.equal(transport.status, 'disconnected');
@@ -193,7 +193,7 @@ test('WhatelsService delegates I/O through ClientTransport', async (t) => {
 
   // Send raw command
   service.sendRaw('CMD.stop\n');
-  assert.deepEqual(mockTransport.sent, ['?get=ALL\n', '?sysinfo\n', 'CMD.stop\n']);
+  assert.deepEqual(mockTransport.sent, ['CMD.state=ALL\n', '?sysinfo\n', 'CMD.stop\n']);
 
   // Handle incoming line
   let telemetryFired = false;

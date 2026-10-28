@@ -102,7 +102,7 @@ class WhatelsEmulator {
       this._emitSysInfo();
       return;
     }
-    if (line.startsWith('?get') || line === '?state' || line.startsWith('CMD.get=')) {
+    if (line === 'CMD.state' || line.startsWith('CMD.state=')) {
       this._emitDomainQuery(line);
       return;
     }
@@ -726,19 +726,17 @@ class WhatelsEmulator {
 
   _emitDomainQuery(line) {
     let q = line;
-    if (q.startsWith('?get=')) q = q.substring(5);
-    else if (q.startsWith('get=')) q = q.substring(4);
-    else if (q.startsWith('CMD.get=')) q = q.substring(8);
-    else if (q === '?state') q = 'ALL';
+    if (q.startsWith('CMD.state=')) q = q.substring(10);
+    else if (q === 'CMD.state') q = 'ALL';
 
-    const tokens = q.toUpperCase().split(/[,;| ]+/);
+    const tokens = q.split(/[,;| ]+/);
     let mask = 0;
     for (const t of tokens) {
-      if (t === 'K' || t === 'KINEMATICS') mask |= 0x01;
-      else if (t === 'I' || t === 'INTENT') mask |= 0x02;
-      else if (t === 'C' || t === 'CYCLE') mask |= 0x04;
-      else if (t === 'P' || t === 'PROPERTIES' || t === 'PROPS') mask |= 0x08;
-      else if (t === 'ALL' || t === '*') mask |= 0x0F;
+      if (t === 'K') mask |= 0x01;
+      else if (t === 'I') mask |= 0x02;
+      else if (t === 'C') mask |= 0x04;
+      else if (t === 'P') mask |= 0x08;
+      else if (t === 'ALL') mask |= 0x0F;
     }
     if (mask === 0) mask = 0x0F;
     const resp = this._buildDomainTelemetry(mask);
