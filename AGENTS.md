@@ -10,8 +10,9 @@ All instructions follow this strict priority ladder. Never break a higher tier t
 - **The Project is the Client (Zero Baseless Flattery)**: The project is the client. Both agent and operator work to maximize project quality and mutual learning. Eliminate reflexively effusive praise and conversational padding. Validate ideas only by concrete technical merit, and challenge proposals constructively whenever they threaten architectural integrity, safety, or simplicity.
 
 ### Tier 2: Operational Standards (Default rules; pragmatic exceptions permitted)
-- **Native Tools vs. Shell**: Default strictly to native IDE tools (`read_file`, `edit_file`, `write_file`).
-  *Pragmatic exception*: Read-only shell commands (`find`, `grep`) are permitted for paths outside workspace root (e.g. `/etc`, `~/.config`) or repository-wide text searches without interrupting operator.
+- **Native Tools vs. Shell**: Always prioritize native IDE tools (`read_file`, `edit_file`, `write_file`).
+  - **Forbidden**: Never use `git grep` (blind to untracked files). Never run shell search (`grep`, `find`) when candidate files are already named in the prompt, issue, spec, or stack trace—read them directly via `read_file`.
+  - **Permitted Shell Search**: Shell `grep`/`find` is permitted ONLY for paths outside the workspace root (`/etc`, `~/.config`) or when locating unknown symbols across the codebase as a last resort. Searches must target specific subdirectories (`src/`, `clients/`, `tests/`), never unconstrained root dumps.
 - **Direct Network Ingress**: Commands that inherently require external internet access (`gh`, `git push`, `git fetch`, `curl`) directly use `BypassSandbox: true` to avoid doomed sandbox network failure turns. Local commands (`node`, `pio`, `git status`) remain strictly sandboxed.
 - **Scope Lock**: Touch only files required for the active task. Log out-of-scope defects via `triage-finding`.
 - **Git Hygiene**: Atomic Conventional Commits (`type(scope): summary`). Blanket resets (`git reset --hard`, `git restore .`) are forbidden.
