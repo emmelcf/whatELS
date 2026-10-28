@@ -37,6 +37,7 @@ static CommandResult handleSimEncoder(const char* args);
 static CommandResult handleSimPulses(const char* args);
 static CommandResult handleSimRpm(const char* args);
 static CommandResult handlePing(const char* args);
+static CommandResult handleState(const char* args);
 
 // Staged Ingress Compat Handlers
 static CommandResult handleGearAxis(const char* args);
@@ -79,6 +80,7 @@ static const CommandRoute COMMAND_ROUTES[] = {
   { "simPulses",     CommandId::CMD_NONE,        handleSimPulses,     nullptr },
   { "simRpm",        CommandId::CMD_NONE,        handleSimRpm,        nullptr },
   { "ping",          CommandId::CMD_NONE,        handlePing,          nullptr },
+  { "state",         CommandId::CMD_NONE,        handleState,         nullptr },
   // Staged Ingress Modal Routes
   { "gearAxis",      CommandId::CMD_SET_AXIS,    handleGearAxis,      nullptr },
   { "gearSync",      CommandId::CMD_SET_SYNC,    handleGearSync,      nullptr },
@@ -473,6 +475,51 @@ static CommandResult handlePing(const char* args) {
   return CommandResult::ok("ping");
 }
 
+static CommandResult handleState(const char* args) {
+  uint8_t mask = 0;
+
+  // Bare payload handling (e.g. no arguments passed)
+  if (!args || !*args) {
+    mask = DOMAIN_ALL;
+  } else {
+    const char* p = args;
+    while (*p) {
+      switch (*p) {
+        case 'K': mask |= DOMAIN_KINEMATICS; break;
+        case 'I': mask |= DOMAIN_INTENT;     break;
+        case 'C': mask |= DOMAIN_CYCLE;      break;
+        case 'P': mask |= DOMAIN_PROPERTIES; break;
+        case ',': break; // Valid delimiter
+        case 'A':
+          // Strict lookahead verification for complete "ALL" token
+          if (p[1] == 'L' && p[2] == 'L' && (p[3] == ',' || p[3] == '\0')) {
+            mask |= DOMAIN_ALL;
+            p += 2; // Advance past the 'LL'
+            break;
+          }
+          // Intentional fall-through to default if it's not the exact token "ALL"
+        default:
+          return CommandResult::failed("state", "INVALID_DOMAIN");
+      }
+      p++;
+    }
+
+    if (mask == 0) {
+      return CommandResult::failed("state", "EMPTY_DOMAIN_MASK");
+    }
+  }
+
+  // Selective capture: only pay for the domains requested
+  MachineModel m;
+  if (mask & DOMAIN_KINEMATICS) m.kinematics = MachineModel::captureKinematics();
+  if (mask & DOMAIN_INTENT)     m.intent     = MachineModel::captureIntent();
+  if (mask & DOMAIN_CYCLE)      m.cycle      = MachineModel::captureCycle();
+  if (mask & DOMAIN_PROPERTIES) m.properties = MachineModel::captureProperties();
+
+  String rep = TelemetrySerializer::buildTelemetry(m, mask);
+  return CommandResult::ok("state", rep);
+}
+
 // Staged Ingress Handlers
 static CommandResult handleGearAxis(const char* args) {
   if (!args || !*args) return CommandResult::failed("gearAxis", "Missing axis");
@@ -652,28 +699,6 @@ CommandResult CommandDispatcher::dispatch(const char* payload, size_t length, ui
       String reply = ModeRegistry::serializeDiscoveryJson(SettingsService::getActiveProfile().capabilities, false) + "\n";
       return CommandResult::ok("mode.discover", reply);
     }
-  }
-
-  // 5. Domain State Queries (?get=K,I / ?state)
-  if ((length >= 4 && strncmp(payload, "?get", 4) == 0) ||
-      (length >= 6 && strncmp(payload, "?state", 6) == 0)) {
-    uint8_t mask = DOMAIN_ALL;
-    const char* eq = strchr(payload, '=');
-    if (eq) {
-      mask = 0;
-      const char* p = eq + 1;
-      while (*p) {
-        if (*p == 'K' || *p == 'k') mask |= DOMAIN_KINEMATICS;
-        else if (*p == 'I' || *p == 'i') mask |= DOMAIN_INTENT;
-        else if (*p == 'C' || *p == 'c') mask |= DOMAIN_CYCLE;
-        else if (*p == 'P' || *p == 'p') mask |= DOMAIN_PROPERTIES;
-        else if (strncasecmp(p, "ALL", 3) == 0) { mask = DOMAIN_ALL; break; }
-        p++;
-      }
-    }
-    MachineModel m = MachineModel::captureAll();
-    String rep = TelemetrySerializer::buildTelemetry(m, mask);
-    return CommandResult::ok("get", rep);
   }
 
   // 6. Canonical CMD.* Namespace (Single-Gate Architecture)

@@ -9,7 +9,7 @@ String NativeClient::serializeResponse(const whatels::core::CommandResult& res) 
       if (res.payload.length() == 0) {
         return "OK:CMD." + String(res.command) + "\n";
       }
-      // If payload is already a fully formed multi-line block (e.g. ?sysinfo, ?get, SETTINGS, JSON)
+      // If payload is already a fully formed multi-line block (e.g. CMD.state, SETTINGS, JSON)
       if (res.payload.indexOf('\n') >= 0 || res.payload.startsWith("{") || res.payload.startsWith("SYSINFO") || res.payload.startsWith("SETTINGS")) {
         String out = res.payload;
         if (!out.endsWith("\n")) out += "\n";

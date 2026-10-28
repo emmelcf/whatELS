@@ -18,8 +18,6 @@ enum DomainFlags : uint8_t {
   DOMAIN_ALL        = 0x0F   // All domains combined (0x01 | 0x02 | 0x04 | 0x08)
 };
 
-// Domain helper: parses queries like "K,I", "kinematics,intent", "ALL", "P", etc. into bitmask
-uint8_t parseDomainQuery(const char* query);
 
 // -----------------------------------------------------------------------------
 // Domain Models: Kinematics (Structured Internals)

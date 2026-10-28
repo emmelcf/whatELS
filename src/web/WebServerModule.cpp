@@ -471,8 +471,8 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     // Native Client routing via ClientManager
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
       if (whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
-        bool isQuery = (length >= 4 && strncmp((const char*)payload, "?get", 4) == 0) ||
-                       (length >= 6 && strncmp((const char*)payload, "?state", 6) == 0) ||
+        bool isQuery = (length >= 9 && strncasecmp((const char*)payload, "CMD.state", 9) == 0) ||
+                       (length >= 8 && strncasecmp((const char*)payload, "CMD.ping", 8) == 0) ||
                        (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
                        (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0) ||
                        (length >= 16 && strncasecmp((const char*)payload, "CMD.settings.get", 16) == 0);

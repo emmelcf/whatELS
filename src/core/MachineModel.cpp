@@ -187,37 +187,4 @@ bool MachineModel::hasChanged(const MachineModel& prev, const MachineModel& curr
   return (detectChangedDomains(prev, current) & domainMask) != 0;
 }
 
-uint8_t parseDomainQuery(const char* query) {
-  if (!query || *query == '\0') return DOMAIN_ALL;
 
-  while (*query == ' ' || *query == '\t') query++;
-  if (strncmp(query, "?get=", 5) == 0) query += 5;
-  else if (strncmp(query, "get=", 4) == 0) query += 4;
-  else if (strncmp(query, "?state", 6) == 0) return DOMAIN_ALL;
-
-  while (*query == ' ' || *query == '\t') query++;
-  if (*query == '\0') return DOMAIN_ALL;
-
-  uint8_t mask = DOMAIN_NONE;
-  char buf[64];
-  strncpy(buf, query, sizeof(buf) - 1);
-  buf[sizeof(buf) - 1] = '\0';
-
-  char* token = strtok(buf, ",;| \r\n");
-  while (token) {
-    if (strcasecmp(token, "K") == 0 || strcasecmp(token, "kinematics") == 0 || strcasecmp(token, "kin") == 0) {
-      mask |= DOMAIN_KINEMATICS;
-    } else if (strcasecmp(token, "I") == 0 || strcasecmp(token, "intent") == 0) {
-      mask |= DOMAIN_INTENT;
-    } else if (strcasecmp(token, "C") == 0 || strcasecmp(token, "cycle") == 0) {
-      mask |= DOMAIN_CYCLE;
-    } else if (strcasecmp(token, "P") == 0 || strcasecmp(token, "properties") == 0 || strcasecmp(token, "prop") == 0 || strcasecmp(token, "props") == 0) {
-      mask |= DOMAIN_PROPERTIES;
-    } else if (strcasecmp(token, "ALL") == 0 || strcmp(token, "*") == 0) {
-      mask |= DOMAIN_ALL;
-    }
-    token = strtok(nullptr, ",;| \r\n");
-  }
-
-  return (mask == DOMAIN_NONE) ? DOMAIN_ALL : mask;
-}
