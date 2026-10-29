@@ -50,16 +50,19 @@ Engages leadscrew motion according to the specified parameters. If called while 
 * **Arguments (Key-Value Syntax Required):** 
   * `axis`: Target axis (`Z`, `X`, or `ZX` for coordinated dual-axis cone/taper feed). **Mandatory** (zero default).
   * `feed`: Feed rate magnitude as a positive integer (`> 0`): deci-microns per rev (`dupr`) when `sync:1`, or deci-microns per minute (`du/min`) when `sync:0`. **Mandatory**.
-  * `dir`: Axis-aware Cartesian direction token. **Mandatory** (zero default):
+  * `dir`: Primary axis Cartesian direction token. **Mandatory** (zero default):
     * Universal: `-`, `-1` (negative coordinate feed) or `+`, `+1` (positive coordinate feed).
-    * $Z$ axis only: `CHUCK`, `LEFT` ($\to -1$); `TAIL`, `RIGHT` ($\to +1$).
+    * $Z$ axis (and `ZX` primary axis): `CHUCK`, `LEFT` ($\to -1$); `TAIL`, `RIGHT` ($\to +1$).
     * $X$ axis only: `CENTER`, `IN`, `INFEED`, `UP` ($\to -1$); `RETRACT`, `OUT`, `DOWN` ($\to +1$).
     * Note: `FWD` and `REV` are strictly forbidden (reserved for spindle rotation per ADR-0001).
+  * `xdir`: Secondary $X$ axis direction token (`CENTER`, `IN`, `INFEED`, `UP`, `-`, `-1` $\to -1$; `RETRACT`, `OUT`, `DOWN`, `+`, `+1` $\to +1$). **Mandatory when `axis:ZX`** (`MISSING_PARAM:xdir` if omitted); rejected with `INVALID_PARAM:xdir` on single-axis `Z` or `X`.
+  * `taper`: Radial $X$ travel in integer deci-microns (`du`) per $10{,}000\text{ du}$ ($1.0\text{ mm}$) of axial $Z$ travel (`> 0`, e.g., `1000` = $0.1000$ radial slope). **Mandatory when `axis:ZX`** (`MISSING_PARAM:taper` if omitted); rejected with `INVALID_PARAM:taper` on single-axis `Z` or `X`.
   * `sync`: (Optional) Spindle synchronization (`1` for ELS electronic gearing; `0` for continuous velocity feed). Default: `1`.
   * `dist`: (Optional) Target travel distance in integer deci-microns (`du`, `> 0`), or `-1` for continuous feed to soft limit. Default: `-1`.
 * **Examples:**
-  * `CMD.startFeed=axis:Z,feed:1500,dir:-,sync:1`
+  * `CMD.startFeed=axis:Z,feed:1500,dir:CHUCK,sync:1`
   * `CMD.startFeed=axis:X,feed:500000,dir:CENTER,sync:0,dist:20000`
+  * `CMD.startFeed=axis:ZX,feed:10000,dir:CHUCK,xdir:RETRACT,taper:1000,sync:1`
 * **Safety Lockout:** Rejected if motion is currently active (`isOn == true`), returning `ERR:CMD.startFeed:MOTION_LOCKED`.
 * **Required Permission:** `PERM_MOTION_START`
 * **Returns:** `OK:CMD.startFeed` or `ERR:CMD.startFeed:<reason>`

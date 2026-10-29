@@ -52,9 +52,9 @@ Cross-slide motion direction is automatically resolved based on feed direction, 
 | **INVERTED** (Narrow at Chuck) | **EXTERNAL** (OD) | Toward Tailstock ($Z+$) | **`RETRACT`** ($X+$) | Diameter expands as tool approaches tail. |
 
 ### 4. Mode Disambiguation: Continuous Gearing vs. Multi-Pass Canned Cycle
-whatELS firmware implements two operational workflows using `MODE_CONE`:
-1. **Continuous Angled Gearing (`GEARBOX -> AXIS: Z+X`):** Single continuous cut along the taper angle, bounded by machine soft limits.
-2. **Automated Multi-Pass Cycle (`TAPER`):** Autonomous multi-pass cycle taking multiple roughing passes parallel to the taper slope, followed by automated retract and rapid return.
+whatELS firmware distinguishes two operational workflows for angled motion:
+1. **Continuous Coupled Gearing (`GEARBOX -> axis:ZX` via `CMD.startFeed`):** Single continuous feed stroke coupling $Z$ (`dir`) and $X$ (`xdir`) at an explicit atomic radial slope (`taper` in $\text{du}$ of $X$ per $10{,}000\text{ du}$ of $Z$), bounded by active soft limits or `dist`. Both `xdir` and `taper` are mandatory parameters in `CMD.startFeed=axis:ZX,...` with zero core defaults.
+2. **Automated Multi-Pass Cycle (`TAPER` via `CMD.startCycle=mode:taper`):** Autonomous multi-pass canned cycle (tracked in Issue #10) taking multiple roughing passes parallel to the taper slope using `surface` (`EXTERNAL` OD vs. `INTERNAL` ID) and `invert` (`NORMAL` vs. `INVERTED`) to resolve pass step-in and end-of-pass retract directions.
 
 ### 5. Multi-Client Disambiguation & Yield Triggers
 Because legacy telemetry uses `MODE_CONE` for both continuous feed and canned cycles, the display controller enforces state-ownership yield triggers:

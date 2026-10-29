@@ -21,10 +21,12 @@ export interface TransportConfig {
 
 export interface StartFeedParams {
   axis: Axis;
-  sync: boolean | 0 | 1;
-  feed: number;                    // strictly positive integer: dupr (sync:1) or du/min (sync:0)
-  dir: -1 | 1 | SemanticDirection;
-  dist?: number;                   // integer deci-microns, default 0 (continuous feed)
+  sync?: boolean | 0 | 1;          // optional, default 1 (spindle synchronized)
+  feed: number;                    // mandatory positive integer: dupr (sync:1) or du/min (sync:0)
+  dir: -1 | 1 | SemanticDirection; // mandatory primary axis direction
+  xdir?: -1 | 1 | SemanticDirX;    // mandatory when axis === 'ZX': secondary X direction
+  taper?: number;                  // mandatory when axis === 'ZX': radial X du per 10,000 du of Z (> 0)
+  dist?: number;                   // optional integer deci-microns, default -1 (continuous feed to limit)
 }
 
 export interface ClientHelloParams {
