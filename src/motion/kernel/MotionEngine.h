@@ -47,6 +47,10 @@ struct FeedParameters {
   int32_t secondaryRatioDen   = 1;
 };
 
+namespace whatels::core {
+class CoreCommandService;
+}
+
 /**
  * @brief Core 1 Real-Time Motion Orchestrator.
  * @details Conforms to MOTION_ENGINE_SPECIFICATION.md Section 6 and
@@ -55,6 +59,8 @@ struct FeedParameters {
  *          TrajectoryPlanner, and TelemetryMailbox streaming.
  */
 class MotionEngine {
+  friend class whatels::core::CoreCommandService;
+
 public:
   static constexpr size_t NUM_AXES = 2;
   static constexpr size_t CMD_QUEUE_DEPTH = 16;
