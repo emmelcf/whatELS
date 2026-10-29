@@ -61,7 +61,7 @@ struct WifiConfig {
   String ssid = "";
   String password = "";
   String hostname = "whatels";
-  String setupApSsid = "whatELS-Setup";
+  String setupApSsid = "whatELS-AP";
   String setupApPassword = "whatels-setup";
   long incomingBufferSize = 100000;
   long outgoingBufferSize = 100000;

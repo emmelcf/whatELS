@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <vector>
 
 namespace whatels {
 namespace core {
@@ -26,42 +27,46 @@ private:
   String        _ipAddress = "";
   String        _statusText = "No WiFi";
   unsigned long _disconnectStartedAt = 0;
-  unsigned long _nextRetryAt = 0;
-  unsigned long _retryIntervalMs = 3000;
   unsigned long _connectStartedAt = 0;
+  unsigned long _nextRetryMs = 0;
+  unsigned long _currentBackoffMs = 3000;
   bool          _mdnsStarted = false;
 
   WifiService() = default;
 
 public:
+  WifiService(const WifiService&) = delete;
+  WifiService& operator=(const WifiService&) = delete;
+
   static WifiService& instance();
 
+  // Core lifecycle & watchdog
   void init();
   bool begin();
-  void update();
-
-  // Mode & configuration triggers
-  bool connectStation(const String& ssid, const String& password, const String& hostname = "");
-  bool startAccessPoint();
+  void loop();
+  inline void update() { loop(); }
   void stop();
 
-  // Network discovery
-  std::vector<WifiScanResult> scanNetworks();
+  // Mode triggers
+  bool connectStation(const String& ssid, const String& password, const String& hostname = "");
+  bool startAccessPoint();
 
-  // Status accessors
+  // Status & discovery accessors
+  bool isConnected() const;
+  inline bool isStationConnected() const { return isConnected(); }
+  inline bool isApActive() const { return _state == WifiModeState::AP_ACTIVE; }
+  String getIpAddress() const;
+  int8_t getRssi() const;
+  const char* getHostname() const { return "whatels"; }
+
   WifiModeState getState() const { return _state; }
   String getModeString() const;
   String getStatusString() const { return _statusText; }
-  String getIpAddress() const { return _ipAddress; }
-  int32_t getRssi() const { return (_state == WifiModeState::STA_CONNECTED) ? WiFi.RSSI() : 0; }
-  bool isStationConnected() const { return _state == WifiModeState::STA_CONNECTED; }
-  bool isApActive() const { return _state == WifiModeState::AP_ACTIVE; }
+
+  std::vector<WifiScanResult> scanNetworks();
 
 private:
   void setStatus(const String& msg);
-  void handleStationConnecting();
-  void handleStationConnected();
-  void handleStationDisconnected();
 };
 
 } // namespace core

@@ -1,9 +1,9 @@
 #include "WifiService.h"
 #include "Config.h"
-#include "SettingsService.h"
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
 #include <esp_log.h>
+#include <algorithm>
 
 static const char* TAG = "WIFI_SVC";
 
@@ -36,6 +36,26 @@ String WifiService::getModeString() const {
   }
 }
 
+bool WifiService::isConnected() const {
+  return (_state == WifiModeState::STA_CONNECTED && WiFi.status() == WL_CONNECTED);
+}
+
+String WifiService::getIpAddress() const {
+  if (_state == WifiModeState::STA_CONNECTED) {
+    return WiFi.localIP().toString();
+  } else if (_state == WifiModeState::AP_ACTIVE) {
+    return WiFi.softAPIP().toString();
+  }
+  return _ipAddress;
+}
+
+int8_t WifiService::getRssi() const {
+  if (isConnected()) {
+    return static_cast<int8_t>(WiFi.RSSI());
+  }
+  return 0;
+}
+
 void WifiService::init() {
   // Disable Wi-Fi modem sleep for ultra-low latency telemetry and HIL testing
   WiFi.setSleep(false);
@@ -51,12 +71,25 @@ bool WifiService::begin() {
     return true;
   }
 
+  bool ok = false;
   if (sysConfig.wifi.ssid.length() > 0) {
-    return connectStation(sysConfig.wifi.ssid, sysConfig.wifi.password, sysConfig.wifi.hostname);
+    ok = connectStation(sysConfig.wifi.ssid, sysConfig.wifi.password, sysConfig.wifi.hostname);
+  } else {
+    // No station SSID configured -> start fallback Access Point
+    ok = startAccessPoint();
   }
 
-  // No station SSID configured -> start setup Access Point immediately
-  return startAccessPoint();
+  // Register mDNS responder for "whatels.local"
+  if (!_mdnsStarted) {
+    if (MDNS.begin(getHostname())) {
+      _mdnsStarted = true;
+      ESP_LOGI(TAG, "mDNS responder registered: http://%s.local", getHostname());
+    } else {
+      ESP_LOGW(TAG, "Failed to start mDNS responder for %s.local", getHostname());
+    }
+  }
+
+  return ok;
 }
 
 bool WifiService::connectStation(const String& ssid, const String& password, const String& hostname) {
@@ -67,17 +100,17 @@ bool WifiService::connectStation(const String& ssid, const String& password, con
   WiFi.disconnect(true);
   WiFi.mode(WIFI_STA);
 
-  String host = (hostname.length() > 0) ? hostname : sysConfig.wifi.hostname;
-  if (host.length() == 0) host = "whatels";
-  WiFi.setHostname(host.c_str());
+  const char* host = (hostname.length() > 0) ? hostname.c_str() : getHostname();
+  WiFi.setHostname(host);
 
-  ESP_LOGI(TAG, "Connecting to Station SSID '%s' (hostname '%s')...", ssid.c_str(), host.c_str());
+  ESP_LOGI(TAG, "Connecting to Station SSID '%s' (hostname '%s')...", ssid.c_str(), host);
   WiFi.begin(ssid.c_str(), password.c_str());
 
   _state = WifiModeState::STA_CONNECTING;
   _connectStartedAt = millis();
-  _retryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
+  _currentBackoffMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
   _disconnectStartedAt = 0;
+  _nextRetryMs = 0;
   setStatus("Connecting");
   return true;
 }
@@ -86,8 +119,10 @@ bool WifiService::startAccessPoint() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP);
 
-  const char* apSsid = sysConfig.wifi.setupApSsid.length() > 0 ? sysConfig.wifi.setupApSsid.c_str() : "whatELS-Setup";
-  const char* apPass = sysConfig.wifi.setupApPassword.length() > 0 ? sysConfig.wifi.setupApPassword.c_str() : "whatels-setup";
+  const char* apSsid = (sysConfig.wifi.setupApSsid.length() > 0)
+                       ? sysConfig.wifi.setupApSsid.c_str()
+                       : "whatELS-AP";
+  const char* apPass = (sysConfig.wifi.setupApPassword.length() >= 8) ? sysConfig.wifi.setupApPassword.c_str() : nullptr;
 
   bool ok = WiFi.softAP(apSsid, apPass);
   if (!ok) {
@@ -101,6 +136,13 @@ bool WifiService::startAccessPoint() {
   _state = WifiModeState::AP_ACTIVE;
   ESP_LOGI(TAG, "SoftAP started: SSID '%s', IP %s", apSsid, _ipAddress.c_str());
   setStatus("Setup " + _ipAddress);
+
+  if (!_mdnsStarted) {
+    if (MDNS.begin(getHostname())) {
+      _mdnsStarted = true;
+      ESP_LOGI(TAG, "mDNS responder registered: http://%s.local", getHostname());
+    }
+  }
   return true;
 }
 
@@ -131,26 +173,32 @@ std::vector<WifiScanResult> WifiService::scanNetworks() {
   return results;
 }
 
-void WifiService::update() {
+void WifiService::loop() {
   if (_state == WifiModeState::OFF) return;
+
+  unsigned long now = millis();
 
   if (_state == WifiModeState::STA_CONNECTING) {
     if (WiFi.status() == WL_CONNECTED) {
       _state = WifiModeState::STA_CONNECTED;
       _ipAddress = WiFi.localIP().toString();
-      _retryIntervalMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
+      _currentBackoffMs = WIFI_RETRY_INITIAL_INTERVAL_MS;
       _disconnectStartedAt = 0;
+      _nextRetryMs = 0;
 
-      String host = sysConfig.wifi.hostname.length() > 0 ? sysConfig.wifi.hostname : "whatels";
-      if (!_mdnsStarted && MDNS.begin(host.c_str())) {
-        _mdnsStarted = true;
-        ESP_LOGI(TAG, "mDNS responder started: http://%s.local", host.c_str());
+      if (!_mdnsStarted) {
+        if (MDNS.begin(getHostname())) {
+          _mdnsStarted = true;
+          ESP_LOGI(TAG, "mDNS responder registered: http://%s.local", getHostname());
+        }
       }
       setStatus("See " + _ipAddress);
       ESP_LOGI(TAG, "Station connected successfully! IP: %s", _ipAddress.c_str());
-    } else if (millis() - _connectStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
-      ESP_LOGW(TAG, "Station connection timed out. Falling back to Setup AP...");
+    } else if (now - _connectStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
+      ESP_LOGW(TAG, "Station connection timed out. Falling back to AP mode (SSID: whatELS-AP)...");
       startAccessPoint();
+      _nextRetryMs = now + _currentBackoffMs;
+      _currentBackoffMs = std::min(_currentBackoffMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
     }
     return;
   }
@@ -158,12 +206,15 @@ void WifiService::update() {
   if (_state == WifiModeState::STA_CONNECTED) {
     if (WiFi.status() != WL_CONNECTED) {
       if (_disconnectStartedAt == 0) {
-        _disconnectStartedAt = millis();
-      } else if (millis() - _disconnectStartedAt >= WIFI_DISCONNECT_DEBOUNCE_MS) {
-        ESP_LOGW(TAG, "Station connection lost after debounce!");
+        _disconnectStartedAt = now;
+      } else if (now - _disconnectStartedAt >= WIFI_DISCONNECT_DEBOUNCE_MS) {
+        ESP_LOGW(TAG, "Station connection lost. Reconnecting with exponential backoff...");
         _state = WifiModeState::STA_CONNECTING;
         _disconnectStartedAt = 0;
-        _nextRetryAt = millis() + _retryIntervalMs;
+        WiFi.reconnect();
+        _connectStartedAt = now;
+        _nextRetryMs = now + _currentBackoffMs;
+        _currentBackoffMs = std::min(_currentBackoffMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
         setStatus("WiFi lost, retrying...");
       }
     } else {
@@ -172,14 +223,14 @@ void WifiService::update() {
     return;
   }
 
-  // Reconnection watchdog for temporary dropouts
+  // Periodic reconnection retry when running in AP fallback mode and station credentials exist
   if (_state == WifiModeState::AP_ACTIVE && sysConfig.wifi.ssid.length() > 0) {
-    // If running in AP mode because station timed out, periodically retry station if desired
-    if (_nextRetryAt != 0 && (long)(millis() - _nextRetryAt) >= 0) {
-      ESP_LOGD(TAG, "Periodic retry to station SSID '%s'...", sysConfig.wifi.ssid.c_str());
+    if (_nextRetryMs != 0 && (long)(now - _nextRetryMs) >= 0) {
+      ESP_LOGD(TAG, "Periodic retry to station SSID '%s' (backoff: %lu ms)...",
+               sysConfig.wifi.ssid.c_str(), _currentBackoffMs);
       WiFi.reconnect();
-      _retryIntervalMs = std::min(_retryIntervalMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
-      _nextRetryAt = millis() + _retryIntervalMs;
+      _nextRetryMs = now + _currentBackoffMs;
+      _currentBackoffMs = std::min(_currentBackoffMs * 2, WIFI_RETRY_MAX_INTERVAL_MS);
     }
   }
 }
