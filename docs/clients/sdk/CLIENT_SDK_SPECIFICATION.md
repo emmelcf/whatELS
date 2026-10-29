@@ -55,7 +55,7 @@ Any application communicating with whatELS must adhere to the 3-tier client pipe
 To eliminate any ambiguity across different programming languages (JavaScript, C++, Python, Rust), the canonical types, parameter structures, domain snapshots, and events are formally defined in TypeScript IDL (and mirrored in [`clients/sdk/js/whatels-client.d.ts`](../../../clients/sdk/js/whatels-client.d.ts)):
 
 ```typescript
-export type Axis = 'Z' | 'X';
+export type Axis = 'Z' | 'X' | 'ZX';
 export type SemanticDirZ = 'CHUCK' | 'TAIL' | 'LEFT' | 'RIGHT';
 export type SemanticDirX = 'INFEED' | 'RETRACT' | 'CENTER' | 'IN' | 'UP' | 'OUT' | 'DOWN';
 export type SemanticDirection = SemanticDirZ | SemanticDirX | -1 | 1;

@@ -238,6 +238,18 @@ void testFeedAndMotionCommands() {
   std::cout << "Stop -> " << wire;
   assert(res.isOk());
   assert(wire == "OK:CMD.stop\n");
+
+  // Start dual-axis compound feed (axis:ZX)
+  const char* feedZx = "CMD.startFeed=axis:ZX,feed:2500,dir:CHUCK,sync:1";
+  res = parser.parseAndDispatch(feedZx, std::strlen(feedZx), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "StartFeed (ZX) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.startFeed\n");
+
+  // Stop after ZX feed
+  res = parser.parseAndDispatch(stopCmd, std::strlen(stopCmd), ctx);
+  assert(res.isOk());
 }
 
 void testUniversalNamespaces() {

@@ -313,7 +313,13 @@ core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx
   }
 
   core::StartFeedCmd cmd;
-  if (!extractAxis(args, "CMD.startFeed", &cmd.axis, &err)) return err;
+  auto ax = args.get("axis");
+  if (ax == "ZX") {
+    cmd.axis = AXIS_Z;
+    cmd.isDualAxis = true;
+  } else if (!extractAxis(args, "CMD.startFeed", &cmd.axis, &err)) {
+    return err;
+  }
 
   auto feedStr = args.get("feed");
   if (feedStr.empty()) {

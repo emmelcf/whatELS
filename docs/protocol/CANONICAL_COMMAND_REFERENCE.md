@@ -48,7 +48,7 @@ Commands that engage stepper motors, set feed directions, configure cycle parame
 #### `CMD.startFeed`
 Engages leadscrew motion according to the specified parameters. If called while idle, transitions state to `RUNNING`.
 * **Arguments (Key-Value Syntax Required):** 
-  * `axis`: Target axis (`Z` or `X`). **Mandatory** (zero default).
+  * `axis`: Target axis (`Z`, `X`, or `ZX` for coordinated dual-axis cone/taper feed). **Mandatory** (zero default).
   * `feed`: Feed rate magnitude as a positive integer (`> 0`): deci-microns per rev (`dupr`) when `sync:1`, or deci-microns per minute (`du/min`) when `sync:0`. **Mandatory**.
   * `dir`: Axis-aware Cartesian direction token. **Mandatory** (zero default):
     * Universal: `-`, `-1` (negative coordinate feed) or `+`, `+1` (positive coordinate feed).

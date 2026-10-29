@@ -10,7 +10,8 @@ static constexpr AxisId AXIS_INVALID = static_cast<AxisId>(0xFF);
  * @brief Atomic Feed Motion Command (CMD.startFeed).
  */
 struct StartFeedCmd {
-  AxisId  axis         = AXIS_INVALID;  // Mandatory: AXIS_Z or AXIS_X
+  AxisId  axis         = AXIS_INVALID;  // Mandatory: AXIS_Z or AXIS_X (primary axis; AXIS_Z when isDualAxis is true)
+  bool    isDualAxis   = false;         // True for coordinated Z+X compound gearbox feed (axis:ZX)
   int8_t  direction    = 0;             // Mandatory: -1 (Chuck / Centerline), +1 (Tailstock / Retract)
   bool    syncSpindle  = true;          // Physical fallback: true = ELS gearing (dupr), false = async IPM (du/min)
   int32_t feedRate     = 0;             // Mandatory: Magnitude of feed rate (> 0)
@@ -18,6 +19,10 @@ struct StartFeedCmd {
 
   bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (isDualAxis && axis != AXIS_Z) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
     }

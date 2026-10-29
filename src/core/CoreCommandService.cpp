@@ -42,7 +42,7 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
   if (gb) {
     ModeRegistry::activateMode(ModeIds::GEARBOX);
-    gb->setActiveAxis(cmd.axis == AXIS_X ? "X" : "Z");
+    gb->setActiveAxis(cmd.isDualAxis ? "ZX" : (cmd.axis == AXIS_X ? "X" : "Z"));
     ok = gb->startFeed(cmd.axis, cmd.syncSpindle, cmd.feedRate, cmd.direction, cmd.targetDistDu);
   } else if (cmd.syncSpindle) {
     SpindleSyncParams params;

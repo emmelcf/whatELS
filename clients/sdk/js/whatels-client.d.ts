@@ -3,7 +3,7 @@
  * Universal TypeScript IDL for whatELS Operator Clients
  */
 
-export type Axis = 'Z' | 'X';
+export type Axis = 'Z' | 'X' | 'ZX';
 export type SemanticDirZ = 'CHUCK' | 'TAIL' | 'LEFT' | 'RIGHT';
 export type SemanticDirX = 'INFEED' | 'RETRACT' | 'CENTER' | 'IN' | 'UP' | 'OUT' | 'DOWN';
 export type SemanticDirection = SemanticDirZ | SemanticDirX | -1 | 1;
