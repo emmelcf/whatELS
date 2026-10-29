@@ -223,7 +223,7 @@ When multiple clients connect via WebSockets, they may require different data fo
 
 ### 3.2 Unicast Request-Response vs. Channel Broadcast Separation
 1. **Unicast Request-Response (1-to-1)**:
-   - Queries (`CMD.state=...`, `?sysinfo`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
+   - Queries (`STATE.get=...`, `SYS.get=...`), Settings reads (`SETTINGS.get=...`), and command confirmations (`OK`, error messages) are sent **unicast** (`sendTXT(clientId)`) exclusively to the requesting socket.
    - Prevents network amplification ($O(N^2)$ traffic) when multiple displays are active.
    - New connections receive an immediate unicast hydration frame without disturbing existing screens.
 2. **Channel Broadcast (1-to-Many)**:
@@ -393,7 +393,7 @@ A central responsibility of the Translation Layer is bridging modern, composite 
    * **Inbound Synthesis:** The `NextionAdapter` listens for the `[Face X]` touch event, constructs the canonical command `CMD.startCycle=gearbox,axis=X,pitch=0.15`, and dispatches it into `CommandDispatcher`.
    * **Outbound Decomposition:** When Mode 50 is running, the adapter decomposes the single unified state into the specific text strings expected by Nextion widgets (`t_feed_x.txt="0.150"`).
 3. **Hardware Profile Awareness:**
-   * The core dynamically reports available modes based on active lathe hardware capabilities (`MODE.discover`).
+   * The core dynamically reports available modes based on active lathe hardware capabilities (`PROPERTIES.modes`).
    * If the machine profile has only a Z leadscrew motor (`MOTOR_Z` set, `MOTOR_X` absent), the controller omits 2-axis modes (Facing, Spherical, Taper).
    * Translation adapters use this discovery data to disable or gray out buttons on physical panels automatically.
 
@@ -560,10 +560,10 @@ C.opIdx=3
 C.passes=6
 ```
 
-#### Multi-Domain Pull Hydration (`CMD.state=`)
+#### Multi-Domain Pull Hydration (`STATE.get=`)
 When a client connects or refreshes, it requests an atomic snapshot of required domains in a single command:
 ```text
-CMD.state=ALL\n
+STATE.get=ALL\n
 ```
 The controller returns an atomic snapshot captured at instant $t_0$, completely eliminating torn-frame read hazards.
 
@@ -652,9 +652,9 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 * `SETTINGS.get=<key>`: Returns specific setting value.
 * `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
   - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
-* `?sysinfo`: Returns firmware build version, chip architecture, flash size, and feature capabilities (`SYSINFO.features=spindleSim`).
-* `CMD.state` / `CMD.state=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Intent, `C` Cycle, `P` Properties).
-* `CMD.state=<domains>`: Atomic snapshot hydration across requested domains (e.g. `CMD.state=K,I`).
+* `SYS.get=info` / `SYS.get=health`: Returns firmware build version, chip architecture, flash size, and feature capabilities (replaces legacy `?sysinfo`).
+* `STATE.get` / `STATE.get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Intent, `C` Cycle, `P` Properties; replaces legacy `CMD.state`).
+* `STATE.get=<domains>`: Atomic snapshot hydration across requested domains (e.g. `STATE.get=K,I`).
 
 ### 10.3 Decommissioned Legacy Commands & Deprecated Modal Staging
 

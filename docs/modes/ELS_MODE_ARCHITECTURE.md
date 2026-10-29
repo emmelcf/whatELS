@@ -800,34 +800,33 @@ From the Mode Engine's perspective, the registration handshake establishes:
 
 ---
 
-### 6.3 Mode Discovery & Capability Negotiation Protocol (`MODE.discover`)
+### 6.3 Mode Discovery & Capability Negotiation Protocol (`PROPERTIES.modes`)
 
-To enable clients to dynamically query available modes, discover parameter schemas, and evaluate hardware requirements against different machine configurations, the controller implements the **`MODE.discover`** query protocol (matching our established `PRESET.discover` and `SETTINGS.schema` patterns).
+To enable clients to dynamically query available modes, discover parameter schemas, and evaluate hardware requirements against different machine configurations, the controller implements the **`PROPERTIES.modes`** query protocol (matching our established `SETTINGS.schema` and `PROPERTIES.profiles` patterns, replacing legacy `MODE.discover`).
 
 #### Supported Discovery Query Forms:
 1. **Active Machine Profile Filter (Default):**
    ```text
-   MODE.discover
-   // or CMD.modes
+   PROPERTIES.modes
    ```
    *Behavior:* Returns only modes whose `requiredHardwareCaps` bitmask is a subset of the currently active lathe profile (`activeMachineProfile.capabilities`). Unavailable modes (e.g., automated 2-axis cycles on a 1-axis lathe) are cleanly omitted.
 
 2. **Named Machine Preset Evaluation:**
    ```text
-   MODE.discover?profile=mini_lathe_7x14
-   MODE.discover?profile=large_toolroom_1440
+   PROPERTIES.modes?profile=mini_lathe_7x14
+   PROPERTIES.modes?profile=large_toolroom_1440
    ```
    *Behavior:* Evaluates registered modes against the hardware capabilities of the specified factory preset profile, allowing client configuration wizards to simulate and preview capabilities.
 
 3. **Explicit Hardware Capability Bitmask:**
    ```text
-   MODE.discover?caps=0x0000001B
+   PROPERTIES.modes?caps=0x0000001B
    ```
    *Behavior:* Tests registered modes directly against a custom hexadecimal capability bitmask.
 
 4. **Unfiltered System Introspection:**
    ```text
-   MODE.discover?all=1
+   PROPERTIES.modes?all=1
    ```
    *Behavior:* Returns all registered modes in the system regardless of active hardware.
 
@@ -1005,14 +1004,14 @@ To ensure machine execution determinism and establish the controller as the sing
   - Implement `UnifiedGearboxMode` orchestrating leadscrew feed, cross-feed, async velocity feed, and tapers via `MotionEngine`.
   - Implement `ModeRegistry` managing static mode instances, active mode pointer, and lifecycle transitions.
 - [ ] **Slice 1.5: Command Dispatcher & Telemetry Integration:**
-  - Implement `MODE.discover` with capability filtering against `activeMachineProfile.capabilities`.
+  - Implement `PROPERTIES.modes` with capability filtering against `activeMachineProfile.capabilities`.
   - Wire canonical commands (`CMD.mode=GEARBOX`, `CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedNudge`) in `CommandDispatcher.cpp`.
   - Broadcast `K.perms` and lock-free telemetry snapshots over WebSocket.
 
 ### Phase 2: Web UI Client Integration (`clients/web_ui/`)
 - [ ] Update `lathe-controller.js` to natively command `mode: 'GEARBOX'` with axis/sync parameters directly to the controller, removing the client-side emulation mapping.
 - [ ] Bind dynamic UI control locking/dimming directly to `K.perms` received from the controller.
-- [ ] Wire `MODE.discover` so the UI dynamically renders available workspaces based on active machine capabilities.
+- [ ] Wire `PROPERTIES.modes` so the UI dynamically renders available workspaces based on active machine capabilities.
 - [ ] Test multi-client interaction with concurrent live DRO feedback.
 
 ### Phase 3: Nextion Client Migration (External Protocol Adapter)

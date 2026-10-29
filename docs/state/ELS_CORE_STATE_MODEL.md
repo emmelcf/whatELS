@@ -345,7 +345,7 @@ struct MotionTelemetrySnapshot {
 ```
 
 * **Zero Lock Contention:** Core 1 motion tasks publish to `TelemetryMailbox` with memory fences on every tick without ever blocking on FreeRTOS queues or Core 0 memory.
-* **Tear-Free Direct Sampling:** Core 0 supervisory tasks (`MachineModel::captureKinematics()`, `WebServerModule`) sample directly from `TelemetryMailbox` via atomic sequence validation. If a write is in progress, it retries lock-free.
+* **Tear-Free Direct Sampling:** Core 0 supervisory tasks (`MachineModel::captureKinematics()`, `ClientManager`, and active transport adapters) sample directly from `TelemetryMailbox` via atomic sequence validation. If a write is in progress, it retries lock-free.
 * **Single Source of Truth:** Core 0 captures canonical `KinematicsState` directly from this mailbox and active axis configuration without maintaining parallel redundant snapshot queues.
 
 ---
@@ -424,14 +424,14 @@ C.passes=6
 P.screwZDu=20000
 ```
 
-### 7.2 Multi-Domain Pull Hydration (`CMD.state=`)
+### 7.2 Multi-Domain Pull Hydration (`STATE.get=`)
 When any client connects, reconnects, or shifts pages, it requests an atomic point-in-time snapshot of all domains:
 
 ```text
-CMD.state=ALL\n
+STATE.get=ALL\n
 ```
 
-Clients may also query specific domains selectively (e.g. `CMD.state=K,I`).
+Clients may also query specific domains selectively (e.g. `STATE.get=K,I`).
 
 The controller captures `MachineModel::captureAll()` at instant $t_0$ and streams the requested domains sequentially in a single transaction, completely eliminating torn-frame read hazards.
 

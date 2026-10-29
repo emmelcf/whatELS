@@ -31,9 +31,9 @@ To test spindle-synchronized motion without requiring physical lathe rotation or
 │ HOST ENVIRONMENT (Python Test)    │ ESP32-S3 TARGET CONTROLLER         │
 │                                   │                                    │
 │  tests/hil/run_tests.py           │  Core 0 (Networking & Dispatch):   │
-│   ├── TestRunner / CLI Filter     │   ├── WebServerModule (:81/ws)     │
-│   ├── TestSuites (26 Tests)       │   ├── CommandDispatcher.cpp        │
-│   └── WhatElsClient (Async WS)    │   │    └── [SAFE-01] Gatekeeper    │
+│   ├── TestRunner / CLI Filter     │   ├── WebSocketTransport (:81/ws)  │
+│   ├── TestSuites (26 Tests)       │   ├── StandardCommandParser        │
+│   └── WhatElsClient (Async WS)    │   │    └── CoreCommandService      │
 │        ├── 500ms Heartbeat Task   │   └── MachineModel / Serializer    │
 │        └── ACK / ERR Synchronizer │            │ (Inter-core Queue)    │
 │            │                      │            ▼                       │
@@ -337,7 +337,7 @@ class WhatElsClient:
         self._ws = await asyncio.wait_for(websockets.connect(self.uri, ping_interval=None), timeout=timeout_s)
         self._rx_task = asyncio.create_task(self._rx_loop())
         self._hb_task = asyncio.create_task(self._heartbeat_loop())
-        await self.send("CMD.state=ALL", expect_ack=False)
+        await self.send("STATE.get=ALL", expect_ack=False)
         await self.wait_for(lambda s: s.telemetry_seq > 0, timeout_s=timeout_s, description="initial hydration")
 
     async def disconnect(self) -> None:
