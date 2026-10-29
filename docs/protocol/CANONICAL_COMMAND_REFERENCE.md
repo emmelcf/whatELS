@@ -17,8 +17,8 @@ Every canonical message is an ASCII string terminated by a newline (`\n` or `\r\
 
 $$\texttt{<NAMESPACE>.<action>[=<arguments>]}\backslash\text{n}$$
 
-* **Namespaces:** `CMD`, `SETTINGS`, `PRESET`, `MODE`, `CLIENT`, and queries (`?sysinfo`).
-* **Argument Formatting:** Arguments may be formatted as comma-separated key-value pairs (e.g. `CMD.startFeed=axis:Z,feed:0.15,dir:+`) or comma-separated positional tokens (e.g. `CMD.jogStep=Z,100`).
+* **Namespaces:** `CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, and `CLIENT`.
+* **Argument Formatting:** Arguments may be formatted as comma-separated key-value pairs (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8...`) or comma-separated positional tokens (e.g. `CMD.jogStep=Z,100`).
 * **Case Sensitivity:** Command names are case-insensitive (`CMD.stop` == `cmd.STOP`). Axis names (`Z`, `X`) and units (`mm`, `tpi`, `du`) accept uppercase or lowercase.
 
 ### Universal Return Grammar
@@ -26,11 +26,11 @@ Every command processed by the controller returns an ASCII response:
 
 | Response Header | Meaning | Wire Example |
 | :--- | :--- | :--- |
-| `OK:CMD.<name>` | Command accepted and executed successfully. | `OK:CMD.stop\n` |
-| `OK:CMD.<name>:<data>` | Command succeeded with scalar or string payload. | `OK:CMD.jogStep:Z,100\n` |
-| `ERR:CMD.<name>:<reason>` | Command failed validation, was locked by motion, or hardware faulted. | `ERR:CMD.startFeed:Missing arguments\n` |
-| `CMD.error=unknown_command` | Unrecognized command syntax. | `CMD.error=unknown_command\n` |
-| `SYSINFO.<key>=<val>` | Multi-line structured query response. | `SYSINFO.version=1.0.4-modular\n...` |
+| `OK:<NAMESPACE>.<name>` | Command accepted and executed successfully. | `OK:CMD.stop\n` |
+| `OK:<NAMESPACE>.<name>:<data>` | Command succeeded with scalar or string payload. | `OK:CMD.startCycle:mode:thread\n` |
+| `ERR:<NAMESPACE>.<name>:<reason>` | Command failed validation, was locked by motion, or faulted. | `ERR:CMD.startFeed:MOTION_LOCKED\n` |
+| `ERR:UNKNOWN_COMMAND` | Unrecognized command syntax (including all decommissioned `?` queries). | `ERR:UNKNOWN_COMMAND\n` |
+| `SYS.<key>=<val>` | Multi-line structured query response. | `SYS.version=1.0.4\n...` |
 | `K.<field>=<val>...` | Universal telemetry hydration or snapshot push. | `K.zDu=12400\|K.rpm=850...\n` |
 
 ---
@@ -50,10 +50,86 @@ Engages leadscrew motion according to the specified parameters. If called while 
   * `sync`: Spindle synchronization (`1` or `sync` for ELS electronic gearing; `0` or `async` for continuous IPM feed).
   * `dist`: (Optional) Target travel distance in deci-microns (`du`). `-1` for continuous feed.
 * **Examples:**
-  * `CMD.startFeed=axis:Z,feed:0.15,dir:+,sync:1`
+  * `CMD.startFeed=axis:Z,feed:1500,dir:-,sync:1`
   * `CMD.startFeed=Z,0.20,+`
+* **Safety Lockout:** Rejected if motion is currently active (`isOn == true`), returning `ERR:CMD.startFeed:MOTION_LOCKED`.
 * **Required Permission:** `PERM_MOTION_START`
 * **Returns:** `OK:CMD.startFeed` or `ERR:CMD.startFeed:<reason>`
+
+#### `CMD.startCycle`
+Atomically initiates a multi-pass canned cutting cycle in a single message frame.
+* **Arguments (Order-Independent Key-Value Pairs):**
+  * `mode`: Cycle type (`thread` | `turn` | `face` | `taper` | `cutoff`).
+  * **Threading (`mode:thread`):**
+    * `pitch:<dupr>` — Thread pitch in deci-microns/rev ($10,000 \text{ dupr} = 1.0 \text{ mm}$).
+    * `depth:<du>` — Total radial cut depth in deci-microns ($10,000 \text{ du} = 1.0 \text{ mm}$).
+    * `passes:<n>` — Number of progressive cutting passes.
+    * `spring:<n>` — Number of zero-depth spring cleanup passes (default: 1).
+    * `angle:<deg>` — Infeed compound angle in decimal degrees (e.g. `29.5` for metric/UN).
+    * `zStart:<du>` — Starting Z position in deci-microns.
+    * `zEnd:<du>` — Ending Z shoulder limit in deci-microns.
+    * `xClear:<du>` — Radial clearance position for return passes.
+    * `step:<0|1>` — (Optional) Enable single-pass inspection step mode (default: 0).
+  * **Turning (`mode:turn`):**
+    * `doc:<du>` — Depth of cut per pass in deci-microns.
+    * `feed:<dupr>` — Synchronous feed rate in deci-microns/rev.
+    * `zStart:<du>` — Starting Z coordinate.
+    * `zEnd:<du>` — Finished shoulder Z limit.
+    * `xStart:<du>` — Initial stock radius.
+    * `xEnd:<du>` — Target final workpiece radius.
+    * `xClear:<du>` — Rapid retract radial clearance.
+    * `retract:<du>` — Axial clearance retract.
+    * `step:<0|1>` — Enable single-pass step mode.
+  * **Facing (`mode:face`):**
+    * `doc:<du>` — Facing depth of cut per pass along Z.
+    * `feed:<dupr>` — Cross-slide feed rate in deci-microns/rev.
+    * `xStart:<du>` — Outer workpiece radius.
+    * `xEnd:<du>` — Centerline radius ($X=0$).
+    * `zStart:<du>` — Face stock front coordinate.
+    * `zEnd:<du>` — Finished face Z coordinate.
+    * `retract:<du>` — Clearance retract distance.
+  * **Taper (`mode:taper`):**
+    * `angle:<deg>` or `ratio:<1:N>` — Taper angle or ratio string.
+    * `feed:<dupr>` — Feed rate along cutting vector.
+    * `zStart:<du>`, `zEnd:<du>`, `xStart:<du>` — Cutting envelope.
+  * **Cutoff / Parting (`mode:cutoff`):**
+    * `feed:<dupr>` — Parting infeed rate.
+    * `peck:<du>` — Peck depth increment.
+    * `retract:<du>` — Chip-breaking retract distance.
+    * `xStart:<du>`, `xEnd:<du>`, `zPos:<du>` — Parting plane and depth.
+* **Zero Ghost Limits Invariant (ADR-15):**
+  Upon receiving `CMD.startCycle`, the cycle's shoulder limit (`zEnd` or `xEnd`) is committed to the controller's active hardware limit table (`z_min`/`z_max` or `x_min`/`x_max`). This limit **persists indefinitely** after cycle completion or cycle stop until explicitly cleared or updated by the operator via `CMD.axisClearLimit`. There are zero hidden or temporary ghost limits.
+* **Safety Lockout:** Rejected if motion is currently active (`isOn == true`) or envelope coordinates are invalid.
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.startCycle:mode:<mode>` or `ERR:CMD.startCycle:<reason>`
+
+#### `CMD.hold`
+Feed hold with automatic radial tool retraction.
+* Immediately halts $Z$ axis carriage advance while maintaining phase-accurate electronic gearing synchronization to the spindle.
+* Simultaneously retracts the $X$ cross-slide radially away from the workpiece ($X+$ to `xClear`) to prevent tool tip burn, rubbing, and chatter marks.
+* Transitions machine state to `CYCLE_HOLD`.
+* **Arguments:** None.
+* **Example:** `CMD.hold`
+* **Required Permission:** `PERM_READ_TELEMETRY` *(Hold authority is universally available to all connected clients).*
+* **Returns:** `OK:CMD.hold` or `ERR:CMD.hold:<reason>`
+
+#### `CMD.resume`
+Resumes a cutting cycle paused in `CYCLE_HOLD`.
+* Feeds the $X$ cross-slide back into the workpiece to the active pass depth.
+* Resynchronizes spindle quadrature phase and resumes synchronous $Z$ cutting feed to complete the active pass.
+* **Arguments:** None.
+* **Example:** `CMD.resume`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.resume` or `ERR:CMD.resume:<reason>`
+
+#### `CMD.step`
+Advances to the next pass when running a canned cycle in Step Mode (`step:1`).
+* When Step Mode is enabled, the controller finishes a pass, retracts to `xClear`, returns to `zStart`, and latches in `STEP_WAIT`.
+* Receiving `CMD.step` verifies spindle rotation and executes the next single cutting pass.
+* **Arguments:** None.
+* **Example:** `CMD.step`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.step` or `ERR:CMD.step:<reason>`
 
 #### `CMD.stop`
 Immediately halts all axis stepping, cancels any active jog or cutting cycle, and returns the machine state to `IDLE`.
@@ -253,38 +329,52 @@ Manages non-volatile storage (NVS) configuration, machine profiles, and tuning p
 
 ---
 
-## 4. Query & Discovery Namespace
+## 4. Query, State & Diagnostics Namespaces (`STATE.*`, `PROPERTIES.*`, `SYS.*`)
 
-Fast, lightweight unicast queries for hydration, capability introspection, and system diagnostics.
+Lightweight, high-integrity unicast queries for atomic state hydration, hardware capability introspection, and system diagnostics.
 
-### 4.1 System Information (`?sysinfo`)
-Queries controller hardware, build version, and compiled feature flags.
-* **Command:** `?sysinfo`
+> [!IMPORTANT]
+> **Decommissioning Notice (ADR-0005):** All legacy `?` query prefixes (`?sysinfo`, `?state`, `?get`, and bare `?`) are completely decommissioned with zero backwards-compatibility cruft. Any attempt to send a query starting with `?` is rejected immediately with `ERR:UNKNOWN_COMMAND`.
+
+### 4.1 System & Appliance Diagnostics (`SYS.get`)
+Queries controller hardware architecture, firmware version, memory utilization, and runtime health metrics.
+* **Syntax:** `SYS.get=<info|health>`
+* **Endpoints:**
+  * `SYS.get=info` — Firmware build version, target ESP32 silicon revision, flash size, and compiled feature flags (replaces legacy `?sysinfo`).
+  * `SYS.get=health` — Dynamic appliance vitals: free heap memory, stack watermark, uptime in seconds, Core 0 / Core 1 loop frequencies, and Wi-Fi RSSI.
 * **Response (Multi-line text):**
   ```text
-  SYSINFO.version=1.0.4-modular
-  SYSINFO.chip=ESP32-S3 rev 2
-  SYSINFO.flash=16 MB
-  SYSINFO.heap=142 KB
-  SYSINFO.features=spindleSim
+  SYS.version=1.0.5
+  SYS.chip=ESP32-S3 rev 2
+  SYS.flash=16 MB
+  SYS.heap=142 KB
+  SYS.uptime=3600
+  SYS.features=spindleSim,ota
   ```
+* **Required Permission:** `PERM_READ_TELEMETRY`
+* **Returns:** `OK:SYS.get` or multi-line `SYS.<key>=<val>` block.
 
-### 4.2 State Hydration Query (`CMD.state`)
-Requests an immediate atomic snapshot of machine state without waiting for a motion event.
-* **Syntax:** `CMD.state` or `CMD.state=<domains>`
+### 4.2 State Hydration Query (`STATE.get`)
+Requests an immediate atomic snapshot of machine state across one or more telemetry domains without waiting for motion events or periodic broadcast ticks (replaces legacy `CMD.state`).
+* **Syntax:** `STATE.get` or `STATE.get=<domains>`
 * **Domain Flags:** `K` (Kinematics), `I` (Intent), `C` (Cycle), `P` (Properties), `ALL`. Tokens must be strict uppercase and comma-separated.
 * **Examples:**
-  * `CMD.state` or `CMD.state=ALL` — Hydrates all four domains.
-  * `CMD.state=K,I` — Hydrates coordinates and setup parameters only.
+  * `STATE.get` or `STATE.get=ALL` — Hydrates all four domains simultaneously.
+  * `STATE.get=K,I` — Hydrates coordinates and active cutting setup parameters only.
 * **Response:** Universal canonical telemetry string:
   ```text
   K.zDu=0|K.xDu=0|K.rpm=0|K.mode=50|K.on=0|I.pitchDu=1500|I.axis=Z|P.leadscrewPitch=40000\n
   ```
+* **Required Permission:** `PERM_READ_TELEMETRY`
+* **Returns:** `OK:STATE.get` followed by canonical telemetry frame.
 
-### 4.3 Mode Discovery (`MODE.discover`)
-Queries which cutting modes and conversational wizards can physically run on the current machine hardware.
-* **Command:** `MODE.discover`
-* **Response (JSON):**
+### 4.3 Mode & Profile Discovery (`PROPERTIES.*`)
+Introspects machine physical capabilities, available cutting modes, and profile geometry.
+* **Available Endpoints:**
+  * `PROPERTIES.modes` — Returns JSON list of cutting modes and conversational wizards physically supported by the active hardware profile (replaces legacy `MODE.discover`).
+  * `PROPERTIES.profiles` — Returns JSON list of available machine hardware profiles in LittleFS.
+  * `PROPERTIES.get=<path>` — Queries a specific hardware property key.
+* **Example `PROPERTIES.modes` Response (JSON):**
   ```json
   {
     "activeProfile": "Precision Matthews 1022",
@@ -297,6 +387,7 @@ Queries which cutting modes and conversational wizards can physically run on the
     ]
   }
   ```
+* **Required Permission:** `PERM_READ_TELEMETRY`
 
 ---
 
@@ -304,15 +395,27 @@ Queries which cutting modes and conversational wizards can physically run on the
 
 Governs connection establishment, capability negotiation, and authoritative `session_id` allocation.
 
-### 5.1 Inbound Hello (`CLIENT.hello`)
-Must be transmitted by the client immediately upon opening any transport connection:
-* **Syntax:** `CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"`
-* **Example:** `CLIENT.hello type=smarttouch,ver=1.2.0,label="Apron Console"`
-* **Returns:**
-  * Success: `OK:CLIENT.hello session_id=<id>,type=<name>,controllerVer=<ver>,perms=<hex_mask>`
-  * Unknown Type: `ERR:CLIENT.unknown_type:type=<name>`
-  * Disallowed Medium: `ERR:CLIENT.transport_disallowed:type=<name>,transport=<t>`
-  * Incompatible Version: `ERR:CLIENT.incompatible_version:min_required=<req>,received=<rec>`
+### 5.1 Inbound Hello & Two-Way Verification (`CLIENT.hello`)
+A client must never enable motion controls or assume a connected state based solely on transport link establishment.
+
+#### Handshake Sequence:
+1. **Link Connect:** The client transport connects (WebSocket Port 81 or WebSerial). The client immediately enters `HANDSHAKE_PENDING` with all jog, feed, and cycle buttons disabled.
+2. **Inbound Hello:** The client sends:
+   ```text
+   CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"
+   ```
+   *Example:* `CLIENT.hello type=smarttouch,ver=1.2.0,label="Apron Console"`
+3. **Controller Validation:** The controller parses the profile type, validates version compatibility, assigns an authoritative `session_id`, and responds:
+   ```text
+   OK:CLIENT.hello session_id=<id>,type=<name>,controllerVer=<ver>,perms=<hex_mask>
+   ```
+4. **Transition to Connected:** Only upon receiving this ACK does the client transition to `CONNECTED` and unlock UI controls permitted by its permission bitmask.
+5. **Watchdog Timeout:** If no `OK:CLIENT.hello` ACK is received within **2000 ms**, the client drops the transport link, raises an error alert, and returns to disconnected state.
+
+#### Error Responses:
+* Unknown Type: `ERR:CLIENT.unknown_type:type=<name>`
+* Disallowed Medium: `ERR:CLIENT.transport_disallowed:type=<name>,transport=<t>`
+* Incompatible Version: `ERR:CLIENT.incompatible_version:min_required=<req>,received=<rec>`
 
 ---
 
