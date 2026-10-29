@@ -606,25 +606,23 @@ core::CommandResult parseProperties(std::string_view act, std::string_view argsS
 core::CommandResult parseSys(std::string_view act, std::string_view argsStr, const ClientContext&) {
   if (act != "get") return core::CommandResult::unrecognized();
 
-  if (argsStr == "health") {
 #ifdef ARDUINO
+  if (argsStr == "health") {
     String out = "SYS.uptime=" + String(millis() / 1000) + "\n";
     out += "SYS.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
     out += "SYS.wifi=connected\n";
     return core::CommandResult::ok("SYS.get", out);
-#else
-    return core::CommandResult::ok("SYS.get", "SYS.uptime=0\nSYS.heap=142 KB\nSYS.wifi=connected\n");
-#endif
   }
 
-#ifdef ARDUINO
   String out = "SYS.version=" CONTROLLER_VERSION_TEXT "\n";
   out += "SYS.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
   out += "SYS.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
   out += "SYS.features=spindleSim,ota\n";
   return core::CommandResult::ok("SYS.get", out);
 #else
-  return core::CommandResult::ok("SYS.get", "SYS.version=1.0.5\nSYS.chip=ESP32-S3\nSYS.flash=16 MB\nSYS.features=spindleSim,ota\n");
+  // Off-target builds without hardware or mock HAL seam report UNAVAILABLE (Refs Issue #9)
+  (void)argsStr;
+  return core::CommandResult::failed("SYS.get", "UNAVAILABLE");
 #endif
 }
 

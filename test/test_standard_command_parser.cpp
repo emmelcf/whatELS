@@ -278,21 +278,31 @@ void testUniversalNamespaces() {
   assert(res.isOk());
   assert(wire.find("mask=3") != std::string::npos); // K(1) | I(2) = 3
 
-  // SYS.get=info
+  // SYS.get=info & SYS.get=health (Tracked in Issue #9: decoupled ISystemInfoHAL seam)
+  // On native host runner without hardware or mock HAL seam, parser cleanly reports UNAVAILABLE.
   const char* sysInfo = "SYS.get=info";
   res = parser.parseAndDispatch(sysInfo, std::strlen(sysInfo), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "SYS.get=info -> " << wire;
+#ifdef ARDUINO
   assert(res.isOk());
   assert(wire.find("SYS.version=") != std::string::npos);
+#else
+  assert(!res.isOk());
+  assert(wire == "ERR:SYS.get:UNAVAILABLE\n");
+#endif
 
-  // SYS.get=health
   const char* sysHealth = "SYS.get=health";
   res = parser.parseAndDispatch(sysHealth, std::strlen(sysHealth), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "SYS.get=health -> " << wire;
+#ifdef ARDUINO
   assert(res.isOk());
   assert(wire.find("SYS.uptime=") != std::string::npos);
+#else
+  assert(!res.isOk());
+  assert(wire == "ERR:SYS.get:UNAVAILABLE\n");
+#endif
 
   // PROPERTIES.modes
   const char* propModes = "PROPERTIES.modes";
