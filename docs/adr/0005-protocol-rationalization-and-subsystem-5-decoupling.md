@@ -44,7 +44,7 @@ The external wire surface is rationalized into six distinct namespaces:
 
 ### Pillar 2: Subsystem 5 Architectural Partitioning
 We cleanly decouple text parsing from domain execution:
-* **`StandardCommandParser` (`src/core_client/`):** Pure string tokenizer. Tokenizes the wire text into strongly-typed C++ command structs. Has zero motion execution knowledge.
+* **`StandardCommandParser` (`src/core_client/`):** Pure string tokenizer. Tokenizes the wire text into strongly-typed C++ command structs. Has zero motion execution knowledge. Hardware diagnostics (`SYS.get`) query an injected `ISystemInfoHAL` seam, isolating bare-metal ESP32 calls from parser logic.
 * **`CoreCommandService` (`src/core/`):** Pure C++ domain service. Receives typed command structs (`StartFeedCmd`, `JogStepCmd`, `AxisLimitCmd`, etc.) and the calling `ClientContext`. Enforces the authoritative `[SAFE-01]` in-motion safety gate. Has zero string parsing.
 * **Compile-Time Safety Gate:** `MotionEngine` declares `friend class whatels::core::CoreCommandService;` while keeping sensitive stepping methods inaccessible to arbitrary callers.
 
