@@ -3,7 +3,6 @@
 #include <esp_log.h>
 
 static const char* TAG = "WEB";
-#include "core/CommandDispatcher.h"
 #include "core/TelemetrySerializer.h"
 #include "core_client/ClientSerializers.h"
 #include "core/WifiService.h"

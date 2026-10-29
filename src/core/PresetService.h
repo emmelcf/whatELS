@@ -11,7 +11,7 @@
 class PresetService {
 public:
   /**
-   * @brief Dispatches PRESET.* commands from CommandDispatcher.
+   * @brief Dispatches preset catalog queries.
    * @param payload Command string starting after "PRESET." (e.g. "discover", "get path=...")
    * @param length Length of payload string.
    * @param reply Output pointer to populate with response.
