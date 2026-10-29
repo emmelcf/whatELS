@@ -18,7 +18,6 @@ Executes the implementation of an approved ticket or specification.
    - Identify or create the pre-agreed test seam (e.g. `tests/hil/suites/test_*.py` or `tests/clients/*.test.mjs`).
    - Write tests that assert expected telemetry, protocol, or motion behavior defined in the spec.
    - Implement the minimal firmware (C++) or client (JS) code required to turn the tests green.
-   - **Autonomy Grant:** The agent has full local autonomy to write tests, implement code, fix compiler errors/typos, adjust parameters, and turn tests green within the agreed spec.
    - **Emergency Brake Tripwire:** Tests verify fidelity to the spec; tests NEVER drive unapproved architectural or semantic changes. If complying with a test reveals an omission, contradiction, requires altering an API contract, or an external tool/environment fails: **PULL THE EMERGENCY BRAKE** (4-point brief: Issue, Root Cause, Options, Recommendation) and wait for operator decision.
 
 3. **Pre-Commit Quality Gates (Strict Sequence):**
