@@ -267,6 +267,111 @@ core::CommandResult parseStartCycle(const ArgList& args, const ClientContext&) {
   return core::CommandResult::failed("CMD.startCycle", "UNAVAILABLE");
 }
 
+core::CommandResult parseJogStep(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  int32_t dist = 0;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.jogStep", &ax, &err)) return err;
+
+  auto distStr = args.get("dist", 1);
+  if (distStr.empty() || !parseDeciMicrons(distStr, &dist)) {
+    return core::CommandResult::failed("CMD.jogStep", "INVALID_PARAM:dist");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::JogStepCmd{ax, dist}, ctx);
+  res.command = "CMD.jogStep";
+  return res;
+}
+
+core::CommandResult parseJogHold(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  int8_t dir = 0;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.jogHold", &ax, &err)) return err;
+
+  auto dirStr = args.get("dir", 1);
+  if (dirStr.empty() || !parsePolarity(dirStr, &dir)) {
+    return core::CommandResult::failed("CMD.jogHold", "INVALID_PARAM:dir");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::JogHoldCmd{ax, dir}, ctx);
+  res.command = "CMD.jogHold";
+  return res;
+}
+
+core::CommandResult parseJogRelease(const ArgList& args, const ClientContext& ctx) {
+  core::JogReleaseCmd cmd;
+  core::CommandResult err;
+  if (args.count > 0 && !extractAxis(args, "CMD.jogRelease", &cmd.axis, &err)) return err;
+
+  auto res = core::CoreCommandService::instance().execute(cmd, ctx);
+  res.command = "CMD.jogRelease";
+  return res;
+}
+
+core::CommandResult parseAxisZero(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.axisZero", &ax, &err)) return err;
+
+  auto res = core::CoreCommandService::instance().execute(core::AxisZeroCmd{ax}, ctx);
+  res.command = "CMD.axisZero";
+  return res;
+}
+
+core::CommandResult parseAxisPosDu(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  int32_t pos = 0;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.axisPosDu", &ax, &err)) return err;
+
+  auto posStr = args.get("pos", 1);
+  if (posStr.empty() || !parseDeciMicrons(posStr, &pos)) {
+    return core::CommandResult::failed("CMD.axisPosDu", "INVALID_PARAM:pos");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::AxisPosCmd{ax, pos}, ctx);
+  res.command = "CMD.axisPosDu";
+  return res;
+}
+
+core::CommandResult parseAxisLimitDu(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  int8_t bound = 0;
+  int32_t coord = 0;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.axisLimitDu", &ax, &err)) return err;
+
+  auto boundStr = args.get("bound", 1);
+  auto coordStr = args.get("coord", 2);
+  if (boundStr.empty() || !parseLimitBound(boundStr, &bound)) {
+    return core::CommandResult::failed("CMD.axisLimitDu", "INVALID_PARAM:bound");
+  }
+  if (coordStr.empty() || !parseDeciMicrons(coordStr, &coord)) {
+    return core::CommandResult::failed("CMD.axisLimitDu", "INVALID_PARAM:coord");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::AxisLimitCmd{ax, bound, coord}, ctx);
+  res.command = "CMD.axisLimitDu";
+  return res;
+}
+
+core::CommandResult parseAxisClearLimit(const ArgList& args, const ClientContext& ctx) {
+  AxisId ax;
+  int8_t bound = 0;
+  core::CommandResult err;
+  if (!extractAxis(args, "CMD.axisClearLimit", &ax, &err)) return err;
+
+  auto boundStr = args.get("bound", 1);
+  if (boundStr.empty() || !parseLimitBound(boundStr, &bound)) {
+    return core::CommandResult::failed("CMD.axisClearLimit", "INVALID_PARAM:bound");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::AxisClearLimitCmd{ax, bound}, ctx);
+  res.command = "CMD.axisClearLimit";
+  return res;
+}
+
 struct CmdRoute {
   std::string_view name;
   const char* canonicalCmd;
@@ -274,68 +379,15 @@ struct CmdRoute {
 };
 
 static const CmdRoute CMD_ROUTES[] = {
-  { "startFeed", "CMD.startFeed", parseStartFeed },
-  { "startCycle", "CMD.startCycle", parseStartCycle },
-  { "jogStep", "CMD.jogStep", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; int32_t dist = 0; core::CommandResult err;
-    if (!extractAxis(a, "CMD.jogStep", &ax, &err)) return err;
-    auto d = a.get("dist", 1);
-    if (d.empty() || !parseDeciMicrons(d, &dist)) return core::CommandResult::failed("CMD.jogStep", "INVALID_PARAM:dist");
-    auto res = core::CoreCommandService::instance().execute(core::JogStepCmd{ax, dist}, c);
-    res.command = "CMD.jogStep";
-    return res;
-  }},
-  { "jogHold", "CMD.jogHold", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; int8_t dir = 0; core::CommandResult err;
-    if (!extractAxis(a, "CMD.jogHold", &ax, &err)) return err;
-    auto d = a.get("dir", 1);
-    if (d.empty() || !parsePolarity(d, &dir)) return core::CommandResult::failed("CMD.jogHold", "INVALID_PARAM:dir");
-    auto res = core::CoreCommandService::instance().execute(core::JogHoldCmd{ax, dir}, c);
-    res.command = "CMD.jogHold";
-    return res;
-  }},
-  { "jogRelease", "CMD.jogRelease", [](const ArgList& a, const ClientContext& c) {
-    core::JogReleaseCmd cmd; core::CommandResult err;
-    if (a.count > 0 && !extractAxis(a, "CMD.jogRelease", &cmd.axis, &err)) return err;
-    auto res = core::CoreCommandService::instance().execute(cmd, c);
-    res.command = "CMD.jogRelease";
-    return res;
-  }},
-  { "axisZero", "CMD.axisZero", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; core::CommandResult err;
-    if (!extractAxis(a, "CMD.axisZero", &ax, &err)) return err;
-    auto res = core::CoreCommandService::instance().execute(core::AxisZeroCmd{ax}, c);
-    res.command = "CMD.axisZero";
-    return res;
-  }},
-  { "axisPosDu", "CMD.axisPosDu", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; int32_t pos = 0; core::CommandResult err;
-    if (!extractAxis(a, "CMD.axisPosDu", &ax, &err)) return err;
-    auto p = a.get("pos", 1);
-    if (p.empty() || !parseDeciMicrons(p, &pos)) return core::CommandResult::failed("CMD.axisPosDu", "INVALID_PARAM:pos");
-    auto res = core::CoreCommandService::instance().execute(core::AxisPosCmd{ax, pos}, c);
-    res.command = "CMD.axisPosDu";
-    return res;
-  }},
-  { "axisLimitDu", "CMD.axisLimitDu", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; int8_t bound = 0; int32_t coord = 0; core::CommandResult err;
-    if (!extractAxis(a, "CMD.axisLimitDu", &ax, &err)) return err;
-    auto b = a.get("bound", 1), cd = a.get("coord", 2);
-    if (b.empty() || !parseLimitBound(b, &bound)) return core::CommandResult::failed("CMD.axisLimitDu", "INVALID_PARAM:bound");
-    if (cd.empty() || !parseDeciMicrons(cd, &coord)) return core::CommandResult::failed("CMD.axisLimitDu", "INVALID_PARAM:coord");
-    auto res = core::CoreCommandService::instance().execute(core::AxisLimitCmd{ax, bound, coord}, c);
-    res.command = "CMD.axisLimitDu";
-    return res;
-  }},
-  { "axisClearLimit", "CMD.axisClearLimit", [](const ArgList& a, const ClientContext& c) {
-    AxisId ax; int8_t bound = 0; core::CommandResult err;
-    if (!extractAxis(a, "CMD.axisClearLimit", &ax, &err)) return err;
-    auto b = a.get("bound", 1);
-    if (b.empty() || !parseLimitBound(b, &bound)) return core::CommandResult::failed("CMD.axisClearLimit", "INVALID_PARAM:bound");
-    auto res = core::CoreCommandService::instance().execute(core::AxisClearLimitCmd{ax, bound}, c);
-    res.command = "CMD.axisClearLimit";
-    return res;
-  }},
+  { "startFeed",      "CMD.startFeed",      parseStartFeed },
+  { "startCycle",     "CMD.startCycle",     parseStartCycle },
+  { "jogStep",        "CMD.jogStep",        parseJogStep },
+  { "jogHold",        "CMD.jogHold",        parseJogHold },
+  { "jogRelease",     "CMD.jogRelease",     parseJogRelease },
+  { "axisZero",       "CMD.axisZero",       parseAxisZero },
+  { "axisPosDu",      "CMD.axisPosDu",      parseAxisPosDu },
+  { "axisLimitDu",    "CMD.axisLimitDu",    parseAxisLimitDu },
+  { "axisClearLimit", "CMD.axisClearLimit", parseAxisClearLimit },
 };
 
 core::CommandResult parseCmd(std::string_view act, std::string_view argsStr, bool hasArgs, const ClientContext& ctx) {
