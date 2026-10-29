@@ -32,20 +32,17 @@ bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
   return true;
 }
 
+bool SettingsService::requestIsOn(bool /*on*/) { return true; }
+bool SettingsService::setFeedrateDupr(long /*dupr*/, bool /*preserveDirection*/) { return true; }
+long SettingsService::getJogStepDu() { return 1000; }
+
+static UnifiedGearboxMode s_gearboxMode;
 UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
-  return nullptr;
+  return &s_gearboxMode;
 }
 
 bool ModeRegistry::activateMode(ModeId /*id*/) {
   return true;
-}
-
-bool UnifiedGearboxMode::setActiveAxis(const char* /*axisStr*/) {
-  return true;
-}
-
-bool UnifiedGearboxMode::startFeed(AxisId /*axis*/, bool /*sync*/, int32_t /*feedRateDu*/, int8_t /*direction*/, int32_t /*targetDistDu*/) {
-  return false;
 }
 
 using namespace whatels::core;
@@ -97,6 +94,21 @@ void testCommandValidationAndInvariants() {
     res = CoreCommandService::instance().execute(cmd, ctx);
     assert(!res.isOk());
     assert(res.payload == "INVALID_PARAM:dist");
+
+    // Dual-axis (ZX) requires xDirection (-1 or +1) and taperRatioDu (> 0)
+    cmd.targetDistDu = -1;
+    cmd.isDualAxis = true;
+    cmd.xDirection = 0;
+    cmd.taperRatioDu = 1000;
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:xdir");
+
+    cmd.xDirection = 1;
+    cmd.taperRatioDu = 0;
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:taper");
   }
 
   // JogStepCmd validation tests

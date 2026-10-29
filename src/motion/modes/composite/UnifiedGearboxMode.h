@@ -16,6 +16,8 @@ private:
     bool      m_isDualAxis = false;
     bool      m_isSync = true;
     int8_t    m_direction = -1;        // Cartesian polarity: -1 (chuck/infeed), +1 (tail/retract)
+    int8_t    m_xDirection = -1;       // Secondary X polarity when m_isDualAxis is true: -1 (infeed), +1 (retract)
+    int32_t   m_taperRatioDu = 0;      // Secondary X radial delta (du) per 10,000 du of Z when m_isDualAxis is true
     int32_t   m_feedRateDu = 1000;     // Canonical magnitude: dupr if sync, du/min if async
     int32_t   m_targetDistDu = -1;     // Stroke distance in du (-1 = continuous to soft limit)
 
@@ -39,7 +41,9 @@ public:
     bool canExecuteCommand(CommandId cmd, ModeState state, AxisId targetAxis = AXIS_Z) const override;
 
     // --- Atomic Motion Invocation (ADR 0001 / ADR 0002) ---
-    bool startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction, int32_t targetDistDu = -1);
+    bool startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction,
+                   int32_t targetDistDu = -1, bool isDualAxis = false,
+                   int8_t xDirection = 0, int32_t taperRatioDu = 0);
 
     // --- Staging & Parameter Control ---
     bool setActiveAxis(const char* axisStr);

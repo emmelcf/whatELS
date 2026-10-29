@@ -65,20 +65,17 @@ bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
   return true;
 }
 
+bool SettingsService::requestIsOn(bool /*on*/) { return true; }
+bool SettingsService::setFeedrateDupr(long /*dupr*/, bool /*preserveDirection*/) { return true; }
+long SettingsService::getJogStepDu() { return 1000; }
+
+static UnifiedGearboxMode s_gearboxMode;
 UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
-  return nullptr;
+  return &s_gearboxMode;
 }
 
 bool ModeRegistry::activateMode(ModeId /*id*/) {
   return true;
-}
-
-bool UnifiedGearboxMode::setActiveAxis(const char* /*axisStr*/) {
-  return true;
-}
-
-bool UnifiedGearboxMode::startFeed(AxisId /*axis*/, bool /*sync*/, int32_t /*feedRateDu*/, int8_t /*direction*/, int32_t /*targetDistDu*/) {
-  return false;
 }
 
 String ModeRegistry::serializeDiscoveryJson(uint32_t /*caps*/, bool /*all*/) {
@@ -239,13 +236,28 @@ void testFeedAndMotionCommands() {
   assert(res.isOk());
   assert(wire == "OK:CMD.stop\n");
 
-  // Start dual-axis compound feed (axis:ZX)
-  const char* feedZx = "CMD.startFeed=axis:ZX,feed:2500,dir:CHUCK,sync:1";
+  // Start dual-axis compound feed (axis:ZX) requires xdir and taper
+  const char* feedZxMissingXdir = "CMD.startFeed=axis:ZX,feed:2500,dir:CHUCK,taper:1000";
+  res = parser.parseAndDispatch(feedZxMissingXdir, std::strlen(feedZxMissingXdir), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startFeed:MISSING_PARAM:xdir\n");
+
+  const char* feedZxMissingTaper = "CMD.startFeed=axis:ZX,feed:2500,dir:CHUCK,xdir:RETRACT";
+  res = parser.parseAndDispatch(feedZxMissingTaper, std::strlen(feedZxMissingTaper), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startFeed:MISSING_PARAM:taper\n");
+
+  const char* feedZx = "CMD.startFeed=axis:ZX,feed:2500,dir:CHUCK,xdir:RETRACT,taper:1000,sync:1";
   res = parser.parseAndDispatch(feedZx, std::strlen(feedZx), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "StartFeed (ZX) -> " << wire;
   assert(res.isOk());
   assert(wire == "OK:CMD.startFeed\n");
+  assert(s_gearboxMode.isDualAxis());
+  assert(MotionEngine::instance().isMoving(AXIS_Z));
+  assert(MotionEngine::instance().isMoving(AXIS_X));
 
   // Stop after ZX feed
   res = parser.parseAndDispatch(stopCmd, std::strlen(stopCmd), ctx);

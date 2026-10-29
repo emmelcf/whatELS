@@ -38,30 +38,14 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
     return CommandResult::failed("startFeed", err);
   }
 
-  bool ok = false;
   UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
-  if (gb) {
-    ModeRegistry::activateMode(ModeIds::GEARBOX);
-    gb->setActiveAxis(cmd.isDualAxis ? "ZX" : (cmd.axis == AXIS_X ? "X" : "Z"));
-    ok = gb->startFeed(cmd.axis, cmd.syncSpindle, cmd.feedRate, cmd.direction, cmd.targetDistDu);
-  } else if (cmd.syncSpindle) {
-    SpindleSyncParams params;
-    params.axis = cmd.axis;
-    params.direction = cmd.direction;
-    params.pitchDupr = cmd.feedRate;
-    params.targetDistDu = cmd.targetDistDu;
-    params.respectSoftLimits = true;
-    ok = MotionEngine::instance().engageSpindleSync(params);
-  } else {
-    VelocityFeedParams params;
-    params.axis = cmd.axis;
-    params.direction = cmd.direction;
-    params.feedRateDuPerMin = cmd.feedRate;
-    params.targetDistDu = cmd.targetDistDu;
-    params.respectSoftLimits = true;
-    ok = MotionEngine::instance().engageVelocityFeed(params);
+  if (!gb) {
+    return CommandResult::failed("startFeed", "UNAVAILABLE");
   }
 
+  ModeRegistry::activateMode(ModeIds::GEARBOX);
+  bool ok = gb->startFeed(cmd.axis, cmd.syncSpindle, cmd.feedRate, cmd.direction,
+                          cmd.targetDistDu, cmd.isDualAxis, cmd.xDirection, cmd.taperRatioDu);
   if (!ok) {
     return CommandResult::failed("startFeed", "ENGINE_REJECTED");
   }

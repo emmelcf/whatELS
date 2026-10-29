@@ -4,7 +4,7 @@
 #include <climits>
 
 static const ParamDescriptor GEARBOX_PARAMS[] = {
-    { "axis", "Active Feed Axis", ParamType::ENUM, "", 0.0f, 0.0f, 1.0f, 1.0f, "Z,X" },
+    { "axis", "Active Feed Axis", ParamType::ENUM, "", 0.0f, 0.0f, 2.0f, 1.0f, "Z,X,ZX" },
     { "sync", "Spindle Synchronized", ParamType::BOOL, "", 1.0f, 0.0f, 1.0f, 1.0f, nullptr },
     { "dir", "Travel Direction", ParamType::ENUM, "", 0.0f, 0.0f, 3.0f, 1.0f, "CHUCK,TAIL,INFEED,RETRACT" },
     { "pitch_dupr", "Pitch in deci-microns/rev", ParamType::INT32, "dupr", 1000.0f, 10.0f, 500000.0f, 100.0f, nullptr },
@@ -39,8 +39,12 @@ const ModeManifest& UnifiedGearboxMode::getManifest() const {
     return GEARBOX_MANIFEST;
 }
 
-bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction, int32_t targetDistDu) {
-    if (feedRateDu <= 0 || direction == 0) return false;
+bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, int8_t direction,
+                                   int32_t targetDistDu, bool isDualAxis, int8_t xDirection, int32_t taperRatioDu) {
+    if (feedRateDu <= 0 || (direction != -1 && direction != 1)) return false;
+    if (isDualAxis && (axis != AXIS_Z || (xDirection != -1 && xDirection != 1) || taperRatioDu <= 0)) {
+        return false;
+    }
 
     if (!m_engine) {
         m_engine = &MotionEngine::instance();
@@ -48,24 +52,18 @@ bool UnifiedGearboxMode::startFeed(AxisId axis, bool sync, int32_t feedRateDu, i
     m_engine->setEventListener(this);
 
     m_axis = axis;
+    m_isDualAxis = isDualAxis;
     m_isSync = sync;
     m_feedRateDu = feedRateDu;
     m_direction = direction;
+    m_xDirection = xDirection;
+    m_taperRatioDu = taperRatioDu;
     m_targetDistDu = targetDistDu;
 
     // Coordinated Dual-Axis Taper Extension [KIN-04]
     bool enableSecondary = m_isDualAxis;
-    int32_t secNum = 0;
+    int32_t secNum = (m_xDirection < 0) ? -m_taperRatioDu : m_taperRatioDu;
     int32_t secDen = 10000;
-    if (enableSecondary) {
-        float taperRatio = SettingsService::getTaperRatio();
-        if (taperRatio > 0.00001f) {
-            int32_t rawNum = static_cast<int32_t>(std::round(taperRatio * static_cast<float>(secDen)));
-            secNum = (direction < 0) ? -rawNum : rawNum;
-        } else {
-            enableSecondary = false;
-        }
-    }
 
     bool ok = false;
     if (m_isSync) {
@@ -251,7 +249,8 @@ void UnifiedGearboxMode::onExit() {
 }
 
 bool UnifiedGearboxMode::start() {
-    return startFeed(m_axis, m_isSync, m_feedRateDu, m_direction, m_targetDistDu);
+    return startFeed(m_axis, m_isSync, m_feedRateDu, m_direction, m_targetDistDu,
+                     m_isDualAxis, m_xDirection, m_taperRatioDu);
 }
 
 void UnifiedGearboxMode::stop(StopType stopType) {
@@ -271,7 +270,8 @@ void UnifiedGearboxMode::stop(StopType stopType) {
 
 bool UnifiedGearboxMode::resume() {
     if (m_state == ModeState::PAUSED) {
-        return startFeed(m_axis, m_isSync, m_feedRateDu, m_direction, m_targetDistDu);
+        return startFeed(m_axis, m_isSync, m_feedRateDu, m_direction, m_targetDistDu,
+                         m_isDualAxis, m_xDirection, m_taperRatioDu);
     }
     return false;
 }

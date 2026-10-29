@@ -13,18 +13,39 @@ struct StartFeedCmd {
   AxisId  axis         = AXIS_INVALID;  // Mandatory: AXIS_Z or AXIS_X (primary axis; AXIS_Z when isDualAxis is true)
   bool    isDualAxis   = false;         // True for coordinated Z+X compound gearbox feed (axis:ZX)
   int8_t  direction    = 0;             // Mandatory: -1 (Chuck / Centerline), +1 (Tailstock / Retract)
-  bool    syncSpindle  = true;          // Physical fallback: true = ELS gearing (dupr), false = async IPM (du/min)
+  int8_t  xDirection   = 0;             // Mandatory when isDualAxis: -1 (Centerline/Infeed) or +1 (Retract); 0 otherwise
+  int32_t taperRatioDu = 0;             // Mandatory when isDualAxis: Radial X delta (du) per 10,000 du of Z (> 0); 0 otherwise
+  bool    syncSpindle  = true;          // Optional fallback: true = ELS gearing (dupr), false = async IPM (du/min)
   int32_t feedRate     = 0;             // Mandatory: Magnitude of feed rate (> 0)
-  int32_t targetDistDu = -1;            // Physical fallback: Travel stroke in deci-microns (-1 = continuous to limit)
+  int32_t targetDistDu = -1;            // Optional fallback: Travel stroke in deci-microns (-1 = continuous to limit)
 
   bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
     }
-    if (isDualAxis && axis != AXIS_Z) {
-      if (errReason) *errReason = "INVALID_PARAM:axis";
-      return false;
+    if (isDualAxis) {
+      if (axis != AXIS_Z) {
+        if (errReason) *errReason = "INVALID_PARAM:axis";
+        return false;
+      }
+      if (xDirection != -1 && xDirection != 1) {
+        if (errReason) *errReason = "INVALID_PARAM:xdir";
+        return false;
+      }
+      if (taperRatioDu <= 0) {
+        if (errReason) *errReason = "INVALID_PARAM:taper";
+        return false;
+      }
+    } else {
+      if (xDirection != 0) {
+        if (errReason) *errReason = "INVALID_PARAM:xdir";
+        return false;
+      }
+      if (taperRatioDu != 0) {
+        if (errReason) *errReason = "INVALID_PARAM:taper";
+        return false;
+      }
     }
     if (direction != -1 && direction != 1) {
       if (errReason) *errReason = "INVALID_PARAM:dir";

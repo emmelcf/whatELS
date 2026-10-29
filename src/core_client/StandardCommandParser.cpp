@@ -118,6 +118,17 @@ bool parseAxis(std::string_view s, AxisId* outAxis) {
   return false;
 }
 
+bool parseAxisOrCompound(std::string_view s, AxisId* outAxis, bool* outIsDual) {
+  if (!outAxis || !outIsDual) return false;
+  if (s == "ZX") {
+    *outAxis = AXIS_Z;
+    *outIsDual = true;
+    return true;
+  }
+  *outIsDual = false;
+  return parseAxis(s, outAxis);
+}
+
 // Axis-aware mapping of text representation to machine physical polarity:
 // -1: Z toward chuck (LEFT/CHUCK), X into workpiece centerline (CENTER/IN/INFEED/UP)
 // +1: Z toward tailstock (RIGHT/TAIL), X retract away from cut (RETRACT/OUT/DOWN)
@@ -308,17 +319,14 @@ core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx
   }
 
   core::CommandResult err;
-  if (!validateAllowedKeys(args, "CMD.startFeed", {"axis", "feed", "dir", "sync", "dist"}, 0, &err)) {
+  if (!validateAllowedKeys(args, "CMD.startFeed", {"axis", "feed", "dir", "sync", "dist", "xdir", "taper"}, 0, &err)) {
     return err;
   }
 
   core::StartFeedCmd cmd;
   auto ax = args.get("axis");
-  if (ax == "ZX") {
-    cmd.axis = AXIS_Z;
-    cmd.isDualAxis = true;
-  } else if (!extractAxis(args, "CMD.startFeed", &cmd.axis, &err)) {
-    return err;
+  if (ax.empty() || !parseAxisOrCompound(ax, &cmd.axis, &cmd.isDualAxis)) {
+    return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:axis");
   }
 
   auto feedStr = args.get("feed");
@@ -332,6 +340,31 @@ core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx
   auto dirStr = args.get("dir");
   if (dirStr.empty() || !parsePolarity(cmd.axis, dirStr, &cmd.direction)) {
     return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:dir");
+  }
+
+  if (cmd.isDualAxis) {
+    if (!args.has("xdir")) {
+      return core::CommandResult::failed("CMD.startFeed", "MISSING_PARAM:xdir");
+    }
+    auto xdirStr = args.get("xdir");
+    if (xdirStr.empty() || !parsePolarity(AXIS_X, xdirStr, &cmd.xDirection)) {
+      return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:xdir");
+    }
+
+    if (!args.has("taper")) {
+      return core::CommandResult::failed("CMD.startFeed", "MISSING_PARAM:taper");
+    }
+    auto taperStr = args.get("taper");
+    if (taperStr.empty() || !parseDeciMicrons(taperStr, &cmd.taperRatioDu) || cmd.taperRatioDu <= 0) {
+      return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:taper");
+    }
+  } else {
+    if (args.has("xdir")) {
+      return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:xdir");
+    }
+    if (args.has("taper")) {
+      return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:taper");
+    }
   }
 
   if (args.has("sync")) {
