@@ -189,13 +189,13 @@ class WhatelsService extends EventTarget {
         if (this.mode === 'emulator') {
           this._log('SYS', 'Emulator connected', 'Internal virtual ESP32 initialized');
           this._emit('connection', { connected: true, mode: 'emulator', host: 'Local Emulator' });
-          this.sendRaw('CMD.state=ALL\n', 'Hydrate all state domains');
-          this.sendRaw('?sysinfo\n', 'Query emulator sysinfo');
+          this.sendRaw('STATE.get=ALL\n', 'Hydrate all state domains');
+          this.sendRaw('SYS.get=info\n', 'Query emulator sysinfo');
         } else {
           const wsUrl = `ws://${this.host}:${this.port}/canonical`;
           this._log('SYS', `Connected to ${wsUrl}`, 'WebSocket connection established (Channel: Canonical)');
           this._emit('connection', { connected: true, mode: 'live', host: this.host });
-          this.sendRaw('?sysinfo\n', 'Query controller sysinfo');
+          this.sendRaw('SYS.get=info\n', 'Query controller sysinfo');
         }
       } else if (status === 'connecting') {
         this.state.connected = false;
@@ -254,7 +254,7 @@ class WhatelsService extends EventTarget {
 
   // Raw transmitter with logging
   sendRaw(data, annotation = '', quiet = false) {
-    const isTelemetryPing = data === '?' || data === '?sysinfo' || data === '?sysinfo\n';
+    const isTelemetryPing = data === 'CMD.ping' || data === 'CMD.ping\n' || data === 'SYS.get=info' || data === 'SYS.get=info\n';
     if (!quiet && (!isTelemetryPing || this.logStatusPushes)) {
       this._log('TX', data.trim(), annotation, isTelemetryPing);
     }
@@ -349,29 +349,31 @@ class WhatelsService extends EventTarget {
   // Discrete 1-step jog in semantic direction
   jogStep(axis, dirOrSemantic) {
     const upper = axis.toUpperCase();
-    let semanticDir = '';
+    let sign = 0;
     const num = Number(dirOrSemantic);
     const isNum = !isNaN(num) && dirOrSemantic !== '' && typeof dirOrSemantic !== 'boolean';
 
     if (upper === 'Z') {
       if (isNum) {
-        semanticDir = num < 0 ? 'CHUCK' : 'TAIL';
+        sign = num < 0 ? -1 : 1;
       } else if (typeof dirOrSemantic === 'string') {
-        semanticDir = dirOrSemantic.toUpperCase();
+        const s = dirOrSemantic.toUpperCase();
+        if (s === 'CHUCK' || s === 'LEFT' || s === '-') sign = -1;
+        else if (s === 'TAIL' || s === 'RIGHT' || s === '+') sign = 1;
       }
-      if (semanticDir === 'LEFT') semanticDir = 'CHUCK';
-      if (semanticDir === 'RIGHT') semanticDir = 'TAIL';
     } else if (upper === 'X') {
       if (isNum) {
-        semanticDir = num > 0 ? 'INFEED' : 'RETRACT';
+        sign = num > 0 ? -1 : 1;
       } else if (typeof dirOrSemantic === 'string') {
-        semanticDir = dirOrSemantic.toUpperCase();
+        const s = dirOrSemantic.toUpperCase();
+        if (s === 'INFEED' || s === 'IN' || s === 'UP' || s === 'CENTER' || s === '-') sign = -1;
+        else if (s === 'RETRACT' || s === 'OUT' || s === 'DOWN' || s === '+') sign = 1;
       }
-      if (semanticDir === 'IN' || semanticDir === 'UP') semanticDir = 'INFEED';
-      if (semanticDir === 'OUT' || semanticDir === 'DOWN') semanticDir = 'RETRACT';
     }
-    if (!semanticDir) return;
-    this.sendRaw(`CMD.jogStep=${upper},${semanticDir}\n`, `Jog Step ${upper} ${semanticDir}`);
+    if (!sign) return;
+    const stepMag = Math.abs(Math.round(this.canonical.jogStepDu || 10000));
+    const distDu = sign * stepMag;
+    this.sendRaw(`CMD.jogStep=${upper},${distDu}\n`, `Jog Step ${upper} ${distDu} du`);
   }
 
   // Cycle Start / Stop
@@ -404,8 +406,9 @@ class WhatelsService extends EventTarget {
   toggleStop(axis, bound) {
     const upper = axis.toUpperCase();
     const isLeftOrUp = (bound === 'min' || bound === 'left' || bound === 'up');
+    const boundToken = upper === 'X' ? (isLeftOrUp ? 'UP' : 'DOWN') : (isLeftOrUp ? 'LEFT' : 'RIGHT');
     const curDu = upper === 'Z' ? this.canonical.zDu : this.canonical.xDu;
-    this.sendRaw(`CMD.axisLimitDu=${upper},${isLeftOrUp ? 1 : 0},${Math.round(curDu)}\n`, `Set Stop ${upper} ${bound}`);
+    this.sendRaw(`CMD.axisLimitDu=${upper},${boundToken},${Math.round(curDu)}\n`, `Set Stop ${upper} ${boundToken}`);
   }
 
   // Step and Measure cycles
@@ -484,10 +487,14 @@ class WhatelsService extends EventTarget {
     this.sendRaw(`CMD.axisPosDu=${axis.toUpperCase()},${Math.round(posDu)}\n`, `Preset Axis ${axis} to ${posDu} du`);
   }
   setAxisLimitDu(axis, isLeftOrUp, limitDu) {
-    this.sendRaw(`CMD.axisLimitDu=${axis.toUpperCase()},${isLeftOrUp ? 1 : 0},${Math.round(limitDu)}\n`, `Set Limit ${axis}`);
+    const upper = axis.toUpperCase();
+    const boundToken = upper === 'X' ? (isLeftOrUp ? 'UP' : 'DOWN') : (isLeftOrUp ? 'LEFT' : 'RIGHT');
+    this.sendRaw(`CMD.axisLimitDu=${upper},${boundToken},${Math.round(limitDu)}\n`, `Set Limit ${upper}`);
   }
   clearAxisLimit(axis, isLeftOrUp) {
-    this.sendRaw(`CMD.axisClearLimit=${axis.toUpperCase()},${isLeftOrUp ? 1 : 0}\n`, `Clear Limit ${axis}`);
+    const upper = axis.toUpperCase();
+    const boundToken = upper === 'X' ? (isLeftOrUp ? 'UP' : 'DOWN') : (isLeftOrUp ? 'LEFT' : 'RIGHT');
+    this.sendRaw(`CMD.axisClearLimit=${upper},${boundToken}\n`, `Clear Limit ${upper}`);
   }
   setOperatingMode(modeId) {
     this.sendRaw(`CMD.mode=${modeId}\n`, `Set Operating Mode ${modeId}`);
@@ -497,7 +504,7 @@ class WhatelsService extends EventTarget {
   }
 
   queryState(domains = 'ALL') {
-    this.sendRaw(`CMD.state=${domains}\n`, `Query state [${domains}]`);
+    this.sendRaw(`STATE.get=${domains}\n`, `Query state [${domains}]`);
   }
 
   // Settings Transaction API (Unicast Request-Response)
@@ -553,7 +560,7 @@ class WhatelsService extends EventTarget {
         timer
       });
 
-      this.sendRaw(`SETTINGS.set=${key},${val}\n`, `Set Setting [${key}=${val}]`);
+      this.sendRaw(`SETTINGS.set=${key}:${val}\n`, `Set Setting [${key}:${val}]`);
     });
   }
 
@@ -584,9 +591,8 @@ class WhatelsService extends EventTarget {
     this.sendRaw(`CMD.feedNudge=${d}\n`, `Feed Nudge [${d > 0 ? '+1' : '-1'}]`);
   }
 
-  discoverModes(query = '') {
-    const q = query ? (query.startsWith('?') ? query : '?' + query) : '';
-    this.sendRaw(`MODE.discover${q}\n`, `Discover Modes [${query}]`);
+  discoverModes() {
+    this.sendRaw(`PROPERTIES.modes\n`, `Discover Modes`);
   }
 
   // Mode Selection
@@ -741,12 +747,14 @@ class WhatelsService extends EventTarget {
             txn.reject(new Error(reason));
           }
         }
-      } else if (line.startsWith('SYSINFO.')) {
-        if (line.startsWith('SYSINFO.version=')) {
-          this.state.version = line.substring('SYSINFO.version='.length);
+      } else if (line.startsWith('SYS.') || line.startsWith('SYSINFO.')) {
+        const prefixLen = line.startsWith('SYSINFO.') ? 8 : 4;
+        const sub = line.substring(prefixLen);
+        if (sub.startsWith('version=')) {
+          this.state.version = sub.substring('version='.length);
         }
-        if (line.startsWith('SYSINFO.features=')) {
-          this.state.features = line.substring('SYSINFO.features='.length).split(',').map((f) => f.trim()).filter(Boolean);
+        if (sub.startsWith('features=')) {
+          this.state.features = sub.substring('features='.length).split(',').map((f) => f.trim()).filter(Boolean);
           this._emit('features', this.state.features);
         }
         this._log('RX', line, 'Hardware Info');

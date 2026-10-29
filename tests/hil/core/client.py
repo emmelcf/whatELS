@@ -87,7 +87,7 @@ class WhatElsClient:
         self._rx_task = asyncio.create_task(self._rx_loop())
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         # Request sysinfo to ensure line is open and hydrated
-        await self.send("?sysinfo", wait_ack=False)
+        await self.send("SYS.get=info", wait_ack=False)
 
     async def disconnect(self) -> None:
         """Stops active feeds, clears simulation, cancels heartbeat and closes socket cleanly."""
@@ -251,6 +251,8 @@ class WhatElsClient:
                         cmd_name = line[7:].strip()
                         if "=" in cmd_name:
                             cmd_name = cmd_name.split("=")[0].strip()
+                        if ":" in cmd_name:
+                            cmd_name = cmd_name.split(":")[0].strip()
                         if cmd_name in self._pending_acks and self._pending_acks[cmd_name]:
                             fut = self._pending_acks[cmd_name].pop(0)
                             if not fut.done():

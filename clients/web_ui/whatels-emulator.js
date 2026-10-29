@@ -98,21 +98,21 @@ class WhatelsEmulator {
       this._emitGrblStatus();
       return;
     }
-    if (line === '?sysinfo') {
+    if (line === 'SYS.get' || line === 'SYS.get=info' || line === 'SYS.get=health') {
       this._emitSysInfo();
       return;
     }
-    if (line === 'CMD.state' || line.startsWith('CMD.state=')) {
+    if (line === 'STATE.get' || line.startsWith('STATE.get=')) {
       this._emitDomainQuery(line);
       return;
     }
-    if (line.startsWith('SETTINGS.get') || line.startsWith('CMD.settings.get')) {
+    if (line.startsWith('SETTINGS.get') || line.startsWith('PROPERTIES.get')) {
       const eq = line.indexOf('=');
       const key = eq !== -1 ? line.substring(eq + 1).trim() : 'ALL';
       this._emitSettingsGet(key);
       return;
     }
-    if (line.startsWith('SETTINGS.set=') || line.startsWith('CMD.settings.set=')) {
+    if (line.startsWith('SETTINGS.set=')) {
       const idx = line.indexOf('=');
       this._emitSettingsSet(line.substring(idx + 1).trim());
       return;
@@ -125,19 +125,15 @@ class WhatelsEmulator {
       this.isOn = true;
       return;
     }
-    if (line.startsWith('MODE.discover') || line === 'CMD.modes') {
+    if (line === 'PROPERTIES.modes') {
       const disc = {
         active_mode_id: 50,
         active_mode_slug: "gearbox",
         modes: [
-          { id: 50, slug: "gearbox", name: "Electronic Gearbox", category: "COMPOSITE", required_hardware: 9, live_permissions: 15 },
-          { id: 10, slug: "prim_gear_z", name: "Gear Z Spindle Sync", category: "PRIMITIVE", required_hardware: 9, live_permissions: 15 },
-          { id: 11, slug: "prim_gear_x", name: "Gear X Spindle Sync", category: "PRIMITIVE", required_hardware: 17, live_permissions: 15 },
-          { id: 12, slug: "prim_async", name: "Async Velocity Feed", category: "PRIMITIVE", required_hardware: 8, live_permissions: 7 },
-          { id: 14, slug: "prim_cone", name: "Cone Taper Sync", category: "PRIMITIVE", required_hardware: 25, live_permissions: 15 }
+          { id: 50, slug: "gearbox", name: "Electronic Gearbox", category: "COMPOSITE", required_hardware: 9, live_permissions: 15 }
         ]
       };
-      this._emitRaw(JSON.stringify(disc) + '\n');
+      this._emitRaw(`OK:PROPERTIES.modes:${JSON.stringify(disc)}\n`);
       return;
     }
 
@@ -240,12 +236,18 @@ class WhatelsEmulator {
       } else if (cmd.startsWith('jogStep=')) {
         const parts = cmd.substring(8).split(',');
         const ax = parts[0].toUpperCase();
-        const dir = (parts[1] || '').toUpperCase();
-        const step = this.moveStep || 10000;
-        if (ax === 'Z') {
-          this.z += (dir === 'CHUCK' || dir === 'LEFT') ? -step : step;
-        } else if (ax === 'X') {
-          this.x += (dir === 'INFEED' || dir === 'IN' || dir === 'UP') ? -step : step;
+        const arg2 = (parts[1] || '').toUpperCase();
+        const numDist = parseInt(arg2, 10);
+        if (!isNaN(numDist)) {
+          if (ax === 'Z') this.z += numDist;
+          else if (ax === 'X') this.x += numDist;
+        } else {
+          const step = this.moveStep || 10000;
+          if (ax === 'Z') {
+            this.z += (arg2 === 'CHUCK' || arg2 === 'LEFT') ? -step : step;
+          } else if (ax === 'X') {
+            this.x += (arg2 === 'INFEED' || arg2 === 'IN' || arg2 === 'UP') ? -step : step;
+          }
         }
       } else if (cmd.startsWith('taperRatio=')) {
         this.tpVal = parseFloat(cmd.substring(11)) || 1.0;
@@ -290,14 +292,16 @@ class WhatelsEmulator {
       } else if (cmd.startsWith('axisLimitDu=')) {
         const parts = cmd.substring(12).split(',');
         const ax = parts[0].toUpperCase();
-        const isLeft = parts[1] === '1';
+        const b = (parts[1] || '').toUpperCase();
+        const isLeft = (b === '1' || b === 'L' || b === 'MIN' || b === 'LEFT' || b === 'CHUCK' || b === 'UP' || b === 'CENTER' || b === 'IN' || b === 'INFEED');
         const du = parseInt(parts[2], 10);
         if (ax === 'Z') { if (isLeft) this.zLeft = du; else this.zRight = du; }
         if (ax === 'X') { if (isLeft) this.xLeft = du; else this.xRight = du; }
       } else if (cmd.startsWith('axisClearLimit=')) {
         const parts = cmd.substring(15).split(',');
         const ax = parts[0].toUpperCase();
-        const isLeft = parts[1] === '1';
+        const b = (parts[1] || '').toUpperCase();
+        const isLeft = (b === '1' || b === 'L' || b === 'MIN' || b === 'LEFT' || b === 'CHUCK' || b === 'UP' || b === 'CENTER' || b === 'IN' || b === 'INFEED');
         if (ax === 'Z') { if (isLeft) this.zLeft = null; else this.zRight = null; }
         if (ax === 'X') { if (isLeft) this.xLeft = null; else this.xRight = null; }
       } else if (cmd.startsWith('gearAxis=')) {
@@ -726,8 +730,8 @@ class WhatelsEmulator {
 
   _emitDomainQuery(line) {
     let q = line;
-    if (q.startsWith('CMD.state=')) q = q.substring(10);
-    else if (q === 'CMD.state') q = 'ALL';
+    if (q.startsWith('STATE.get=')) q = q.substring(10);
+    else if (q === 'STATE.get') q = 'ALL';
 
     const tokens = q.split(/[,;| ]+/);
     let mask = 0;
@@ -745,11 +749,11 @@ class WhatelsEmulator {
 
   _emitSysInfo() {
     const sysinfo =
-      `SYSINFO.version=H${this.HARDWARE_VERSION}V${this.SOFTWARE_VERSION} (EMU)\n` +
-      `SYSINFO.chip=ESP32-S3 (Virtual)\n` +
-      `SYSINFO.flash=8MB\n` +
-      `SYSINFO.heap=240KB\n` +
-      `SYSINFO.features=spindleSim\n`;
+      `SYS.version=H${this.HARDWARE_VERSION}V${this.SOFTWARE_VERSION} (EMU)\n` +
+      `SYS.chip=ESP32-S3 (Virtual)\n` +
+      `SYS.flash=8MB\n` +
+      `SYS.heap=240KB\n` +
+      `SYS.features=spindleSim\n`;
     this._emitRaw(sysinfo);
   }
 
@@ -795,7 +799,7 @@ class WhatelsEmulator {
   }
 
   _emitSettingsSet(keyVal) {
-    const sep = keyVal.indexOf(',') !== -1 ? ',' : '=';
+    const sep = keyVal.indexOf(':') !== -1 ? ':' : (keyVal.indexOf(',') !== -1 ? ',' : '=');
     const parts = keyVal.split(sep);
     const key = parts[0].trim();
     const val = (parts[1] || '').trim();

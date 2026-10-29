@@ -64,8 +64,8 @@ export class WebSocketTransport extends ClientTransport {
         this.ws.onerror = null;
         this.ws.onclose = null;
         this.ws.close();
-      } catch (e) {
-        // Ignore close errors
+      } catch (err) {
+        this._emitError(err instanceof Error ? err : new Error(`WebSocket close error: ${err}`));
       }
       this.ws = null;
     }
