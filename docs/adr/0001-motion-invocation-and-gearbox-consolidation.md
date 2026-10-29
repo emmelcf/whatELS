@@ -114,7 +114,7 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
 
 ### 4.6 Dual Command Pathways & Ingress Staging Adapter
 * **Atomic Motion Invocation (Canonical Rich Client Key-Value API)**:
-  `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]`
+  `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<distance>]`
   * **Order-Independent & Extensible:** Parameters are parsed as Key-Value pairs, allowing any order and clean optional arguments without comma placeholder tricks.
   * **Quoting & Delimiter Safety:** Values containing special characters (`:`, `,`) can be enclosed in quotes (e.g. `key:"value"`), guaranteeing tokenizer safety.
   * **Positional Fallback:** For backwards compatibility with simple hardware pendants, positional CSV syntax (`CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[distance]`) is also recognized.

@@ -178,7 +178,7 @@ To prevent cross-client state collisions and network saturation when multiple in
 2. **Atomic Cycle Inception (`START`):**
    * Physical motion is engaged exclusively by tapping `START FEED` or `START CYCLE`.
    * The client bundles all required cycle parameters into an atomic command stream:
-     - **Gearbox Inception (Atomic ADR 0001/0002):** `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]\n` (or legacy staged fallback: `CMD.gearAxis=<axis>\nCMD.gearSync=<sync>\nCMD.gearDir=<dir>\nCMD.dupr=<pitchDu>\nCMD.on=1\n`)
+     - **Gearbox Inception (Atomic ADR 0001/0002):** `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<distance>]\n` (or legacy staged fallback: `CMD.gearAxis=<axis>\nCMD.gearSync=<1|0>\nCMD.gearDir=<dir>\nCMD.dupr=<pitchDu>\nCMD.on=1\n`)
      - **Canned Cycle Inception (Turning/Facing/Threading):** Staged shoulder limits (`CMD.axisLimitDu=...`), cycle geometry, pass parameters, and `CMD.on=1\n`.
 3. **Hardware Limit Persistence:**
    * Canned cycle shoulder limits (calculated in Turning and Facing wizards) are transmitted to the controller's hardware registers (`z.leftStop`, `z.rightStop`, `x.leftStop`, `x.rightStop`) upon cycle inception.

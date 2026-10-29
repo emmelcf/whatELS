@@ -21,7 +21,8 @@ $$\texttt{<NAMESPACE>.<action>[=<arguments>]}\backslash\text{n}$$
 * **Strict Single-`=` Invariant:** There is **at most one** `=` in any message, strictly separating the `<NAMESPACE>.<action>` header from its `<arguments>` payload. Commands with no arguments (`CMD.stop`, `CMD.hold`, `CMD.resume`, `CMD.step`) have no `=`.
 * **Colon Parameter Formatting (`name:value`):** In key-value payloads, parameter keys and values are strictly separated by a colon (`:`), **never `=`** (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8`). Multiple parameters are separated strictly by a comma (`,`).
 * **Zero Loose Spaces:** Unquoted spaces or tabs are strictly forbidden anywhere in command headers, parameter keys, or numeric values. The **only** permissible location for a space is inside a double-quoted string literal (e.g. `label:"Apron Console"`). Any unquoted space causes the command to be rejected immediately with `ERR:UNKNOWN_COMMAND`.
-* **Case Sensitivity:** Command names are case-insensitive (`CMD.stop` == `cmd.STOP`). Axis names (`Z`, `X`) and units (`mm`, `tpi`, `du`) accept uppercase or lowercase.
+* **Strict Case Sensitivity:** The protocol is strictly case-sensitive. Namespace headers are uppercase (`CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, `CLIENT`), action names and parameter keys are camelCase, and axis identifiers are uppercase (`Z`, `X`). Any command, namespace, action, or parameter passed with incorrect case is rejected immediately.
+* **Strict Binary Flags (`<0|1>`):** All boolean flags on the wire (such as `sync` and `step`) are strictly represented by the numeric characters `1` (enabled / true) or `0` (disabled / false). Text variants (`true`, `false`, `sync`, `async`) are invalid and rejected immediately with `INVALID_PARAM`.
 
 ### Universal Return Grammar
 Every command processed by the controller returns an ASCII response:
@@ -49,7 +50,7 @@ Engages leadscrew motion according to the specified parameters. If called while 
   * `axis`: Target axis (`Z`, `X`, or `ZX` / `TAPER`). Default: `Z`.
   * `feed`: Feed rate. If floating-point (contains `.`), parsed as mm/rev; otherwise parsed as deci-microns per rev (`dupr`).
   * `dir`: Direction (`+`, `-`, `LEFT`, `RIGHT`, `FWD`, `REV`).
-  * `sync`: Spindle synchronization (`1` or `sync` for ELS electronic gearing; `0` or `async` for continuous IPM feed).
+  * `sync`: Spindle synchronization (`1` for ELS electronic gearing; `0` for continuous IPM feed). Default: `1`.
   * `dist`: (Optional) Target travel distance in deci-microns (`du`). `-1` for continuous feed.
 * **Examples:**
   * `CMD.startFeed=axis:Z,feed:1500,dir:-,sync:1`
@@ -73,15 +74,14 @@ Atomically initiates a multi-pass canned cutting cycle in a single message frame
     * `xClear:<du>` — Radial clearance position for return passes.
     * `step:<0|1>` — (Optional) Enable single-pass inspection step mode (default: 0).
   * **Turning (`mode:turn`):**
-    * `doc:<du>` — Depth of cut per pass in deci-microns.
     * `feed:<dupr>` — Synchronous feed rate in deci-microns/rev.
+    * `doc:<du>` — Depth of cut per pass in deci-microns.
     * `zStart:<du>` — Starting Z coordinate.
     * `zEnd:<du>` — Finished shoulder Z limit.
     * `xStart:<du>` — Initial stock radius.
-    * `xEnd:<du>` — Target final workpiece radius.
     * `xClear:<du>` — Rapid retract radial clearance.
-    * `retract:<du>` — Axial clearance retract.
-    * `step:<0|1>` — Enable single-pass step mode.
+    * `passes:<n>` — Total cutting passes (default: 1).
+    * `step:<0|1>` — (Optional) Enable single-pass step mode (default: 0).
   * **Facing (`mode:face`):**
     * `doc:<du>` — Facing depth of cut per pass along Z.
     * `feed:<dupr>` — Cross-slide feed rate in deci-microns/rev.
@@ -140,14 +140,6 @@ Immediately halts all axis stepping, cancels any active jog or cutting cycle, an
 * **Required Permission:** `PERM_READ_TELEMETRY` *(Emergency Stop authority is always granted to any connected client).*
 * **Returns:** `OK:CMD.stop`
 
-#### `CMD.mode`
-Switches the active kinematic cutting mode.
-* **Arguments:** Mode ID or mode name (`gearbox`, `turning`, `facing`, `threading`, `cutoff`, `slotting`, `sphere`).
-* **Example:** `CMD.mode=50` or `CMD.mode=gearbox`
-* **Safety Lockout:** Rejected if motion is currently active (`isOn == true`).
-* **Required Permission:** `PERM_MOTION_START`
-* **Returns:** `OK:CMD.mode:<modeId>`
-
 ---
 
 ### 2.2 Manual Jogging & Positioning
@@ -175,55 +167,9 @@ Stops an active continuous jog initiated by `CMD.jogHold`.
 * **Required Permission:** `PERM_JOG_PULSE`
 * **Returns:** `OK:CMD.jogRelease`
 
-#### `CMD.jogStepDu`
-Configures the default step increment used for physical panel jog buttons.
-* **Arguments:** `<dist_du>`
-* **Example:** `CMD.jogStepDu=1000` *(100 microns / 0.1 mm)*
-* **Returns:** `OK:CMD.jogStepDu`
-
 ---
 
-### 2.3 Feed Pitch, Direction & Electronic Gearing Configuration
-
-#### `CMD.feedMm`
-Sets the active feed rate in millimeters per revolution (`mm/rev`).
-* **Arguments:** `<pitch_mm>` (Float).
-* **Example:** `CMD.feedMm=0.15`
-* **Returns:** `OK:CMD.feedMm`
-
-#### `CMD.feedTpi`
-Sets the active threading pitch in Threads Per Inch (`TPI`).
-* **Arguments:** `<tpi_value>` (Float).
-* **Example:** `CMD.feedTpi=20.0`
-* **Returns:** `OK:CMD.feedTpi`
-
-#### `CMD.feedDupr`
-Sets the raw feed rate in deci-microns per revolution (`dupr`).
-* **Arguments:** `<dupr_int32>` ($10,000\text{ dupr} = 1.0\text{ mm/rev}$).
-* **Example:** `CMD.feedDupr=1500` *(0.15 mm/rev)*
-* **Returns:** `OK:CMD.feedDupr`
-
-#### `CMD.gearAxis`
-Selects the primary target axis for the Electronic Gearbox.
-* **Arguments:** `Z` | `X` | `ZX` (Taper).
-* **Example:** `CMD.gearAxis=Z`
-* **Returns:** `OK:CMD.gearAxis`
-
-#### `CMD.gearDir` (or `CMD.feedDir`)
-Sets the cutting feed direction.
-* **Arguments:** `+` | `-` | `LEFT` | `RIGHT` | `FWD` | `REV`.
-* **Example:** `CMD.gearDir=+`
-* **Returns:** `OK:CMD.gearDir`
-
-#### `CMD.gearSync`
-Enables or disables spindle electronic synchronization.
-* **Arguments:** `1` (synchronized ELS gearing) | `0` (asynchronous IPM feed).
-* **Example:** `CMD.gearSync=1`
-* **Returns:** `OK:CMD.gearSync`
-
----
-
-### 2.4 Coordinates & Soft Limits
+### 2.3 Coordinates & Soft Limits
 
 #### `CMD.axisZero`
 Zeroes the current position coordinate of the specified axis.
@@ -252,29 +198,7 @@ Clears a software travel limit register.
 
 ---
 
-### 2.5 Taper & Cone Configuration
-
-#### `CMD.taperAngle`
-Sets the active taper angle in decimal degrees.
-* **Arguments:** `<angle_degrees>` (Float).
-* **Example:** `CMD.taperAngle=1.5`
-* **Returns:** `OK:CMD.taperAngle`
-
-#### `CMD.taperRatio`
-Sets the active taper as a proportional ratio string.
-* **Arguments:** `<ratio>` (`1:N`).
-* **Example:** `CMD.taperRatio=1:5`
-* **Returns:** `OK:CMD.taperRatio`
-
-#### `CMD.taperPreset`
-Applies an industry standard taper preset by name.
-* **Arguments:** `MT1`, `MT2`, `MT3`, `MT4`, `MT5`, `R8`, `B16`, etc.
-* **Example:** `CMD.taperPreset=MT3`
-* **Returns:** `OK:CMD.taperPreset`
-
----
-
-### 2.6 Simulation & Diagnostics (Elevated Permission Only)
+### 2.4 Simulation & Diagnostics (Elevated Permission Only)
 
 > [!CAUTION]
 > The following commands manipulate simulated encoder pulses and RPM registers. They are **strictly restricted** to test harnesses holding `PERM_SIMULATION`. Operator interfaces attempting to call these will receive `ERR:CMD.permission_denied`.
@@ -310,7 +234,7 @@ Manages non-volatile storage (NVS) configuration, machine profiles, and tuning p
 | :--- | :--- | :--- |
 | `SETTINGS.get` | Returns all key-value settings. | `SETTINGS.get` |
 | `SETTINGS.get=<key>` | Reads a single configuration key. | `SETTINGS.get=leadscrew_pitch` |
-| `SETTINGS.set=<key>=<val>` | Writes a configuration key to persistent NVS. | `SETTINGS.set=leadscrew_pitch=4.0` |
+| `SETTINGS.set=<key>:<val>` | Writes a configuration key to persistent NVS. | `SETTINGS.set=leadscrew_pitch:4.0` |
 | `SETTINGS.reset=<key>` | Resets a specific key to factory default. | `SETTINGS.reset=leadscrew_pitch` |
 | `SETTINGS.getGroup=<group>` | Dumps an entire configuration group (JSON). | `SETTINGS.getGroup=motor_z` |
 | `SETTINGS.resetGroup=<group>`| Resets an entire group to factory defaults. | `SETTINGS.resetGroup=motor_z` |

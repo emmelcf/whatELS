@@ -625,10 +625,10 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 
 ### 10.1 Canonical Rich Client Command Set (Core Surface)
 
-* `CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<dist>]`: Atomically initiates feed motion via Key-Value pairs (or legacy positional CSV `CMD.startFeed=<axis>,<sync>,<feedRate>,<dir>,[dist]`):
+* `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<dist>]`: Atomically initiates feed motion via Key-Value pairs (or legacy positional CSV `CMD.startFeed=<axis>,<feedRate>,<dir>,[sync],[dist]`):
   - Values containing special characters (`:`, `,`) may be enclosed in double quotes (e.g. `key:"value"`).
   - `axis`: `'Z'`, `'X'`, or `'ZX'`
-  - `sync`: `'sync'` (or `1`) for spindle-synchronized ($\text{mm/rev}$ / $\text{in/rev}$), `'async'` (or `0`) for time-based velocity ($\text{mm/min}$ / $\text{in/min}$)
+  - `sync`: `1` for spindle-synchronized ($\text{mm/rev}$ / $\text{in/rev}$), `0` for time-based velocity ($\text{mm/min}$ / $\text{in/min}$). Binary flags are strictly `1` or `0`; text variants (`sync`/`async`/`true`/`false`) are rejected.
   - `feed`: strictly positive magnitude ($F > 0$, float mm or integer du)
   - `dir`: Cartesian polarity (`-1` for $-Z$ chuck / $-X$ centerline, `+1` for $+Z$ tailstock / $+X$ retract). The Ingress Translation Layer also accepts lathe operator semantics (`CHUCK`/`TAIL` for $Z$; `CENTER`/`RETRACT` or `IN`/`OUT` for $X$). `FWD`/`REV` are strictly banned for feed motion (reserved exclusively for spindle rotation).
   - `dist`: optional stroke distance in mm or du (or `-1` for continuous feed to soft limit)

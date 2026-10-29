@@ -440,11 +440,11 @@ To support both advanced multi-client tablet UIs and simple hardware pendants, t
 ##### 1. Atomic Motion Invocation (Rich Clients / Web UI / Macros)
 Dispatches the complete motion specification in a single atomic frame when engaging feed:
 ```
-CMD.startFeed=axis:<axis>,sync:<sync>,feed:<feedRate>,dir:<dir>,[dist:<distance>]
+CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<distance>]
 ```
 * Example (Sync): `CMD.startFeed=axis:Z,sync:1,feed:0.15,dir:CHUCK` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously.
 * Example (Async): `CMD.startFeed=axis:Z,sync:0,feed:150,dir:CHUCK,dist:25.0` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
-*(Note: Positional CSV `CMD.startFeed=Z,sync,0.15,-1` is also supported for legacy/dumb hardware pendants).*
+*(Note: Positional CSV `CMD.startFeed=Z,0.15,-1,1` is also supported for legacy/dumb hardware pendants).*
 
 ##### 2. Ingress Staging Adapter (Dumb Clients / Pendants / Form Setters)
 Allows simple clients to update modal parameters one by one, staging them on Core 0 until engaged:

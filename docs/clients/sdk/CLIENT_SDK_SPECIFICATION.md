@@ -64,7 +64,7 @@ export type TransportStatus = 'disconnected' | 'connecting' | 'connected';
 
 export interface StartFeedParams {
   axis: Axis;
-  sync: boolean | 0 | 1;
+  sync: 0 | 1;
   feed: number;                    // strictly positive: deci-microns/rev or mm/min
   dir: -1 | 1 | SemanticDirection;
   dist?: number;                   // deci-microns or mm, default -1 (continuous feed)
