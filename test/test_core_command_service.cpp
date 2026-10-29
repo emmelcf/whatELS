@@ -27,40 +27,79 @@ static void printHeader(const char* name) {
   std::cout << "==================================================\n";
 }
 
-void testCommandStructsAndVariants() {
-  printHeader("1. Command Structs & C++17 std::variant");
+void testCommandValidationAndInvariants() {
+  printHeader("1. Command Struct Domain Invariant Validation");
 
-  StartCycleCmd cycleCmd;
+  ClientContext ctx;
+  ctx.effectivePerms = PERM_ALL;
 
-  // Test Threading
-  ThreadingCycleParams threadParams;
-  threadParams.pitchDupr = 15000;
-  threadParams.passes = 8;
-  threadParams.depthDu = 9200;
-  threadParams.zStartDu = 0;
-  threadParams.zEndDu = -25000;
-  threadParams.xClearDu = 20000;
-  cycleCmd.params = threadParams;
+  // StartFeedCmd validation tests
+  {
+    StartFeedCmd cmd;
+    cmd.axis = (AxisId)99;
+    cmd.direction = -1;
+    cmd.feedRate = 1500;
+    CommandResult res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:axis");
 
-  assert(std::holds_alternative<ThreadingCycleParams>(cycleCmd.params));
-  auto& retrievedThread = std::get<ThreadingCycleParams>(cycleCmd.params);
-  assert(retrievedThread.pitchDupr == 15000);
-  assert(retrievedThread.passes == 8);
+    cmd.axis = AXIS_Z;
+    cmd.direction = 0; // Invalid polarity
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:dir");
 
-  // Test Turning
-  TurningCycleParams turnParams;
-  turnParams.feedDupr = 1500;
-  turnParams.passes = 4;
-  turnParams.docDu = 5000;
-  turnParams.zEndDu = -50000;
-  cycleCmd.params = turnParams;
+    cmd.direction = -1;
+    cmd.feedRate = 0; // Zero feed rate invalid
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:feed");
 
-  assert(std::holds_alternative<TurningCycleParams>(cycleCmd.params));
-  auto& retrievedTurn = std::get<TurningCycleParams>(cycleCmd.params);
-  assert(retrievedTurn.feedDupr == 1500);
-  assert(retrievedTurn.docDu == 5000);
+    cmd.feedRate = 1500;
+    cmd.targetDistDu = 0; // Stroke of 0 is invalid
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:dist");
+  }
 
-  std::cout << "  [PASS] Variant extraction and typed parameter integrity verified.\n";
+  // JogStepCmd validation tests
+  {
+    JogStepCmd cmd;
+    cmd.axis = AXIS_Z;
+    cmd.distDu = 0; // 0 distance jog step is invalid
+    CommandResult res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:dist");
+
+    cmd.axis = (AxisId)5;
+    cmd.distDu = 100;
+    res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:axis");
+  }
+
+  // JogHoldCmd validation tests
+  {
+    JogHoldCmd cmd;
+    cmd.axis = AXIS_Z;
+    cmd.direction = 5; // Invalid polarity
+    CommandResult res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:dir");
+  }
+
+  // AxisLimitCmd validation tests
+  {
+    AxisLimitCmd cmd;
+    cmd.axis = AXIS_Z;
+    cmd.limitBound = 3; // Only bound 1 or 2 valid
+    cmd.coordDu = 1000;
+    CommandResult res = CoreCommandService::instance().execute(cmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:bound");
+  }
+
+  std::cout << "  [PASS] Domain validation correctly rejects invalid/omitted physical parameters.\n";
 }
 
 void testSafe01MotionSafetyGate() {
@@ -113,17 +152,13 @@ void testZeroGhostLimitsPersistence() {
   ClientContext ctx;
   ctx.effectivePerms = PERM_ALL;
 
-  StartCycleCmd cycleCmd;
-  ThreadingCycleParams threadParams;
-  threadParams.pitchDupr = 15000;
-  threadParams.passes = 8;
-  threadParams.depthDu = 9200;
-  threadParams.zStartDu = 0;
-  threadParams.zEndDu = -35000; // Shoulder at -3.5 mm
-  threadParams.xClearDu = 20000;
-  cycleCmd.params = threadParams;
+  // Set shoulder limit directly via canonical AxisLimitCmd
+  AxisLimitCmd limitCmd;
+  limitCmd.axis = AXIS_Z;
+  limitCmd.limitBound = 1; // Bound 1 = Lower / Chuck shoulder
+  limitCmd.coordDu = -35000; // Shoulder at -3.5 mm
 
-  CommandResult res = CoreCommandService::instance().execute(cycleCmd, ctx);
+  CommandResult res = CoreCommandService::instance().execute(limitCmd, ctx);
   assert(res.isOk());
 
   // Verify that the shoulder limit persists directly in the controller's active soft limit table
@@ -163,7 +198,7 @@ int main() {
   std::cout << " RUNNING CORE COMMAND SERVICE & SAFETY GATE UNIT TESTS\n";
   std::cout << "======================================================\n";
 
-  testCommandStructsAndVariants();
+  testCommandValidationAndInvariants();
   testSafe01MotionSafetyGate();
   testZeroGhostLimitsPersistence();
   testHoldAndResumeLifecycle();

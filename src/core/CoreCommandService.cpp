@@ -35,17 +35,14 @@ bool CoreCommandService::validateEnvelope(int32_t zStart, int32_t zEnd, int32_t 
 }
 
 CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("startFeed", valErr ? valErr : "INVALID_PARAM");
+  }
+
   String err;
   if (!canExecuteMotion(ctx, &err)) {
     return CommandResult::failed("startFeed", err);
-  }
-
-  if (cmd.feedRate <= 0) {
-    return CommandResult::failed("startFeed", "Invalid feed rate");
-  }
-
-  if (cmd.direction != -1 && cmd.direction != 1) {
-    return CommandResult::failed("startFeed", "Invalid direction");
   }
 
   bool ok = false;
@@ -75,6 +72,11 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
 }
 
 CommandResult CoreCommandService::execute(const JogStepCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("jogStep", valErr ? valErr : "INVALID_PARAM");
+  }
+
   if (!(ctx.effectivePerms & core_client::PERM_JOG_PULSE)) {
     return CommandResult::failed("jogStep", "PERMISSION_DENIED");
   }
@@ -93,6 +95,11 @@ CommandResult CoreCommandService::execute(const JogStepCmd& cmd, const core_clie
 }
 
 CommandResult CoreCommandService::execute(const JogHoldCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("jogHold", valErr ? valErr : "INVALID_PARAM");
+  }
+
   if (!(ctx.effectivePerms & core_client::PERM_JOG_PULSE)) {
     return CommandResult::failed("jogHold", "PERMISSION_DENIED");
   }
@@ -110,11 +117,25 @@ CommandResult CoreCommandService::execute(const JogHoldCmd& cmd, const core_clie
 
 CommandResult CoreCommandService::execute(const JogReleaseCmd& cmd, const core_client::ClientContext& ctx) {
   (void)ctx;
-  MotionEngine::instance().stop(cmd.axis, false);
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("jogRelease", valErr ? valErr : "INVALID_PARAM");
+  }
+
+  if (cmd.hasAxis) {
+    MotionEngine::instance().stop(cmd.axis, false);
+  } else {
+    MotionEngine::instance().stopAll(false);
+  }
   return CommandResult::ok("jogRelease");
 }
 
 CommandResult CoreCommandService::execute(const AxisZeroCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("axisZero", valErr ? valErr : "INVALID_PARAM");
+  }
+
   String err;
   if (!canExecuteMotion(ctx, &err)) {
     return CommandResult::failed("axisZero", err);
@@ -124,6 +145,11 @@ CommandResult CoreCommandService::execute(const AxisZeroCmd& cmd, const core_cli
 }
 
 CommandResult CoreCommandService::execute(const AxisPosCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("axisPosDu", valErr ? valErr : "INVALID_PARAM");
+  }
+
   String err;
   if (!canExecuteMotion(ctx, &err)) {
     return CommandResult::failed("axisPosDu", err);
@@ -134,6 +160,11 @@ CommandResult CoreCommandService::execute(const AxisPosCmd& cmd, const core_clie
 
 CommandResult CoreCommandService::execute(const AxisLimitCmd& cmd, const core_client::ClientContext& ctx) {
   (void)ctx;
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("axisLimitDu", valErr ? valErr : "INVALID_PARAM");
+  }
+
   if (MotionEngine::instance().isMoving(cmd.axis)) {
     return CommandResult::failed("axisLimitDu", "MOTION_LOCKED");
   }
@@ -148,6 +179,11 @@ CommandResult CoreCommandService::execute(const AxisLimitCmd& cmd, const core_cl
 
 CommandResult CoreCommandService::execute(const AxisClearLimitCmd& cmd, const core_client::ClientContext& ctx) {
   (void)ctx;
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("axisClearLimit", valErr ? valErr : "INVALID_PARAM");
+  }
+
   if (MotionEngine::instance().isMoving(cmd.axis)) {
     return CommandResult::failed("axisClearLimit", "MOTION_LOCKED");
   }

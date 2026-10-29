@@ -8,92 +8,195 @@ namespace whatels::core {
  * @brief Atomic Feed Motion Command (CMD.startFeed).
  */
 struct StartFeedCmd {
-  AxisId  axis         = AXIS_Z;
-  int8_t  direction    = -1;    // -1 (Chuck / Centerline), +1 (Tailstock / Retract)
-  bool    syncSpindle  = true;  // true = ELS gearing (dupr), false = async IPM (du/min)
-  int32_t feedRate     = 0;     // Magnitude of feed rate (> 0)
-  int32_t targetDistDu = -1;    // Travel stroke in deci-microns (-1 = continuous to limit)
+  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  int8_t  direction    = 0;             // Mandatory: -1 (Chuck / Centerline), +1 (Tailstock / Retract)
+  bool    syncSpindle  = true;          // Physical fallback: true = ELS gearing (dupr), false = async IPM (du/min)
+  int32_t feedRate     = 0;             // Mandatory: Magnitude of feed rate (> 0)
+  int32_t targetDistDu = -1;            // Physical fallback: Travel stroke in deci-microns (-1 = continuous to limit)
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (direction != -1 && direction != 1) {
+      if (errReason) *errReason = "INVALID_PARAM:dir";
+      return false;
+    }
+    if (feedRate <= 0) {
+      if (errReason) *errReason = "INVALID_PARAM:feed";
+      return false;
+    }
+    if (targetDistDu < -1 || targetDistDu == 0) {
+      if (errReason) *errReason = "INVALID_PARAM:dist";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Incremental Single-Step Manual Jog Command (CMD.jogStep).
  */
 struct JogStepCmd {
-  AxisId  axis   = AXIS_Z;
-  int32_t distDu = 0;           // Signed distance in deci-microns
+  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  int32_t distDu = 0;                   // Mandatory: Signed distance in deci-microns (!= 0)
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (distDu == 0) {
+      if (errReason) *errReason = "INVALID_PARAM:dist";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Continuous Manual Jog Command (CMD.jogHold).
  */
 struct JogHoldCmd {
-  AxisId axis      = AXIS_Z;
-  int8_t direction = -1;        // -1 or +1
+  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+  int8_t direction = 0;                 // Mandatory: -1 or +1
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (direction != -1 && direction != 1) {
+      if (errReason) *errReason = "INVALID_PARAM:dir";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Stop Continuous Manual Jog Command (CMD.jogRelease).
  */
 struct JogReleaseCmd {
-  AxisId axis = AXIS_Z;
+  bool   hasAxis = false;               // If false, stops all axes
+  AxisId axis    = AXIS_Z;
+
+  bool validate(const char** errReason = nullptr) const {
+    if (hasAxis && axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Zero Axis Origin Command (CMD.axisZero).
  */
 struct AxisZeroCmd {
-  AxisId axis = AXIS_Z;
+  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Set Axis Coordinate Preset Command (CMD.axisPosDu).
  */
 struct AxisPosCmd {
-  AxisId  axis  = AXIS_Z;
-  int32_t posDu = 0;
+  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  int32_t posDu = 0;                    // Mandatory: Target coordinate in deci-microns
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Set Axis Travel Limit Command (CMD.axisLimitDu).
  */
 struct AxisLimitCmd {
-  AxisId  axis       = AXIS_Z;
-  int8_t  limitBound = 1;       // 1 = Lower / Chuck, 2 = Upper / Tailstock
-  int32_t coordDu    = 0;
+  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  int8_t  limitBound = 0;               // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
+  int32_t coordDu    = 0;               // Mandatory: Coordinate in deci-microns
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (limitBound != 1 && limitBound != 2) {
+      if (errReason) *errReason = "INVALID_PARAM:bound";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief Clear Axis Travel Limit Command (CMD.axisClearLimit).
  */
 struct AxisClearLimitCmd {
-  AxisId axis       = AXIS_Z;
-  int8_t limitBound = 1;
+  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+  int8_t limitBound = 0;                // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
+
+  bool validate(const char** errReason = nullptr) const {
+    if (axis != AXIS_Z && axis != AXIS_X) {
+      if (errReason) *errReason = "INVALID_PARAM:axis";
+      return false;
+    }
+    if (limitBound != 1 && limitBound != 2) {
+      if (errReason) *errReason = "INVALID_PARAM:bound";
+      return false;
+    }
+    return true;
+  }
 };
 
 /**
  * @brief In-Cut Radial Retract Feed Hold Command (CMD.hold).
  */
-struct HoldCmd {};
+struct HoldCmd {
+  bool validate(const char** = nullptr) const { return true; }
+};
 
 /**
  * @brief Resume Feed from Hold Command (CMD.resume).
  */
-struct ResumeCmd {};
+struct ResumeCmd {
+  bool validate(const char** = nullptr) const { return true; }
+};
 
 /**
  * @brief Advance Next Pass in Step Mode Command (CMD.step).
  */
-struct StepCmd {};
+struct StepCmd {
+  bool validate(const char** = nullptr) const { return true; }
+};
 
 /**
  * @brief Universal Emergency Stop Command (CMD.stop).
  */
-struct StopCmd {};
+struct StopCmd {
+  bool validate(const char** = nullptr) const { return true; }
+};
 
 /**
  * @brief Line Flush and Heartbeat Ping Command (CMD.ping).
  */
-struct PingCmd {};
+struct PingCmd {
+  bool validate(const char** = nullptr) const { return true; }
+};
 
 } // namespace whatels::core
 

@@ -302,7 +302,10 @@ core::CommandResult parseJogHold(const ArgList& args, const ClientContext& ctx) 
 core::CommandResult parseJogRelease(const ArgList& args, const ClientContext& ctx) {
   core::JogReleaseCmd cmd;
   core::CommandResult err;
-  if (args.count > 0 && !extractAxis(args, "CMD.jogRelease", &cmd.axis, &err)) return err;
+  if (args.count > 0) {
+    if (!extractAxis(args, "CMD.jogRelease", &cmd.axis, &err)) return err;
+    cmd.hasAxis = true;
+  }
 
   auto res = core::CoreCommandService::instance().execute(cmd, ctx);
   res.command = "CMD.jogRelease";
