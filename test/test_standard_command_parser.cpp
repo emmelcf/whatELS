@@ -116,91 +116,45 @@ void testCleanBreakQueries() {
   }
 }
 
-void testOrderIndependentCycleParsing() {
-  printHeader("2. Order-Independent Key-Value Cycle Parsing");
+void testCycleContract() {
+  printHeader("2. Canned Cycle Ingress Contract (Pending IELSMode migration Refs #10)");
   auto& parser = StandardCommandParser::instance();
   auto ctx = makeAdminContext();
 
   // Reset engine to idle via stop command
   parser.parseAndDispatch("CMD.stop", 8, ctx);
 
-  // Scrambled threading command with float mm coercion (depth:1.2 mm -> 12000 du)
-  const char* threadCmd = "CMD.startCycle=passes:8,pitch:15000,zEnd:-25000,xClear:20000,depth:1.2,mode:thread,zStart:0,step:1";
+  // Canned cycles are not yet implemented as IELSMode classes (Refs Issue #10);
+  // they deterministically report UNAVAILABLE instead of faking execution.
+  const char* threadCmd = "CMD.startCycle=mode:thread,pitch:15000,passes:8,depth:12000";
   CommandResult res = parser.parseAndDispatch(threadCmd, std::strlen(threadCmd), ctx);
   String wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Thread result: " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startCycle:mode:thread\n");
+  std::cout << "Thread cycle -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startCycle:UNAVAILABLE\n");
 
-  // Turning cycle
-  const char* turnCmd = "CMD.startCycle=mode:turn,feed:0.15,doc:0.5,zStart:0,zEnd:-50000,xStart:15000,xClear:20000,passes:4";
+  const char* turnCmd = "CMD.startCycle=mode:turn,feed:1500,doc:5000";
   res = parser.parseAndDispatch(turnCmd, std::strlen(turnCmd), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Turn result: " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startCycle:mode:turn\n");
+  std::cout << "Turn cycle -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startCycle:UNAVAILABLE\n");
 
-  // Facing cycle
-  const char* faceCmd = "CMD.startCycle=mode:face,feed:0.10,doc:0.25,xStart:25000,xEnd:0,zStart:0,zClear:2000";
-  res = parser.parseAndDispatch(faceCmd, std::strlen(faceCmd), ctx);
-  wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Face result: " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startCycle:mode:face\n");
-
-  // Taper cycle (using ratio)
-  const char* taperCmd = "CMD.startCycle=mode:taper,feed:1500,ratio:1:5,zStart:0,zEnd:-30000,xStart:10000,xClear:15000";
-  res = parser.parseAndDispatch(taperCmd, std::strlen(taperCmd), ctx);
-  wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Taper result: " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startCycle:mode:taper\n");
-
-  // Cutoff cycle
-  const char* cutoffCmd = "CMD.startCycle=mode:cutoff,feed:500,peck:10000,retract:1000,xStart:20000,xEnd:0,zPos:-15000";
-  res = parser.parseAndDispatch(cutoffCmd, std::strlen(cutoffCmd), ctx);
-  wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Cutoff result: " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startCycle:mode:cutoff\n");
-}
-
-void testCycleValidationAndErrors() {
-  printHeader("3. Parameter Validation and Deterministic Errors");
-  auto& parser = StandardCommandParser::instance();
-  auto ctx = makeAdminContext();
-
-  // Missing mode
+  // Missing mode parameter fails with MISSING_PARAM:mode
   const char* missingMode = "CMD.startCycle=pitch:15000,passes:4";
-  CommandResult res = parser.parseAndDispatch(missingMode, std::strlen(missingMode), ctx);
-  String wire = StandardCommandParser::formatWireResponse(res);
+  res = parser.parseAndDispatch(missingMode, std::strlen(missingMode), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "Missing mode -> " << wire;
   assert(!res.isOk());
   assert(wire.find("MISSING_PARAM:mode") != std::string::npos);
 
-  // Missing pitch in threading
-  const char* missingPitch = "CMD.startCycle=mode:thread,depth:10000,zStart:0,zEnd:-10000,xClear:15000";
-  res = parser.parseAndDispatch(missingPitch, std::strlen(missingPitch), ctx);
+  // Positional parameters strictly rejected for startCycle
+  const char* posCycle = "CMD.startCycle=thread,15000";
+  res = parser.parseAndDispatch(posCycle, std::strlen(posCycle), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Missing pitch -> " << wire;
+  std::cout << "Positional cycle -> " << wire;
   assert(!res.isOk());
-  assert(wire.find("MISSING_PARAM:pitch") != std::string::npos);
-
-  // Invalid pitch (negative or non-numeric)
-  const char* invalidPitch = "CMD.startCycle=mode:thread,pitch:invalid,depth:10000,zStart:0,zEnd:-10000,xClear:15000";
-  res = parser.parseAndDispatch(invalidPitch, std::strlen(invalidPitch), ctx);
-  wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Invalid pitch -> " << wire;
-  assert(!res.isOk());
-  assert(wire.find("INVALID_PARAM:pitch") != std::string::npos);
-
-  // Unknown mode
-  const char* unknownMode = "CMD.startCycle=mode:banana,feed:1500";
-  res = parser.parseAndDispatch(unknownMode, std::strlen(unknownMode), ctx);
-  wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "Unknown mode -> " << wire;
-  assert(!res.isOk());
-  assert(wire.find("UNKNOWN_MODE:banana") != std::string::npos);
+  assert(wire == "ERR:UNKNOWN_COMMAND\n");
 }
 
 void testFeedAndMotionCommands() {
@@ -648,8 +602,7 @@ int main() {
   MotionEngine engine(&mockStepper, &mockEncoder);
 
   testCleanBreakQueries();
-  testOrderIndependentCycleParsing();
-  testCycleValidationAndErrors();
+  testCycleContract();
   testFeedAndMotionCommands();
   testUniversalNamespaces();
   testStrictGrammarAndSpaceRejection();
@@ -659,7 +612,7 @@ int main() {
   testSettingsAndExtendedIntrospection();
 
   std::cout << "\n========================================================\n";
-  std::cout << " ALL 10 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
+  std::cout << " ALL 9 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
   std::cout << "========================================================\n";
   return 0;
 }

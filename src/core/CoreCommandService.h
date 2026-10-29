@@ -19,7 +19,6 @@ public:
 
   // Typed Command Execution Surface
   CommandResult execute(const StartFeedCmd& cmd, const core_client::ClientContext& ctx);
-  CommandResult execute(const StartCycleCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const JogStepCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const JogHoldCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const JogReleaseCmd& cmd, const core_client::ClientContext& ctx);

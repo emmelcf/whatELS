@@ -75,22 +75,6 @@ bool parseDeciMicrons(std::string_view s, int32_t* outValue) {
   return true;
 }
 
-bool parseUint16(std::string_view s, uint16_t* outValue, uint16_t minVal = 0) {
-  double val = 0.0;
-  if (!parseNumber(s, &val) || val < minVal || val > 65535.0 || s.find('.') != std::string_view::npos) {
-    return false;
-  }
-  *outValue = static_cast<uint16_t>(val);
-  return true;
-}
-
-bool parseFloat32(std::string_view s, float* outValue) {
-  double val = 0.0;
-  if (!parseNumber(s, &val)) return false;
-  *outValue = static_cast<float>(val);
-  return true;
-}
-
 bool parseBool(std::string_view s, bool* outValue) {
   if (!outValue) return false;
   if (s == "1") { *outValue = true;  return true; }
@@ -235,83 +219,6 @@ bool extractAxis(const ArgList& args, const char* cmdName, AxisId* outAxis, core
   return true;
 }
 
-struct ParamExtractor {
-  const ArgList& args;
-  const char* failKey = nullptr;
-  bool missing = false;
-
-  bool du(std::string_view key, int32_t& out, bool req = true, bool posOnly = false, std::string_view alias = {}) {
-    auto v = args.get(key);
-    if (v.empty() && !alias.empty()) v = args.get(alias);
-    if (v.empty()) {
-      if (req) { failKey = key.data(); missing = true; return false; }
-      return true;
-    }
-    if (!parseDeciMicrons(v, &out) || (posOnly && out <= 0)) {
-      failKey = key.data(); missing = false; return false;
-    }
-    return true;
-  }
-
-  bool u16(std::string_view key, uint16_t& out, bool req = false, uint16_t minVal = 0) {
-    auto v = args.get(key);
-    if (v.empty()) {
-      if (req) { failKey = key.data(); missing = true; return false; }
-      return true;
-    }
-    if (!parseUint16(v, &out, minVal)) {
-      failKey = key.data(); missing = false; return false;
-    }
-    return true;
-  }
-
-  bool f32(std::string_view key, float& out, bool req = false, std::string_view alias = {}) {
-    auto v = args.get(key);
-    if (v.empty() && !alias.empty()) v = args.get(alias);
-    if (v.empty()) {
-      if (req) { failKey = key.data(); missing = true; return false; }
-      return true;
-    }
-    if (!parseFloat32(v, &out)) {
-      failKey = key.data(); missing = false; return false;
-    }
-    return true;
-  }
-
-  bool boolean(std::string_view key, bool& out, bool defaultVal = false) {
-    auto v = args.get(key);
-    if (v.empty()) { out = defaultVal; return true; }
-    return parseBool(v, &out);
-  }
-
-  bool taperAngle(float& out) {
-    auto ang = args.get("angle");
-    auto rat = args.get("ratio");
-    if (!ang.empty()) {
-      if (parseFloat32(ang, &out)) return true;
-      failKey = "angle"; missing = false; return false;
-    }
-    if (!rat.empty()) {
-      size_t c = rat.find(':');
-      float r = 0;
-      if (c != std::string_view::npos && parseFloat32(rat.substr(c + 1), &r) && r > 0) {
-        out = static_cast<float>(std::atan(1.0f / r) * 180.0f / M_PI);
-        return true;
-      }
-      failKey = "ratio"; missing = false; return false;
-    }
-    failKey = "angle"; missing = true; return false;
-  }
-
-  String formatError() const {
-    return String(missing ? "MISSING_PARAM:" : "INVALID_PARAM:") + (failKey ? failKey : "");
-  }
-};
-
-// =============================================================================
-// 4. MOTION COMMAND HANDLERS
-// =============================================================================
-
 core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx) {
   if (!args.isKv && args.count < 2) return core::CommandResult::failed("CMD.startFeed", "MISSING_ARGUMENTS");
 
@@ -350,79 +257,14 @@ core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx
   return res;
 }
 
-core::CommandResult parseStartCycle(const ArgList& args, const ClientContext& ctx) {
+core::CommandResult parseStartCycle(const ArgList& args, const ClientContext&) {
   if (!args.isKv) return core::CommandResult::unrecognized();
   auto mode = args.get("mode");
   if (mode.empty()) return core::CommandResult::failed("CMD.startCycle", "MISSING_PARAM:mode");
 
-  ParamExtractor p{ args, nullptr, false };
-  core::StartCycleCmd cmd;
-
-  if (mode == "thread" || mode == "threading") {
-    core::ThreadingCycleParams cp;
-    if (!p.du("pitch", cp.pitchDupr, true, true) ||
-        !p.du("depth", cp.depthDu, true, true, "doc") ||
-        !p.du("zStart", cp.zStartDu) || !p.du("zEnd", cp.zEndDu) ||
-        !p.du("xClear", cp.xClearDu) ||
-        !p.u16("passes", cp.passes, false, 1) ||
-        !p.u16("spring", cp.springPasses) ||
-        !p.f32("angle", cp.infeedAngle, false, "infeed") ||
-        !p.boolean("step", cp.stepMode)) {
-      return core::CommandResult::failed("CMD.startCycle", p.formatError());
-    }
-    cmd.params = cp;
-  } else if (mode == "turn" || mode == "turning") {
-    core::TurningCycleParams cp;
-    if (!p.du("feed", cp.feedDupr, true, true) ||
-        !p.du("doc", cp.docDu, true, true) ||
-        !p.du("zStart", cp.zStartDu) || !p.du("zEnd", cp.zEndDu) ||
-        !p.du("xStart", cp.xStartDu) || !p.du("xClear", cp.xClearDu) ||
-        !p.u16("passes", cp.passes, false, 1) ||
-        !p.boolean("sync", cp.syncSpindle, true) ||
-        !p.boolean("step", cp.stepMode)) {
-      return core::CommandResult::failed("CMD.startCycle", p.formatError());
-    }
-    cmd.params = cp;
-  } else if (mode == "face" || mode == "facing") {
-    core::FacingCycleParams cp;
-    if (!p.du("feed", cp.feedDupr, true, true) ||
-        !p.du("doc", cp.docDu, true, true) ||
-        !p.du("xStart", cp.xStartDu) || !p.du("xEnd", cp.xEndDu) ||
-        !p.du("zStart", cp.zStartDu) || !p.du("zClear", cp.zClearDu) ||
-        !p.u16("passes", cp.passes, false, 1) ||
-        !p.boolean("sync", cp.syncSpindle, true) ||
-        !p.boolean("step", cp.stepMode)) {
-      return core::CommandResult::failed("CMD.startCycle", p.formatError());
-    }
-    cmd.params = cp;
-  } else if (mode == "taper") {
-    core::TaperCycleParams cp;
-    if (!p.du("feed", cp.feedDupr, true, true) ||
-        !p.taperAngle(cp.taperAngleDeg) ||
-        !p.du("zStart", cp.zStartDu) || !p.du("zEnd", cp.zEndDu) ||
-        !p.du("xStart", cp.xStartDu) || !p.du("xClear", cp.xClearDu) ||
-        !p.boolean("sync", cp.syncSpindle, true) ||
-        !p.boolean("step", cp.stepMode)) {
-      return core::CommandResult::failed("CMD.startCycle", p.formatError());
-    }
-    cmd.params = cp;
-  } else if (mode == "cutoff" || mode == "parting") {
-    core::CutoffCycleParams cp;
-    if (!p.du("feed", cp.feedDupr, true, true) ||
-        !p.du("peck", cp.peckDepthDu, true, true) ||
-        !p.du("retract", cp.retractDu, true, true) ||
-        !p.du("xStart", cp.xStartDu) || !p.du("xEnd", cp.xEndDu) ||
-        !p.du("zPos", cp.zPosDu)) {
-      return core::CommandResult::failed("CMD.startCycle", p.formatError());
-    }
-    cmd.params = cp;
-  } else {
-    return core::CommandResult::failed("CMD.startCycle", String("UNKNOWN_MODE:") + mode.data());
-  }
-
-  auto res = core::CoreCommandService::instance().execute(cmd, ctx);
-  res.command = "CMD.startCycle";
-  return res;
+  // Multi-pass canned cycles will be implemented as proper IELSMode classes
+  // in src/motion/modes/ registered in ModeRegistry (Refs Issue #10).
+  return core::CommandResult::failed("CMD.startCycle", "UNAVAILABLE");
 }
 
 struct CmdRoute {

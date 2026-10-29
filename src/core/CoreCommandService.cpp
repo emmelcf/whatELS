@@ -74,58 +74,6 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
   return CommandResult::ok("startFeed");
 }
 
-CommandResult CoreCommandService::execute(const StartCycleCmd& cmd, const core_client::ClientContext& ctx) {
-  String err;
-  if (!canExecuteMotion(ctx, &err)) {
-    return CommandResult::failed("startCycle", err);
-  }
-
-  CommandResult result = std::visit([this](auto&& p) -> CommandResult {
-    using T = std::decay_t<decltype(p)>;
-
-    if constexpr (std::is_same_v<T, ThreadingCycleParams>) {
-      if (p.pitchDupr <= 0 || p.passes == 0 || p.depthDu <= 0) {
-        return CommandResult::failed("startCycle", "Invalid threading parameters");
-      }
-      // ADR-15 Zero Ghost Limits: Persist shoulder limit register
-      MotionEngine::instance().setSoftLimitDu(AXIS_Z, 0, p.zEndDu, "THREAD_SHLDR", true);
-      return CommandResult::ok("startCycle", "mode:thread");
-
-    } else if constexpr (std::is_same_v<T, TurningCycleParams>) {
-      if (p.feedDupr <= 0 || p.passes == 0 || p.docDu <= 0) {
-        return CommandResult::failed("startCycle", "Invalid turning parameters");
-      }
-      // ADR-15 Zero Ghost Limits: Persist shoulder limit register
-      MotionEngine::instance().setSoftLimitDu(AXIS_Z, 0, p.zEndDu, "TURN_SHLDR", true);
-      return CommandResult::ok("startCycle", "mode:turn");
-
-    } else if constexpr (std::is_same_v<T, FacingCycleParams>) {
-      if (p.feedDupr <= 0 || p.passes == 0 || p.docDu <= 0) {
-        return CommandResult::failed("startCycle", "Invalid facing parameters");
-      }
-      MotionEngine::instance().setSoftLimitDu(AXIS_X, 0, p.xEndDu, "FACE_SHLDR", true);
-      return CommandResult::ok("startCycle", "mode:face");
-
-    } else if constexpr (std::is_same_v<T, TaperCycleParams>) {
-      if (p.feedDupr <= 0 || p.taperAngleDeg == 0.0f) {
-        return CommandResult::failed("startCycle", "Invalid taper parameters");
-      }
-      MotionEngine::instance().setSoftLimitDu(AXIS_Z, 0, p.zEndDu, "TAPER_SHLDR", true);
-      return CommandResult::ok("startCycle", "mode:taper");
-
-    } else if constexpr (std::is_same_v<T, CutoffCycleParams>) {
-      if (p.feedDupr <= 0 || p.peckDepthDu <= 0) {
-        return CommandResult::failed("startCycle", "Invalid cutoff parameters");
-      }
-      return CommandResult::ok("startCycle", "mode:cutoff");
-    }
-
-    return CommandResult::failed("startCycle", "Unknown cycle type");
-  }, cmd.params);
-
-  return result;
-}
-
 CommandResult CoreCommandService::execute(const JogStepCmd& cmd, const core_client::ClientContext& ctx) {
   if (!(ctx.effectivePerms & core_client::PERM_JOG_PULSE)) {
     return CommandResult::failed("jogStep", "PERMISSION_DENIED");
