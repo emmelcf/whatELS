@@ -5,12 +5,17 @@
 #include "core/SettingsService.h"
 #include "core/PresetService.h"
 #include "modes/ModeRegistry.h"
+#ifdef ARDUINO
+#include "core/WifiService.h"
+#endif
 
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
 #include <cmath>
+#include <climits>
 #include <array>
+#include <initializer_list>
 #include <string_view>
 
 namespace whatels::core_client {
@@ -29,7 +34,6 @@ bool isValidIdentifier(std::string_view s) {
   return true;
 }
 
-// Single authoritative in-place number parser replacing 3 hand-rolled loops
 bool parseNumber(std::string_view s, double* out) {
   if (s.empty() || !out) return false;
   size_t i = 0;
@@ -53,7 +57,7 @@ bool parseNumber(std::string_view s, double* out) {
 
   if (dotPos != std::string_view::npos) {
     i = dotPos + 1;
-    if (i >= s.size()) return false; // Trailing dot with no digits
+    if (i >= s.size()) return false;
     double frac = 0.1;
     for (; i < s.size(); ++i, frac *= 0.1) {
       if (s[i] < '0' || s[i] > '9') return false;
@@ -65,14 +69,33 @@ bool parseNumber(std::string_view s, double* out) {
   return true;
 }
 
-bool parseDeciMicrons(std::string_view s, int32_t* outValue) {
+bool parseInt32(std::string_view s, int32_t* outValue) {
   if (s.empty() || !outValue) return false;
-  double val = 0.0;
-  if (!parseNumber(s, &val)) return false;
-  *outValue = (s.find('.') != std::string_view::npos)
-      ? static_cast<int32_t>(std::lround(val * 10000.0))
-      : static_cast<int32_t>(val);
+  size_t i = 0;
+  bool negative = false;
+  if (s[0] == '-') {
+    negative = true;
+    i++;
+  } else if (s[0] == '+') {
+    i++;
+  }
+  if (i >= s.size()) return false;
+
+  int64_t accum = 0;
+  for (; i < s.size(); ++i) {
+    if (s[i] < '0' || s[i] > '9') return false;
+    accum = accum * 10 + (s[i] - '0');
+    if (!negative && accum > INT32_MAX) return false;
+    if (negative && -accum < INT32_MIN) return false;
+  }
+
+  int64_t signedVal = negative ? -accum : accum;
+  *outValue = static_cast<int32_t>(signedVal);
   return true;
+}
+
+bool parseDeciMicrons(std::string_view s, int32_t* outValue) {
+  return parseInt32(s, outValue);
 }
 
 bool parseBool(std::string_view s, bool* outValue) {
@@ -95,38 +118,69 @@ bool parseAxis(std::string_view s, AxisId* outAxis) {
   return false;
 }
 
-// Single authoritative mapping of text representation to machine physical polarity
-// -1: infeed into cut / toward chuck / toward centerline (Bound 1 / Lower limit)
-// +1: retract away from cut / toward tailstock (Bound 2 / Upper limit)
-bool parsePolarity(std::string_view s, int8_t* outPolarity) {
+// Axis-aware mapping of text representation to machine physical polarity:
+// -1: Z toward chuck (LEFT/CHUCK), X into workpiece centerline (CENTER/IN/INFEED/UP)
+// +1: Z toward tailstock (RIGHT/TAIL), X retract away from cut (RETRACT/OUT/DOWN)
+bool parsePolarity(AxisId axis, std::string_view s, int8_t* outPolarity) {
   if (!outPolarity) return false;
-  if (s == "-" || s == "-1" || s == "LEFT" || s == "CHUCK" || s == "CENTER" ||
-      s == "IN" || s == "INFEED" || s == "REV" || s == "UP") {
+  if (s == "-" || s == "-1") {
     *outPolarity = -1;
     return true;
   }
-  if (s == "+" || s == "+1" || s == "1" || s == "RIGHT" || s == "TAIL" ||
-      s == "RETRACT" || s == "OUT" || s == "FWD" || s == "DOWN") {
+  if (s == "+" || s == "+1") {
     *outPolarity = 1;
     return true;
+  }
+  if (axis == AXIS_Z) {
+    if (s == "LEFT" || s == "CHUCK") {
+      *outPolarity = -1;
+      return true;
+    }
+    if (s == "RIGHT" || s == "TAIL") {
+      *outPolarity = 1;
+      return true;
+    }
+  } else if (axis == AXIS_X) {
+    if (s == "CENTER" || s == "IN" || s == "INFEED" || s == "UP") {
+      *outPolarity = -1;
+      return true;
+    }
+    if (s == "RETRACT" || s == "OUT" || s == "DOWN") {
+      *outPolarity = 1;
+      return true;
+    }
   }
   return false;
 }
 
-bool parseLimitBound(std::string_view s, int8_t* outBound) {
+bool parseLimitBound(AxisId axis, std::string_view s, int8_t* outBound) {
   if (!outBound) return false;
-  if (s == "1" || s == "L") {
+  if (s == "L" || s == "MIN") {
     *outBound = 1;
     return true;
   }
-  if (s == "2" || s == "R") {
+  if (s == "R" || s == "MAX") {
     *outBound = 2;
     return true;
   }
-  int8_t polarity = 0;
-  if (parsePolarity(s, &polarity)) {
-    *outBound = (polarity < 0) ? 1 : 2;
-    return true;
+  if (axis == AXIS_Z) {
+    if (s == "LEFT" || s == "CHUCK") {
+      *outBound = 1;
+      return true;
+    }
+    if (s == "RIGHT" || s == "TAIL") {
+      *outBound = 2;
+      return true;
+    }
+  } else if (axis == AXIS_X) {
+    if (s == "UP" || s == "CENTER" || s == "IN" || s == "INFEED") {
+      *outBound = 1;
+      return true;
+    }
+    if (s == "DOWN" || s == "RETRACT" || s == "OUT") {
+      *outBound = 2;
+      return true;
+    }
   }
   return false;
 }
@@ -193,6 +247,7 @@ bool tokenizeArgs(std::string_view s, ArgList* out) {
         out->isKv = true;
         std::string_view key = token.substr(0, colon);
         if (!isValidIdentifier(key)) return false;
+        if (out->has(key)) return false; // Duplicate key rejected
         out->items[out->count++] = { key, unquote(token.substr(colon + 1)) };
       } else {
         if (out->isKv) return false; // Mixed KV + positional rejected
@@ -210,6 +265,34 @@ bool tokenizeArgs(std::string_view s, ArgList* out) {
 // 3. PARAMETER EXTRACTOR & VALIDATION HELPERS
 // =============================================================================
 
+bool validateAllowedKeys(const ArgList& args, const char* cmdName,
+                         std::initializer_list<std::string_view> allowedKeys,
+                         size_t maxPositional, core::CommandResult* outErr) {
+  if (args.isKv) {
+    for (size_t i = 0; i < args.count; ++i) {
+      bool found = false;
+      for (auto allowed : allowedKeys) {
+        if (args.items[i].key == allowed) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        String reason = "INVALID_PARAM:";
+        for (char c : args.items[i].key) {
+          reason += c;
+        }
+        *outErr = core::CommandResult::failed(cmdName, reason);
+        return false;
+      }
+    }
+  } else if (args.count > maxPositional) {
+    *outErr = core::CommandResult::failed(cmdName, "INVALID_PARAM");
+    return false;
+  }
+  return true;
+}
+
 bool extractAxis(const ArgList& args, const char* cmdName, AxisId* outAxis, core::CommandResult* outErr) {
   auto ax = args.get("axis", 0);
   if (ax.empty() || !parseAxis(ax, outAxis)) {
@@ -220,33 +303,42 @@ bool extractAxis(const ArgList& args, const char* cmdName, AxisId* outAxis, core
 }
 
 core::CommandResult parseStartFeed(const ArgList& args, const ClientContext& ctx) {
-  if (!args.isKv && args.count < 2) return core::CommandResult::failed("CMD.startFeed", "MISSING_ARGUMENTS");
-
-  core::StartFeedCmd cmd;
-  core::CommandResult err;
-  if (!extractAxis(args, "CMD.startFeed", &cmd.axis, &err)) return err;
-
-  auto feedStr = args.get("feed", 1);
-  if (feedStr.empty() || !parseDeciMicrons(feedStr, &cmd.feedRate) || cmd.feedRate <= 0) {
-    bool hasFeed = args.has("feed");
-    return core::CommandResult::failed("CMD.startFeed",
-      (!hasFeed && args.isKv) ? "MISSING_PARAM:feed" : "INVALID_PARAM:feed");
+  if (!args.isKv) {
+    return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM");
   }
 
-  auto dirStr = args.get("dir", 2);
-  if (dirStr.empty() || !parsePolarity(dirStr, &cmd.direction)) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.startFeed", {"axis", "feed", "dir", "sync", "dist"}, 0, &err)) {
+    return err;
+  }
+
+  core::StartFeedCmd cmd;
+  if (!extractAxis(args, "CMD.startFeed", &cmd.axis, &err)) return err;
+
+  auto feedStr = args.get("feed");
+  if (feedStr.empty()) {
+    return core::CommandResult::failed("CMD.startFeed", "MISSING_PARAM:feed");
+  }
+  if (!parseDeciMicrons(feedStr, &cmd.feedRate) || cmd.feedRate <= 0) {
+    return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:feed");
+  }
+
+  auto dirStr = args.get("dir");
+  if (dirStr.empty() || !parsePolarity(cmd.axis, dirStr, &cmd.direction)) {
     return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:dir");
   }
 
-  auto syncStr = args.get("sync", 3);
-  if (syncStr.empty()) {
+  if (args.has("sync")) {
+    auto syncStr = args.get("sync");
+    if (syncStr.empty() || !parseBool(syncStr, &cmd.syncSpindle)) {
+      return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:sync");
+    }
+  } else {
     cmd.syncSpindle = true;
-  } else if (!parseBool(syncStr, &cmd.syncSpindle)) {
-    return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:sync");
   }
 
-  if (args.has("dist") || (!args.isKv && args.count > 4)) {
-    auto distStr = args.get("dist", 4);
+  if (args.has("dist")) {
+    auto distStr = args.get("dist");
     if (distStr.empty() || !parseDeciMicrons(distStr, &cmd.targetDistDu)) {
       return core::CommandResult::failed("CMD.startFeed", "INVALID_PARAM:dist");
     }
@@ -268,9 +360,11 @@ core::CommandResult parseStartCycle(const ArgList& args, const ClientContext&) {
 }
 
 core::CommandResult parseJogStep(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.jogStep", {"axis", "dist"}, 2, &err)) return err;
+
   AxisId ax;
   int32_t dist = 0;
-  core::CommandResult err;
   if (!extractAxis(args, "CMD.jogStep", &ax, &err)) return err;
 
   auto distStr = args.get("dist", 1);
@@ -284,13 +378,15 @@ core::CommandResult parseJogStep(const ArgList& args, const ClientContext& ctx) 
 }
 
 core::CommandResult parseJogHold(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.jogHold", {"axis", "dir"}, 2, &err)) return err;
+
   AxisId ax;
   int8_t dir = 0;
-  core::CommandResult err;
   if (!extractAxis(args, "CMD.jogHold", &ax, &err)) return err;
 
   auto dirStr = args.get("dir", 1);
-  if (dirStr.empty() || !parsePolarity(dirStr, &dir)) {
+  if (dirStr.empty() || !parsePolarity(ax, dirStr, &dir)) {
     return core::CommandResult::failed("CMD.jogHold", "INVALID_PARAM:dir");
   }
 
@@ -300,8 +396,10 @@ core::CommandResult parseJogHold(const ArgList& args, const ClientContext& ctx) 
 }
 
 core::CommandResult parseJogRelease(const ArgList& args, const ClientContext& ctx) {
-  core::JogReleaseCmd cmd;
   core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.jogRelease", {"axis"}, 1, &err)) return err;
+
+  core::JogReleaseCmd cmd;
   if (args.count > 0) {
     if (!extractAxis(args, "CMD.jogRelease", &cmd.axis, &err)) return err;
     cmd.hasAxis = true;
@@ -313,8 +411,10 @@ core::CommandResult parseJogRelease(const ArgList& args, const ClientContext& ct
 }
 
 core::CommandResult parseAxisZero(const ArgList& args, const ClientContext& ctx) {
-  AxisId ax;
   core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.axisZero", {"axis"}, 1, &err)) return err;
+
+  AxisId ax;
   if (!extractAxis(args, "CMD.axisZero", &ax, &err)) return err;
 
   auto res = core::CoreCommandService::instance().execute(core::AxisZeroCmd{ax}, ctx);
@@ -323,9 +423,11 @@ core::CommandResult parseAxisZero(const ArgList& args, const ClientContext& ctx)
 }
 
 core::CommandResult parseAxisPosDu(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.axisPosDu", {"axis", "pos"}, 2, &err)) return err;
+
   AxisId ax;
   int32_t pos = 0;
-  core::CommandResult err;
   if (!extractAxis(args, "CMD.axisPosDu", &ax, &err)) return err;
 
   auto posStr = args.get("pos", 1);
@@ -339,15 +441,17 @@ core::CommandResult parseAxisPosDu(const ArgList& args, const ClientContext& ctx
 }
 
 core::CommandResult parseAxisLimitDu(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.axisLimitDu", {"axis", "bound", "coord"}, 3, &err)) return err;
+
   AxisId ax;
   int8_t bound = 0;
   int32_t coord = 0;
-  core::CommandResult err;
   if (!extractAxis(args, "CMD.axisLimitDu", &ax, &err)) return err;
 
   auto boundStr = args.get("bound", 1);
   auto coordStr = args.get("coord", 2);
-  if (boundStr.empty() || !parseLimitBound(boundStr, &bound)) {
+  if (boundStr.empty() || !parseLimitBound(ax, boundStr, &bound)) {
     return core::CommandResult::failed("CMD.axisLimitDu", "INVALID_PARAM:bound");
   }
   if (coordStr.empty() || !parseDeciMicrons(coordStr, &coord)) {
@@ -360,19 +464,86 @@ core::CommandResult parseAxisLimitDu(const ArgList& args, const ClientContext& c
 }
 
 core::CommandResult parseAxisClearLimit(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.axisClearLimit", {"axis", "bound"}, 2, &err)) return err;
+
   AxisId ax;
   int8_t bound = 0;
-  core::CommandResult err;
   if (!extractAxis(args, "CMD.axisClearLimit", &ax, &err)) return err;
 
   auto boundStr = args.get("bound", 1);
-  if (boundStr.empty() || !parseLimitBound(boundStr, &bound)) {
+  if (boundStr.empty() || !parseLimitBound(ax, boundStr, &bound)) {
     return core::CommandResult::failed("CMD.axisClearLimit", "INVALID_PARAM:bound");
   }
 
   auto res = core::CoreCommandService::instance().execute(core::AxisClearLimitCmd{ax, bound}, ctx);
   res.command = "CMD.axisClearLimit";
   return res;
+}
+
+core::CommandResult parseSimRpm(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.simRpm", {"rpm"}, 1, &err)) return err;
+
+  auto rpmStr = args.get("rpm", 0);
+  double rpmVal = 0.0;
+  if (rpmStr.empty() || !parseNumber(rpmStr, &rpmVal) || rpmVal < 0.0) {
+    return core::CommandResult::failed("CMD.simRpm", "INVALID_PARAM:rpm");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::SimRpmCmd{static_cast<float>(rpmVal)}, ctx);
+  res.command = "CMD.simRpm";
+  return res;
+}
+
+core::CommandResult parseSimEncoder(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.simEncoder", {"active"}, 1, &err)) return err;
+
+  auto activeStr = args.get("active", 0);
+  bool active = false;
+  if (activeStr.empty() || !parseBool(activeStr, &active)) {
+    return core::CommandResult::failed("CMD.simEncoder", "INVALID_PARAM:active");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::SimEncoderCmd{true, active}, ctx);
+  res.command = "CMD.simEncoder";
+  return res;
+}
+
+core::CommandResult parseSimPulses(const ArgList& args, const ClientContext& ctx) {
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CMD.simPulses", {"pulses"}, 1, &err)) return err;
+
+  auto pulsesStr = args.get("pulses", 0);
+  int32_t pulses = 0;
+  if (pulsesStr.empty() || !parseInt32(pulsesStr, &pulses) || pulses == 0) {
+    return core::CommandResult::failed("CMD.simPulses", "INVALID_PARAM:pulses");
+  }
+
+  auto res = core::CoreCommandService::instance().execute(core::SimPulsesCmd{pulses}, ctx);
+  res.command = "CMD.simPulses";
+  return res;
+}
+
+core::CommandResult parseStop(const ClientContext& ctx) {
+  return core::CoreCommandService::instance().execute(core::StopCmd{}, ctx);
+}
+
+core::CommandResult parseHold(const ClientContext& ctx) {
+  return core::CoreCommandService::instance().execute(core::HoldCmd{}, ctx);
+}
+
+core::CommandResult parseResume(const ClientContext& ctx) {
+  return core::CoreCommandService::instance().execute(core::ResumeCmd{}, ctx);
+}
+
+core::CommandResult parseStep(const ClientContext& ctx) {
+  return core::CoreCommandService::instance().execute(core::StepCmd{}, ctx);
+}
+
+core::CommandResult parsePing(const ClientContext& ctx) {
+  return core::CoreCommandService::instance().execute(core::PingCmd{}, ctx);
 }
 
 struct CmdRoute {
@@ -391,6 +562,9 @@ static const CmdRoute CMD_ROUTES[] = {
   { "axisPosDu",      "CMD.axisPosDu",      parseAxisPosDu },
   { "axisLimitDu",    "CMD.axisLimitDu",    parseAxisLimitDu },
   { "axisClearLimit", "CMD.axisClearLimit", parseAxisClearLimit },
+  { "simRpm",         "CMD.simRpm",         parseSimRpm },
+  { "simEncoder",     "CMD.simEncoder",     parseSimEncoder },
+  { "simPulses",      "CMD.simPulses",      parseSimPulses },
 };
 
 core::CommandResult parseCmd(std::string_view act, std::string_view argsStr, bool hasArgs, const ClientContext& ctx) {
@@ -400,11 +574,11 @@ core::CommandResult parseCmd(std::string_view act, std::string_view argsStr, boo
     core::CommandResult (*run)(const ClientContext&);
   };
   static const NoArg NO_ARGS[] = {
-    { "stop",   "CMD.stop",   [](const ClientContext& c) { return core::CoreCommandService::instance().execute(core::StopCmd{}, c); } },
-    { "hold",   "CMD.hold",   [](const ClientContext& c) { return core::CoreCommandService::instance().execute(core::HoldCmd{}, c); } },
-    { "resume", "CMD.resume", [](const ClientContext& c) { return core::CoreCommandService::instance().execute(core::ResumeCmd{}, c); } },
-    { "step",   "CMD.step",   [](const ClientContext& c) { return core::CoreCommandService::instance().execute(core::StepCmd{}, c); } },
-    { "ping",   "CMD.ping",   [](const ClientContext& c) { return core::CoreCommandService::instance().execute(core::PingCmd{}, c); } },
+    { "stop",   "CMD.stop",   parseStop },
+    { "hold",   "CMD.hold",   parseHold },
+    { "resume", "CMD.resume", parseResume },
+    { "step",   "CMD.step",   parseStep },
+    { "ping",   "CMD.ping",   parsePing },
   };
 
   for (const auto& r : NO_ARGS) {
@@ -416,15 +590,13 @@ core::CommandResult parseCmd(std::string_view act, std::string_view argsStr, boo
     }
   }
 
-  if (act == "jogRelease" && !hasArgs) {
-    auto res = core::CoreCommandService::instance().execute(core::JogReleaseCmd{}, ctx);
-    res.command = "CMD.jogRelease";
-    return res;
-  }
-
   for (const auto& r : CMD_ROUTES) {
     if (act == r.name) {
-      if (!hasArgs || argsStr.empty()) {
+      if (!hasArgs) {
+        if (act == "jogRelease") {
+          ArgList emptyArgs;
+          return parseJogRelease(emptyArgs, ctx);
+        }
         return core::CommandResult::failed(r.canonicalCmd, "MISSING_ARGUMENTS");
       }
       ArgList args;
@@ -446,15 +618,20 @@ core::CommandResult parseState(std::string_view act, std::string_view argsStr, c
   uint8_t mask = DOMAIN_ALL;
   if (!argsStr.empty() && argsStr != "ALL") {
     mask = DOMAIN_NONE;
-    for (char c : argsStr) {
-      if (c == ',') continue;
-      if (c == 'K') mask |= DOMAIN_KINEMATICS;
-      else if (c == 'I') mask |= DOMAIN_INTENT;
-      else if (c == 'C') mask |= DOMAIN_CYCLE;
-      else if (c == 'P') mask |= DOMAIN_PROPERTIES;
-      else return core::CommandResult::unrecognized();
+    size_t start = 0;
+    for (size_t i = 0; i <= argsStr.size(); ++i) {
+      if (i == argsStr.size() || argsStr[i] == ',') {
+        if (i == start) return core::CommandResult::unrecognized(); // Reject empty/double/trailing commas
+        std::string_view tok = argsStr.substr(start, i - start);
+        start = i + 1;
+        if (tok == "K") mask |= DOMAIN_KINEMATICS;
+        else if (tok == "I") mask |= DOMAIN_INTENT;
+        else if (tok == "C") mask |= DOMAIN_CYCLE;
+        else if (tok == "P") mask |= DOMAIN_PROPERTIES;
+        else if (tok == "ALL") mask |= DOMAIN_ALL;
+        else return core::CommandResult::unrecognized();
+      }
     }
-    if (mask == DOMAIN_NONE) mask = DOMAIN_ALL;
   }
   return core::CommandResult::ok("STATE.get", TelemetrySerializer::buildTelemetry(mask));
 }
@@ -464,7 +641,11 @@ core::CommandResult dispatchServiceCall(const char* cmdName, Func func, const ch
   String reply;
   bool ok = func(args, &reply);
   return ok ? core::CommandResult::ok(cmdName, reply)
-            : core::CommandResult::failed(cmdName, reply.empty() ? "Operation failed" : reply);
+            : core::CommandResult::failed(cmdName, reply.length() == 0 ? "Operation failed" : reply);
+}
+
+bool listPresetsAdapter(const char*, String* r) {
+  return SettingsService::listPresets(r);
 }
 
 core::CommandResult parseSettings(std::string_view act, std::string_view argsStr, const ClientContext& ctx) {
@@ -473,7 +654,7 @@ core::CommandResult parseSettings(std::string_view act, std::string_view argsStr
 
   if (act == "get")     return dispatchServiceCall("SETTINGS.get", SettingsService::get, args);
   if (act == "schema")  return dispatchServiceCall("SETTINGS.schema", SettingsService::getSchema, args);
-  if (act == "presets") return dispatchServiceCall("SETTINGS.presets", [](const char*, String* r) { return SettingsService::listPresets(r); }, args);
+  if (act == "presets") return dispatchServiceCall("SETTINGS.presets", listPresetsAdapter, args);
 
   if (act == "set" || act == "reset") {
     if (!ctx.hasPermission(PERM_SETTINGS_WRITE)) {
@@ -488,13 +669,14 @@ core::CommandResult parseSettings(std::string_view act, std::string_view argsStr
 
 core::CommandResult parseProperties(std::string_view act, std::string_view argsStr, const ClientContext&) {
   if (act == "modes") {
+    if (!argsStr.empty()) return core::CommandResult::unrecognized();
     return core::CommandResult::ok("PROPERTIES.modes",
       ModeRegistry::serializeDiscoveryJson(SettingsService::getActiveProfile().capabilities, false));
   }
   std::string nullTerminatedArgs(argsStr);
   const char* args = argsStr.empty() ? nullptr : nullTerminatedArgs.c_str();
 
-  if (act == "profiles") return dispatchServiceCall("PROPERTIES.profiles", [](const char*, String* r) { return SettingsService::listPresets(r); }, args);
+  if (act == "profiles") return dispatchServiceCall("PROPERTIES.profiles", listPresetsAdapter, args);
   if (act == "get")      return dispatchServiceCall("PROPERTIES.get", SettingsService::get, args);
 
   return core::CommandResult::unrecognized();
@@ -502,23 +684,29 @@ core::CommandResult parseProperties(std::string_view act, std::string_view argsS
 
 core::CommandResult parseSys(std::string_view act, std::string_view argsStr, const ClientContext&) {
   if (act != "get") return core::CommandResult::unrecognized();
+  if (!argsStr.empty() && argsStr != "info" && argsStr != "health") {
+    return core::CommandResult::failed("SYS.get", "INVALID_PARAM");
+  }
 
 #ifdef ARDUINO
   if (argsStr == "health") {
     String out = "SYS.uptime=" + String(millis() / 1000) + "\n";
     out += "SYS.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
-    out += "SYS.wifi=connected\n";
+    out += "SYS.wifi=" + WifiService::instance().getModeString() + "\n";
     return core::CommandResult::ok("SYS.get", out);
   }
 
   String out = "SYS.version=" CONTROLLER_VERSION_TEXT "\n";
   out += "SYS.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
   out += "SYS.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
+#if ENABLE_SPINDLE_SIM
   out += "SYS.features=spindleSim,ota\n";
+#else
+  out += "SYS.features=ota\n";
+#endif
   return core::CommandResult::ok("SYS.get", out);
 #else
   // Off-target builds without hardware or mock HAL seam report UNAVAILABLE (Refs Issue #9)
-  (void)argsStr;
   return core::CommandResult::failed("SYS.get", "UNAVAILABLE");
 #endif
 }
@@ -529,11 +717,19 @@ core::CommandResult parseClient(std::string_view act, std::string_view argsStr, 
   ArgList args;
   if (!tokenizeArgs(argsStr, &args) || !args.isKv) return core::CommandResult::unrecognized();
 
+  core::CommandResult err;
+  if (!validateAllowedKeys(args, "CLIENT.hello", {"type", "ver", "label"}, 0, &err)) {
+    return err;
+  }
+
   auto type = args.get("type");
-  std::string profileType = type.empty() ? "unknown" : std::string(type);
+  if (type.empty()) {
+    return core::CommandResult::failed("CLIENT.hello", "MISSING_PARAM:type");
+  }
+  std::string profileType(type);
 
   char ack[128];
-  snprintf(ack, sizeof(ack), "session_id=%u,type=%s,controllerVer=1.0.5,perms=0x%04X",
+  snprintf(ack, sizeof(ack), "session_id=%u,type=%s,controllerVer=" CONTROLLER_VERSION_TEXT ",perms=0x%04X",
            ctx.sessionId == 255 ? 1 : ctx.sessionId,
            profileType.c_str(),
            ctx.effectivePerms & 0xFFFF);
@@ -558,21 +754,23 @@ String StandardCommandParser::formatWireResponse(const core::CommandResult& res)
   if (res.status == core::CommandStatus::FAILED) {
     String out = "ERR:";
     if (res.command) out += res.command;
-    if (!res.payload.empty()) {
+    if (res.payload.length() > 0) {
       out += ":";
       out += res.payload;
     }
     return out + "\n";
   }
 
-  if (res.payload.empty()) {
+  if (res.payload.length() == 0) {
     String out = "OK:";
     if (res.command) out += res.command;
     return out + "\n";
   }
 
-  if (res.payload.find('\n') != std::string::npos || res.payload.rfind("K.", 0) == 0) {
-    return (res.payload.back() == '\n') ? res.payload : res.payload + "\n";
+  const char* p = res.payload.c_str();
+  size_t len = res.payload.length();
+  if (std::strchr(p, '\n') != nullptr || (len >= 2 && p[0] == 'K' && p[1] == '.')) {
+    return (p[len - 1] == '\n') ? res.payload : res.payload + "\n";
   }
 
   String out = "OK:";

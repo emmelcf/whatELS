@@ -1,7 +1,8 @@
 #pragma once
 
 #include "transports/ITransport.h"
-#include "core/CommandDispatcher.h"
+#include "ClientContext.h"
+#include "core/CommandResult.h"
 #include "MachineModel.h"
 
 namespace whatels {
@@ -9,14 +10,21 @@ namespace core_client {
 
 class ClientEndpoint {
 protected:
-  ITransport* _transport;
+  ITransport*   _transport;
+  ClientContext _ctx;
 
 public:
-  explicit ClientEndpoint(ITransport* transport) : _transport(transport) {}
+  explicit ClientEndpoint(ITransport* transport) : _transport(transport) {
+    _ctx.sessionId = 1;
+    _ctx.effectivePerms = PERM_ALL;
+  }
   virtual ~ClientEndpoint() = default;
 
   ITransport* getTransport() const { return _transport; }
   void setTransport(ITransport* transport) { _transport = transport; }
+
+  ClientContext& getContext() { return _ctx; }
+  const ClientContext& getContext() const { return _ctx; }
 
   // Processes incoming raw payload, executes domain command, and transmits serialized reply
   virtual bool handleIncoming(const char* payload, size_t length) = 0;

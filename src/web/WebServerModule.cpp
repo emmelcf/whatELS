@@ -456,7 +456,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     for (size_t i = 0; i < length; i++) {
       if (payload[i] >= 32 && payload[i] <= 126) cmdStr += (char)payload[i];
     }
-    if (cmdStr != "?" && cmdStr != "?sysinfo") {
+    if (cmdStr != "CMD.ping") {
       ESP_LOGD(TAG, "WebSocket Command [%d]: %s", num, cmdStr.c_str());
     }
 
@@ -471,11 +471,11 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     // Native Client routing via ClientManager
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
       if (whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
-        bool isQuery = (length >= 9 && strncasecmp((const char*)payload, "CMD.state", 9) == 0) ||
+        bool isQuery = (length >= 9 && strncasecmp((const char*)payload, "STATE.get", 9) == 0) ||
                        (length >= 8 && strncasecmp((const char*)payload, "CMD.ping", 8) == 0) ||
-                       (length >= 8 && strncmp((const char*)payload, "?sysinfo", 8) == 0) ||
-                       (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0) ||
-                       (length >= 16 && strncasecmp((const char*)payload, "CMD.settings.get", 16) == 0);
+                       (length >= 7 && strncasecmp((const char*)payload, "SYS.get", 7) == 0) ||
+                       (length >= 11 && strncasecmp((const char*)payload, "PROPERTIES.", 11) == 0) ||
+                       (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0);
         if (!isQuery) {
           machineStatusForcePublish = true;
         }
@@ -483,7 +483,7 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
       }
       return;
     }
-    webSocket.sendTXT(num, "CMD.error=unknown_command\n");
+    webSocket.sendTXT(num, "ERR:UNKNOWN_COMMAND\n");
   }
 }
 

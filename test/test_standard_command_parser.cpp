@@ -11,6 +11,7 @@
 #include "core/SettingsService.h"
 #include "core/TelemetrySerializer.h"
 #include "modes/ModeRegistry.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/kernel/MotionEngine.h"
 #include "motion/hal/MockStepperHAL.h"
 #include "motion/hal/MockSpindleEncoderHAL.h"
@@ -50,6 +51,34 @@ bool SettingsService::getSchema(const char* name, String* out) {
 bool SettingsService::listPresets(String* out) {
   if (out) *out = "[\"preset1\",\"preset2\"]";
   return true;
+}
+
+bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  const char* label = (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT";
+  return MotionEngine::instance().setSoftLimitDu(axis, slot, limitDu, label, true);
+}
+
+bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  MotionEngine::instance().getSoftLimits(axis).clearLimit(slot);
+  return true;
+}
+
+UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
+  return nullptr;
+}
+
+bool ModeRegistry::activateMode(ModeId /*id*/) {
+  return true;
+}
+
+bool UnifiedGearboxMode::setActiveAxis(const char* /*axisStr*/) {
+  return true;
+}
+
+bool UnifiedGearboxMode::startFeed(AxisId /*axis*/, bool /*sync*/, int32_t /*feedRateDu*/, int8_t /*direction*/, int32_t /*targetDistDu*/) {
+  return false;
 }
 
 String ModeRegistry::serializeDiscoveryJson(uint32_t /*caps*/, bool /*all*/) {
@@ -162,8 +191,8 @@ void testFeedAndMotionCommands() {
   auto& parser = StandardCommandParser::instance();
   auto ctx = makeAdminContext();
 
-  // Start feed (Key-Value)
-  const char* feedKv = "CMD.startFeed=axis:Z,feed:0.25,dir:-,sync:1";
+  // Start feed (Key-Value, integer deci-microns)
+  const char* feedKv = "CMD.startFeed=axis:Z,feed:2500,dir:-,sync:1";
   CommandResult res = parser.parseAndDispatch(feedKv, std::strlen(feedKv), ctx);
   String wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "StartFeed (KV) -> " << wire;
@@ -171,7 +200,7 @@ void testFeedAndMotionCommands() {
   assert(wire == "OK:CMD.startFeed\n");
 
   // In-motion safety gate [SAFE-01] verification: starting new feed while moving must fail!
-  const char* feedConflict = "CMD.startFeed=axis:X,feed:0.10,dir:+";
+  const char* feedConflict = "CMD.startFeed=axis:X,feed:1000,dir:+";
   res = parser.parseAndDispatch(feedConflict, std::strlen(feedConflict), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "In-motion conflict -> " << wire;
@@ -194,13 +223,13 @@ void testFeedAndMotionCommands() {
   assert(res.isOk());
   assert(wire == "OK:CMD.resume\n");
 
-  // Step mode advance
+  // Step mode advance (pending Issue #10 canned cycle modes -> UNAVAILABLE)
   const char* stepCmd = "CMD.step";
   res = parser.parseAndDispatch(stepCmd, std::strlen(stepCmd), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "Step -> " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.step\n");
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.step:UNAVAILABLE\n");
 
   // Stop
   const char* stopCmd = "CMD.stop";
@@ -457,21 +486,67 @@ void testCoordinatesAndLimits() {
 }
 
 void testPositionalFeedAndPing() {
-  printHeader("9. Positional Feed & System Ping");
+  printHeader("9. Key-Value Feed Enforcement, Simulation Commands & System Ping");
   auto& parser = StandardCommandParser::instance();
   auto adminCtx = makeAdminContext();
+  auto readOnlyCtx = makeReadOnlyContext();
 
   parser.parseAndDispatch("CMD.stop", 8, adminCtx);
 
-  // Positional startFeed
-  const char* feedPos = "CMD.startFeed=Z,0.25,-,1";
+  // Positional startFeed must be rejected (KV required for 5-arg startFeed)
+  const char* feedPos = "CMD.startFeed=Z,2500,-,1";
   CommandResult res = parser.parseAndDispatch(feedPos, std::strlen(feedPos), adminCtx);
   String wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "startFeed (pos) -> " << wire;
-  assert(res.isOk());
-  assert(wire == "OK:CMD.startFeed\n");
+  std::cout << "startFeed (pos rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startFeed:INVALID_PARAM\n");
 
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  // Float decimal-point sniffing on wire must be rejected (pure integer du required)
+  const char* feedFloat = "CMD.startFeed=axis:Z,feed:0.25,dir:-";
+  res = parser.parseAndDispatch(feedFloat, std::strlen(feedFloat), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "startFeed (float rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startFeed:INVALID_PARAM:feed\n");
+
+  // Unknown key typo (snyc:0 instead of sync:0) must be rejected
+  const char* feedTypo = "CMD.startFeed=axis:Z,feed:2500,dir:-,snyc:0";
+  res = parser.parseAndDispatch(feedTypo, std::strlen(feedTypo), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "startFeed (unknown key snyc rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.startFeed:INVALID_PARAM:snyc\n");
+
+  // Axis-mismatched direction token (UP on Z axis) must be rejected
+  const char* wrongAxisDir = "CMD.jogHold=axis:Z,dir:UP";
+  res = parser.parseAndDispatch(wrongAxisDir, std::strlen(wrongAxisDir), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogHold (Z with UP rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.jogHold:INVALID_PARAM:dir\n");
+
+  // Axis-mismatched limit bound (LEFT on X axis) must be rejected
+  const char* wrongAxisBound = "CMD.axisLimitDu=X,LEFT,-10000";
+  res = parser.parseAndDispatch(wrongAxisBound, std::strlen(wrongAxisBound), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "axisLimitDu (X with LEFT rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire == "ERR:CMD.axisLimitDu:INVALID_PARAM:bound\n");
+
+  // Simulation commands (CMD.simEncoder, CMD.simRpm, CMD.simPulses)
+  const char* simEnc = "CMD.simEncoder=1";
+  res = parser.parseAndDispatch(simEnc, std::strlen(simEnc), adminCtx);
+  assert(res.isOk());
+  res = parser.parseAndDispatch(simEnc, std::strlen(simEnc), readOnlyCtx);
+  assert(!res.isOk());
+
+  const char* simRpm = "CMD.simRpm=300";
+  res = parser.parseAndDispatch(simRpm, std::strlen(simRpm), adminCtx);
+  assert(res.isOk());
+
+  const char* simPulses = "CMD.simPulses=400";
+  res = parser.parseAndDispatch(simPulses, std::strlen(simPulses), adminCtx);
+  assert(res.isOk());
 
   // Ping
   const char* pingCmd = "CMD.ping";

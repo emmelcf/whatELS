@@ -4,11 +4,13 @@
 
 namespace whatels::core {
 
+static constexpr AxisId AXIS_INVALID = static_cast<AxisId>(0xFF);
+
 /**
  * @brief Atomic Feed Motion Command (CMD.startFeed).
  */
 struct StartFeedCmd {
-  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  AxisId  axis         = AXIS_INVALID;  // Mandatory: AXIS_Z or AXIS_X
   int8_t  direction    = 0;             // Mandatory: -1 (Chuck / Centerline), +1 (Tailstock / Retract)
   bool    syncSpindle  = true;          // Physical fallback: true = ELS gearing (dupr), false = async IPM (du/min)
   int32_t feedRate     = 0;             // Mandatory: Magnitude of feed rate (> 0)
@@ -39,7 +41,7 @@ struct StartFeedCmd {
  * @brief Incremental Single-Step Manual Jog Command (CMD.jogStep).
  */
 struct JogStepCmd {
-  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  AxisId  axis   = AXIS_INVALID;        // Mandatory: AXIS_Z or AXIS_X
   int32_t distDu = 0;                   // Mandatory: Signed distance in deci-microns (!= 0)
 
   bool validate(const char** errReason = nullptr) const {
@@ -59,7 +61,7 @@ struct JogStepCmd {
  * @brief Continuous Manual Jog Command (CMD.jogHold).
  */
 struct JogHoldCmd {
-  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+  AxisId axis      = AXIS_INVALID;      // Mandatory: AXIS_Z or AXIS_X
   int8_t direction = 0;                 // Mandatory: -1 or +1
 
   bool validate(const char** errReason = nullptr) const {
@@ -80,7 +82,7 @@ struct JogHoldCmd {
  */
 struct JogReleaseCmd {
   bool   hasAxis = false;               // If false, stops all axes
-  AxisId axis    = AXIS_Z;
+  AxisId axis    = AXIS_INVALID;
 
   bool validate(const char** errReason = nullptr) const {
     if (hasAxis && axis != AXIS_Z && axis != AXIS_X) {
@@ -95,7 +97,7 @@ struct JogReleaseCmd {
  * @brief Zero Axis Origin Command (CMD.axisZero).
  */
 struct AxisZeroCmd {
-  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+  AxisId axis = AXIS_INVALID;           // Mandatory: AXIS_Z or AXIS_X
 
   bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
@@ -110,7 +112,7 @@ struct AxisZeroCmd {
  * @brief Set Axis Coordinate Preset Command (CMD.axisPosDu).
  */
 struct AxisPosCmd {
-  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  AxisId  axis  = AXIS_INVALID;         // Mandatory: AXIS_Z or AXIS_X
   int32_t posDu = 0;                    // Mandatory: Target coordinate in deci-microns
 
   bool validate(const char** errReason = nullptr) const {
@@ -126,7 +128,7 @@ struct AxisPosCmd {
  * @brief Set Axis Travel Limit Command (CMD.axisLimitDu).
  */
 struct AxisLimitCmd {
-  AxisId  axis;                         // Mandatory: AXIS_Z or AXIS_X
+  AxisId  axis       = AXIS_INVALID;    // Mandatory: AXIS_Z or AXIS_X
   int8_t  limitBound = 0;               // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
   int32_t coordDu    = 0;               // Mandatory: Coordinate in deci-microns
 
@@ -147,7 +149,7 @@ struct AxisLimitCmd {
  * @brief Clear Axis Travel Limit Command (CMD.axisClearLimit).
  */
 struct AxisClearLimitCmd {
-  AxisId axis;                          // Mandatory: AXIS_Z or AXIS_X
+  AxisId axis       = AXIS_INVALID;     // Mandatory: AXIS_Z or AXIS_X
   int8_t limitBound = 0;                // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
 
   bool validate(const char** errReason = nullptr) const {
@@ -157,6 +159,52 @@ struct AxisClearLimitCmd {
     }
     if (limitBound != 1 && limitBound != 2) {
       if (errReason) *errReason = "INVALID_PARAM:bound";
+      return false;
+    }
+    return true;
+  }
+};
+
+/**
+ * @brief Simulated Spindle RPM Override Command (CMD.simRpm).
+ */
+struct SimRpmCmd {
+  float rpm = -1.0f;
+
+  bool validate(const char** errReason = nullptr) const {
+    if (rpm < 0.0f) {
+      if (errReason) *errReason = "INVALID_PARAM:rpm";
+      return false;
+    }
+    return true;
+  }
+};
+
+/**
+ * @brief Simulated Spindle Encoder Enable/Disable Command (CMD.simEncoder).
+ */
+struct SimEncoderCmd {
+  bool hasActive = false;
+  bool active    = false;
+
+  bool validate(const char** errReason = nullptr) const {
+    if (!hasActive) {
+      if (errReason) *errReason = "INVALID_PARAM:active";
+      return false;
+    }
+    return true;
+  }
+};
+
+/**
+ * @brief Simulated Spindle Pulse Injection Command (CMD.simPulses).
+ */
+struct SimPulsesCmd {
+  int32_t pulses = 0;
+
+  bool validate(const char** errReason = nullptr) const {
+    if (pulses == 0) {
+      if (errReason) *errReason = "INVALID_PARAM:pulses";
       return false;
     }
     return true;

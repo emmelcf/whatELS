@@ -38,6 +38,7 @@ void ClientManager::onClientConnected(uint8_t num, const char* path) {
   // Determine client type by request path
   if (!path || *path == '\0' || strcmp(path, "/") == 0 || strncmp(path, "/canonical", 10) == 0) {
     _wsEndpoints[num] = new NativeClient(_wsTransports[num]);
+    _wsEndpoints[num]->getContext().sessionId = num + 1;
     // Immediate hydration frame
     MachineModel m = MachineModel::captureAll();
     _wsEndpoints[num]->broadcast(m, DOMAIN_ALL);

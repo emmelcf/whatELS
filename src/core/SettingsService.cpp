@@ -1428,9 +1428,9 @@ bool SettingsService::set(const char* keyVal, String* reply) {
     return false;
   }
 
-  const char* sep = strpbrk(keyVal, ",=");
+  const char* sep = strpbrk(keyVal, ":,=");
   if (!sep) {
-    if (reply) *reply = "ERR:SETTINGS=expected key,value\n";
+    if (reply) *reply = "ERR:SETTINGS=expected key:value\n";
     return true;
   }
 

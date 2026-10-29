@@ -31,15 +31,15 @@ public:
   CommandResult execute(const StepCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const StopCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const PingCmd& cmd, const core_client::ClientContext& ctx);
+  CommandResult execute(const SimRpmCmd& cmd, const core_client::ClientContext& ctx);
+  CommandResult execute(const SimEncoderCmd& cmd, const core_client::ClientContext& ctx);
+  CommandResult execute(const SimPulsesCmd& cmd, const core_client::ClientContext& ctx);
 
   // [SAFE-01] Motion Safety Interlock Query
   bool canExecuteMotion(const core_client::ClientContext& ctx, String* errReason) const;
 
 private:
   CoreCommandService() = default;
-
-  // Validation helpers
-  bool validateEnvelope(int32_t zStart, int32_t zEnd, int32_t xStart, int32_t xEnd, String* errReason) const;
 };
 
 } // namespace whatels::core

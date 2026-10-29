@@ -1,4 +1,7 @@
 #include "CoreCommandService.h"
+#include "SettingsService.h"
+#include "modes/ModeRegistry.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 #include <cmath>
 
 namespace whatels::core {
@@ -10,7 +13,7 @@ CoreCommandService& CoreCommandService::instance() {
 
 bool CoreCommandService::canExecuteMotion(const core_client::ClientContext& ctx, String* errReason) const {
   // Check permission
-  if (!(ctx.effectivePerms & core_client::PERM_MOTION_START)) {
+  if (!ctx.hasPermission(core_client::PERM_MOTION_START)) {
     if (errReason) *errReason = "PERMISSION_DENIED";
     return false;
   }
@@ -21,16 +24,6 @@ bool CoreCommandService::canExecuteMotion(const core_client::ClientContext& ctx,
     return false;
   }
 
-  return true;
-}
-
-bool CoreCommandService::validateEnvelope(int32_t zStart, int32_t zEnd, int32_t xStart, int32_t xEnd, String* errReason) const {
-  (void)zStart;
-  (void)zEnd;
-  (void)xStart;
-  (void)xEnd;
-  (void)errReason;
-  // Limit boundary check logic here
   return true;
 }
 
@@ -46,7 +39,12 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
   }
 
   bool ok = false;
-  if (cmd.syncSpindle) {
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  if (gb) {
+    ModeRegistry::activateMode(ModeIds::GEARBOX);
+    gb->setActiveAxis(cmd.axis == AXIS_X ? "X" : "Z");
+    ok = gb->startFeed(cmd.axis, cmd.syncSpindle, cmd.feedRate, cmd.direction, cmd.targetDistDu);
+  } else if (cmd.syncSpindle) {
     SpindleSyncParams params;
     params.axis = cmd.axis;
     params.direction = cmd.direction;
@@ -65,7 +63,7 @@ CommandResult CoreCommandService::execute(const StartFeedCmd& cmd, const core_cl
   }
 
   if (!ok) {
-    return CommandResult::failed("startFeed", "Engine rejected move");
+    return CommandResult::failed("startFeed", "ENGINE_REJECTED");
   }
 
   return CommandResult::ok("startFeed");
@@ -77,7 +75,7 @@ CommandResult CoreCommandService::execute(const JogStepCmd& cmd, const core_clie
     return CommandResult::failed("jogStep", valErr ? valErr : "INVALID_PARAM");
   }
 
-  if (!(ctx.effectivePerms & core_client::PERM_JOG_PULSE)) {
+  if (!ctx.hasPermission(core_client::PERM_JOG_PULSE)) {
     return CommandResult::failed("jogStep", "PERMISSION_DENIED");
   }
 
@@ -89,7 +87,7 @@ CommandResult CoreCommandService::execute(const JogStepCmd& cmd, const core_clie
   int32_t stepDu = std::abs(cmd.distDu);
   bool ok = MotionEngine::instance().startJog(cmd.axis, dir, stepDu);
   if (!ok) {
-    return CommandResult::failed("jogStep", "Jog step rejected");
+    return CommandResult::failed("jogStep", "JOG_REJECTED");
   }
   return CommandResult::ok("jogStep");
 }
@@ -100,7 +98,7 @@ CommandResult CoreCommandService::execute(const JogHoldCmd& cmd, const core_clie
     return CommandResult::failed("jogHold", valErr ? valErr : "INVALID_PARAM");
   }
 
-  if (!(ctx.effectivePerms & core_client::PERM_JOG_PULSE)) {
+  if (!ctx.hasPermission(core_client::PERM_JOG_PULSE)) {
     return CommandResult::failed("jogHold", "PERMISSION_DENIED");
   }
 
@@ -110,16 +108,19 @@ CommandResult CoreCommandService::execute(const JogHoldCmd& cmd, const core_clie
 
   bool ok = MotionEngine::instance().startJog(cmd.axis, cmd.direction, 0); // Continuous
   if (!ok) {
-    return CommandResult::failed("jogHold", "Jog hold rejected");
+    return CommandResult::failed("jogHold", "JOG_REJECTED");
   }
   return CommandResult::ok("jogHold");
 }
 
 CommandResult CoreCommandService::execute(const JogReleaseCmd& cmd, const core_client::ClientContext& ctx) {
-  (void)ctx;
   const char* valErr = nullptr;
   if (!cmd.validate(&valErr)) {
     return CommandResult::failed("jogRelease", valErr ? valErr : "INVALID_PARAM");
+  }
+
+  if (!ctx.hasPermission(core_client::PERM_JOG_PULSE)) {
+    return CommandResult::failed("jogRelease", "PERMISSION_DENIED");
   }
 
   if (cmd.hasAxis) {
@@ -159,59 +160,76 @@ CommandResult CoreCommandService::execute(const AxisPosCmd& cmd, const core_clie
 }
 
 CommandResult CoreCommandService::execute(const AxisLimitCmd& cmd, const core_client::ClientContext& ctx) {
-  (void)ctx;
   const char* valErr = nullptr;
   if (!cmd.validate(&valErr)) {
     return CommandResult::failed("axisLimitDu", valErr ? valErr : "INVALID_PARAM");
   }
 
+  if (!ctx.hasPermission(core_client::PERM_MOTION_START)) {
+    return CommandResult::failed("axisLimitDu", "PERMISSION_DENIED");
+  }
+
   if (MotionEngine::instance().isMoving(cmd.axis)) {
     return CommandResult::failed("axisLimitDu", "MOTION_LOCKED");
   }
-  size_t slot = (cmd.limitBound == 2) ? 1 : 0;
-  const char* label = (cmd.limitBound == 2) ? "RIGHT" : "LEFT";
-  bool ok = MotionEngine::instance().setSoftLimitDu(cmd.axis, slot, cmd.coordDu, label, true);
+  LimitDirection dir = (cmd.limitBound == 2) ? LimitDirection::LIMIT_RIGHT_OR_DOWN : LimitDirection::LIMIT_LEFT_OR_UP;
+  bool ok = SettingsService::setAxisLimitDu(cmd.axis, dir, cmd.coordDu);
   if (!ok) {
-    return CommandResult::failed("axisLimitDu", "Limit out of bounds");
+    return CommandResult::failed("axisLimitDu", "LIMIT_OUT_OF_BOUNDS");
   }
   return CommandResult::ok("axisLimitDu");
 }
 
 CommandResult CoreCommandService::execute(const AxisClearLimitCmd& cmd, const core_client::ClientContext& ctx) {
-  (void)ctx;
   const char* valErr = nullptr;
   if (!cmd.validate(&valErr)) {
     return CommandResult::failed("axisClearLimit", valErr ? valErr : "INVALID_PARAM");
   }
 
+  if (!ctx.hasPermission(core_client::PERM_MOTION_START)) {
+    return CommandResult::failed("axisClearLimit", "PERMISSION_DENIED");
+  }
+
   if (MotionEngine::instance().isMoving(cmd.axis)) {
     return CommandResult::failed("axisClearLimit", "MOTION_LOCKED");
   }
-  size_t slot = (cmd.limitBound == 2) ? 1 : 0;
-  MotionEngine::instance().getSoftLimits(cmd.axis).clearLimit(slot);
+  LimitDirection dir = (cmd.limitBound == 2) ? LimitDirection::LIMIT_RIGHT_OR_DOWN : LimitDirection::LIMIT_LEFT_OR_UP;
+  SettingsService::clearAxisLimit(cmd.axis, dir);
   return CommandResult::ok("axisClearLimit");
 }
 
 CommandResult CoreCommandService::execute(const HoldCmd& cmd, const core_client::ClientContext& ctx) {
   (void)cmd;
   (void)ctx;
-  // Coordinated radial retract: pause feed hold
-  MotionEngine::instance().pauseFeedHold(AXIS_Z);
+  // Feed hold is universally permitted across all sessions and pauses active axes
+  if (MotionEngine::instance().isMoving(AXIS_X) && !MotionEngine::instance().isMoving(AXIS_Z)) {
+    MotionEngine::instance().pauseFeedHold(AXIS_X);
+  } else {
+    MotionEngine::instance().pauseFeedHold(AXIS_Z);
+  }
   return CommandResult::ok("hold");
 }
 
 CommandResult CoreCommandService::execute(const ResumeCmd& cmd, const core_client::ClientContext& ctx) {
   (void)cmd;
-  (void)ctx;
-  MotionEngine::instance().resumeFeedHold(AXIS_Z);
+  if (!ctx.hasPermission(core_client::PERM_MOTION_START)) {
+    return CommandResult::failed("resume", "PERMISSION_DENIED");
+  }
+  if (MotionEngine::instance().isFeedHold(AXIS_X) && !MotionEngine::instance().isFeedHold(AXIS_Z)) {
+    MotionEngine::instance().resumeFeedHold(AXIS_X);
+  } else {
+    MotionEngine::instance().resumeFeedHold(AXIS_Z);
+  }
   return CommandResult::ok("resume");
 }
 
 CommandResult CoreCommandService::execute(const StepCmd& cmd, const core_client::ClientContext& ctx) {
   (void)cmd;
-  (void)ctx;
-  // Step mode advance
-  return CommandResult::ok("step");
+  if (!ctx.hasPermission(core_client::PERM_MOTION_START)) {
+    return CommandResult::failed("step", "PERMISSION_DENIED");
+  }
+  // Multi-pass canned cycle step-advance pending IELSMode implementation (Refs Issue #10)
+  return CommandResult::failed("step", "UNAVAILABLE");
 }
 
 CommandResult CoreCommandService::execute(const StopCmd& cmd, const core_client::ClientContext& ctx) {
@@ -227,6 +245,51 @@ CommandResult CoreCommandService::execute(const PingCmd& cmd, const core_client:
   (void)ctx;
   MotionEngine::instance().touchSimHeartbeat();
   return CommandResult::ok("ping");
+}
+
+CommandResult CoreCommandService::execute(const SimRpmCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("simRpm", valErr ? valErr : "INVALID_PARAM");
+  }
+  if (!ctx.hasPermission(core_client::PERM_SIMULATION)) {
+    return CommandResult::failed("simRpm", "PERMISSION_DENIED");
+  }
+  ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+  if (hal) hal->setSimulatedRpm(cmd.rpm);
+  MotionEngine::instance().touchSimHeartbeat();
+  return CommandResult::ok("simRpm");
+}
+
+CommandResult CoreCommandService::execute(const SimEncoderCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("simEncoder", valErr ? valErr : "INVALID_PARAM");
+  }
+  if (!ctx.hasPermission(core_client::PERM_SIMULATION)) {
+    return CommandResult::failed("simEncoder", "PERMISSION_DENIED");
+  }
+  ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+  if (cmd.active && (MotionEngine::instance().isAnyAxisMoving() || (hal && hal->getFilteredRpm() > 0))) {
+    return CommandResult::failed("simEncoder", "SAFETY_INTERLOCK_ACTIVE");
+  }
+  if (hal) hal->setSimulationActive(cmd.active);
+  MotionEngine::instance().touchSimHeartbeat();
+  return CommandResult::ok("simEncoder");
+}
+
+CommandResult CoreCommandService::execute(const SimPulsesCmd& cmd, const core_client::ClientContext& ctx) {
+  const char* valErr = nullptr;
+  if (!cmd.validate(&valErr)) {
+    return CommandResult::failed("simPulses", valErr ? valErr : "INVALID_PARAM");
+  }
+  if (!ctx.hasPermission(core_client::PERM_SIMULATION)) {
+    return CommandResult::failed("simPulses", "PERMISSION_DENIED");
+  }
+  ISpindleEncoderHAL* hal = MotionEngine::instance().getEncoderHAL();
+  if (hal) hal->injectSimulatedPulses(cmd.pulses);
+  MotionEngine::instance().touchSimHeartbeat();
+  return CommandResult::ok("simPulses");
 }
 
 } // namespace whatels::core

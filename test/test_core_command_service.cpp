@@ -11,11 +11,41 @@
 #include "motion/hal/MockStepperHAL.h"
 #include "motion/hal/MockSpindleEncoderHAL.h"
 #include "core/SettingsService.h"
+#include "modes/ModeRegistry.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 
-// Minimal test double for SettingsService active profile
+// Minimal test doubles for SettingsService and ModeRegistry
 static LatheConfiguration s_mockConfig;
 const LatheConfiguration& SettingsService::getActiveProfile() {
   return s_mockConfig;
+}
+
+bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  const char* label = (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT";
+  return MotionEngine::instance().setSoftLimitDu(axis, slot, limitDu, label, true);
+}
+
+bool SettingsService::clearAxisLimit(AxisId axis, LimitDirection dir) {
+  size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
+  MotionEngine::instance().getSoftLimits(axis).clearLimit(slot);
+  return true;
+}
+
+UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
+  return nullptr;
+}
+
+bool ModeRegistry::activateMode(ModeId /*id*/) {
+  return true;
+}
+
+bool UnifiedGearboxMode::setActiveAxis(const char* /*axisStr*/) {
+  return true;
+}
+
+bool UnifiedGearboxMode::startFeed(AxisId /*axis*/, bool /*sync*/, int32_t /*feedRateDu*/, int8_t /*direction*/, int32_t /*targetDistDu*/) {
+  return false;
 }
 
 using namespace whatels::core;
@@ -33,13 +63,20 @@ void testCommandValidationAndInvariants() {
   ClientContext ctx;
   ctx.effectivePerms = PERM_ALL;
 
-  // StartFeedCmd validation tests
+  // StartFeedCmd validation tests (including default-initialized axis rejection)
   {
+    StartFeedCmd uninitCmd;
+    uninitCmd.direction = -1;
+    uninitCmd.feedRate = 1500;
+    CommandResult res = CoreCommandService::instance().execute(uninitCmd, ctx);
+    assert(!res.isOk());
+    assert(res.payload == "INVALID_PARAM:axis");
+
     StartFeedCmd cmd;
     cmd.axis = (AxisId)99;
     cmd.direction = -1;
     cmd.feedRate = 1500;
-    CommandResult res = CoreCommandService::instance().execute(cmd, ctx);
+    res = CoreCommandService::instance().execute(cmd, ctx);
     assert(!res.isOk());
     assert(res.payload == "INVALID_PARAM:axis");
 
@@ -189,8 +226,41 @@ void testHoldAndResumeLifecycle() {
 
   StepCmd stepCmd;
   CommandResult stepRes = CoreCommandService::instance().execute(stepCmd, ctx);
-  assert(stepRes.isOk());
-  std::cout << "  [PASS] CMD.step executed cleanly.\n";
+  assert(!stepRes.isOk());
+  assert(stepRes.payload == "UNAVAILABLE");
+  std::cout << "  [PASS] CMD.step cleanly reports UNAVAILABLE (pending Issue #10).\n";
+}
+
+void testSimulationCommandsAndPermissions() {
+  printHeader("5. Simulation Commands (SimRpmCmd, SimEncoderCmd, SimPulsesCmd)");
+
+  MockStepperHAL stepperHal;
+  MockSpindleEncoderHAL encoderHal;
+  MotionEngine engine(&stepperHal, &encoderHal);
+
+  ClientContext simCtx;
+  simCtx.effectivePerms = PERM_SIMULATION;
+
+  ClientContext noSimCtx;
+  noSimCtx.effectivePerms = PERM_READ_TELEMETRY;
+
+  SimEncoderCmd encCmd{true, true};
+  CommandResult denyRes = CoreCommandService::instance().execute(encCmd, noSimCtx);
+  assert(!denyRes.isOk());
+  assert(denyRes.payload == "PERMISSION_DENIED");
+
+  CommandResult okEnc = CoreCommandService::instance().execute(encCmd, simCtx);
+  assert(okEnc.isOk());
+
+  SimRpmCmd rpmCmd{300.0f};
+  CommandResult okRpm = CoreCommandService::instance().execute(rpmCmd, simCtx);
+  assert(okRpm.isOk());
+
+  SimPulsesCmd pulsesCmd{400};
+  CommandResult okPulses = CoreCommandService::instance().execute(pulsesCmd, simCtx);
+  assert(okPulses.isOk());
+
+  std::cout << "  [PASS] Simulation commands enforce PERM_SIMULATION and execute cleanly.\n";
 }
 
 int main() {
@@ -202,6 +272,7 @@ int main() {
   testSafe01MotionSafetyGate();
   testZeroGhostLimitsPersistence();
   testHoldAndResumeLifecycle();
+  testSimulationCommandsAndPermissions();
 
   std::cout << "\n>>> ALL CORE COMMAND SERVICE TESTS PASSED SUCCESSFULLY! <<<\n\n";
   return 0;
