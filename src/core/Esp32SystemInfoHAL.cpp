@@ -61,3 +61,4 @@ const char* Esp32SystemInfoHAL::getFeatures() const { return "ota"; }
 } // namespace whatels::core
 
 #endif
+
