@@ -55,19 +55,19 @@ Any application communicating with whatELS must adhere to the 3-tier client pipe
 To eliminate any ambiguity across different programming languages (JavaScript, C++, Python, Rust), the canonical types, parameter structures, domain snapshots, and events are formally defined in TypeScript IDL (and mirrored in [`clients/sdk/js/whatels-client.d.ts`](../../../clients/sdk/js/whatels-client.d.ts)):
 
 ```typescript
-export type Axis = 'Z' | 'X' | 'ZX';
-export type SemanticDirZ = 'CHUCK' | 'TAIL';
-export type SemanticDirX = 'INFEED' | 'RETRACT';
+export type Axis = 'Z' | 'X';
+export type SemanticDirZ = 'CHUCK' | 'TAIL' | 'LEFT' | 'RIGHT';
+export type SemanticDirX = 'INFEED' | 'RETRACT' | 'CENTER' | 'IN' | 'UP' | 'OUT' | 'DOWN';
 export type SemanticDirection = SemanticDirZ | SemanticDirX | -1 | 1;
-export type LimitSide = 'L' | 'R' | 'U' | 'D';
+export type LimitSide = 'LEFT' | 'RIGHT' | 'UP' | 'DOWN' | 'MIN' | 'MAX';
 export type TransportStatus = 'disconnected' | 'connecting' | 'connected';
 
 export interface StartFeedParams {
   axis: Axis;
   sync: 0 | 1;
-  feed: number;                    // strictly positive: deci-microns/rev or mm/min
+  feed: number;                    // strictly positive integer: dupr (sync:1) or du/min (sync:0)
   dir: -1 | 1 | SemanticDirection;
-  dist?: number;                   // deci-microns or mm, default -1 (continuous feed)
+  dist?: number;                   // integer deci-microns, default 0 (continuous feed)
 }
 
 export interface ClientHelloParams {
@@ -180,9 +180,9 @@ sequenceDiagram
     participant Core as Controller Core (ClientManager)
 
     Note over SDK,Core: Transport link opened (WebSocket, WebSerial, or Emulator)
-    SDK->>Core: CLIENT.hello=type:<profile>,ver:<semver>,label:"<label>"\n
+    SDK->>Core: CLIENT.hello=type:<profile>,ver:<semver>,label:<label>\n
     Note over Core: Lookup profile, check permissions, allocate authoritative session_id
-    Core-->>SDK: OK:CLIENT.hello session_id=<id>,type=<profile>,controllerVer=<ver>,perms=<mask\n
+    Core-->>SDK: OK:CLIENT.hello=type:<profile>,controllerVer=<ver>\n
     Note over SDK: Authoritative session allocated.<br/>Immediately request complete domain hydration.
     SDK->>Core: STATE.get=ALL\n
     Core-->>SDK: [Atomic Multi-Domain Snapshot Frames K.*, I.*, C.*, P.*]
@@ -190,11 +190,10 @@ sequenceDiagram
 ```
 
 1. **Client Identification (`CLIENT.hello`)**:
-   - SDK emits: `CLIENT.hello=type:<profile_name>,ver:<version_string>,label="<friendly_label>"\n`
-   - Example: `CLIENT.hello=type:webui,ver:1.0.0,label:"Lathe Touch DRO"\n`
+   - SDK emits: `CLIENT.hello=type:<profile_name>,ver:<version_string>,label:<friendly_label>\n`
+   - Example: `CLIENT.hello=type:webui,ver:1.0.0,label:LatheTouchDRO\n`
 2. **Controller Acknowledgement**:
-   - Controller returns: `OK:CLIENT.hello session_id=<uint8>,type=<profile_name>,controllerVer=<ver>,perms=<hex_mask>\n`
-   - SDK stores the authoritative `sessionId` and granted `perms` mask.
+   - Controller returns: `OK:CLIENT.hello=type:<profile_name>,controllerVer=<ver>\n`
 3. **Immediate Hydration (`STATE.get=ALL`)**:
    - To eliminate split-brain initialization and display races, the SDK must immediately request a complete atomic snapshot of all domains.
 
@@ -207,18 +206,17 @@ The SDK provides a strongly-typed, Promise-returning method for every canonical 
 #### Standard Command Method Surface:
 | Method Signature | Canonical Wire Format | Response Expected |
 | :--- | :--- | :--- |
-| `startFeed({ axis, sync, feed, dir, dist })` | `CMD.startFeed=axis:<axis>,sync:<0\|1>,feed:<val>,dir:<-1\|1>[,dist:<val>]\n` | `OK:CMD.startFeed` |
+| `startFeed({ axis, sync, feed, dir, dist })` | `CMD.startFeed=axis:<axis>,sync:<0\|1>,feed:<val>,dir:<dir>[,dist:<val>]\n` | `OK:CMD.startFeed` |
 | `stop()` | `CMD.stop\n` | `OK:CMD.stop` |
 | `jogHold(axis, dir)` | `CMD.jogHold=<axis>,<CHUCK\|TAIL\|INFEED\|RETRACT>\n` | `OK:CMD.jogHold` |
 | `jogRelease(axis)` | `CMD.jogRelease=<axis>\n` | `OK:CMD.jogRelease` |
-| `jogStep(axis, dir)` | `CMD.jogStep=<axis>,<CHUCK\|TAIL\|INFEED\|RETRACT>\n` | `OK:CMD.jogStep` |
-| `jogStepDu(du)` | `CMD.jogStepDu=<du>\n` | `OK:CMD.jogStepDu` |
+| `jogStep(axis, distDu)` | `CMD.jogStep=<axis>,<signed_du>\n` | `OK:CMD.jogStep` |
 | `axisZero(axis)` | `CMD.axisZero=<axis>\n` | `OK:CMD.axisZero` |
 | `axisPosDu(axis, posDu)` | `CMD.axisPosDu=<axis>,<posDu>\n` | `OK:CMD.axisPosDu` |
-| `axisLimitDu(axis, side, du)` | `CMD.axisLimitDu=<axis>,<L\|R>,<du>\n` | `OK:CMD.axisLimitDu` |
-| `axisClearLimit(axis, side)` | `CMD.axisClearLimit=<axis>,<L\|R>\n` | `OK:CMD.axisClearLimit` |
-| `getSetting(key)` | `SETTINGS.get=<key>\n` | `OK:SETTINGS.get:<key>=<val>` |
-| `setSetting(key, val)` | `SETTINGS.set=<key>,<val>\n` | `OK:SETTINGS.set:<key>` |
+| `axisLimitDu(axis, side, du)` | `CMD.axisLimitDu=<axis>,<LEFT\|RIGHT\|UP\|DOWN>,<du>\n` | `OK:CMD.axisLimitDu` |
+| `axisClearLimit(axis, side)` | `CMD.axisClearLimit=<axis>,<LEFT\|RIGHT\|UP\|DOWN>\n` | `OK:CMD.axisClearLimit` |
+| `getSetting(key)` | `SETTINGS.get=<key>\n` | `OK:SETTINGS.get=<key>:<val>` |
+| `setSetting(key, val)` | `SETTINGS.set=<key>:<val>\n` | `OK:SETTINGS.set` |
 
 #### Request-Response Correlation & Timeouts:
 1. When a command method is called, the SDK dispatches the line and registers an internal pending transaction.
@@ -367,12 +365,11 @@ export class WhatelsClient extends EventTarget {
   setTransport(transport) { ... }
 
   // Strongly-Typed Commands
-  async startFeed({ axis, sync, feed, dir, dist = -1 }) { ... }
+  async startFeed({ axis, sync, feed, dir, dist = 0 }) { ... }
   async stop() { ... }
   async jogHold(axis, dir) { ... }
   async jogRelease(axis) { ... }
-  async jogStep(axis, dir) { ... }
-  async jogStepDu(du) { ... }
+  async jogStep(axis, distDu) { ... }
   async axisZero(axis) { ... }
   async axisPosDu(axis, posDu) { ... }
   async axisLimitDu(axis, side, du) { ... }

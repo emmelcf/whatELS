@@ -3,11 +3,11 @@
  * Universal TypeScript IDL for whatELS Operator Clients
  */
 
-export type Axis = 'Z' | 'X' | 'ZX';
-export type SemanticDirZ = 'CHUCK' | 'TAIL';
-export type SemanticDirX = 'INFEED' | 'RETRACT';
+export type Axis = 'Z' | 'X';
+export type SemanticDirZ = 'CHUCK' | 'TAIL' | 'LEFT' | 'RIGHT';
+export type SemanticDirX = 'INFEED' | 'RETRACT' | 'CENTER' | 'IN' | 'UP' | 'OUT' | 'DOWN';
 export type SemanticDirection = SemanticDirZ | SemanticDirX | -1 | 1;
-export type LimitSide = 'L' | 'R' | 'U' | 'D';
+export type LimitSide = 'LEFT' | 'RIGHT' | 'UP' | 'DOWN' | 'MIN' | 'MAX';
 export type TransportStatus = 'disconnected' | 'connecting' | 'connected';
 
 export interface TransportConfig {
@@ -22,9 +22,9 @@ export interface TransportConfig {
 export interface StartFeedParams {
   axis: Axis;
   sync: boolean | 0 | 1;
-  feed: number;                    // strictly positive: deci-microns/rev or mm/min
+  feed: number;                    // strictly positive integer: dupr (sync:1) or du/min (sync:0)
   dir: -1 | 1 | SemanticDirection;
-  dist?: number;                   // deci-microns or mm, default -1 (continuous feed)
+  dist?: number;                   // integer deci-microns, default 0 (continuous feed)
 }
 
 export interface ClientHelloParams {
@@ -131,8 +131,7 @@ export declare class WhatelsClient extends EventTarget {
   stop(): Promise<string>;
   jogHold(axis: Axis, dir: SemanticDirection): Promise<string>;
   jogRelease(axis: Axis): Promise<string>;
-  jogStep(axis: Axis, dir: SemanticDirection): Promise<string>;
-  jogStepDu(du: number): Promise<string>;
+  jogStep(axis: Axis, distDu: number): Promise<string>;
 
   axisZero(axis: Axis): Promise<string>;
   axisPosDu(axis: Axis, posDu: number): Promise<string>;
