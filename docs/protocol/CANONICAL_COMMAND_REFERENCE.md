@@ -284,7 +284,7 @@ Queries controller hardware architecture, firmware version, memory utilization, 
   SYS.flash=16 MB
   SYS.features=spindleSim,ota
   ```
-* **Off-Target Behavior:** On native host test builds without hardware HAL (Refs Issue #9), returns `ERR:SYS.get:UNAVAILABLE`.
+* **Off-Target Behavior:** Builds or endpoints without an injected `ISystemInfoHAL` provider return `ERR:SYS.get:UNAVAILABLE`. Test suites inject `MockSystemInfoHAL` to simulate hardware vitals deterministically.
 * **Required Permission:** `PERM_READ_TELEMETRY`
 * **Returns:** Multi-line `SYS.<key>=<val>` block or `ERR:SYS.get:<reason>`.
 

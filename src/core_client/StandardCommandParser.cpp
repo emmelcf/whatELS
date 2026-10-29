@@ -5,9 +5,7 @@
 #include "core/SettingsService.h"
 #include "core/PresetService.h"
 #include "modes/ModeRegistry.h"
-#ifdef ARDUINO
-#include "core/WifiService.h"
-#endif
+#include "core/ISystemInfoHAL.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -721,33 +719,31 @@ core::CommandResult parseProperties(std::string_view act, std::string_view argsS
   return core::CommandResult::unrecognized();
 }
 
-core::CommandResult parseSys(std::string_view act, std::string_view argsStr, const ClientContext&) {
+core::CommandResult parseSys(std::string_view act, std::string_view argsStr, const ClientContext& ctx, core::ISystemInfoHAL* hal) {
   if (act != "get") return core::CommandResult::unrecognized();
+  if (!ctx.hasPermission(PERM_READ_TELEMETRY)) {
+    return core::CommandResult::failed("SYS.get", "PERMISSION_DENIED", 403);
+  }
   if (!argsStr.empty() && argsStr != "info" && argsStr != "health") {
     return core::CommandResult::failed("SYS.get", "INVALID_PARAM");
   }
 
-#ifdef ARDUINO
+  if (!hal) {
+    return core::CommandResult::failed("SYS.get", "UNAVAILABLE");
+  }
+
   if (argsStr == "health") {
-    String out = "SYS.uptime=" + String(millis() / 1000) + "\n";
-    out += "SYS.heap=" + String(ESP.getFreeHeap() / 1024) + " KB\n";
-    out += "SYS.wifi=" + WifiService::instance().getModeString() + "\n";
+    String out = "SYS.uptime=" + std::to_string(hal->getUptimeSeconds()) + "\n";
+    out += "SYS.heap=" + std::to_string(hal->getFreeHeapBytes() / 1024) + " KB\n";
+    out += "SYS.wifi=" + hal->getWifiStatus() + "\n";
     return core::CommandResult::ok("SYS.get", out);
   }
 
-  String out = "SYS.version=" CONTROLLER_VERSION_TEXT "\n";
-  out += "SYS.chip=" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\n";
-  out += "SYS.flash=" + String(ESP.getFlashChipSize() / 1024 / 1024) + " MB\n";
-#if ENABLE_SPINDLE_SIM
-  out += "SYS.features=spindleSim,ota\n";
-#else
-  out += "SYS.features=ota\n";
-#endif
+  String out = "SYS.version=" + String(hal->getVersion()) + "\n";
+  out += "SYS.chip=" + String(hal->getChipModel()) + " rev " + std::to_string(hal->getChipRevision()) + "\n";
+  out += "SYS.flash=" + std::to_string(hal->getFlashSizeBytes() / 1024 / 1024) + " MB\n";
+  out += "SYS.features=" + String(hal->getFeatures()) + "\n";
   return core::CommandResult::ok("SYS.get", out);
-#else
-  // Off-target builds without hardware or mock HAL seam report UNAVAILABLE (Refs Issue #9)
-  return core::CommandResult::failed("SYS.get", "UNAVAILABLE");
-#endif
 }
 
 core::CommandResult parseClient(std::string_view act, std::string_view argsStr, const ClientContext& ctx) {
@@ -867,7 +863,7 @@ core::CommandResult StandardCommandParser::parseAndDispatch(const char* line, si
   if (ns == "STATE")      return parseState(act, argsStr, ctx);
   if (ns == "SETTINGS")   return parseSettings(act, argsStr, ctx);
   if (ns == "PROPERTIES") return parseProperties(act, argsStr, ctx);
-  if (ns == "SYS")        return parseSys(act, argsStr, ctx);
+  if (ns == "SYS")        return parseSys(act, argsStr, ctx, _systemInfoHal);
   if (ns == "CLIENT")     return parseClient(act, argsStr, ctx);
 
   return core::CommandResult::unrecognized();

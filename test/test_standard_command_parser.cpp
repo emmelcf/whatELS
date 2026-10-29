@@ -15,6 +15,7 @@
 #include "motion/kernel/MotionEngine.h"
 #include "motion/hal/MockStepperHAL.h"
 #include "motion/hal/MockSpindleEncoderHAL.h"
+#include "mocks/MockSystemInfoHAL.h"
 
 using namespace whatels::core;
 using namespace whatels::core_client;
@@ -285,31 +286,75 @@ void testUniversalNamespaces() {
   assert(res.isOk());
   assert(wire.find("mask=3") != std::string::npos); // K(1) | I(2) = 3
 
-  // SYS.get=info & SYS.get=health (Tracked in Issue #9: decoupled ISystemInfoHAL seam)
-  // On native host runner without hardware or mock HAL seam, parser cleanly reports UNAVAILABLE.
+  // SYS.get=info & SYS.get=health (Decoupled ISystemInfoHAL seam, Refs Issue #9)
+  // 1. Without provider, parser deterministically reports UNAVAILABLE
+  parser.setSystemInfoHAL(nullptr);
   const char* sysInfo = "SYS.get=info";
   res = parser.parseAndDispatch(sysInfo, std::strlen(sysInfo), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "SYS.get=info -> " << wire;
-#ifdef ARDUINO
-  assert(res.isOk());
-  assert(wire.find("SYS.version=") != std::string::npos);
-#else
+  std::cout << "SYS.get=info (no hal) -> " << wire;
   assert(!res.isOk());
   assert(wire == "ERR:SYS.get:UNAVAILABLE\n");
-#endif
 
   const char* sysHealth = "SYS.get=health";
   res = parser.parseAndDispatch(sysHealth, std::strlen(sysHealth), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
-  std::cout << "SYS.get=health -> " << wire;
-#ifdef ARDUINO
-  assert(res.isOk());
-  assert(wire.find("SYS.uptime=") != std::string::npos);
-#else
+  std::cout << "SYS.get=health (no hal) -> " << wire;
   assert(!res.isOk());
   assert(wire == "ERR:SYS.get:UNAVAILABLE\n");
-#endif
+
+  // 2. With injected MockSystemInfoHAL provider, verifies live formatting and vitals
+  MockSystemInfoHAL mockSysHal;
+  parser.setSystemInfoHAL(&mockSysHal);
+
+  // SYS.get=info
+  res = parser.parseAndDispatch(sysInfo, std::strlen(sysInfo), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SYS.get=info (mock hal) -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("SYS.version=H5V38") != std::string::npos);
+  assert(wire.find("SYS.chip=ESP32-S3 rev 2") != std::string::npos);
+  assert(wire.find("SYS.flash=16 MB") != std::string::npos);
+  assert(wire.find("SYS.features=spindleSim,ota") != std::string::npos);
+
+  // Bare SYS.get defaults to info
+  const char* sysBare = "SYS.get";
+  res = parser.parseAndDispatch(sysBare, std::strlen(sysBare), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SYS.get (bare mock hal) -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("SYS.version=H5V38") != std::string::npos);
+
+  // SYS.get=health
+  res = parser.parseAndDispatch(sysHealth, std::strlen(sysHealth), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SYS.get=health (mock hal) -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("SYS.uptime=120") != std::string::npos);
+  assert(wire.find("SYS.heap=142 KB") != std::string::npos);
+  assert(wire.find("SYS.wifi=STA_CONNECTED") != std::string::npos);
+
+  // Invalid parameter
+  const char* sysInvalid = "SYS.get=bogus";
+  res = parser.parseAndDispatch(sysInvalid, std::strlen(sysInvalid), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:SYS.get:INVALID_PARAM\n");
+
+  // Permission check: without PERM_READ_TELEMETRY, access is rejected
+  ClientContext unauthCtx = ctx;
+  unauthCtx.effectivePerms = 0;
+  res = parser.parseAndDispatch(sysInfo, std::strlen(sysInfo), unauthCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:SYS.get:PERMISSION_DENIED\n");
+
+  // 3. Reset provider restores UNAVAILABLE
+  parser.setSystemInfoHAL(nullptr);
+  res = parser.parseAndDispatch(sysInfo, std::strlen(sysInfo), ctx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:SYS.get:UNAVAILABLE\n");
 
   // PROPERTIES.modes
   const char* propModes = "PROPERTIES.modes";

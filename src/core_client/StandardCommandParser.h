@@ -7,6 +7,10 @@
 #include "core/CoreCommands.h"
 #include "core_client/ClientContext.h"
 
+namespace whatels::core {
+class ISystemInfoHAL;
+}
+
 namespace whatels::core_client {
 
 /**
@@ -19,6 +23,12 @@ namespace whatels::core_client {
 class StandardCommandParser {
 public:
   static StandardCommandParser& instance();
+
+  /**
+   * @brief Injects the system diagnostics and appliance hardware info HAL provider.
+   */
+  void setSystemInfoHAL(core::ISystemInfoHAL* hal) { _systemInfoHal = hal; }
+  core::ISystemInfoHAL* getSystemInfoHAL() const { return _systemInfoHal; }
 
   /**
    * @brief Parses an incoming ASCII wire line and dispatches to appropriate service.
@@ -36,6 +46,8 @@ public:
 
 private:
   StandardCommandParser() = default;
+
+  core::ISystemInfoHAL* _systemInfoHal = nullptr;
 };
 
 } // namespace whatels::core_client

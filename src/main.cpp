@@ -9,11 +9,14 @@
 #include "motion/hal/Esp32StepperHAL.h"
 #include "motion/hal/Esp32SpindleEncoderHAL.h"
 #include "motion/kernel/MotionEngine.h"
+#include "core/Esp32SystemInfoHAL.h"
+#include "core_client/StandardCommandParser.h"
 
 static const char* TAG = "MAIN";
 
 static Esp32StepperHAL stepperHal;
 static Esp32SpindleEncoderHAL encoderHal;
+static whatels::core::Esp32SystemInfoHAL systemInfoHal;
 
 void setup() {
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
@@ -70,6 +73,8 @@ void setup() {
   MotionEngine& engine = MotionEngine::instance();
   engine.setStepperHAL(&stepperHal);
   engine.setEncoderHAL(&encoderHal);
+
+  whatels::core_client::StandardCommandParser::instance().setSystemInfoHAL(&systemInfoHal);
 
   SettingsService::applyDerivedMachineConfig();
 
