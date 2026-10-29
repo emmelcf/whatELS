@@ -66,7 +66,7 @@ The 979-line monolith is completely deleted and replaced by three single-respons
 ### Pillar 5: Two-Way Verified Client Handshake
 A client must never enable motion controls or report "Connected" based solely on transport link open:
 1. Client opens transport and enters `HANDSHAKE_PENDING` with motion controls locked.
-2. Client sends `CLIENT.hello type=<profile>,ver=<version>,label="<friendly_label>"`.
+2. Client sends `CLIENT.hello=type:<profile>,ver:<version>,label="<friendly_label>"`.
 3. Controller validates profile, assigns authoritative `session_id`, and responds:
    `OK:CLIENT.hello session_id=...,controllerVer=...,perms=...`
 4. Only upon parsing this ACK does the client transition to `CONNECTED` and unlock controls.

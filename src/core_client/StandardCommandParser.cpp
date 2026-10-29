@@ -16,24 +16,70 @@
 namespace whatels::core_client {
 
 // =============================================================================
-// INTERNAL STRING & KEY-VALUE PARSING UTILITIES
+// INTERNAL STRICT GRAMMAR & VALIDATION UTILITIES
 // =============================================================================
 
 namespace {
 
-std::string_view trimView(std::string_view s) {
-  while (!s.empty() && (std::isspace(static_cast<unsigned char>(s.front())) || s.front() == '\r' || s.front() == '\n')) {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && (std::isspace(static_cast<unsigned char>(s.back())) || s.back() == '\r' || s.back() == '\n')) {
+/**
+ * @brief Strips trailing CR/LF line terminators without touching internal bytes.
+ */
+std::string_view stripLineTerminators(std::string_view s) {
+  while (!s.empty() && (s.back() == '\r' || s.back() == '\n')) {
     s.remove_suffix(1);
   }
   return s;
 }
 
-std::string trimString(const std::string& str) {
-  std::string_view sv = trimView(str);
-  return std::string(sv.data(), sv.size());
+/**
+ * @brief Validates universal message syntax rules:
+ *        1. Zero unquoted spaces or tabs anywhere in the message.
+ *        2. Double quotes must be strictly balanced.
+ *        3. At most one '=' in the entire message (separating header from arguments).
+ */
+bool validateGrammar(std::string_view line, size_t* outEqPos) {
+  bool inQuotes = false;
+  size_t eqCount = 0;
+  size_t firstEq = std::string_view::npos;
+
+  for (size_t i = 0; i < line.size(); ++i) {
+    char c = line[i];
+    if (c == '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes) {
+      // Invariant: Unquoted whitespace is strictly forbidden anywhere in commands
+      if (c == ' ' || c == '\t') {
+        return false;
+      }
+      if (c == '=') {
+        eqCount++;
+        if (firstEq == std::string_view::npos) {
+          firstEq = i;
+        }
+      }
+    }
+  }
+
+  // Unbalanced quotes
+  if (inQuotes) return false;
+
+  // Invariant: At most one '=' per command (separating header from arguments)
+  if (eqCount > 1) return false;
+
+  if (outEqPos) *outEqPos = firstEq;
+  return true;
+}
+
+bool isValidIdentifier(std::string_view s) {
+  if (s.empty()) return false;
+  for (char c : s) {
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool equalsIgnoreCase(std::string_view a, std::string_view b) {
@@ -51,14 +97,16 @@ struct KeyValuePair {
   std::string val;
 };
 
-std::vector<KeyValuePair> parseKeyValues(const char* args) {
-  std::vector<KeyValuePair> result;
-  if (!args || *args == '\0') return result;
+/**
+ * @brief Parses strictly formatted key-value arguments: name1:val1,name2:val2,...
+ * @details Rejects any token lacking a colon, containing an '=', or having trailing commas.
+ */
+bool parseKeyValuesStrict(const char* args, std::vector<KeyValuePair>& result) {
+  if (!args || *args == '\0') return true;
 
   const char* p = args;
   while (*p) {
-    while (*p == ' ' || *p == '\t' || *p == ',') p++;
-    if (!*p) break;
+    if (*p == ',') return false; // Leading or double comma
 
     const char* start = p;
     bool inQuote = false;
@@ -66,30 +114,43 @@ std::vector<KeyValuePair> parseKeyValues(const char* args) {
       if (*p == '"') inQuote = !inQuote;
       p++;
     }
+    if (inQuote) return false; // Unbalanced quote
 
     std::string_view token(start, p - start);
-    token = trimView(token);
-    if (!token.empty()) {
-      size_t sep = token.find(':');
-      if (sep == std::string_view::npos) {
-        sep = token.find('=');
-      }
+    if (token.empty()) return false;
 
-      if (sep != std::string_view::npos) {
-        std::string_view k = trimView(token.substr(0, sep));
-        std::string_view v = trimView(token.substr(sep + 1));
-        if (v.size() >= 2 && v.front() == '"' && v.back() == '"') {
-          v.remove_prefix(1);
-          v.remove_suffix(1);
-        }
-        result.push_back({ std::string(k), std::string(v) });
-      } else {
-        result.push_back({ std::string(token), "" });
+    size_t colonPos = std::string_view::npos;
+    bool tokenInQuote = false;
+    for (size_t i = 0; i < token.size(); ++i) {
+      if (token[i] == '"') tokenInQuote = !tokenInQuote;
+      else if (!tokenInQuote && token[i] == ':') {
+        colonPos = i;
+        break;
       }
     }
-    if (*p == ',') p++;
+
+    if (colonPos == std::string_view::npos || colonPos == 0) {
+      return false; // Key-value pair must have name:val format
+    }
+
+    std::string_view k = token.substr(0, colonPos);
+    std::string_view v = token.substr(colonPos + 1);
+
+    if (!isValidIdentifier(k)) return false;
+
+    // Strip outer quotes from value if present
+    if (v.size() >= 2 && v.front() == '"' && v.back() == '"') {
+      v.remove_prefix(1);
+      v.remove_suffix(1);
+    }
+
+    result.push_back({ std::string(k), std::string(v) });
+    if (*p == ',') {
+      p++;
+      if (!*p) return false; // Trailing comma forbidden
+    }
   }
-  return result;
+  return true;
 }
 
 const KeyValuePair* findKey(const std::vector<KeyValuePair>& pairs, std::string_view key) {
@@ -106,12 +167,12 @@ bool parseDeciMicrons(const std::string& str, int32_t* outVal) {
   char* end = nullptr;
   if (str.find('.') != std::string::npos) {
     double mm = std::strtod(str.c_str(), &end);
-    if (end == str.c_str()) return false;
+    if (end == str.c_str() || *end != '\0') return false;
     *outVal = static_cast<int32_t>(std::lround(mm * 10000.0));
     return true;
   } else {
     long du = std::strtol(str.c_str(), &end, 10);
-    if (end == str.c_str()) return false;
+    if (end == str.c_str() || *end != '\0') return false;
     *outVal = static_cast<int32_t>(du);
     return true;
   }
@@ -202,59 +263,67 @@ core::CommandResult StandardCommandParser::parseAndDispatch(const char* line, si
     return core::CommandResult::unrecognized();
   }
 
-  std::string_view trimmed = trimView(std::string_view(line, length));
-  if (trimmed.empty()) {
+  std::string_view raw(line, length);
+  std::string_view stripped = stripLineTerminators(raw);
+  if (stripped.empty()) {
     return core::CommandResult::unrecognized();
   }
 
   // Pillar 1 Clean Break Rule: All legacy '?' queries are rejected immediately
-  if (trimmed.front() == '?') {
+  if (stripped.front() == '?') {
     return core::CommandResult::unrecognized();
   }
 
-  // Split on dot '.' for namespace separation (<NAMESPACE>.<action>[=<args>])
-  size_t dotPos = trimmed.find('.');
-  if (dotPos == std::string_view::npos) {
+  // Strict Syntax Invariants: Zero unquoted spaces, balanced quotes, at most one '='
+  size_t eqPos = std::string_view::npos;
+  if (!validateGrammar(stripped, &eqPos)) {
     return core::CommandResult::unrecognized();
   }
 
-  std::string_view nsView = trimmed.substr(0, dotPos);
-  std::string_view restView = trimmed.substr(dotPos + 1);
+  // Extract Header: strictly <NAMESPACE>.<action>
+  bool hasEquals = (eqPos != std::string_view::npos);
+  std::string_view headerView = hasEquals ? stripped.substr(0, eqPos) : stripped;
+  std::string_view argsView = hasEquals ? stripped.substr(eqPos + 1) : "";
 
-  std::string action;
-  std::string args;
-  size_t delimPos = std::string_view::npos;
-  for (size_t i = 0; i < restView.size(); ++i) {
-    char c = restView[i];
-    if (c == '=' || c == ' ' || c == '\t') {
-      delimPos = i;
-      break;
-    }
+  // A trailing naked '=' without arguments (e.g. "CMD.stop=" or "CMD.startFeed=") is invalid syntax
+  if (hasEquals && argsView.empty()) {
+    return core::CommandResult::unrecognized();
   }
 
-  if (delimPos != std::string_view::npos) {
-    action = std::string(trimView(restView.substr(0, delimPos)));
-    std::string_view remaining = trimView(restView.substr(delimPos + 1));
-    if (!remaining.empty() && remaining.front() == '=') {
-      remaining = trimView(remaining.substr(1));
-    }
-    args = std::string(remaining);
-  } else {
-    action = std::string(trimView(restView));
+  // Header must contain strictly one dot '.' separating namespace and action
+  size_t dotPos = headerView.find('.');
+  if (dotPos == std::string_view::npos || dotPos == 0 || dotPos == headerView.size() - 1) {
+    return core::CommandResult::unrecognized();
   }
+
+  // Ensure no multiple dots in header
+  if (headerView.find('.', dotPos + 1) != std::string_view::npos) {
+    return core::CommandResult::unrecognized();
+  }
+
+  std::string_view nsView = headerView.substr(0, dotPos);
+  std::string_view actView = headerView.substr(dotPos + 1);
+
+  if (!isValidIdentifier(nsView) || !isValidIdentifier(actView)) {
+    return core::CommandResult::unrecognized();
+  }
+
+  std::string action(actView);
+  const char* args = hasEquals ? argsView.data() : nullptr;
+  std::string argsStr(argsView); // Null-terminated copy
 
   if (equalsIgnoreCase(nsView, "CMD")) {
-    return parseCmd(action.c_str(), args.c_str(), ctx);
+    return parseCmd(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   } else if (equalsIgnoreCase(nsView, "STATE")) {
-    return parseState(action.c_str(), args.c_str(), ctx);
+    return parseState(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   } else if (equalsIgnoreCase(nsView, "SETTINGS")) {
-    return parseSettings(action.c_str(), args.c_str(), ctx);
+    return parseSettings(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   } else if (equalsIgnoreCase(nsView, "PROPERTIES")) {
-    return parseProperties(action.c_str(), args.c_str(), ctx);
+    return parseProperties(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   } else if (equalsIgnoreCase(nsView, "SYS")) {
-    return parseSys(action.c_str(), args.c_str(), ctx);
+    return parseSys(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   } else if (equalsIgnoreCase(nsView, "CLIENT")) {
-    return parseClient(action.c_str(), args.c_str(), ctx);
+    return parseClient(action.c_str(), hasEquals ? argsStr.c_str() : nullptr, ctx);
   }
 
   return core::CommandResult::unrecognized();
@@ -270,18 +339,22 @@ core::CommandResult StandardCommandParser::parseCmd(const char* action, const ch
   } else if (equalsIgnoreCase(action, "startCycle")) {
     return parseStartCycle(args, ctx);
   } else if (equalsIgnoreCase(action, "stop")) {
+    if (args != nullptr) return core::CommandResult::unrecognized();
     core::CommandResult res = core::CoreCommandService::instance().execute(core::StopCmd{}, ctx);
     res.command = "CMD.stop";
     return res;
   } else if (equalsIgnoreCase(action, "hold")) {
+    if (args != nullptr) return core::CommandResult::unrecognized();
     core::CommandResult res = core::CoreCommandService::instance().execute(core::HoldCmd{}, ctx);
     res.command = "CMD.hold";
     return res;
   } else if (equalsIgnoreCase(action, "resume")) {
+    if (args != nullptr) return core::CommandResult::unrecognized();
     core::CommandResult res = core::CoreCommandService::instance().execute(core::ResumeCmd{}, ctx);
     res.command = "CMD.resume";
     return res;
   } else if (equalsIgnoreCase(action, "step")) {
+    if (args != nullptr) return core::CommandResult::unrecognized();
     core::CommandResult res = core::CoreCommandService::instance().execute(core::StepCmd{}, ctx);
     res.command = "CMD.step";
     return res;
@@ -300,6 +373,7 @@ core::CommandResult StandardCommandParser::parseCmd(const char* action, const ch
   } else if (equalsIgnoreCase(action, "axisClearLimit")) {
     return parseAxisClearLimit(args, ctx);
   } else if (equalsIgnoreCase(action, "ping")) {
+    if (args != nullptr) return core::CommandResult::unrecognized();
     core::CommandResult res = core::CoreCommandService::instance().execute(core::PingCmd{}, ctx);
     res.command = "CMD.ping";
     return res;
@@ -315,9 +389,13 @@ core::CommandResult StandardCommandParser::parseStartFeed(const char* args, cons
 
   core::StartFeedCmd cmd;
 
-  // Check if args are Key-Value or Positional CSV
+  // Check if args are Key-Value (contains ':') or Positional CSV
   if (std::strchr(args, ':') != nullptr) {
-    auto pairs = parseKeyValues(args);
+    std::vector<KeyValuePair> pairs;
+    if (!parseKeyValuesStrict(args, pairs)) {
+      return core::CommandResult::unrecognized();
+    }
+
     const auto* ax = findKey(pairs, "axis");
     if (ax) cmd.axis = parseAxis(ax->val);
 
@@ -349,7 +427,7 @@ core::CommandResult StandardCommandParser::parseStartFeed(const char* args, cons
     char* token = std::strtok(buf, ",");
     int idx = 0;
     while (token) {
-      std::string t = trimString(token);
+      std::string t(token);
       if (idx == 0) {
         cmd.axis = parseAxis(t);
       } else if (idx == 1) {
@@ -382,7 +460,11 @@ core::CommandResult StandardCommandParser::parseStartCycle(const char* args, con
     return core::CommandResult::failed("CMD.startCycle", "MISSING_ARGUMENTS");
   }
 
-  auto pairs = parseKeyValues(args);
+  std::vector<KeyValuePair> pairs;
+  if (!parseKeyValuesStrict(args, pairs)) {
+    return core::CommandResult::unrecognized();
+  }
+
   const auto* modeKv = findKey(pairs, "mode");
   if (!modeKv || modeKv->val.empty()) {
     return core::CommandResult::failed("CMD.startCycle", "MISSING_PARAM:mode");
@@ -663,7 +745,8 @@ core::CommandResult StandardCommandParser::parseJogStep(const char* args, const 
 
   core::JogStepCmd cmd;
   if (std::strchr(args, ':') != nullptr) {
-    auto pairs = parseKeyValues(args);
+    std::vector<KeyValuePair> pairs;
+    if (!parseKeyValuesStrict(args, pairs)) return core::CommandResult::unrecognized();
     const auto* ax = findKey(pairs, "axis");
     if (ax) cmd.axis = parseAxis(ax->val);
     const auto* dist = findKey(pairs, "dist");
@@ -673,9 +756,9 @@ core::CommandResult StandardCommandParser::parseJogStep(const char* args, const 
     std::strncpy(buf, args, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
     char* token = std::strtok(buf, ",");
-    if (token) cmd.axis = parseAxis(trimString(token));
+    if (token) cmd.axis = parseAxis(token);
     token = std::strtok(nullptr, ",");
-    if (token) parseDeciMicrons(trimString(token), &cmd.distDu);
+    if (token) parseDeciMicrons(token, &cmd.distDu);
   }
 
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
@@ -690,7 +773,8 @@ core::CommandResult StandardCommandParser::parseJogHold(const char* args, const 
 
   core::JogHoldCmd cmd;
   if (std::strchr(args, ':') != nullptr) {
-    auto pairs = parseKeyValues(args);
+    std::vector<KeyValuePair> pairs;
+    if (!parseKeyValuesStrict(args, pairs)) return core::CommandResult::unrecognized();
     const auto* ax = findKey(pairs, "axis");
     if (ax) cmd.axis = parseAxis(ax->val);
     const auto* dir = findKey(pairs, "dir");
@@ -700,9 +784,9 @@ core::CommandResult StandardCommandParser::parseJogHold(const char* args, const 
     std::strncpy(buf, args, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
     char* token = std::strtok(buf, ",");
-    if (token) cmd.axis = parseAxis(trimString(token));
+    if (token) cmd.axis = parseAxis(token);
     token = std::strtok(nullptr, ",");
-    if (token) cmd.direction = parseDirection(trimString(token));
+    if (token) cmd.direction = parseDirection(token);
   }
 
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
@@ -713,7 +797,7 @@ core::CommandResult StandardCommandParser::parseJogHold(const char* args, const 
 core::CommandResult StandardCommandParser::parseJogRelease(const char* args, const ClientContext& ctx) {
   core::JogReleaseCmd cmd;
   if (args && *args != '\0') {
-    cmd.axis = parseAxis(trimString(args));
+    cmd.axis = parseAxis(args);
   }
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
   res.command = "CMD.jogRelease";
@@ -724,7 +808,7 @@ core::CommandResult StandardCommandParser::parseAxisZero(const char* args, const
   if (!args || *args == '\0') {
     return core::CommandResult::failed("CMD.axisZero", "MISSING_ARGUMENTS");
   }
-  core::AxisZeroCmd cmd{ parseAxis(trimString(args)) };
+  core::AxisZeroCmd cmd{ parseAxis(args) };
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
   res.command = "CMD.axisZero";
   return res;
@@ -740,9 +824,9 @@ core::CommandResult StandardCommandParser::parseAxisPosDu(const char* args, cons
   std::strncpy(buf, args, sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = '\0';
   char* token = std::strtok(buf, ",");
-  if (token) cmd.axis = parseAxis(trimString(token));
+  if (token) cmd.axis = parseAxis(token);
   token = std::strtok(nullptr, ",");
-  if (token) parseDeciMicrons(trimString(token), &cmd.posDu);
+  if (token) parseDeciMicrons(token, &cmd.posDu);
 
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
   res.command = "CMD.axisPosDu";
@@ -759,14 +843,14 @@ core::CommandResult StandardCommandParser::parseAxisLimitDu(const char* args, co
   std::strncpy(buf, args, sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = '\0';
   char* token = std::strtok(buf, ",");
-  if (token) cmd.axis = parseAxis(trimString(token));
+  if (token) cmd.axis = parseAxis(token);
   token = std::strtok(nullptr, ",");
   if (token) {
-    std::string b = trimString(token);
+    std::string b(token);
     cmd.limitBound = (b == "2" || equalsIgnoreCase(b, "R") || equalsIgnoreCase(b, "RIGHT") || equalsIgnoreCase(b, "TAIL")) ? 2 : 1;
   }
   token = std::strtok(nullptr, ",");
-  if (token) parseDeciMicrons(trimString(token), &cmd.coordDu);
+  if (token) parseDeciMicrons(token, &cmd.coordDu);
 
   core::CommandResult res = core::CoreCommandService::instance().execute(cmd, ctx);
   res.command = "CMD.axisLimitDu";
@@ -783,10 +867,10 @@ core::CommandResult StandardCommandParser::parseAxisClearLimit(const char* args,
   std::strncpy(buf, args, sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = '\0';
   char* token = std::strtok(buf, ",");
-  if (token) cmd.axis = parseAxis(trimString(token));
+  if (token) cmd.axis = parseAxis(token);
   token = std::strtok(nullptr, ",");
   if (token) {
-    std::string b = trimString(token);
+    std::string b(token);
     cmd.limitBound = (b == "2" || equalsIgnoreCase(b, "R") || equalsIgnoreCase(b, "RIGHT") || equalsIgnoreCase(b, "TAIL")) ? 2 : 1;
   }
 
@@ -809,13 +893,13 @@ core::CommandResult StandardCommandParser::parseState(const char* action, const 
     domainMask = DOMAIN_NONE;
     const char* p = args;
     while (*p) {
-      while (*p == ' ' || *p == '\t' || *p == ',') p++;
-      if (!*p) break;
+      if (*p == ',') { p++; continue; }
       char c = std::toupper(static_cast<unsigned char>(*p));
       if (c == 'K') domainMask |= DOMAIN_KINEMATICS;
       else if (c == 'I') domainMask |= DOMAIN_INTENT;
       else if (c == 'C') domainMask |= DOMAIN_CYCLE;
       else if (c == 'P') domainMask |= DOMAIN_PROPERTIES;
+      else return core::CommandResult::unrecognized();
       p++;
     }
     if (domainMask == DOMAIN_NONE) domainMask = DOMAIN_ALL;
@@ -912,7 +996,15 @@ core::CommandResult StandardCommandParser::parseSys(const char* action, const ch
 
 core::CommandResult StandardCommandParser::parseClient(const char* action, const char* args, const ClientContext& /*ctx*/) {
   if (equalsIgnoreCase(action, "hello")) {
-    auto pairs = parseKeyValues(args);
+    if (!args || *args == '\0') {
+      return core::CommandResult::unrecognized();
+    }
+
+    std::vector<KeyValuePair> pairs;
+    if (!parseKeyValuesStrict(args, pairs)) {
+      return core::CommandResult::unrecognized();
+    }
+
     const auto* type = findKey(pairs, "type");
     std::string profileType = type ? type->val : "unknown";
 

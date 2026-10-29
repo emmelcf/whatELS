@@ -302,14 +302,64 @@ void testUniversalNamespaces() {
   std::cout << "SETTINGS.get -> " << wire;
   assert(res.isOk());
 
-  // CLIENT.hello handshake
-  const char* clientHello = "CLIENT.hello type=smarttouch,ver=1.2.0,label=\"Apron Console\"";
+  // CLIENT.hello handshake (Strict single '=', colon parameters, quoted label containing spaces)
+  const char* clientHello = "CLIENT.hello=type:smarttouch,ver:1.2.0,label:\"Apron Console\"";
   res = parser.parseAndDispatch(clientHello, std::strlen(clientHello), ctx);
   wire = StandardCommandParser::formatWireResponse(res);
   std::cout << "CLIENT.hello -> " << wire;
   assert(res.isOk());
   assert(wire.find("session_id=1") != std::string::npos);
   assert(wire.find("type=smarttouch") != std::string::npos);
+}
+
+void testStrictGrammarAndSpaceRejection() {
+  printHeader("6. Strict Grammar, Single-Equals, and Space Rejection Matrix");
+  auto& parser = StandardCommandParser::instance();
+  auto ctx = makeAdminContext();
+
+  const char* invalidCommands[] = {
+    // 1. Loose spaces around '=' or action
+    "CMD.startFeed = axis:Z,feed:1500",
+    "CMD. startFeed=axis:Z,feed:1500",
+    "CMD .startFeed=axis:Z,feed:1500",
+    // 2. Loose spaces inside arguments
+    "CMD.startFeed=axis:Z, feed:1500",
+    "CMD.startFeed=axis: Z,feed:1500",
+    "CMD.startFeed=axis :Z,feed:1500",
+    // 3. Space-separated commands (missing '=')
+    "CLIENT.hello type:smarttouch",
+    "CMD.startFeed axis:Z",
+    "CMD.stop now",
+    // 4. Trailing spaces
+    "CMD.stop ",
+    "CMD.hold \t",
+    // 5. Multiple '=' signs (using '=' instead of ':')
+    "CLIENT.hello=type=smarttouch",
+    "CLIENT.hello=type=smarttouch,ver=1.2.0",
+    "CMD.startFeed=axis=Z,feed=1500",
+    "CMD.startCycle=mode=thread,pitch=15000",
+    // 6. Unexpected '=' on no-arg commands
+    "CMD.stop=",
+    "CMD.stop=1",
+    "CMD.hold=true",
+    "CMD.resume=1",
+    "CMD.step=next",
+    // 7. Trailing or double commas
+    "CMD.startFeed=axis:Z,feed:1500,",
+    "CMD.startFeed=axis:Z,,feed:1500",
+    // 8. Missing colon in key-value token
+    "CMD.startCycle=thread,pitch:15000"
+  };
+
+  for (const char* cmd : invalidCommands) {
+    CommandResult res = parser.parseAndDispatch(cmd, std::strlen(cmd), ctx);
+    String wire = StandardCommandParser::formatWireResponse(res);
+    std::cout << "Asserting rejection of: '" << cmd << "' -> " << wire;
+    assert(!res.isHandled());
+    assert(wire == "ERR:UNKNOWN_COMMAND\n");
+  }
+
+  std::cout << "  [PASS] All malformed, space-contaminated, and multi-'=' commands strictly rejected.\n";
 }
 
 int main() {
@@ -326,9 +376,10 @@ int main() {
   testCycleValidationAndErrors();
   testFeedAndMotionCommands();
   testUniversalNamespaces();
+  testStrictGrammarAndSpaceRejection();
 
   std::cout << "\n========================================================\n";
-  std::cout << " ALL 5 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
+  std::cout << " ALL 6 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
   std::cout << "========================================================\n";
   return 0;
 }

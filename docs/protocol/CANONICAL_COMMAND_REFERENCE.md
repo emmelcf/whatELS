@@ -18,7 +18,9 @@ Every canonical message is an ASCII string terminated by a newline (`\n` or `\r\
 $$\texttt{<NAMESPACE>.<action>[=<arguments>]}\backslash\text{n}$$
 
 * **Namespaces:** `CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, and `CLIENT`.
-* **Argument Formatting:** Arguments may be formatted as comma-separated key-value pairs (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8...`) or comma-separated positional tokens (e.g. `CMD.jogStep=Z,100`).
+* **Strict Single-`=` Invariant:** There is **at most one** `=` in any message, strictly separating the `<NAMESPACE>.<action>` header from its `<arguments>` payload. Commands with no arguments (`CMD.stop`, `CMD.hold`, `CMD.resume`, `CMD.step`) have no `=`.
+* **Colon Parameter Formatting (`name:value`):** In key-value payloads, parameter keys and values are strictly separated by a colon (`:`), **never `=`** (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8`). Multiple parameters are separated strictly by a comma (`,`).
+* **Zero Loose Spaces:** Unquoted spaces or tabs are strictly forbidden anywhere in command headers, parameter keys, or numeric values. The **only** permissible location for a space is inside a double-quoted string literal (e.g. `label:"Apron Console"`). Any unquoted space causes the command to be rejected immediately with `ERR:UNKNOWN_COMMAND`.
 * **Case Sensitivity:** Command names are case-insensitive (`CMD.stop` == `cmd.STOP`). Axis names (`Z`, `X`) and units (`mm`, `tpi`, `du`) accept uppercase or lowercase.
 
 ### Universal Return Grammar
@@ -402,9 +404,9 @@ A client must never enable motion controls or assume a connected state based sol
 1. **Link Connect:** The client transport connects (WebSocket Port 81 or WebSerial). The client immediately enters `HANDSHAKE_PENDING` with all jog, feed, and cycle buttons disabled.
 2. **Inbound Hello:** The client sends:
    ```text
-   CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"
+   CLIENT.hello=type:<profile_name>,ver:<version_string>,label:"<friendly_label>"
    ```
-   *Example:* `CLIENT.hello type=smarttouch,ver=1.2.0,label="Apron Console"`
+   *Example:* `CLIENT.hello=type:smarttouch,ver:1.2.0,label:"Apron Console"`
 3. **Controller Validation:** The controller parses the profile type, validates version compatibility, assigns an authoritative `session_id`, and responds:
    ```text
    OK:CLIENT.hello session_id=<id>,type=<name>,controllerVer=<ver>,perms=<hex_mask>

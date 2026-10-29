@@ -180,7 +180,7 @@ sequenceDiagram
     participant Core as Controller Core (ClientManager)
 
     Note over SDK,Core: Transport link opened (WebSocket, WebSerial, or Emulator)
-    SDK->>Core: CLIENT.hello type=<profile>,ver=<semver>,label="<label>"\n
+    SDK->>Core: CLIENT.hello=type:<profile>,ver:<semver>,label:"<label>"\n
     Note over Core: Lookup profile, check permissions, allocate authoritative session_id
     Core-->>SDK: OK:CLIENT.hello session_id=<id>,type=<profile>,controllerVer=<ver>,perms=<mask\n
     Note over SDK: Authoritative session allocated.<br/>Immediately request complete domain hydration.
@@ -190,8 +190,8 @@ sequenceDiagram
 ```
 
 1. **Client Identification (`CLIENT.hello`)**:
-   - SDK emits: `CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"\n`
-   - Example: `CLIENT.hello type=webui,ver=1.0.0,label="Lathe Touch DRO"\n`
+   - SDK emits: `CLIENT.hello=type:<profile_name>,ver:<version_string>,label="<friendly_label>"\n`
+   - Example: `CLIENT.hello=type:webui,ver:1.0.0,label:"Lathe Touch DRO"\n`
 2. **Controller Acknowledgement**:
    - Controller returns: `OK:CLIENT.hello session_id=<uint8>,type=<profile_name>,controllerVer=<ver>,perms=<hex_mask>\n`
    - SDK stores the authoritative `sessionId` and granted `perms` mask.
