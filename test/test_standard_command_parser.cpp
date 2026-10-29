@@ -81,6 +81,13 @@ static ClientContext makeAdminContext() {
   return ctx;
 }
 
+static ClientContext makeReadOnlyContext() {
+  ClientContext ctx;
+  ctx.sessionId = 2;
+  ctx.effectivePerms = PERM_READ_TELEMETRY;
+  return ctx;
+}
+
 // =============================================================================
 // TEST SUITES
 // =============================================================================
@@ -362,6 +369,265 @@ void testStrictGrammarAndSpaceRejection() {
   std::cout << "  [PASS] All malformed, space-contaminated, and multi-'=' commands strictly rejected.\n";
 }
 
+void testManualJogging() {
+  printHeader("7. Manual Jogging (jogStep, jogHold, jogRelease & Permissions)");
+  auto& parser = StandardCommandParser::instance();
+  auto adminCtx = makeAdminContext();
+  auto readOnlyCtx = makeReadOnlyContext();
+
+  // Reset to idle
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // jogStep positional
+  const char* stepPos = "CMD.jogStep=Z,100";
+  CommandResult res = parser.parseAndDispatch(stepPos, std::strlen(stepPos), adminCtx);
+  String wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogStep (pos) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogStep\n");
+
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // jogStep key-value
+  const char* stepKv = "CMD.jogStep=axis:Z,dist:-500";
+  res = parser.parseAndDispatch(stepKv, std::strlen(stepKv), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogStep (KV) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogStep\n");
+
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // jogHold positional
+  const char* holdPos = "CMD.jogHold=Z,+";
+  res = parser.parseAndDispatch(holdPos, std::strlen(holdPos), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogHold (pos) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogHold\n");
+
+  // jogRelease with axis
+  const char* relAxis = "CMD.jogRelease=Z";
+  res = parser.parseAndDispatch(relAxis, std::strlen(relAxis), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogRelease (axis) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogRelease\n");
+
+  // jogRelease bare (no axis)
+  const char* relBare = "CMD.jogRelease";
+  res = parser.parseAndDispatch(relBare, std::strlen(relBare), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogRelease (bare) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogRelease\n");
+
+  // jogHold key-value
+  const char* holdKv = "CMD.jogHold=axis:X,dir:-";
+  res = parser.parseAndDispatch(holdKv, std::strlen(holdKv), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogHold (KV) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.jogHold\n");
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // Permission check: read-only client must be rejected
+  res = parser.parseAndDispatch(stepPos, std::strlen(stepPos), readOnlyCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogStep (read-only rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire.find("PERMISSION_DENIED") != std::string::npos);
+
+  // Lathe safety: invalid axis or direction must be rejected deterministically (zero silent fallback)
+  const char* invalidAxis = "CMD.jogStep=INVALID,100";
+  res = parser.parseAndDispatch(invalidAxis, std::strlen(invalidAxis), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogStep (invalid axis) -> " << wire;
+  assert(!res.isOk());
+  assert(wire.find("INVALID_PARAM:axis") != std::string::npos);
+
+  const char* invalidDir = "CMD.jogHold=Z,INVALID";
+  res = parser.parseAndDispatch(invalidDir, std::strlen(invalidDir), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "jogHold (invalid dir) -> " << wire;
+  assert(!res.isOk());
+  assert(wire.find("INVALID_PARAM:dir") != std::string::npos);
+}
+
+void testCoordinatesAndLimits() {
+  printHeader("8. Coordinates & Travel Limits (axisZero, axisPosDu, axisLimitDu, axisClearLimit)");
+  auto& parser = StandardCommandParser::instance();
+  auto adminCtx = makeAdminContext();
+
+  // axisZero
+  const char* zeroCmd = "CMD.axisZero=Z";
+  CommandResult res = parser.parseAndDispatch(zeroCmd, std::strlen(zeroCmd), adminCtx);
+  String wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "axisZero -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.axisZero\n");
+
+  // axisPosDu
+  const char* posCmd = "CMD.axisPosDu=Z,500000";
+  res = parser.parseAndDispatch(posCmd, std::strlen(posCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "axisPosDu -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.axisPosDu\n");
+
+  // axisLimitDu (Left limit)
+  const char* limitCmd = "CMD.axisLimitDu=Z,LEFT,-100000";
+  res = parser.parseAndDispatch(limitCmd, std::strlen(limitCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "axisLimitDu -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.axisLimitDu\n");
+
+  // axisClearLimit
+  const char* clearCmd = "CMD.axisClearLimit=Z,LEFT";
+  res = parser.parseAndDispatch(clearCmd, std::strlen(clearCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "axisClearLimit -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.axisClearLimit\n");
+}
+
+void testPositionalFeedAndPing() {
+  printHeader("9. Positional Feed & System Ping");
+  auto& parser = StandardCommandParser::instance();
+  auto adminCtx = makeAdminContext();
+
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // Positional startFeed
+  const char* feedPos = "CMD.startFeed=Z,0.25,-,1";
+  CommandResult res = parser.parseAndDispatch(feedPos, std::strlen(feedPos), adminCtx);
+  String wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "startFeed (pos) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.startFeed\n");
+
+  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+
+  // Ping
+  const char* pingCmd = "CMD.ping";
+  res = parser.parseAndDispatch(pingCmd, std::strlen(pingCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "ping -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:CMD.ping\n");
+}
+
+void testSettingsAndExtendedIntrospection() {
+  printHeader("10. Settings Permissions, Presets/Schema & Bare State Hydration");
+  auto& parser = StandardCommandParser::instance();
+  auto adminCtx = makeAdminContext();
+  auto readOnlyCtx = makeReadOnlyContext();
+
+  // SETTINGS.get (all)
+  const char* setGetAll = "SETTINGS.get";
+  CommandResult res = parser.parseAndDispatch(setGetAll, std::strlen(setGetAll), adminCtx);
+  String wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.get (all) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.get:val_all\n");
+
+  // SETTINGS.set with admin permissions
+  const char* setWrite = "SETTINGS.set=leadscrew_pitch:4.0";
+  res = parser.parseAndDispatch(setWrite, std::strlen(setWrite), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.set (admin) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.set:leadscrew_pitch:4.0\n");
+
+  // SETTINGS.set with read-only permissions (MUST be rejected with 403)
+  res = parser.parseAndDispatch(setWrite, std::strlen(setWrite), readOnlyCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.set (read-only rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire.find("PERMISSION_DENIED") != std::string::npos);
+
+  // SETTINGS.reset with admin
+  const char* setReset = "SETTINGS.reset=leadscrew_pitch";
+  res = parser.parseAndDispatch(setReset, std::strlen(setReset), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.reset (admin) -> " << wire;
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.reset:leadscrew_pitch\n");
+
+  // SETTINGS.reset with read-only (MUST be rejected)
+  res = parser.parseAndDispatch(setReset, std::strlen(setReset), readOnlyCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.reset (read-only rejected) -> " << wire;
+  assert(!res.isOk());
+  assert(wire.find("PERMISSION_DENIED") != std::string::npos);
+
+  // SETTINGS.schema
+  const char* schemaCmd = "SETTINGS.schema=motor_z";
+  res = parser.parseAndDispatch(schemaCmd, std::strlen(schemaCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.schema -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("motor_z") != std::string::npos);
+
+  // SETTINGS.presets
+  const char* presetsCmd = "SETTINGS.presets";
+  res = parser.parseAndDispatch(presetsCmd, std::strlen(presetsCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "SETTINGS.presets -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("preset1") != std::string::npos);
+
+  // PROPERTIES.profiles
+  const char* profilesCmd = "PROPERTIES.profiles";
+  res = parser.parseAndDispatch(profilesCmd, std::strlen(profilesCmd), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "PROPERTIES.profiles -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("preset1") != std::string::npos);
+
+  // PROPERTIES.get
+  const char* propGet = "PROPERTIES.get=leadscrew_pitch";
+  res = parser.parseAndDispatch(propGet, std::strlen(propGet), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "PROPERTIES.get -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("leadscrew_pitch") != std::string::npos);
+
+  // Bare STATE.get (no args)
+  const char* bareState = "STATE.get";
+  res = parser.parseAndDispatch(bareState, std::strlen(bareState), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  std::cout << "STATE.get (bare) -> " << wire;
+  assert(res.isOk());
+  assert(wire.find("mask=15") != std::string::npos); // DOMAIN_ALL (15)
+
+  // Strict Case Sensitivity & Binary Flag Rejection: wrong-cased and text boolean variants MUST be rejected
+  const char* wrongCaseCommands[] = {
+    "cmd.STOP",
+    "CMD.STOP",
+    "cmd.stop",
+    "STATE.GET",
+    "state.get",
+    "SETTINGS.GET",
+    "CMD.STARTFEED=axis:Z,feed:1500,dir:-",
+    "CMD.startFeed=axis:z,feed:1500,dir:-", // lower-case 'z' rejected
+    "CMD.startFeed=AXIS:Z,feed:1500,dir:-", // upper-case 'AXIS' rejected
+    "CMD.startFeed=axis:Z,feed:1500,dir:-,sync:true",  // text boolean 'true' rejected
+    "CMD.startFeed=axis:Z,feed:1500,dir:-,sync:sync",  // text alias 'sync' rejected
+    "CMD.startFeed=axis:Z,feed:1500,dir:-,sync:false", // text boolean 'false' rejected
+    "CMD.startFeed=axis:Z,feed:1500,dir:-,sync:async"  // text alias 'async' rejected
+  };
+
+  for (const char* badCase : wrongCaseCommands) {
+    res = parser.parseAndDispatch(badCase, std::strlen(badCase), adminCtx);
+    wire = StandardCommandParser::formatWireResponse(res);
+    std::cout << "Asserting case rejection: '" << badCase << "' -> " << wire;
+    assert(!res.isOk());
+    assert(wire == "ERR:UNKNOWN_COMMAND\n" || wire.find("INVALID_PARAM") != std::string::npos);
+  }
+}
+
 int main() {
   std::cout << "========================================================\n";
   std::cout << " RUNNING STANDARD COMMAND PARSER NATIVE UNIT TEST SUITE\n";
@@ -377,9 +643,13 @@ int main() {
   testFeedAndMotionCommands();
   testUniversalNamespaces();
   testStrictGrammarAndSpaceRejection();
+  testManualJogging();
+  testCoordinatesAndLimits();
+  testPositionalFeedAndPing();
+  testSettingsAndExtendedIntrospection();
 
   std::cout << "\n========================================================\n";
-  std::cout << " ALL 6 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
+  std::cout << " ALL 10 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
   std::cout << "========================================================\n";
   return 0;
 }

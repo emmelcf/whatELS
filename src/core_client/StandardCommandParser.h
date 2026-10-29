@@ -36,26 +36,6 @@ public:
 
 private:
   StandardCommandParser() = default;
-
-  // Namespace Dispatchers
-  core::CommandResult parseCmd(const char* action, const char* args, const ClientContext& ctx);
-  core::CommandResult parseState(const char* action, const char* args, const ClientContext& ctx);
-  core::CommandResult parseSettings(const char* action, const char* args, const ClientContext& ctx);
-  core::CommandResult parseProperties(const char* action, const char* args, const ClientContext& ctx);
-  core::CommandResult parseSys(const char* action, const char* args, const ClientContext& ctx);
-  core::CommandResult parseClient(const char* action, const char* args, const ClientContext& ctx);
-
-  // Command Action Parsers
-  core::CommandResult parseStartFeed(const char* args, const ClientContext& ctx);
-  core::CommandResult parseStartCycle(const char* args, const ClientContext& ctx);
-  core::CommandResult parseJogStep(const char* args, const ClientContext& ctx);
-  core::CommandResult parseJogHold(const char* args, const ClientContext& ctx);
-  core::CommandResult parseJogRelease(const char* args, const ClientContext& ctx);
-  core::CommandResult parseAxisZero(const char* args, const ClientContext& ctx);
-  core::CommandResult parseAxisPosDu(const char* args, const ClientContext& ctx);
-  core::CommandResult parseAxisLimitDu(const char* args, const ClientContext& ctx);
-  core::CommandResult parseAxisClearLimit(const char* args, const ClientContext& ctx);
 };
 
 } // namespace whatels::core_client
-
