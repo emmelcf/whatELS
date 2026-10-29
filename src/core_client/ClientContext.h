@@ -25,6 +25,10 @@ struct ClientContext {
   uint8_t  sessionId      = 255;
   uint32_t effectivePerms = PERM_ALL; // Granted permissions bitmask
   bool     holdsLock      = false;    // True if holding motion execution lock
+
+  bool hasPermission(uint32_t perm) const {
+    return (effectivePerms & perm) == perm;
+  }
 };
 
 } // namespace whatels::core_client
