@@ -31,34 +31,35 @@ The whatELS firmware inherited two major architectural bottlenecks from early mo
 
 ## 2. Decision Details: The 5 Non-Negotiable Pillars
 
-### Pillar 1: Strict 5-Namespace Grammar Matrix
-The external wire surface is rationalized into five distinct namespaces:
-1. **`CMD` (Physical Motion Intents):** `CMD.startFeed`, `CMD.startCycle`, `CMD.hold`, `CMD.resume`, `CMD.step`, `CMD.stop`, `CMD.jogStep`, `CMD.jogHold`, `CMD.axisZero`.
+### Pillar 1: Strict 6-Namespace Grammar Matrix
+The external wire surface is rationalized into six distinct namespaces:
+1. **`CMD` (Physical Motion Intents):** `CMD.startFeed`, `CMD.startCycle`, `CMD.hold`, `CMD.resume`, `CMD.step`, `CMD.stop`, `CMD.jogStep`, `CMD.jogHold`, `CMD.jogRelease`, `CMD.axisZero`, `CMD.axisPosDu`, `CMD.axisLimitDu`, `CMD.axisClearLimit`, `CMD.ping`, `CMD.simEncoder`, `CMD.simRpm`, `CMD.simPulses`.
 2. **`STATE` (Machine Dynamic State):** `STATE.get[=<domains>]` (e.g. `STATE.get=ALL` or `STATE.get=K,I`).
-3. **`SETTINGS` (User Preferences & Machine Config):** `SETTINGS.get[=<path>]`, `SETTINGS.set=<key>,<val>`, `SETTINGS.reset`, `SETTINGS.presets`.
+3. **`SETTINGS` (User Preferences & Machine Config):** `SETTINGS.get[=<path>]`, `SETTINGS.set=<key>:<val>`, `SETTINGS.reset`, `SETTINGS.presets`, `SETTINGS.schema`.
 4. **`PROPERTIES` (Machine Iron Invariants & Profiles):** `PROPERTIES.get[=<path>]`, `PROPERTIES.modes`, `PROPERTIES.profiles`.
 5. **`SYS` (Appliance & Host Diagnostics):** `SYS.get[=<path>]` (e.g. `SYS.get=info`, `SYS.get=health`).
+6. **`CLIENT` (Session & Capability Handshake):** `CLIENT.hello=type:<profile>,ver:<version>,label:"<friendly_label>"`.
 
 **Clean Break Rule:** All legacy `?` queries (`?sysinfo`, `?state`, `?get`, and bare `?`) are completely deleted with zero deprecation cruft. Any attempt to send a `?` query receives `ERR:UNKNOWN_COMMAND`.
 
 ### Pillar 2: Subsystem 5 Architectural Partitioning
 We cleanly decouple text parsing from domain execution:
 * **`StandardCommandParser` (`src/core_client/`):** Pure string tokenizer. Tokenizes the wire text into strongly-typed C++ command structs. Has zero motion execution knowledge.
-* **`CoreCommandService` (`src/core/`):** Pure C++ domain service. Receives typed command structs (`StartFeedCmd`, `StartCycleCmd`, etc.) and the calling `ClientContext`. Enforces the authoritative `[SAFE-01]` in-motion safety gate. Has zero string parsing.
+* **`CoreCommandService` (`src/core/`):** Pure C++ domain service. Receives typed command structs (`StartFeedCmd`, `JogStepCmd`, `AxisLimitCmd`, etc.) and the calling `ClientContext`. Enforces the authoritative `[SAFE-01]` in-motion safety gate. Has zero string parsing.
 * **Compile-Time Safety Gate:** `MotionEngine` declares `friend class whatels::core::CoreCommandService;` while keeping sensitive stepping methods inaccessible to arbitrary callers.
 
-### Pillar 3: Total Retirement of `WebServerModule.cpp`
-The 979-line monolith is completely deleted and replaced by three single-responsibility classes:
+### Pillar 3: Progressive Decomposition of `WebServerModule.cpp` (In-Progress)
+The 979-line `WebServerModule.cpp` monolith is being decomposed into three single-responsibility classes:
 1. **`WifiService` (`src/core/WifiService.h/.cpp`):** AP/STA connection state machine, exponential-backoff reconnect watchdog (3s to 30s), disabled modem sleep for real-time telemetry, and mDNS responder (`whatels.local`).
-2. **`HttpServer` (`src/core/network/HttpServer.h/.cpp`):** Dedicated Port 80 HTTP server for LittleFS web assets, transparent `.gz` compression, SPA routing, and multipart OTA updates (`POST /firmware/upload`).
+2. **`HttpServer` (`src/core/network/HttpServer.h/.cpp`):** Dedicated Port 80 HTTP server for web assets, transparent `.gz` compression, SPA routing, and multipart OTA updates (`POST /firmware/upload`). *(Note: `WebServerModule.cpp` remains temporarily active until embedded `PROGMEM` asset serving is migrated into `HttpServer.cpp`).*
 3. **`WebSocketTransport` (`src/core_client/transports/`):** Dedicated Port 81 client transport implementing `ITransport` on `/canonical`. Status telemetry is managed exclusively by `ClientManager::broadcastIfChanged()` at the 10 Hz global cadence.
 
 ### Pillar 4: Formal Cycle Start Contract & Zero Ghost Limits
 * **Atomic Single-Frame Initiation:** Canned cycles are initiated atomically in a single frame via `CMD.startCycle=mode:<type>,<key1>:<val1>,...` using order-independent key-value tokens.
-* **C++17 `std::variant` Parameters:** `StartCycleCmd` encapsulates mode-specific parameter structs (`ThreadingCycleParams`, `TurningCycleParams`, `FacingCycleParams`, `TaperCycleParams`, `CutoffCycleParams`).
+* **Mode Layer Implementation (Refs Issue #10):** Multi-pass canned cycles (`Threading`, `Turning`, `Facing`, `Taper`, `Cutoff`) are implemented as `IELSMode` classes in `src/motion/modes/` registered with `ModeRegistry`. Until each cycle mode is implemented, `CMD.startCycle` and `CMD.step` deterministically return `UNAVAILABLE`.
 * **In-Flight Lifecycle:** 
-  * `CMD.hold`: Immediately retracts tool radially ($X+$ to `xClear`) to prevent tool rubbing, halts $Z$ travel while retaining spindle sync, and latches state to `CYCLE_HOLD`.
-  * `CMD.resume`: Advances tool back to cut depth and continues pass.
+  * `CMD.hold`: Pauses active feed while retaining spindle sync and latches state to `CYCLE_HOLD` / `PAUSED`.
+  * `CMD.resume`: Resumes feed from `CYCLE_HOLD`.
   * `CMD.step`: When `stepMode` is active, the engine completes a pass, returns to `zStart`, latches `STEP_WAIT`, and waits for `CMD.step` to fire the next pass.
   * `CMD.stop`: Universal emergency stop.
 * **Zero Ghost Limits Invariant (ADR-15):** The cycle's shoulder limit (`zEnd`) is written into the active soft limit table (`z_min`/`z_max`) and persists after cycle completion. There are zero hidden limits.
@@ -66,9 +67,9 @@ The 979-line monolith is completely deleted and replaced by three single-respons
 ### Pillar 5: Two-Way Verified Client Handshake
 A client must never enable motion controls or report "Connected" based solely on transport link open:
 1. Client opens transport and enters `HANDSHAKE_PENDING` with motion controls locked.
-2. Client sends `CLIENT.hello=type:<profile>,ver:<version>,label="<friendly_label>"`.
+2. Client sends `CLIENT.hello=type:<profile>,ver:<version>,label:"<friendly_label>"`.
 3. Controller validates profile, assigns authoritative `session_id`, and responds:
-   `OK:CLIENT.hello session_id=...,controllerVer=...,perms=...`
+   `OK:CLIENT.hello:session_id=...,type=...,controllerVer=...,perms=...`
 4. Only upon parsing this ACK does the client transition to `CONNECTED` and unlock controls.
 5. Backed by a 2000 ms watchdog timer to fail safe on hung firmware.
 

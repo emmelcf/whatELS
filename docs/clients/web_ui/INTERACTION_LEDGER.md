@@ -28,48 +28,48 @@ This document provides the exhaustive, 1-to-1 mapping of every interactive eleme
 
 | # | UI Control / Action | Target Selector / DOM Element | Event Trigger | JS Handler | Emitted Wire Command | Controller Kinematic Effect |
 | :-: | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | **D-Pad Tap Z-** | `#btnJogZMinus` | Pointerup (<300ms) | `jogStep('Z', 'CHUCK')` | `CMD.jogStep=Z,CHUCK\n` | `queueWebUiStep(B_LEFT)`. Moves carriage 1 step toward chuck. |
-| **2** | **D-Pad Hold Z-** | `#btnJogZMinus` | Pointerdown (≥300ms) | `jog('Z', 'CHUCK', true)` | `CMD.jogHold=Z,CHUCK\n` | `queueWebUiEvent(B_LEFT, true)`. Continuous carriage feed until released. |
-| **3** | **D-Pad Release Z-** | `#btnJogZMinus` | Pointerup / cancel | `jog('Z', 'CHUCK', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_LEFT, false)`. Decelerates carriage smoothly to stop. |
-| **4** | **D-Pad Tap Z+** | `#btnJogZPlus` | Pointerup (<300ms) | `jogStep('Z', 'TAIL')` | `CMD.jogStep=Z,TAIL\n` | `queueWebUiStep(B_RIGHT)`. Moves carriage 1 step toward tailstock. |
-| **5** | **D-Pad Hold Z+** | `#btnJogZPlus` | Pointerdown (≥300ms) | `jog('Z', 'TAIL', true)` | `CMD.jogHold=Z,TAIL\n` | `queueWebUiEvent(B_RIGHT, true)`. Continuous carriage feed until released. |
-| **6** | **D-Pad Release Z+** | `#btnJogZPlus` | Pointerup / cancel | `jog('Z', 'TAIL', false)` | `CMD.jogRelease=Z\n` | `queueWebUiEvent(B_RIGHT, false)`. Decelerates carriage smoothly to stop. |
-| **7** | **D-Pad Tap X+** | `#btnJogXPlus` | Pointerup (<300ms) | `jogStep('X', 'RETRACT')` | `CMD.jogStep=X,RETRACT\n` | `queueWebUiStep(B_DOWN)`. Steps cross-slide 1 step away from centerline. |
-| **8** | **D-Pad Hold X+** | `#btnJogXPlus` | Pointerdown (≥300ms) | `jog('X', 'RETRACT', true)` | `CMD.jogHold=X,RETRACT\n` | `queueWebUiEvent(B_DOWN, true)`. Continuous cross-slide retract until released. |
-| **9** | **D-Pad Release X+** | `#btnJogXPlus` | Pointerup / cancel | `jog('X', 'RETRACT', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_DOWN, false)`. Decelerates cross-slide smoothly to stop. |
-| **10** | **D-Pad Tap X-** | `#btnJogXMinus` | Pointerup (<300ms) | `jogStep('X', 'INFEED')` | `CMD.jogStep=X,INFEED\n` | `queueWebUiStep(B_UP)`. Steps cross-slide 1 step inward toward centerline. |
-| **11** | **D-Pad Hold X-** | `#btnJogXMinus` | Pointerdown (≥300ms) | `jog('X', 'INFEED', true)` | `CMD.jogHold=X,INFEED\n` | `queueWebUiEvent(B_UP, true)`. Continuous cross-slide plunge until released. |
-| **12** | **D-Pad Release X-** | `#btnJogXMinus` | Pointerup / cancel | `jog('X', 'INFEED', false)` | `CMD.jogRelease=X\n` | `queueWebUiEvent(B_UP, false)`. Decelerates cross-slide smoothly to stop. |
+| **1** | **D-Pad Tap Z-** | `#btnJogZMinus` | Pointerup (<300ms) | `jogStep('Z', 'CHUCK')` | `CMD.jogStep=Z,-<step_du>\n` | Moves carriage 1 discrete step (`-jogStepDu`) toward chuck. |
+| **2** | **D-Pad Hold Z-** | `#btnJogZMinus` | Pointerdown (≥300ms) | `jog('Z', 'CHUCK', true)` | `CMD.jogHold=Z,CHUCK\n` | Continuous carriage feed toward chuck until released. |
+| **3** | **D-Pad Release Z-** | `#btnJogZMinus` | Pointerup / cancel | `jog('Z', 'CHUCK', false)` | `CMD.jogRelease=Z\n` | Decelerates carriage smoothly to stop. |
+| **4** | **D-Pad Tap Z+** | `#btnJogZPlus` | Pointerup (<300ms) | `jogStep('Z', 'TAIL')` | `CMD.jogStep=Z,<step_du>\n` | Moves carriage 1 discrete step (`+jogStepDu`) toward tailstock. |
+| **5** | **D-Pad Hold Z+** | `#btnJogZPlus` | Pointerdown (≥300ms) | `jog('Z', 'TAIL', true)` | `CMD.jogHold=Z,TAIL\n` | Continuous carriage feed toward tailstock until released. |
+| **6** | **D-Pad Release Z+** | `#btnJogZPlus` | Pointerup / cancel | `jog('Z', 'TAIL', false)` | `CMD.jogRelease=Z\n` | Decelerates carriage smoothly to stop. |
+| **7** | **D-Pad Tap X+** | `#btnJogXPlus` | Pointerup (<300ms) | `jogStep('X', 'RETRACT')` | `CMD.jogStep=X,<step_du>\n` | Steps cross-slide 1 discrete step (`+jogStepDu`) away from centerline. |
+| **8** | **D-Pad Hold X+** | `#btnJogXPlus` | Pointerdown (≥300ms) | `jog('X', 'RETRACT', true)` | `CMD.jogHold=X,RETRACT\n` | Continuous cross-slide retract until released. |
+| **9** | **D-Pad Release X+** | `#btnJogXPlus` | Pointerup / cancel | `jog('X', 'RETRACT', false)` | `CMD.jogRelease=X\n` | Decelerates cross-slide smoothly to stop. |
+| **10** | **D-Pad Tap X-** | `#btnJogXMinus` | Pointerup (<300ms) | `jogStep('X', 'INFEED')` | `CMD.jogStep=X,-<step_du>\n` | Steps cross-slide 1 discrete step (`-jogStepDu`) inward toward centerline. |
+| **11** | **D-Pad Hold X-** | `#btnJogXMinus` | Pointerdown (≥300ms) | `jog('X', 'INFEED', true)` | `CMD.jogHold=X,INFEED\n` | Continuous cross-slide plunge until released. |
+| **12** | **D-Pad Release X-** | `#btnJogXMinus` | Pointerup / cancel | `jog('X', 'INFEED', false)` | `CMD.jogRelease=X\n` | Decelerates cross-slide smoothly to stop. |
 | **13** | **Chamfer NW (↖ Z- X-)** | `#btnChamferNW` | Pointerdown hold | `jogChamfer('NW', true)` | `CMD.jogChamfer=NW,1\n` | Coordinated dual-axis jog: Z toward chuck, X infeed. |
 | **14** | **Chamfer Release NW** | `#btnChamferNW` | Pointerup / cancel | `jogChamfer('NW', false)` | `CMD.jogChamfer=NW,0\n` | Decelerates both axes to a coordinated stop. |
 | **15** | **Chamfer SE (↘ Z+ X+)** | `#btnChamferSE` | Pointerdown hold | `jogChamfer('SE', true)` | `CMD.jogChamfer=SE,1\n` | Coordinated dual-axis jog: Z toward tailstock, X retract. |
 | **16** | **Chamfer Release SE** | `#btnChamferSE` | Pointerup / cancel | `jogChamfer('SE', false)` | `CMD.jogChamfer=SE,0\n` | Decelerates both axes to a coordinated stop. |
-| **17** | **Runstack: START** | `#btnRun` | Click / tap | `startCycle()` | **Atomic Motion Invocation (ADR 0001/0002)**:<br>• Gearbox: `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<rate>,dir:<dir>,[dist:<dist>]\n`<br>• Cycles (Turn/Face/Thread): staged limits (`CMD.axisLimitDu=...`) + cycle params + `CMD.on=1\n` | `setIsOnFromTask(true)`. Atomically passes complete motion intent to Kinematic Kernel and engages cut. Limits persist after cut completes. |
-| **18** | **Runstack: STOP** | `#btnStop` | Click / tap | `stopCycle()` | `CMD.stop\n` (or `CMD.on=0\n`) | Immediately halts stepping with controlled deceleration; disengages cycle. Limit registers remain intact. |
+| **17** | **Runstack: START** | `#btnRun` | Click / tap | `startCycle()` | **Atomic Motion Invocation (ADR 0001/0002)**:<br>• Gearbox: `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<rate>,dir:<dir>[,dist:<dist>]\n`<br>• Cycles (Turn/Face/Thread): `CMD.startCycle=...` (pending Issue #10) | Atomically passes complete motion intent to Kinematic Kernel and engages cut. Limits persist after cut completes. |
+| **18** | **Runstack: STOP** | `#btnStop` | Click / tap | `stopCycle()` | `CMD.stop\n` | Immediately halts stepping with controlled deceleration; disengages cycle. Limit registers remain intact. |
 | **19** | **Zero Z Axis** | `#btnZeroZ` | Click / tap | `zeroAxis('Z')` | `CMD.axisZero=Z\n` | `setAxisZero(&z)`. Sets current carriage position as $Z=0.000$. |
 | **20** | **Zero X Axis** | `#btnZeroX` | Click / tap | `zeroAxis('X')` | `CMD.axisZero=X\n` | `setAxisZero(&x)`. Sets current cross-slide position as $X=0.000$. |
 | **21** | **Mode Selector** | Nav tabs / `.mode-chip` | Click / tap | `setMode(modeSlug)` | *None (Client Local while idle)* | Switches local presentation deck / wizard. Controller remains idle until `START`. |
 | **22** | **Reverse Feed / Pitch** | `#deckToggleDir` | Click / tap | `setGearDir(dir)` / `reverseFeed()` | *None (Client Local while idle)* | Flips client-local motion travel direction; dispatched atomically on `START`. |
-| **23** | **Jog Step Cycle** | `#stepMain` | Click / tap | `cycleJogStep()` | `CMD.jogStepDu=<du>\n` | Cycles in-memory `moveStep` through standard table (e.g. 100, 1000, 10000 du). |
-| **24** | **Custom Jog Step** | `#stepMain` | Long-press (>600ms) | `openKeypad('step')` | `CMD.jogStepDu=<du>\n` | Opens keypad to input non-standard step increment. |
+| **23** | **Jog Step Cycle** | `#stepMain` | Click / tap | `cycleJogStep()` | *None (Client Local)* | Cycles client `canonical.jogStepDu` through standard table (e.g. 100, 1000, 10000 du), dispatched atomically in `CMD.jogStep`. |
+| **24** | **Custom Jog Step** | `#stepMain` | Long-press (>600ms) | `openKeypad('step')` | *None (Client Local)* | Opens keypad to input non-standard step increment (`canonical.jogStepDu`). |
 | **25** | **Feed Step Increment** | `#deckStepCycle` | Click / tap | `cycleFeedStep()` | *None (Client Local)* | Advances local feed override increment ($0.01 \to 0.05 \to 0.10 \to 0.20\text{ mm}$). |
 | **26** | **Feed Nudge Minus** | `#deckNudgeMinus` | Click / tap | `nudgeFeed(-1)` | *Idle:* None (Client Local)<br>*Running:* `CMD.feedNudge=-1\n` | Adjusts feed pitch locally when idle; trims active live cutting feed if `PERM_LIVE_FEED_TRIM` permitted. |
 | **27** | **Feed Nudge Plus** | `#deckNudgePlus` | Click / tap | `nudgeFeed(+1)` | *Idle:* None (Client Local)<br>*Running:* `CMD.feedNudge=+1\n` | Adjusts feed pitch locally when idle; trims active live cutting feed if `PERM_LIVE_FEED_TRIM` permitted. |
-| **28** | **Gearbox Axis Selector** | `#deckAxisSelector` / `.axis-tab` | Click / tap | `setGearAxis(axis)` | *None (Client Local while idle)* | Sets client-local leadscrew axis ($Z$, $X$, or compound $ZX$). Dispatched atomically on `START`. |
+| **28** | **Gearbox Axis Selector** | `#deckAxisSelector` / `.axis-tab` | Click / tap | `setGearAxis(axis)` | *None (Client Local while idle)* | Sets client-local leadscrew axis ($Z$ or $X$). Dispatched atomically on `START`. |
 | **29** | **Gearbox Sync Toggle** | `#deckSyncToggle` | Click / tap | `setGearSync(sync)` | *None (Client Local while idle)* | Sets client-local sync mode (Spindle Sync vs Async Velocity). Dispatched atomically on `START`. |
 | **30** | **Unit System Toggle** | `#unitToggle` | Click / tap | `cycleMeasure()` | *None (Client Local)* | Toggles `$store.machine.measure` (`0`: mm, `1`: in). Zero wire traffic. |
 | **31** | **Diameter / Radius Toggle** | `#repBadge` | Click / tap | `toggleDiaRad()` | *None (Client Local)* | Toggles `$store.machine.dia` (`Ø` vs `R`). Core kinematics remain pure radius. |
-| **32** | **Set Z Left Limit** | `#chipZLeft` | Click / tap | `openLimitModal('Z', 'L')` | `CMD.axisLimitDu=Z,L,<du>\n` | Sets hardware left limit register (`z.leftStop`). Persists indefinitely until modified/cleared. |
-| **33** | **Set Z Right Limit** | `#chipZRight` | Click / tap | `openLimitModal('Z', 'R')` | `CMD.axisLimitDu=Z,R,<du>\n` | Sets hardware right limit register (`z.rightStop`). Persists indefinitely until modified/cleared. |
-| **34** | **Clear Z Limits** | `#btnClearLimitZ` | Click / tap | `clearLimit('Z')` | `CMD.axisClearLimit=Z,L\n` | Clears active Z limits (`defined = false`), restoring unbounded continuous carriage travel. |
-| **35** | **Set X Infeed Limit** | `#chipXUp` | Click / tap | `openLimitModal('X', 'U')` | `CMD.axisLimitDu=X,L,<du>\n` | Sets hardware infeed limit register (`x.leftStop`). Persists indefinitely until modified/cleared. |
-| **36** | **Set X Retract Limit** | `#chipXDown` | Click / tap | `openLimitModal('X', 'D')` | `CMD.axisLimitDu=X,R,<du>\n` | Sets hardware retract limit register (`x.rightStop`). Persists indefinitely until modified/cleared. |
+| **32** | **Set Z Left Limit** | `#chipZLeft` | Click / tap | `openLimitModal('Z', 'L')` | `CMD.axisLimitDu=Z,LEFT,<du>\n` | Sets hardware left limit register (`z.leftStop`). Persists indefinitely until modified/cleared. |
+| **33** | **Set Z Right Limit** | `#chipZRight` | Click / tap | `openLimitModal('Z', 'R')` | `CMD.axisLimitDu=Z,RIGHT,<du>\n` | Sets hardware right limit register (`z.rightStop`). Persists indefinitely until modified/cleared. |
+| **34** | **Clear Z Limits** | `#btnClearLimitZ` | Click / tap | `clearLimit('Z')` | `CMD.axisClearLimit=Z,LEFT\n` | Clears active Z limits (`defined = false`), restoring unbounded continuous carriage travel. |
+| **35** | **Set X Infeed Limit** | `#chipXUp` | Click / tap | `openLimitModal('X', 'U')` | `CMD.axisLimitDu=X,UP,<du>\n` | Sets hardware infeed limit register (`x.leftStop`). Persists indefinitely until modified/cleared. |
+| **36** | **Set X Retract Limit** | `#chipXDown` | Click / tap | `openLimitModal('X', 'D')` | `CMD.axisLimitDu=X,DOWN,<du>\n` | Sets hardware retract limit register (`x.rightStop`). Persists indefinitely until modified/cleared. |
 | **37** | **Set Metric Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateMm(mm)` | *Idle:* None (Client Local)<br>*Running:* `CMD.feedMm=<val>\n` | Updates local pitch; dispatched atomically on `START` or dynamically trimmed if running. |
 | **38** | **Set TPI Pitch** | Pitch keypad confirm | Keypad SET tap | `setFeedrateTpi(tpi)` | *Idle:* None (Client Local)<br>*Running:* `CMD.feedTpi=<val>\n` | Updates local pitch; dispatched atomically on `START` or dynamically trimmed if running. |
 | **39** | **Set Taper Angle** | Taper keypad confirm | Keypad SET tap | `setTaperAngle(deg)` | *None (Client Local while idle)* | Updates local taper angle; dispatched atomically on `START`. |
 | **40** | **Set Taper Ratio** | Taper keypad confirm | Keypad SET tap | `setTaperRatio(1/K)` | *None (Client Local while idle)* | Updates local taper ratio; dispatched atomically on `START`. |
-| **41** | **Spindle Sim RPM** | Visualizer Spindle HUD | Click / input | `setSpindleSim(1, rpm)` | `CMD.spindleSim=1,<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
-| **42** | **Spindle Sim Turn** | Visualizer Chuck Wheel | Pointer drag / step | `spindleSimTurn(deg)` | `CMD.spindleSimTurn=<deg>\n` | Generates queued encoder pulses equivalent to specified hand rotation. |
+| **41** | **Spindle Sim RPM** | Visualizer Spindle HUD | Click / input | `setSpindleSim(1, rpm)` | `CMD.simEncoder=1\n` + `CMD.simRpm=<rpm>\n` | Overrides physical PCNT with synthetic pulse generator for offline verification. |
+| **42** | **Spindle Sim Turn** | Visualizer Chuck Wheel | Pointer drag / step | `spindleSimTurn(deg)` | `CMD.simPulses=<count>\n` | Generates queued encoder pulses equivalent to specified hand rotation. |
 
 ---
 

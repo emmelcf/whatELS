@@ -55,13 +55,13 @@ The core controller command surface is strictly rationalized around atomic inten
 
 | Command Category | Wire Syntax | Description & Semantics |
 | :--- | :--- | :--- |
-| **Atomic Feed Motion** | `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<rate>,dir:<dir>,[dist:<dist>]` | Atomically validates and initiates continuous or targeted feed motion via Key-Value pairs (or positional fallback). |
-| **Motion Stop** | `CMD.stop` or `CMD.on=0` | Immediately stops all in-flight motion with controlled deceleration. |
-| **Manual Jogging** | `CMD.jogHold=<axis>,<dir>`<br>`CMD.jogRelease=<axis>`<br>`CMD.jogStep=<axis>,<dir>` | Direct real-time manual positioning. |
+| **Atomic Feed Motion** | `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<rateDu>,dir:<dir>,[dist:<distDu>]` | Atomically validates and initiates continuous or targeted feed motion via Key-Value pairs. |
+| **Motion Stop** | `CMD.stop` | Immediately stops all in-flight motion with controlled deceleration. |
+| **Manual Jogging** | `CMD.jogHold=<axis>,<dir>`<br>`CMD.jogRelease=<axis>`<br>`CMD.jogStep=<axis>,<distDu>` | Direct real-time manual positioning. |
 | **Dynamic In-Cut Nudge** | `CMD.feedNudge=<+1\|-1>` | Adjusts active feedrate under chip load. |
-| **Coordinate & Limits** | `CMD.axisZero=<axis>`<br>`CMD.axisPosDu=<axis>,<posDu>`<br>`CMD.axisLimitDu=<axis>,<L\|R>,<posDu>`<br>`CMD.axisClearLimit=<axis>,<L\|R>` | Origin datum setting and software travel limit registers. |
-| **Persistent Settings** | `SETTINGS.get=*`<br>`SETTINGS.set=<key>,<val>` | Core machine configuration (leadscrews, steps, encoder PPR). |
-| **Hydration & Telemetry** | `CMD.state=ALL`<br>`?sysinfo` | Atomic multi-domain state snapshots and firmware capability queries. |
+| **Coordinate & Limits** | `CMD.axisZero=<axis>`<br>`CMD.axisPosDu=<axis>,<posDu>`<br>`CMD.axisLimitDu=<axis>,<bound>,<posDu>`<br>`CMD.axisClearLimit=<axis>,<bound>` | Origin datum setting and software travel limit registers. |
+| **Persistent Settings** | `SETTINGS.get`<br>`SETTINGS.set=<key>:<val>` | Core machine configuration (leadscrews, steps, encoder PPR). |
+| **Hydration & Telemetry** | `STATE.get=ALL`<br>`SYS.get=info` | Atomic multi-domain state snapshots and firmware capability queries. |
 
 ### 3.2 Idle Machine State vs. Client View State
 

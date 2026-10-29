@@ -811,24 +811,8 @@ To enable clients to dynamically query available modes, discover parameter schem
    ```
    *Behavior:* Returns only modes whose `requiredHardwareCaps` bitmask is a subset of the currently active lathe profile (`activeMachineProfile.capabilities`). Unavailable modes (e.g., automated 2-axis cycles on a 1-axis lathe) are cleanly omitted.
 
-2. **Named Machine Preset Evaluation:**
-   ```text
-   PROPERTIES.modes?profile=mini_lathe_7x14
-   PROPERTIES.modes?profile=large_toolroom_1440
-   ```
-   *Behavior:* Evaluates registered modes against the hardware capabilities of the specified factory preset profile, allowing client configuration wizards to simulate and preview capabilities.
-
-3. **Explicit Hardware Capability Bitmask:**
-   ```text
-   PROPERTIES.modes?caps=0x0000001B
-   ```
-   *Behavior:* Tests registered modes directly against a custom hexadecimal capability bitmask.
-
-4. **Unfiltered System Introspection:**
-   ```text
-   PROPERTIES.modes?all=1
-   ```
-   *Behavior:* Returns all registered modes in the system regardless of active hardware.
+2. **Future Parameterized Evaluation (Planned):**
+   *Note:* All queries must strictly adhere to the single-`=` colon-separated key-value grammar (zero `?` characters on the wire). Future parameterized filters (`PROPERTIES.modes=profile:<slug>`, `PROPERTIES.modes=caps:<hex>`, `PROPERTIES.modes=all:1`) are reserved for upcoming capability simulation wizards.
 
 #### Discovery JSON Response Payload:
 ```json

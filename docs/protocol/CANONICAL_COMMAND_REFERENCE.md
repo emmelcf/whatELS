@@ -1,28 +1,29 @@
 # whatELS Canonical Command & Protocol Wire Reference
 
 > **Status:** Authoritative Wire Specification  
-> **Target Subsystem:** Subsystem 5 (Command Dispatcher & Transport) & Subsystem 6 (Client Adapters)  
+> **Target Subsystem:** Subsystem 4 (`CoreCommandService`) & Subsystem 5 (`StandardCommandParser` & Transports)  
 > **Master Architecture:** [`docs/clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)  
-> **Implementation Reference:** [`src/core/CommandDispatcher.cpp`](../../src/core/CommandDispatcher.cpp)  
+> **Implementation Reference:** [`src/core_client/StandardCommandParser.cpp`](../../src/core_client/StandardCommandParser.cpp), [`src/core/CoreCommandService.cpp`](../../src/core/CoreCommandService.cpp)  
 > **Date:** October 2026  
 
 ---
 
 ## 1. Overview & Syntax Rules
 
-The **whatELS Canonical Command Surface** is the single authoritative wire interface for controlling the whatELS motion controller. All transports (WebSocket, physical UART Serial, USB CDC) and all client endpoints (`NativeClient`, `NextionAdapter`, HIL test harness) converge on this command dictionary via [`CommandDispatcher::dispatch()`](../../src/core/CommandDispatcher.h).
+The **whatELS Canonical Command Surface** is the single authoritative wire interface for controlling the whatELS motion controller. All transports (WebSocket, physical UART Serial, USB CDC) and all client endpoints (`NativeClient`, `NextionAdapter`, HIL test harness) converge on this command dictionary via [`StandardCommandParser::parseAndDispatch()`](../../src/core_client/StandardCommandParser.h) and [`CoreCommandService::execute()`](../../src/core/CoreCommandService.h).
 
 ### Command Grammar
 Every canonical message is an ASCII string terminated by a newline (`\n` or `\r\n`):
 
 $$\texttt{<NAMESPACE>.<action>[=<arguments>]}\backslash\text{n}$$
 
-* **Namespaces:** `CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, and `CLIENT`.
-* **Strict Single-`=` Invariant:** There is **at most one** `=` in any message, strictly separating the `<NAMESPACE>.<action>` header from its `<arguments>` payload. Commands with no arguments (`CMD.stop`, `CMD.hold`, `CMD.resume`, `CMD.step`) have no `=`.
-* **Colon Parameter Formatting (`name:value`):** In key-value payloads, parameter keys and values are strictly separated by a colon (`:`), **never `=`** (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8`). Multiple parameters are separated strictly by a comma (`,`).
+* **Namespaces (6):** `CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, and `CLIENT`.
+* **Strict Single-`=` Invariant:** There is **at most one** `=` in any message, strictly separating the `<NAMESPACE>.<action>` header from its `<arguments>` payload. Commands with no arguments (`CMD.stop`, `CMD.hold`, `CMD.resume`, `CMD.step`, `CMD.ping`) have no `=`.
+* **Colon Parameter Formatting (`name:value`):** In key-value payloads, parameter keys and values are strictly separated by a colon (`:`), **never `=`** (e.g. `CMD.startFeed=axis:Z,feed:1500,dir:-` or `CMD.startCycle=mode:thread,pitch:15000,passes:8`). Multiple parameters are separated strictly by a comma (`,`). Duplicate or unknown parameter keys are rejected with `ERR:UNKNOWN_COMMAND` or `ERR:<CMD>:INVALID_PARAM:<key>`.
 * **Zero Loose Spaces:** Unquoted spaces or tabs are strictly forbidden anywhere in command headers, parameter keys, or numeric values. The **only** permissible location for a space is inside a double-quoted string literal (e.g. `label:"Apron Console"`). Any unquoted space causes the command to be rejected immediately with `ERR:UNKNOWN_COMMAND`.
 * **Strict Case Sensitivity:** The protocol is strictly case-sensitive. Namespace headers are uppercase (`CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, `CLIENT`), action names and parameter keys are camelCase, and axis identifiers are uppercase (`Z`, `X`). Any command, namespace, action, or parameter passed with incorrect case is rejected immediately.
-* **Strict Binary Flags (`<0|1>`):** All boolean flags on the wire (such as `sync` and `step`) are strictly represented by the numeric characters `1` (enabled / true) or `0` (disabled / false). Text variants (`true`, `false`, `sync`, `async`) are invalid and rejected immediately with `INVALID_PARAM`.
+* **Strict Binary Flags (`<0|1>`):** All boolean flags on the wire (such as `sync`, `step`, and `active`) are strictly represented by the numeric characters `1` (enabled / true) or `0` (disabled / false). Text variants (`true`, `false`, `sync`, `async`) are invalid and rejected immediately with `INVALID_PARAM`.
+* **Pure Integer Deci-Microns (`du`):** All linear coordinates, travel distances, and feed rates on the wire are strict 32-bit signed integers in deci-microns (`1 mm = 10,000 du`, `1 mm/rev = 10,000 dupr`). Floating-point decimal points on the wire are rejected with `INVALID_PARAM` (with the sole exception of `CMD.simRpm`).
 
 ### Universal Return Grammar
 Every command processed by the controller returns an ASCII response:
@@ -30,10 +31,10 @@ Every command processed by the controller returns an ASCII response:
 | Response Header | Meaning | Wire Example |
 | :--- | :--- | :--- |
 | `OK:<NAMESPACE>.<name>` | Command accepted and executed successfully. | `OK:CMD.stop\n` |
-| `OK:<NAMESPACE>.<name>:<data>` | Command succeeded with scalar or string payload. | `OK:CMD.startCycle:mode:thread\n` |
-| `ERR:<NAMESPACE>.<name>:<reason>` | Command failed validation, was locked by motion, or faulted. | `ERR:CMD.startFeed:MOTION_LOCKED\n` |
+| `OK:<NAMESPACE>.<name>:<data>` | Command succeeded with scalar or string payload. | `OK:CLIENT.hello:session_id=1,...\n` |
+| `ERR:<NAMESPACE>.<name>:<reason>` | Command failed validation, was locked by motion, or is unavailable. | `ERR:CMD.startFeed:MOTION_LOCKED\n` |
 | `ERR:UNKNOWN_COMMAND` | Unrecognized command syntax (including all decommissioned `?` queries). | `ERR:UNKNOWN_COMMAND\n` |
-| `SYS.<key>=<val>` | Multi-line structured query response. | `SYS.version=1.0.4\n...` |
+| `SYS.<key>=<val>` | Multi-line structured query response. | `SYS.version=H5V38\n...` |
 | `K.<field>=<val>...` | Universal telemetry hydration or snapshot push. | `K.zDu=12400\|K.rpm=850...\n` |
 
 ---
@@ -46,21 +47,28 @@ Commands that engage stepper motors, set feed directions, configure cycle parame
 
 #### `CMD.startFeed`
 Engages leadscrew motion according to the specified parameters. If called while idle, transitions state to `RUNNING`.
-* **Arguments:** 
-  * `axis`: Target axis (`Z`, `X`, or `ZX` / `TAPER`). Default: `Z`.
-  * `feed`: Feed rate. If floating-point (contains `.`), parsed as mm/rev; otherwise parsed as deci-microns per rev (`dupr`).
-  * `dir`: Direction (`+`, `-`, `LEFT`, `RIGHT`, `FWD`, `REV`).
-  * `sync`: Spindle synchronization (`1` for ELS electronic gearing; `0` for continuous IPM feed). Default: `1`.
-  * `dist`: (Optional) Target travel distance in deci-microns (`du`). `-1` for continuous feed.
+* **Arguments (Key-Value Syntax Required):** 
+  * `axis`: Target axis (`Z` or `X`). **Mandatory** (zero default).
+  * `feed`: Feed rate magnitude as a positive integer (`> 0`): deci-microns per rev (`dupr`) when `sync:1`, or deci-microns per minute (`du/min`) when `sync:0`. **Mandatory**.
+  * `dir`: Axis-aware Cartesian direction token. **Mandatory** (zero default):
+    * Universal: `-`, `-1` (negative coordinate feed) or `+`, `+1` (positive coordinate feed).
+    * $Z$ axis only: `CHUCK`, `LEFT` ($\to -1$); `TAIL`, `RIGHT` ($\to +1$).
+    * $X$ axis only: `CENTER`, `IN`, `INFEED`, `UP` ($\to -1$); `RETRACT`, `OUT`, `DOWN` ($\to +1$).
+    * Note: `FWD` and `REV` are strictly forbidden (reserved for spindle rotation per ADR-0001).
+  * `sync`: (Optional) Spindle synchronization (`1` for ELS electronic gearing; `0` for continuous velocity feed). Default: `1`.
+  * `dist`: (Optional) Target travel distance in integer deci-microns (`du`, `> 0`), or `-1` for continuous feed to soft limit. Default: `-1`.
 * **Examples:**
   * `CMD.startFeed=axis:Z,feed:1500,dir:-,sync:1`
-  * `CMD.startFeed=Z,0.20,+`
+  * `CMD.startFeed=axis:X,feed:500000,dir:CENTER,sync:0,dist:20000`
 * **Safety Lockout:** Rejected if motion is currently active (`isOn == true`), returning `ERR:CMD.startFeed:MOTION_LOCKED`.
 * **Required Permission:** `PERM_MOTION_START`
 * **Returns:** `OK:CMD.startFeed` or `ERR:CMD.startFeed:<reason>`
 
 #### `CMD.startCycle`
 Atomically initiates a multi-pass canned cutting cycle in a single message frame.
+> [!NOTE]
+> **Implementation Status (Refs Issue #10):** Multi-pass canned cycle `IELSMode` classes are currently pending implementation in `src/motion/modes/`. Until registered in `ModeRegistry`, valid `CMD.startCycle` invocations deterministically return `ERR:CMD.startCycle:UNAVAILABLE`.
+
 * **Arguments (Order-Independent Key-Value Pairs):**
   * `mode`: Cycle type (`thread` | `turn` | `face` | `taper` | `cutoff`).
   * **Threading (`mode:thread`):**
@@ -107,18 +115,16 @@ Atomically initiates a multi-pass canned cutting cycle in a single message frame
 
 #### `CMD.hold`
 Feed hold with automatic radial tool retraction.
-* Immediately halts $Z$ axis carriage advance while maintaining phase-accurate electronic gearing synchronization to the spindle.
-* Simultaneously retracts the $X$ cross-slide radially away from the workpiece ($X+$ to `xClear`) to prevent tool tip burn, rubbing, and chatter marks.
-* Transitions machine state to `CYCLE_HOLD`.
+* Immediately halts active axis carriage advance while maintaining phase-accurate electronic gearing synchronization to the spindle.
+* Transitions machine state to `CYCLE_HOLD` / `PAUSED`.
 * **Arguments:** None.
 * **Example:** `CMD.hold`
 * **Required Permission:** `PERM_READ_TELEMETRY` *(Hold authority is universally available to all connected clients).*
 * **Returns:** `OK:CMD.hold` or `ERR:CMD.hold:<reason>`
 
 #### `CMD.resume`
-Resumes a cutting cycle paused in `CYCLE_HOLD`.
-* Feeds the $X$ cross-slide back into the workpiece to the active pass depth.
-* Resynchronizes spindle quadrature phase and resumes synchronous $Z$ cutting feed to complete the active pass.
+Resumes a feed or cutting cycle paused in `CYCLE_HOLD`.
+* Resynchronizes spindle quadrature phase and resumes cutting feed to complete the active pass.
 * **Arguments:** None.
 * **Example:** `CMD.resume`
 * **Required Permission:** `PERM_MOTION_START`
@@ -127,7 +133,7 @@ Resumes a cutting cycle paused in `CYCLE_HOLD`.
 #### `CMD.step`
 Advances to the next pass when running a canned cycle in Step Mode (`step:1`).
 * When Step Mode is enabled, the controller finishes a pass, retracts to `xClear`, returns to `zStart`, and latches in `STEP_WAIT`.
-* Receiving `CMD.step` verifies spindle rotation and executes the next single cutting pass.
+* Receiving `CMD.step` verifies spindle rotation and executes the next single cutting pass. *(Currently returns `ERR:CMD.step:UNAVAILABLE` pending Issue #10 canned cycle implementation).*
 * **Arguments:** None.
 * **Example:** `CMD.step`
 * **Required Permission:** `PERM_MOTION_START`
@@ -146,26 +152,26 @@ Immediately halts all axis stepping, cancels any active jog or cutting cycle, an
 
 #### `CMD.jogStep`
 Executes an incremental single-step jog on the specified axis.
-* **Arguments:** `<axis>,<dist_du>` (Distance in deci-microns, where $10,000 \text{ du} = 1.0\text{ mm}$).
+* **Arguments:** `<axis>,<dist_du>` or `axis:<Z|X>,dist:<dist_du>` (Signed integer distance in deci-microns, $\neq 0$, where $10,000 \text{ du} = 1.0\text{ mm}$).
 * **Examples:**
   * `CMD.jogStep=Z,100` *(Jog Z positive 10 microns / 0.01 mm)*
-  * `CMD.jogStep=X,-500` *(Jog X negative 50 microns / 0.05 mm)*
+  * `CMD.jogStep=axis:X,dist:-500` *(Jog X negative 50 microns / 0.05 mm)*
 * **Required Permission:** `PERM_JOG_PULSE`
-* **Returns:** `OK:CMD.jogStep:<axis>,<dist>`
+* **Returns:** `OK:CMD.jogStep` or `ERR:CMD.jogStep:<reason>`
 
 #### `CMD.jogHold`
 Initiates continuous jogging on an axis. The axis continues stepping until `CMD.jogRelease` or `CMD.stop` is received.
-* **Arguments:** `<axis>,<direction>` (`+` / `-` / `LEFT` / `RIGHT` / `UP` / `DOWN`).
+* **Arguments:** `<axis>,<direction>` or `axis:<Z|X>,dir:<direction>` (`+` / `-` / `-1` / `+1`, `LEFT` / `RIGHT` / `CHUCK` / `TAIL` for $Z$, `UP` / `DOWN` / `CENTER` / `RETRACT` / `IN` / `INFEED` / `OUT` for $X$).
 * **Example:** `CMD.jogHold=Z,+`
 * **Required Permission:** `PERM_JOG_PULSE`
-* **Returns:** `OK:CMD.jogHold:<axis>`
+* **Returns:** `OK:CMD.jogHold` or `ERR:CMD.jogHold:<reason>`
 
 #### `CMD.jogRelease`
 Stops an active continuous jog initiated by `CMD.jogHold`.
-* **Arguments:** `<axis>` (Optional).
-* **Example:** `CMD.jogRelease=Z`
+* **Arguments:** `<axis>` or `axis:<Z|X>` (Optional; stops all axes if omitted).
+* **Examples:** `CMD.jogRelease=Z` or `CMD.jogRelease`
 * **Required Permission:** `PERM_JOG_PULSE`
-* **Returns:** `OK:CMD.jogRelease`
+* **Returns:** `OK:CMD.jogRelease` or `ERR:CMD.jogRelease:<reason>`
 
 ---
 
@@ -173,85 +179,85 @@ Stops an active continuous jog initiated by `CMD.jogHold`.
 
 #### `CMD.axisZero`
 Zeroes the current position coordinate of the specified axis.
-* **Arguments:** `<axis>` (`Z` or `X`).
+* **Arguments:** `<axis>` or `axis:<Z|X>` (`Z` or `X`).
 * **Example:** `CMD.axisZero=Z`
 * **Required Permission:** `PERM_MOTION_START`
-* **Returns:** `OK:CMD.axisZero`
+* **Returns:** `OK:CMD.axisZero` or `ERR:CMD.axisZero:<reason>`
 
 #### `CMD.axisPosDu`
-Presets an absolute coordinate value onto an axis.
-* **Arguments:** `<axis>,<position_du>`
+Presets an absolute integer coordinate value onto an axis.
+* **Arguments:** `<axis>,<position_du>` or `axis:<Z|X>,pos:<position_du>`
 * **Example:** `CMD.axisPosDu=Z,500000` *(Set Z coordinate to +50.000 mm)*
-* **Returns:** `OK:CMD.axisPosDu`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.axisPosDu` or `ERR:CMD.axisPosDu:<reason>`
 
 #### `CMD.axisLimitDu`
 Sets a software travel limit on the specified axis.
-* **Arguments:** `<axis>,<L|R|LEFT|RIGHT>,<dist_du>`
+* **Arguments:** `<axis>,<bound>,<coord_du>` or `axis:<Z|X>,bound:<bound>,coord:<coord_du>`
+  * Valid `<bound>` tokens: Universal `L`, `R`, `MIN`, `MAX`; $Z$-axis `LEFT`, `CHUCK`, `RIGHT`, `TAIL`; $X$-axis `UP`, `CENTER`, `IN`, `INFEED`, `DOWN`, `RETRACT`, `OUT`.
 * **Example:** `CMD.axisLimitDu=Z,LEFT,-100000` *(Set Z Left Limit to -10.0 mm)*
-* **Returns:** `OK:CMD.axisLimitDu`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.axisLimitDu` or `ERR:CMD.axisLimitDu:<reason>`
 
 #### `CMD.axisClearLimit`
 Clears a software travel limit register.
-* **Arguments:** `<axis>,<L|R|LEFT|RIGHT>`
+* **Arguments:** `<axis>,<bound>` or `axis:<Z|X>,bound:<bound>`
 * **Example:** `CMD.axisClearLimit=Z,LEFT`
-* **Returns:** `OK:CMD.axisClearLimit`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.axisClearLimit` or `ERR:CMD.axisClearLimit:<reason>`
 
 ---
 
 ### 2.4 Simulation & Diagnostics (Elevated Permission Only)
 
 > [!CAUTION]
-> The following commands manipulate simulated encoder pulses and RPM registers. They are **strictly restricted** to test harnesses holding `PERM_SIMULATION`. Operator interfaces attempting to call these will receive `ERR:CMD.permission_denied`.
+> The following commands manipulate simulated encoder pulses and RPM registers. They are **strictly restricted** to test harnesses holding `PERM_SIMULATION`. Operator interfaces attempting to call these will receive `ERR:CMD.<name>:PERMISSION_DENIED`.
+
+#### `CMD.simEncoder`
+Enables or disables synthetic spindle encoder simulation mode on the controller HAL. Rejected with `SAFETY_INTERLOCK_ACTIVE` if any axis is currently moving or physical spindle RPM > 0.
+* **Arguments:** `<0|1>` or `active:<0|1>`
+* **Example:** `CMD.simEncoder=1`
+* **Required Permission:** `PERM_SIMULATION`
+* **Returns:** `OK:CMD.simEncoder` or `ERR:CMD.simEncoder:<reason>`
 
 #### `CMD.simRpm`
 Injects simulated spindle RPM into the motion engine for testing ELS synchronization without a spinning motor.
-* **Arguments:** `<rpm_int>` (`0` to disable).
+* **Arguments:** `<rpm>` or `rpm:<rpm>` (`>= 0`, `0` to stop).
 * **Example:** `CMD.simRpm=1200`
 * **Required Permission:** `PERM_SIMULATION`
-* **Returns:** `OK:CMD.simRpm:1200`
+* **Returns:** `OK:CMD.simRpm` or `ERR:CMD.simRpm:<reason>`
 
-#### `CMD.simEncoder`
-Injects synthetic spindle encoder quadrature ticks.
-* **Arguments:** `<ticks_int>`
-* **Example:** `CMD.simEncoder=4096`
+#### `CMD.simPulses`
+Injects a discrete number of synthetic spindle encoder quadrature pulses.
+* **Arguments:** `<pulses_int>` or `pulses:<pulses_int>` ($\neq 0$).
+* **Example:** `CMD.simPulses=4096`
 * **Required Permission:** `PERM_SIMULATION`
-* **Returns:** `OK:CMD.simEncoder`
+* **Returns:** `OK:CMD.simPulses` or `ERR:CMD.simPulses:<reason>`
 
 #### `CMD.ping`
-Simple diagnostic ping.
+Refreshes the simulation / jog safety watchdog heartbeat.
 * **Arguments:** None.
 * **Returns:** `OK:CMD.ping`
 
 ---
 
-## 3. Settings & Presets Namespace (`SETTINGS.*` & `PRESET.*`)
+## 3. Settings & Machine Profiles Namespace (`SETTINGS.*`)
 
-Manages non-volatile storage (NVS) configuration, machine profiles, and tuning parameters.
+Manages non-volatile storage (NVS) configuration, machine profile selection, and tuning parameters.
 
 ### 3.1 Settings Access (`SETTINGS.*`)
 
 | Wire Command | Description | Example |
 | :--- | :--- | :--- |
 | `SETTINGS.get` | Returns all key-value settings. | `SETTINGS.get` |
-| `SETTINGS.get=<key>` | Reads a single configuration key. | `SETTINGS.get=leadscrew_pitch` |
-| `SETTINGS.set=<key>:<val>` | Writes a configuration key to persistent NVS. | `SETTINGS.set=leadscrew_pitch:4.0` |
-| `SETTINGS.reset=<key>` | Resets a specific key to factory default. | `SETTINGS.reset=leadscrew_pitch` |
-| `SETTINGS.getGroup=<group>` | Dumps an entire configuration group (JSON). | `SETTINGS.getGroup=motor_z` |
-| `SETTINGS.resetGroup=<group>`| Resets an entire group to factory defaults. | `SETTINGS.resetGroup=motor_z` |
+| `SETTINGS.get=<key>` | Reads a single configuration key or group (`machine`, `sys`, `prefs`). | `SETTINGS.get=machine.z.pitchDu` |
+| `SETTINGS.set=<key>:<val>` | Writes a configuration key to persistent NVS. | `SETTINGS.set=machine.z.pitchDu:40000` |
+| `SETTINGS.set=preset:<id>` | Applies a machine profile preset to active controller settings. | `SETTINGS.set=preset:wm210v` |
+| `SETTINGS.reset=<key>` | Resets a specific key or `ALL` to factory default. | `SETTINGS.reset=ALL` |
+| `SETTINGS.presets` | Returns JSON list of available machine profile presets. | `SETTINGS.presets` |
 | `SETTINGS.schema` | Returns JSON schema defining valid settings keys, types, and ranges. | `SETTINGS.schema` |
 
-* **Required Permission:** `PERM_SETTINGS_WRITE` (Reads permitted with `PERM_READ_TELEMETRY`).
-
-### 3.2 Machine Presets (`PRESET.*`)
-
-| Wire Command | Description | Example |
-| :--- | :--- | :--- |
-| `PRESET.list` | Returns JSON list of available machine profile presets. | `PRESET.list` |
-| `PRESET.get=<id>` | Returns JSON details of a specific machine preset. | `PRESET.get=precision_matthews_1022` |
-| `PRESET.apply=<id>` | Applies a factory preset to active controller settings. | `PRESET.apply=mini_lathe_7x14` |
-| `PRESET.save=<id>` | Saves the current machine configuration as a user preset. | `PRESET.save=my_custom_lathe` |
-| `PRESET.delete=<id>` | Deletes a saved user preset. | `PRESET.delete=my_custom_lathe` |
-| `PRESET.setDefault=<id>` | Sets the default machine preset loaded on boot. | `PRESET.setDefault=precision_matthews_1022` |
+* **Required Permission:** `PERM_SETTINGS_WRITE` for `set` and `reset` (Reads permitted with `PERM_READ_TELEMETRY`).
 
 ---
 
@@ -264,21 +270,20 @@ Lightweight, high-integrity unicast queries for atomic state hydration, hardware
 
 ### 4.1 System & Appliance Diagnostics (`SYS.get`)
 Queries controller hardware architecture, firmware version, memory utilization, and runtime health metrics.
-* **Syntax:** `SYS.get=<info|health>`
+* **Syntax:** `SYS.get`, `SYS.get=info`, or `SYS.get=health`
 * **Endpoints:**
-  * `SYS.get=info` — Firmware build version, target ESP32 silicon revision, flash size, and compiled feature flags (replaces legacy `?sysinfo`).
-  * `SYS.get=health` — Dynamic appliance vitals: free heap memory, stack watermark, uptime in seconds, Core 0 / Core 1 loop frequencies, and Wi-Fi RSSI.
+  * `SYS.get` / `SYS.get=info` — Firmware build version, target ESP32 silicon revision, flash size, and compiled feature flags (replaces legacy `?sysinfo`).
+  * `SYS.get=health` — Dynamic appliance vitals: uptime in seconds, free heap memory in KB, and active Wi-Fi mode.
 * **Response (Multi-line text):**
   ```text
-  SYS.version=1.0.5
+  SYS.version=H5V38
   SYS.chip=ESP32-S3 rev 2
   SYS.flash=16 MB
-  SYS.heap=142 KB
-  SYS.uptime=3600
   SYS.features=spindleSim,ota
   ```
+* **Off-Target Behavior:** On native host test builds without hardware HAL (Refs Issue #9), returns `ERR:SYS.get:UNAVAILABLE`.
 * **Required Permission:** `PERM_READ_TELEMETRY`
-* **Returns:** `OK:SYS.get` or multi-line `SYS.<key>=<val>` block.
+* **Returns:** Multi-line `SYS.<key>=<val>` block or `ERR:SYS.get:<reason>`.
 
 ### 4.2 State Hydration Query (`STATE.get`)
 Requests an immediate atomic snapshot of machine state across one or more telemetry domains without waiting for motion events or periodic broadcast ticks (replaces legacy `CMD.state`).
@@ -292,13 +297,13 @@ Requests an immediate atomic snapshot of machine state across one or more teleme
   K.zDu=0|K.xDu=0|K.rpm=0|K.mode=50|K.on=0|I.pitchDu=1500|I.axis=Z|P.leadscrewPitch=40000\n
   ```
 * **Required Permission:** `PERM_READ_TELEMETRY`
-* **Returns:** `OK:STATE.get` followed by canonical telemetry frame.
+* **Returns:** Canonical multi-line or pipe-delimited telemetry frame.
 
 ### 4.3 Mode & Profile Discovery (`PROPERTIES.*`)
 Introspects machine physical capabilities, available cutting modes, and profile geometry.
 * **Available Endpoints:**
   * `PROPERTIES.modes` — Returns JSON list of cutting modes and conversational wizards physically supported by the active hardware profile (replaces legacy `MODE.discover`).
-  * `PROPERTIES.profiles` — Returns JSON list of available machine hardware profiles in LittleFS.
+  * `PROPERTIES.profiles` — Returns JSON list of available machine hardware profiles.
   * `PROPERTIES.get=<path>` — Queries a specific hardware property key.
 * **Example `PROPERTIES.modes` Response (JSON):**
   ```json
@@ -306,10 +311,7 @@ Introspects machine physical capabilities, available cutting modes, and profile 
     "activeProfile": "Precision Matthews 1022",
     "capabilities": ["SPINDLE_ENCODER", "MOTOR_Z", "MOTOR_X"],
     "modes": [
-      { "id": 50, "name": "GEARBOX", "status": "AVAILABLE" },
-      { "id": 51, "name": "TURNING", "status": "AVAILABLE" },
-      { "id": 52, "name": "FACING", "status": "AVAILABLE" },
-      { "id": 53, "name": "THREADING", "status": "AVAILABLE" }
+      { "id": 50, "name": "GEARBOX", "status": "AVAILABLE" }
     ]
   }
   ```
@@ -331,17 +333,16 @@ A client must never enable motion controls or assume a connected state based sol
    CLIENT.hello=type:<profile_name>,ver:<version_string>,label:"<friendly_label>"
    ```
    *Example:* `CLIENT.hello=type:smarttouch,ver:1.2.0,label:"Apron Console"`
-3. **Controller Validation:** The controller parses the profile type, validates version compatibility, assigns an authoritative `session_id`, and responds:
+3. **Controller Validation:** The controller parses the profile type (`type` is mandatory), validates version compatibility, assigns an authoritative `session_id`, and responds:
    ```text
-   OK:CLIENT.hello session_id=<id>,type=<name>,controllerVer=<ver>,perms=<hex_mask>
+   OK:CLIENT.hello:session_id=<id>,type=<name>,controllerVer=<ver>,perms=<hex_mask>
    ```
 4. **Transition to Connected:** Only upon receiving this ACK does the client transition to `CONNECTED` and unlock UI controls permitted by its permission bitmask.
-5. **Watchdog Timeout:** If no `OK:CLIENT.hello` ACK is received within **2000 ms**, the client drops the transport link, raises an error alert, and returns to disconnected state.
+5. **Watchdog Timeout:** If no `OK:CLIENT.hello:` ACK is received within **2000 ms**, the client drops the transport link, raises an error alert, and returns to disconnected state.
 
 #### Error Responses:
-* Unknown Type: `ERR:CLIENT.unknown_type:type=<name>`
-* Disallowed Medium: `ERR:CLIENT.transport_disallowed:type=<name>,transport=<t>`
-* Incompatible Version: `ERR:CLIENT.incompatible_version:min_required=<req>,received=<rec>`
+* Missing Type: `ERR:CLIENT.hello:MISSING_PARAM:type`
+* Unknown Parameter: `ERR:CLIENT.hello:INVALID_PARAM:<key>`
 
 ---
 

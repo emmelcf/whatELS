@@ -107,11 +107,11 @@ The WebSerial transport communicates over USB CDC or UART serial using the brows
 ### 2.3 Wire Protocol Parity (Canonical Line-Oriented Text)
 
 WebSerial and WebSocket use the **exact same canonical text grammar**:
-* **Commands**: `CMD.startFeed=axis:Z,sync:1,feed:0.150,dir:-1\n`, `CMD.stop\n`, `CMD.state=ALL\n`
+* **Commands**: `CMD.startFeed=axis:Z,sync:1,feed:1500,dir:-1\n`, `CMD.stop\n`, `STATE.get=ALL\n`
 * **Telemetry**: `K.zDu=125400\n`, `K.rpm=620\n`, `I.thPitch=1.5\n`
-* **Handshake**: `CLIENT.hello type=webui,ver=1.0.0,label="Web UI"\n`
+* **Handshake**: `CLIENT.hello=type:webui,ver:1.0.0,label:"Web UI"\n`
 
-Zero protocol translation is performed for native clients (`NativeClient`). WebSerial, WebSocket, and serial pendants share 100% of telemetry formatting in `TelemetrySerializer` and command routing in `CommandDispatcher`.
+Zero protocol translation is performed for native clients (`NativeClient`). WebSerial, WebSocket, and serial pendants share 100% of telemetry formatting in `TelemetrySerializer` and command parsing/dispatch in `StandardCommandParser` and `CoreCommandService`.
 
 ---
 

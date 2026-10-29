@@ -321,9 +321,9 @@ sequenceDiagram
     participant CM as ClientManager (Session Gate)
     participant Core as CommandDispatcher / Kinematics
 
-    Client->>CM: CLIENT.hello type=webui, ver=1.2.0, label="Headstock Tablet"
+    Client->>CM: CLIENT.hello=type:webui,ver:1.2.0,label:"Headstock Tablet"
     Note over CM: 1. Lookup 'webui' in ClientProfile registry<br/>2. Verify transport is allowed (WebSocket: OK)<br/>3. Verify version (1.2.0 >= min 1.0.0: OK)<br/>4. Allocate unique session_id (e.g. 2)<br/>5. Bind profile permissions & optional translator
-    CM-->>Client: OK:CLIENT.hello session_id=2, type=webui, controllerVer=1.0.4, perms=0x0F
+    CM-->>Client: OK:CLIENT.hello:session_id=2,type=webui,controllerVer=H5V38,perms=0x000F
     CM->>Client: [Unicast Initial Hydration Frame for Session 2]
 
     Note over Client,CM: Later: Operator triggers an action
@@ -331,17 +331,17 @@ sequenceDiagram
     Note over CM: Map transport handle to session_id=2.<br/>Verify session 2 permissions (PERM_JOG_PULSE: OK).<br/>Audit log: "[Session 2: Headstock Tablet] CMD.jogStep=Z,100"
     CM->>Core: dispatch(CMD.jogStep=Z,100)
     Core-->>CM: OK
-    CM-->>Client: OK:CMD.jogStep:Z,100
+    CM-->>Client: OK:CMD.jogStep
 ```
 
 #### Handshake Wire Grammar:
 1. **Inbound Client Hello:**
    ```text
-   CLIENT.hello type=<profile_name>,ver=<version_string>,label="<friendly_label>"
+   CLIENT.hello=type:<profile_name>,ver:<version_string>,label:"<friendly_label>"
    ```
 2. **Outbound Controller Acknowledgement:**
    ```text
-   OK:CLIENT.hello session_id=<uint8>,type=<profile_name>,controllerVer=<version_string>,perms=<hex_mask>
+   OK:CLIENT.hello:session_id=<uint8>,type=<profile_name>,controllerVer=<version_string>,perms=<hex_mask>
    ```
 3. **Rejection Errors:**
    * `ERR:CLIENT.unknown_type:type=<name>` — Profile not registered in core.
@@ -625,33 +625,32 @@ Because different physical clients (Web touchscreens, Nextion LCDs, wireless pen
 
 ### 10.1 Canonical Rich Client Command Set (Core Surface)
 
-* `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<dist>]`: Atomically initiates feed motion via Key-Value pairs (or legacy positional CSV `CMD.startFeed=<axis>,<feedRate>,<dir>,[sync],[dist]`):
+* `CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRateDu>,dir:<dir>,[dist:<distDu>]`: Atomically initiates feed motion via Key-Value pairs:
   - Values containing special characters (`:`, `,`) may be enclosed in double quotes (e.g. `key:"value"`).
-  - `axis`: `'Z'`, `'X'`, or `'ZX'`
-  - `sync`: `1` for spindle-synchronized ($\text{mm/rev}$ / $\text{in/rev}$), `0` for time-based velocity ($\text{mm/min}$ / $\text{in/min}$). Binary flags are strictly `1` or `0`; text variants (`sync`/`async`/`true`/`false`) are rejected.
-  - `feed`: strictly positive magnitude ($F > 0$, float mm or integer du)
-  - `dir`: Cartesian polarity (`-1` for $-Z$ chuck / $-X$ centerline, `+1` for $+Z$ tailstock / $+X$ retract). The Ingress Translation Layer also accepts lathe operator semantics (`CHUCK`/`TAIL` for $Z$; `CENTER`/`RETRACT` or `IN`/`OUT` for $X$). `FWD`/`REV` are strictly banned for feed motion (reserved exclusively for spindle rotation).
-  - `dist`: optional stroke distance in mm or du (or `-1` for continuous feed to soft limit)
-* `CMD.stop` or `CMD.on=0`: Immediately stops all active motion with controlled deceleration.
-* `CMD.feedNudge=<+1|-1>`: Nudges live in-cut feed rate under chip load without halting motion.
+  - `axis`: `'Z'` or `'X'` (mandatory)
+  - `sync`: `1` for spindle-synchronized ($\text{dupr}$), `0` for time-based velocity ($\text{du/min}$). Binary flags are strictly `1` or `0`; text variants (`sync`/`async`/`true`/`false`) are rejected.
+  - `feed`: strictly positive integer magnitude in deci-microns ($F > 0$, `dupr` or `du/min`)
+  - `dir`: Axis-aware Cartesian polarity (`-`, `-1`, `+`, `+1`, or lathe operator semantics: `CHUCK`/`LEFT`/`TAIL`/`RIGHT` for $Z$; `CENTER`/`IN`/`INFEED`/`UP`/`RETRACT`/`OUT`/`DOWN` for $X$). `FWD`/`REV` are strictly banned for feed motion (reserved exclusively for spindle rotation).
+  - `dist`: optional integer stroke distance in `du` (or `-1` for continuous feed to soft limit)
+* `CMD.stop`: Immediately stops all active motion with controlled deceleration.
+* `CMD.hold` / `CMD.resume` / `CMD.step`: In-flight cycle pause, resume, and step-advance.
 
 #### Manual Jogging & Positioning
-* `CMD.jogHold=<axis>,<dir>`: Starts continuous manual jog along `<axis>` (`Z` or `X`) in semantic direction (`CHUCK`, `TAIL`, `INFEED`, `RETRACT`, `-1`, `+1`).
+* `CMD.jogHold=<axis>,<dir>` (or `axis:<Z|X>,dir:<dir>`): Starts continuous manual jog along `<axis>` (`Z` or `X`) in semantic direction (`CHUCK`, `TAIL`, `INFEED`, `RETRACT`, `UP`, `DOWN`, `-1`, `+1`).
 * `CMD.jogRelease=<axis>`: Stops manual jog along `<axis>` (or all axes if omitted).
-* `CMD.jogStep=<axis>,<dir>`: Executes a discrete single-step move of `moveStep` deci-microns in `<dir>`.
-* `CMD.jogStepDu=<du>`: Sets single-step increment size in deci-microns (e.g. `100` = $0.01\text{ mm}$).
+* `CMD.jogStep=<axis>,<distDu>` (or `axis:<Z|X>,dist:<distDu>`): Executes a discrete single-step move of signed `<distDu>` deci-microns.
 
 #### Coordinates & Universal Travel Limits
-* `CMD.axisZero=<axis>`: Zeroes machine coordinate origin for `<axis>` (`Z`, `X`, `Y`).
-* `CMD.axisPosDu=<axis>,<posDu>`: Sets absolute DRO position coordinate for `<axis>`.
-* `CMD.axisLimitDu=<axis>,<L|R>,<du>`: Programs software travel limit boundary for `<axis>`.
-* `CMD.axisClearLimit=<axis>,<L|R>`: Clears specified travel limit register.
+* `CMD.axisZero=<axis>`: Zeroes machine coordinate origin for `<axis>` (`Z`, `X`).
+* `CMD.axisPosDu=<axis>,<posDu>`: Sets absolute DRO position coordinate for `<axis>` in integer `du`.
+* `CMD.axisLimitDu=<axis>,<bound>,<du>`: Programs software travel limit boundary for `<axis>` (`L`, `R`, `MIN`, `MAX`, `LEFT`/`RIGHT`/`CHUCK`/`TAIL` for $Z$, `UP`/`DOWN`/`CENTER`/`RETRACT` for $X$).
+* `CMD.axisClearLimit=<axis>,<bound>`: Clears specified travel limit register.
 
 ### 10.2 Settings, Telemetry & Hydration
-* `SETTINGS.get` / `SETTINGS.get=*`: Returns all persistent machine and operational settings.
+* `SETTINGS.get`: Returns all persistent machine and operational settings.
 * `SETTINGS.get=<key>`: Returns specific setting value.
-* `SETTINGS.set=<key>,<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
-  - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`.
+* `SETTINGS.set=<key>:<value>`: Mutates setting, updates fast in-memory cache, persists to NVS flash, and triggers status broadcast.
+  - Keys: `abs`, `zDro`, `xdro`, `measure`, `feedStepDu`, `jogStepDu`, `deadbandAngle`, `deadbandTurns`, `screwZDu`, `screwXDu`, `motorStepsZ`, `motorStepsX`, `encoderPpr`, `preset`.
 * `SYS.get=info` / `SYS.get=health`: Returns firmware build version, chip architecture, flash size, and feature capabilities (replaces legacy `?sysinfo`).
 * `STATE.get` / `STATE.get=ALL`: Returns complete multi-domain telemetry frame (`K` Kinematics, `I` Intent, `C` Cycle, `P` Properties; replaces legacy `CMD.state`).
 * `STATE.get=<domains>`: Atomic snapshot hydration across requested domains (e.g. `STATE.get=K,I`).
