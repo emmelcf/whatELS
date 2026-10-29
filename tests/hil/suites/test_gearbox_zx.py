@@ -13,18 +13,18 @@ from core.base_test import HilTestCase
 
 class TestGearboxZXShallowTaperSync(HilTestCase):
     name = "gearbox_zx_shallow_taper_sync"
-    description = "Verify [KIN-04] coordinated Z+X shallow taper cut (0.10 ratio) over 4 spindle revs"
+    description = "Verify [KIN-04] coordinated Z+X shallow taper cut (0.10 ratio = 1000 du/mm) over 4 spindle revs"
 
     async def run(self) -> None:
-        # 1. Set taper ratio = 0.10 (radial delta / axial delta)
-        taper_ratio = 0.10
-        await self.client.send(f"CMD.taperRatio={taper_ratio}", wait_ack=True)
-
-        # 2. Start Gearbox feed on dual-axis ZX (Z lead = 10,000 dupr)
-        await self.client.send("CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK", wait_ack=True)
+        # 1. Start Gearbox feed on dual-axis ZX (Z lead = 10,000 dupr, taper = 1000 du per 10,000 du Z = 0.10)
+        taper_du = 1000
+        await self.client.send(
+            f"CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK,xdir:INFEED,taper:{taper_du}",
+            wait_ack=True,
+        )
         await self.client.wait_for(lambda s: s.is_on, description="dual-axis feed active")
 
-        # 3. Inject 4 spindle revolutions (Z lead = 10,000 dupr -> Z = -40,000 du, X = -4,000 du)
+        # 2. Inject 4 spindle revolutions (Z lead = 10,000 dupr -> Z = -40,000 du, X = -4,000 du)
         pulses_4revs = self.client.revs_to_pulses(4.0)
         expected_z = -40000
         expected_x = -4000
@@ -43,7 +43,7 @@ class TestGearboxZXShallowTaperSync(HilTestCase):
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {
-            "taper_ratio": taper_ratio,
+            "taper_du": taper_du,
             "z_du": state.z_du,
             "x_du": state.x_du,
         }
@@ -51,14 +51,16 @@ class TestGearboxZXShallowTaperSync(HilTestCase):
 
 class TestGearboxZXSteepConeMajorAxisSwap(HilTestCase):
     name = "gearbox_zx_steep_cone_major_axis_swap"
-    description = "Verify steep cone (2.0 ratio) 2D Bresenham major-axis swap maintaining exact 1:2 ratio"
+    description = "Verify steep cone (2.0 ratio = 20000 du/mm) 2D Bresenham major-axis swap maintaining exact 1:2 ratio"
 
     async def run(self) -> None:
-        cone_ratio = 2.0
-        await self.client.send(f"CMD.taperRatio={cone_ratio}", wait_ack=True)
+        cone_taper_du = 20000
 
-        # Start Gearbox feed on dual-axis ZX (Z lead = 5,000 dupr)
-        await self.client.send("CMD.startFeed=axis:ZX,sync:1,feed:5000,dir:CHUCK", wait_ack=True)
+        # Start Gearbox feed on dual-axis ZX (Z lead = 5,000 dupr, taper = 20000 du per 10,000 du Z = 2.0)
+        await self.client.send(
+            f"CMD.startFeed=axis:ZX,sync:1,feed:5000,dir:CHUCK,xdir:INFEED,taper:{cone_taper_du}",
+            wait_ack=True,
+        )
         await self.client.wait_for(lambda s: s.is_on, description="steep cone active")
 
         # 4 revolutions at 5,000 dupr Z lead:
@@ -86,7 +88,7 @@ class TestGearboxZXSteepConeMajorAxisSwap(HilTestCase):
         await self.client.wait_for(lambda s: not s.is_on, timeout_s=2.0)
 
         self.details = {
-            "cone_ratio": cone_ratio,
+            "cone_taper_du": cone_taper_du,
             "z_du": state.z_du,
             "x_du": state.x_du,
             "ratio_actual": round(ratio_actual, 4),
@@ -99,13 +101,15 @@ class TestGearboxZXAsyncTaperFeed(HilTestCase):
 
     async def run(self) -> None:
         await self.client.send("CMD.simRpm=0", wait_ack=True)
-        taper_ratio = 0.25
-        await self.client.send(f"CMD.taperRatio={taper_ratio}", wait_ack=True)
+        taper_du = 2500
 
         # Asynchronous feed: Z travel = 20,000 du, X travel = 0.25 * 20,000 = 5,000 du
         expected_z = -20000
         expected_x = -5000
-        await self.client.send("CMD.startFeed=axis:ZX,sync:0,feed:3000000,dir:CHUCK,dist:20000", wait_ack=True)
+        await self.client.send(
+            f"CMD.startFeed=axis:ZX,sync:0,feed:3000000,dir:CHUCK,xdir:INFEED,taper:{taper_du},dist:20000",
+            wait_ack=True,
+        )
         await self.client.wait_for(lambda s: s.is_on, description="async taper feed active")
 
         state = await self.client.wait_for(lambda s: not s.is_on, timeout_s=6.0, description="async taper completed")
@@ -115,7 +119,7 @@ class TestGearboxZXAsyncTaperFeed(HilTestCase):
         assert state.rpm == 0
 
         self.details = {
-            "taper_ratio": taper_ratio,
+            "taper_du": taper_du,
             "z_du": state.z_du,
             "x_du": state.x_du,
         }
@@ -129,19 +133,21 @@ class TestGearboxZXSecondaryAxisSoftLimitHalt(HilTestCase):
         # Arm primary limit far away (-100,000 du), but secondary X limit close (-5,000 du)
         z_limit = -100000
         x_limit = -5000
-        await self.client.send(f"CMD.axisLimitDu=Z,L,{z_limit}", wait_ack=True)
-        await self.client.send(f"CMD.axisLimitDu=X,U,{x_limit}", wait_ack=True)
+        await self.client.send(f"CMD.axisLimitDu=Z,LEFT,{z_limit}", wait_ack=True)
+        await self.client.send(f"CMD.axisLimitDu=X,UP,{x_limit}", wait_ack=True)
         await self.client.wait_for(lambda s: s.z_left_du == z_limit and s.x_up_du == x_limit, timeout_s=3.0)
 
-        # Taper ratio = 0.25 (when X moves 5,000 du, Z moves 20,000 du)
-        taper_ratio = 0.25
-        await self.client.send(f"CMD.taperRatio={taper_ratio}", wait_ack=True)
+        # Taper ratio = 0.25 -> 2500 du per 10,000 du Z (when X moves 5,000 du, Z moves 20,000 du)
+        taper_du = 2500
 
         await self.client.send("CMD.simRpm=600", wait_ack=True)
         await self.client.wait_for(lambda s: s.rpm >= 580, description="spindle at 600 RPM")
 
         # Start continuous taper cut
-        await self.client.send("CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK", wait_ack=True)
+        await self.client.send(
+            f"CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK,xdir:INFEED,taper:{taper_du}",
+            wait_ack=True,
+        )
         await self.client.wait_for(lambda s: s.is_on, description="taper cut engaged")
 
         # X reaches -5,000 du first -> controller must disengage BOTH axes synchronously
@@ -152,8 +158,8 @@ class TestGearboxZXSecondaryAxisSoftLimitHalt(HilTestCase):
         hold_state = self.client.state
 
         await self.client.send("CMD.simRpm=0", wait_ack=True)
-        await self.client.send("CMD.axisClearLimit=Z,L", wait_ack=True)
-        await self.client.send("CMD.axisClearLimit=X,U", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=Z,LEFT", wait_ack=True)
+        await self.client.send("CMD.axisClearLimit=X,UP", wait_ack=True)
 
         assert_halted(hold_state, "both axes halted on secondary X soft limit")
         assert_pos_du(hold_state.x_du, x_limit, tolerance_du=2, axis="X")
