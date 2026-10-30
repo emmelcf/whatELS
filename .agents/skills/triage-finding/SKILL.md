@@ -1,6 +1,7 @@
 ---
 name: triage-finding
 description: Capture out-of-scope bugs, tech debt, or feature ideas as structured GitHub Issues without derailing active work.
+disable-model-invocation: true
 ---
 
 # Triage Finding Skill (Zero-Distraction Issue Capture)

@@ -3,6 +3,7 @@ name: web-ui-preview
 description: >-
   Previews the Touch DRO Web Client (clients/web_ui/). Use when editing UI code to inspect
   the 800×480 layout or verify console errors against hardware or emulator.
+disable-model-invocation: true
 ---
 
 # Web UI Preview & Verification Runbook

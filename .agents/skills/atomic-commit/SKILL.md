@@ -1,6 +1,7 @@
 ---
 name: atomic-commit
 description: Stage decoupled Conventional Commits, verifying doc parity, test status, and generated asset sync before proposing commands.
+disable-model-invocation: true
 ---
 
 # Atomic Commit & Git Hygiene Skill

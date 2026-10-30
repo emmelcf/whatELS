@@ -3,6 +3,7 @@ name: controller-hil-test
 description: >-
   Runs Hardware-in-the-Loop (HIL) integration tests against the ESP32-S3 controller over WebSocket.
   Use to verify motion synchronization, limits, jogging, or live regressions.
+disable-model-invocation: true
 ---
 
 # Controller Hardware-in-the-Loop (HIL) Testing Runbook

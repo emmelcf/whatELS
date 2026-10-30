@@ -4,6 +4,7 @@ description: >-
   Builds and verifies the whatELS ESP32-S3 firmware using PlatformIO.
   Use whenever C++ source files or headers under src/ or platformio.ini are modified,
   or when checking for compilation errors without flashing hardware.
+disable-model-invocation: true
 ---
 
 # Firmware Build & Verification Runbook
