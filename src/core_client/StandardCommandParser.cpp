@@ -733,17 +733,22 @@ core::CommandResult parseSys(std::string_view act, std::string_view argsStr, con
   }
 
   if (argsStr == "health") {
-    String out = "SYS.uptime=" + std::to_string(hal->getUptimeSeconds()) + "\n";
-    out += "SYS.heap=" + std::to_string(hal->getFreeHeapBytes() / 1024) + " KB\n";
-    out += "SYS.wifi=" + hal->getWifiStatus() + "\n";
-    return core::CommandResult::ok("SYS.get", out);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "SYS.uptime=%lu\nSYS.heap=%lu KB\nSYS.wifi=%s\n",
+             static_cast<unsigned long>(hal->getUptimeSeconds()),
+             static_cast<unsigned long>(hal->getFreeHeapBytes() / 1024),
+             hal->getWifiStatus().c_str());
+    return core::CommandResult::ok("SYS.get", buf);
   }
 
-  String out = "SYS.version=" + String(hal->getVersion()) + "\n";
-  out += "SYS.chip=" + String(hal->getChipModel()) + " rev " + std::to_string(hal->getChipRevision()) + "\n";
-  out += "SYS.flash=" + std::to_string(hal->getFlashSizeBytes() / 1024 / 1024) + " MB\n";
-  out += "SYS.features=" + String(hal->getFeatures()) + "\n";
-  return core::CommandResult::ok("SYS.get", out);
+  char buf[256];
+  snprintf(buf, sizeof(buf), "SYS.version=%s\nSYS.chip=%s rev %lu\nSYS.flash=%lu MB\nSYS.features=%s\n",
+           hal->getVersion(),
+           hal->getChipModel(),
+           static_cast<unsigned long>(hal->getChipRevision()),
+           static_cast<unsigned long>(hal->getFlashSizeBytes() / 1024 / 1024),
+           hal->getFeatures());
+  return core::CommandResult::ok("SYS.get", buf);
 }
 
 core::CommandResult parseClient(std::string_view act, std::string_view argsStr, const ClientContext& ctx) {
