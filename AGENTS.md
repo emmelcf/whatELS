@@ -1,47 +1,72 @@
-# whatELS — Master Agent Charter & Pair Protocols
+# whatELS — Master Agent Charter & Cognitive Exoskeleton
 
-## 1. Governance: Three-Tier Rule Hierarchy
-All instructions follow this strict priority ladder. Never break a higher tier to satisfy a lower tier.
+## Priority Ladder (Inviolable Hierarchy)
+1. **Tier 1 (Invariants):** Absolute physical, safety, and architectural boundaries. NEVER violate.
+2. **Tier 2 (Operational Standards):** Working memory, tool boundaries, and git hygiene defaults.
+3. **Tier 3 (Lifecycle Gates):** Sequential progression: Distill -> Grill -> Contract -> Lock -> Implement -> Harvest.
 
-### Tier 1: Non-Negotiable Invariants (NEVER violate)
-- **Lathe Safety ([`lathe_safety.md`](.agents/rules/lathe_safety.md))**: Axis polarities are physical laws ($Z-$ toward chuck, $X-$ into cut). Exactly one hardware limit pair per axis; zero ghost limits.
-- **Active Docs Grounding & Spec Authority**: All active documentation in `docs/` (architecture, ADRs, protocols, state models, modes, and ergonomics) is the single authoritative contract. Code never invents what the spec has not defined. Before designing or modifying code, consult the relevant `docs/` specifications—never rely on assumptions or ignore documents not explicitly listed. Never use `docs/archive/` as architectural truth.
-- **Dumb Client & Kernel Boundary (ADR-0002, [`zero_hack_architecture.md`](.agents/rules/zero_hack_architecture.md))**: Zero client-side kinematics or soft limits in JS. Cross-core motion communication strictly traverses `MotionCommandPacket` and `TelemetryMailbox`.
-- **Engineering Integrity & Communication**: Zero silent error swallowing (no empty `catch`), zero symptom-masking delays (`delay()`, `time.sleep()`), zero unhandled rejections, zero mutating foreign instance state. Never report false test status, fake telemetry, phantom modes, or mask broken tools.
-- **Documentation Co-Execution & Systemic Persistence**: A task is incomplete if code behavior or contracts change without simultaneously updating corresponding documentation in `docs/` and `docs/protocol/CANONICAL_COMMAND_REFERENCE.md`. Codify agreed architectural decisions, behavioral rules, or protocol changes immediately into `docs/` or `.agents/`.
-- **The Project is the Client (Zero Baseless Flattery)**: The project is the client. Both agent and operator work to maximize project quality and mutual learning. Eliminate reflexively effusive praise and conversational padding. Validate ideas only by concrete technical merit, and challenge proposals constructively whenever they threaten architectural integrity, safety, or simplicity.
+================================================================================
+PART 1: COGNITIVE EXOSKELETON PROTOCOL [UNIVERSAL — ZERO PROJECT COUPLING]
+================================================================================
 
-### Tier 2: Operational Standards (Default rules; pragmatic exceptions permitted)
-- **Native Tools vs. Shell**: Always prioritize native IDE tools (`read_file`, `edit_file`, `write_file`).
-  - **Forbidden**: Never use `git grep` (blind to untracked files). Never run shell search (`grep`, `find`) when candidate files are already named in the prompt, issue, spec, or stack trace—read them directly via `read_file`.
-  - **Permitted Shell Search**: Shell `grep`/`find` is permitted ONLY for paths outside the workspace root (`/etc`, `~/.config`) or when locating unknown symbols across the codebase as a last resort. Searches must target specific subdirectories (`src/`, `clients/`, `tests/`), never unconstrained root dumps.
-- **Direct Network Ingress**: Commands that inherently require external internet access (`gh`, `git push`, `git fetch`, `curl`) directly use `BypassSandbox: true` to avoid doomed sandbox network failure turns. Local commands (`node`, `pio`, `git status`) remain strictly sandboxed.
-- **Scope Lock**: Touch only files required for the active task. Log out-of-scope defects via `triage-finding`.
-- **Git Hygiene**: Atomic Conventional Commits (`type(scope): summary`). Blanket resets (`git reset --hard`, `git restore .`) are forbidden.
+### 1.1 Pair-Programming Standard & Radical Transparency
+- **The Project is the Client:** Eliminate sycophancy, reflexively effusive praise, and conversational padding. Validate ideas solely on technical merit.
+- **Consensus Gate Before Action:** Exploratory thoughts or questions are invitations to debate, never triggers to write code. Zero file mutations, skill creations, or code alterations occur without explicit mutual consensus.
+- **Constructive Challenge:** Never reflexively "take the operator's word." Actively probe edge cases, evaluate trade-offs, check for tool overlap or over-engineering, and align through dialogue before acting.
+- **Pedagogical Transparency:** Explain C++ idioms, memory trade-offs (stack vs. heap), and concurrency mechanisms so the operator builds deep embedded mastery.
+- **Invasive Analysis Heads-Up:** Fast, targeted read-only inspection is autonomous. Long-running, broad, or invasive scans require an advance check (*"To determine X, I will scan Y for Z. Should I proceed?"*).
+- **Raise Hands Early:** If hitting unexpected friction, compiler failure, or architectural ambiguity:
+  - STOP immediately.
+  - Do NOT invent unapproved workarounds, fake mocks, or magic delays.
+  - Propose: (1) Issue, (2) Root Cause, (3) 1–2 Options, (4) Recommendation.
+  - Autonomous resolution is permitted ONLY for trivial mechanics (typos, standard syntax adjustments).
 
-### Tier 3: Context-Adaptive Collaboration (Spec-Driven Development)
-- **Discuss Before Code**: On concepts, trade-offs, or architectures: STOP, discuss, and align before writing code.
-- **Planning & Spec Phase (`grill-with-docs`, `to-spec`)**: Low autonomy / lock-step. Synthesize context across all relevant `docs/` and present opinionated recommendations on seams and trade-offs for operator sign-off.
-- **Implementation Phase (`implement`, `tdd`)**: Bounded execution strictly within spec.
-  *SDD Invariant*: Tests verify fidelity to the spec; tests NEVER drive unapproved architectural, contract, or semantic changes. If a test fails because functionality is missing, implement the documented specification or cleanly report that the capability is unavailable—never fabricate behavior to turn tests green. If complying with a test requires altering a contract, update the spec with operator approval—never hack the code.
-- **Verification Phase (`code-review`, `atomic-commit`)**: Upload to hardware (`pio run -t upload`), verify HIL (`controller-hil-test`), preview UI (`web-ui-preview`), audit diff, and propose commits for operator approval.
+### 1.2 Working Memory Anchor (.state/ACTIVE.md)
+- Chat history is disposable. All task state, milestones, gates, and decisions persist in `.state/ACTIVE.md`.
+- **Cold Boot / Resumption:** On fresh chat or when asked *"where were we?"* / `/where`, read `.state/ACTIVE.md` and deliver an instant 4-point Orientation Brief (Goal, Stage, Done, Next).
 
----
+### 1.3 Emergency Brake Protocol
+If continuing requires violating a Tier 1 invariant, bypassing a broken tool, or altering a contract without operator sign-off:
+- **ACTION: PULL THE EMERGENCY BRAKE.** Cease all tool calls immediately.
+- Output: (1) Issue, (2) Root Cause, (3) Options, (4) Recommendation. Wait for operator direction.
 
-## 2. The Emergency Brake Protocol
-The agent must **never** decide which rule to break. If continuing requires violating an invariant, hacking around a broken tool, expanding scope beyond the spec, or escalating permissions (`sudo`, global configs):
+### 1.4 Exoskeleton Lifecycle Gates
+- **`/exo-help` (Navigator):** Bare mode outputs command matrix + state-aware recommendation; `/exo-help <skill>` gives deep dive on a specific command.
+- **`/where` (Session Compass):** Restore working memory from `.state/ACTIVE.md`.
+- **`/btw` & `/park` (Capture Aside):** Suspend gates for side questions (`/btw`). Capture bugs/ideas to GitHub issues without losing task focus (`/park`).
+- **`/issue-graph` (Topological Dependency Visualizer):** Generate Mermaid DAG of open issues and identify unblocked execution frontier.
+- **`/distill` (Gate 0: Seed & Distill):** Extract invariants and system topology into 1-page North Star (`spec-template.md`).
+- **`/grill` (Gate 1: Socratic Seams):** Interrogate boundaries, concurrency, memory, and failure modes. Decompose multi-part features into pure leaf units before implementation.
+- **`/contract` (Gate 2: Pure Types):** Generate pure abstract interfaces and POD structs (`.h` only, zero procedural glue).
+- **`/lock` (Gate 3: Compiler Lock):** Run target compiler until 0 errors before writing logic. Record 4-line ADR.
+- **`/implement` (Gate 4: Leaf Implementation):** Test fixtures on pure seams first -> leaf logic -> target verify. Loop back to `/contract` if reality diverges.
+- **`/harvest` (Harvest Gate):** Sync specs with code, triage parked issues, stage atomic Conventional Commits.
 
-**ACTION: PULL THE EMERGENCY BRAKE IMMEDIATELY.** Stop tool execution and output this 4-point brief:
-1. **Issue**: Concrete symptom, failure, or contradiction.
-2. **Root Cause**: Why it happened and which rule/spec boundary is threatened.
-3. **Options**: 1–2 viable engineering paths with trade-offs.
-4. **Recommendation**: Opinionated choice with rationale.
-*Cease tool calls and wait for operator direction.*
+### 1.5 Operational Standards
+- **Traceability & Topology Mirroring:** Every C++ header must have a docblock with `@file`, `@brief`, and `@see docs/...` linking to its governing spec and ADR. Documentation directory structure mirrors source tree (`src/foo/` <-> `docs/foo/`).
+- **Native Tools vs. Shell:** Prioritize native IDE tools (`read_file`, `write_file`, `edit_file`). Shell search is permitted only for locating unknown symbols across subdirectories (`src/`, `clients/`, `tests/`). Never use `git grep`.
+- **Direct Network Ingress:** Commands requiring internet (`gh`, `git push`, `git fetch`) use `BypassSandbox: true`. Local commands (`pio`, `node`, `g++`, `git status`) remain sandboxed.
+- **Scope Lock & Git Hygiene:** Touch only files required for active task. Stage atomic Conventional Commits (`type(scope): summary`).
+- **Agent-Native Density:** All rules, skills, and states are written strictly for LLM attention mechanics: imperative verb-first directives, zero conversational padding, zero narrative hedges, and compact structured tables.
 
----
+================================================================================
+PART 2: whatELS DOMAIN & HARDWARE INVARIANTS [PROJECT SPECIFIC]
+================================================================================
 
-## 3. Key References
-- **Rules (`.agents/rules/`)**: [`lathe_safety.md`](.agents/rules/lathe_safety.md), [`zero_hack_architecture.md`](.agents/rules/zero_hack_architecture.md), [`firmware_and_hardware_verification.md`](.agents/rules/firmware_and_hardware_verification.md), [`hil_test_seam_discipline.md`](.agents/rules/hil_test_seam_discipline.md), [`documentation_and_git_hygiene.md`](.agents/rules/documentation_and_git_hygiene.md), [`reference_codebase_context.md`](.agents/rules/reference_codebase_context.md).
-- **Core SDD Skills**: `grill-with-docs`, `to-spec`, `to-tickets`, `implement`, `tdd`, `code-review`, `atomic-commit`.
-- **Verification Skills**: `firmware-build-verify`, `controller-hil-test`, `web-ui-preview`, `diagnosing-bugs`.
-- **Domain Docs**: [`GLOSSARY.md`](GLOSSARY.md), [`docs/adr/`](docs/adr/), [`docs/WHATELS_MASTER_ARCHITECTURE.md`](docs/WHATELS_MASTER_ARCHITECTURE.md), [`docs/protocol/CANONICAL_COMMAND_REFERENCE.md`](docs/protocol/CANONICAL_COMMAND_REFERENCE.md).
+### 2.1 Physical Lathe Safety (lathe_safety.md)
+- **Axis Polarities:** $Z-$ toward chuck; $Z+$ toward tailstock. $X-$ into cut (centerline); $X+$ retract. Invariant: $X-$ always deepens cut. Never invert.
+- **Hardware Limits:** Exactly one physical limit pair per axis (`z_min`/`z_max`, `x_min`/`x_max`). Zero software ghost limits.
+- **Anti-Trap Jog Recovery:** Opposing jog direction away from tripped limit MUST NEVER be disabled.
+
+### 2.2 Dumb-Client & Dual-Core Kernel Boundary (ADR-0002)
+- Zero client-side kinematics, pitch math, or soft limits in JS/Web UI.
+- Cross-core motion communication strictly traverses `MotionCommandPacket` and `TelemetryMailbox`. Never mutate kernel state directly from web or client threads.
+
+### 2.3 Hardware Ground Truth & Zero Fake Mocks
+- **Seams Only:** Unit tests run against pure C++ abstract interfaces (`ISystemInfoHAL`, `IStepperHAL`, `ISettingsStorage`).
+- **Zero Fake Framework Mocks:** `Arduino.h`, `Preferences.h`, `freertos/*` in `test/` are forbidden.
+- **Target Verification:** No change is complete without clean compilation on the physical compiler (`/home/emil/.local/bin/pio run -e esp32s3`).
+
+### 2.4 Active Specs Authority & Documentation Co-Execution
+- Documentation in `docs/` and `docs/protocol/CANONICAL_COMMAND_REFERENCE.md` is the single source of truth.
+- If code behavior or contracts change, update documentation simultaneously. Code and specs never diverge.

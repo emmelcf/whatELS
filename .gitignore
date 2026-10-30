@@ -34,3 +34,6 @@ __pycache__/
 
 # Agent skill manager lockfile
 skills-lock.json
+
+# Cognitive Exoskeleton local working memory
+.state/
