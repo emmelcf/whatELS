@@ -384,6 +384,7 @@ struct FeedParameters {
 
 class MotionEngine {
 public:
+  // Note: IDROScaleHAL* and IEndstopHAL* parameters are Planned (not yet implemented; current MotionEngine injects IStepperHAL* and ISpindleEncoderHAL* only).
   MotionEngine(IStepperHAL* stepperHal, ISpindleEncoderHAL* encoderHal, IDROScaleHAL* droHal, IEndstopHAL* endstopHal);
 
   // Axis Configuration

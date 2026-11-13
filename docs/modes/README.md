@@ -30,15 +30,15 @@ To cleanly decouple physical motion logic from presentation while ensuring high 
 
 ## 2. Mode Catalog
 
-| Mode Name | Specification Document | Category | Motion Type | Primary Axis | Key Machine Capabilities Required |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Electronic Gearbox** | [`gearbox/SPECIFICATION.md`](./gearbox/SPECIFICATION.md) | Continuous Geared | Spindle-Synchronized or Time Async | $Z$ or $X$ | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
-| **Threading** | [`threading/SPECIFICATION.md`](./threading/SPECIFICATION.md)<br>• [`WIZARD_WORKFLOW.md`](./threading/WIZARD_WORKFLOW.md) | Multi-Pass Cycle | Rigid Spindle Sync (Modulo Phase Lock) | $Z$ (sync) + $X$ (infeed) | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
-| **Turning** | [`turning/SPECIFICATION.md`](./turning/SPECIFICATION.md) | Multi-Pass Cycle | Canned Longitudinal Turning Cycle | $Z$ (cut) + $X$ (DOC) | `CAP_MOTOR_Z`, `CAP_MOTOR_X` (or manual $X$) |
-| **Facing** | [`facing/SPECIFICATION.md`](./facing/SPECIFICATION.md) | Multi-Pass Cycle | Canned Transverse Facing Cycle | $X$ (cut) + $Z$ (DOC) | `CAP_MOTOR_X`, `CAP_MOTOR_Z` (or manual $Z$) |
-| **Taper & Chamfer** | [`taper/SPECIFICATION.md`](./taper/SPECIFICATION.md) | Coordinated Angled | Dual-Axis Synchronized Continuous / Multi-Pass | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
-| **Cutoff / Parting** | [`cutoff/SPECIFICATION.md`](./cutoff/SPECIFICATION.md) | Specialized Cycle | Controlled Transverse Plunge | $X$ Cross-Slide | `CAP_MOTOR_X` |
-| **Slotting / Keyway** | [`slotting/SPECIFICATION.md`](./slotting/SPECIFICATION.md) | Reciprocating Cycle | Linear Broaching Strokes | $Z$ Carriage | `CAP_MOTOR_Z`, `CAP_SPINDLE_INDEX` |
-| **Half-Spheres** | [`spheres/SPECIFICATION.md`](./spheres/SPECIFICATION.md) | Contouring Cycle | Coordinated Circular Interpolation | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
-| **Joystick / Pendant** | [`joystick/SPECIFICATION.md`](./joystick/SPECIFICATION.md) | Manual Rapid/Feed | Deflection-Proportional Velocity | $Z$ and/or $X$ | `CAP_JOYSTICK` or `CAP_MPG_Z` / `CAP_MPG_X` |
+| Mode Name | Specification Document | Status | Category | Motion Type | Primary Axis | Key Machine Capabilities Required |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Electronic Gearbox** | [`gearbox/SPECIFICATION.md`](./gearbox/SPECIFICATION.md) | **Implemented** (`UnifiedGearboxMode`) | Continuous Geared | Spindle-Synchronized or Time Async | $Z$ or $X$ | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
+| **Threading** | [`threading/SPECIFICATION.md`](./threading/SPECIFICATION.md)<br>• [`WIZARD_WORKFLOW.md`](./threading/WIZARD_WORKFLOW.md) | **Planned** (Not Implemented — Issue #10) | Multi-Pass Cycle | Rigid Spindle Sync (Modulo Phase Lock) | $Z$ (sync) + $X$ (infeed) | `CAP_SPINDLE_ENCODER`, `CAP_MOTOR_Z` |
+| **Turning** | [`turning/SPECIFICATION.md`](./turning/SPECIFICATION.md) | **Planned** (Not Implemented — Issue #10) | Multi-Pass Cycle | Canned Longitudinal Turning Cycle | $Z$ (cut) + $X$ (DOC) | `CAP_MOTOR_Z`, `CAP_MOTOR_X` (or manual $X$) |
+| **Facing** | [`facing/SPECIFICATION.md`](./facing/SPECIFICATION.md) | **Planned** (Not Implemented — Issue #10) | Multi-Pass Cycle | Canned Transverse Facing Cycle | $X$ (cut) + $Z$ (DOC) | `CAP_MOTOR_X`, `CAP_MOTOR_Z` (or manual $Z$) |
+| **Taper & Chamfer** | [`taper/SPECIFICATION.md`](./taper/SPECIFICATION.md) | **Partial** (Continuous `ZX` implemented; multi-pass Planned — Issue #10) | Coordinated Angled | Dual-Axis Synchronized Continuous / Multi-Pass | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
+| **Cutoff / Parting** | [`cutoff/SPECIFICATION.md`](./cutoff/SPECIFICATION.md) | **Planned** (Not Implemented — Issue #10) | Specialized Cycle | Controlled Transverse Plunge | $X$ Cross-Slide | `CAP_MOTOR_X` |
+| **Slotting / Keyway** | [`slotting/SPECIFICATION.md`](./slotting/SPECIFICATION.md) | **Planned** (Not Implemented — Issue #10) | Reciprocating Cycle | Linear Broaching Strokes | $Z$ Carriage | `CAP_MOTOR_Z`, `CAP_SPINDLE_INDEX` |
+| **Half-Spheres** | [`spheres/SPECIFICATION.md`](./spheres/SPECIFICATION.md) | **Planned** (Not Implemented — Issue #10) | Contouring Cycle | Coordinated Circular Interpolation | $Z + X$ Coordinated | `CAP_MOTOR_Z`, `CAP_MOTOR_X` |
+| **Joystick / Pendant** | [`joystick/SPECIFICATION.md`](./joystick/SPECIFICATION.md) | **Planned** (Not Implemented) | Manual Rapid/Feed | Deflection-Proportional Velocity | $Z$ and/or $X$ | `CAP_JOYSTICK` or `CAP_MPG_Z` / `CAP_MPG_X` |
 

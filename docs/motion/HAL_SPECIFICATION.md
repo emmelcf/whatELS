@@ -242,6 +242,8 @@ public:
 
 ## 4. Optical DRO Linear Scales Abstraction (`IDROScaleHAL`)
 
+> **Status:** **Planned — Not Yet Implemented.** Current firmware reads quadrature scales directly via `DRO_Scale` (`src/motion/DRO_Scale.h`); HAL extraction into `IDROScaleHAL` is deferred to a future milestone.
+
 For lathes equipped with optical linear glass scales or magnetic encoders on the carriage and cross-slide:
 
 ```cpp
@@ -275,6 +277,8 @@ public:
 ---
 
 ## 5. Hardware Endstops & Emergency Stop Abstraction (`IEndstopHAL`)
+
+> **Status:** **Planned — Not Yet Implemented.** `IEndstopHAL` and `Esp32EndstopHAL` are target-state interfaces not yet wired into `MotionEngine`.
 
 For physical machine protection switches:
 
