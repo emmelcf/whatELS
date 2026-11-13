@@ -1,0 +1,133 @@
+# whatELS — Spec-vs-Code Drift & Coverage Report
+
+**Audit Scope:** Read-only comparison of active specifications in [`docs/`](../../docs) (excluding [`docs/archive/`](../../docs/archive)) against [`src/`](../../src), [`clients/`](../../clients), [`data/`](../../data), [`test/`](../../test), and [`tests/`](../../tests).
+**Second-Pass Enrichment:** Every `CODE_VS_SPEC` divergence was cross-checked against `git log` history to distinguish stale specs left behind during recent protocol work from unimplemented target specs or code regressions.
+
+---
+
+## 1. Executive Summary & Git-History Root-Cause Patterns
+
+The audit identified **74 distinct findings** across four subsystems, clustering into **three clear historical waves** in git history:
+
+1. **Pre-SDD Target Specs (`091e6ea`, 2026-10-21):** The initial SDD baseline documented target-state architecture (e.g., 4 kHz Core 1 loop, RMT pulse trains, `IDROScaleHAL`, `IEndstopHAL`, 7 canned machining modes, `ControlsHardwareConfig`) that the earlier firmware had not yet implemented.
+2. **Protocol Rationalization Wave (`2026-10-26` → `2026-10-29`, Issues #2, #3, #9, #10):** Active specs ([`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md), [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md), [`ELS_MODE_ARCHITECTURE.md`](../../docs/modes/ELS_MODE_ARCHITECTURE.md), [`INTERACTION_LEDGER.md`](../../docs/clients/web_ui/INTERACTION_LEDGER.md), [`HIL_TEST_HARNESS_SPECIFICATION.md`](../../docs/testing/HIL_TEST_HARNESS_SPECIFICATION.md)) and core parser/service/transport code moved to the 6-namespace single-equals colon grammar (`CMD.startFeed`, `CMD.state`, atomic `xdir`/`taper`). However, **secondary specs and legacy UI callers** ([`docs/modes/gearbox/SPECIFICATION.md`](../../docs/modes/gearbox/SPECIFICATION.md), [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md), [`ELS_PRESET_CATALOG.md`](../../docs/state/ELS_PRESET_CATALOG.md), and [`lathe-controller.js`](../../clients/web_ui/lathe-controller.js)) remained at `091e6ea`, creating `SPEC_CONFLICT` and `CODE_VS_SPEC` drift.
+3. **Header Traceability Gap (`AGENTS.md` §1.5):** Almost all C++ headers under `src/` lack the required `@see docs/...` traceability link.
+
+### Subsystem Scorecard
+
+| Subsystem | `CODE_VS_SPEC` | `SPEC_NO_CODE` | `CODE_NO_SPEC` | `SPEC_CONFLICT` | `BOUNDARY` | Total |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Protocol, Core & State** | 12 | 7 | 5 | 6 | — | **30** |
+| **Motion Kernel, HAL & Machine** | 11 | 4 | 3 | 2 | — | **20** |
+| **Machining Modes** | 5 | 2 | 3 | 3 | — | **13** |
+| **Clients & Test Harnesses** | 5 | 3 | 1 | — | 2 | **11** |
+| **Total** | **33** | **16** | **12** | **11** | **2** | **74** |
+
+> [!TIP]
+> See the companion artifact [traceability_matrix.md](./traceability_matrix.md) for the complete layer-by-layer `Spec ↔ Code` mapping.
+
+---
+
+## 2. Critical & High-Severity Findings (Prioritized)
+
+### 2.1 Critical
+
+| ID | Type | Subsystem | Summary & Citations | Git History Signal | Recommended Action |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **C-01** | `CODE_VS_SPEC` | Motion / HAL | **Core 1 loop runs at 1 kHz (1 ms) & bypasses `startPulseTrain()`:** [`CONCURRENCY_AND_TIMING.md`](../../docs/motion/CONCURRENCY_AND_TIMING.md#L220-L234) specifies a 250 µs (4 kHz) Core 1 loop and RMT/GPTimer `startPulseTrain` for velocity feed. [`MotionEngine.cpp`](../../src/motion/kernel/MotionEngine.cpp#L12) uses `pdMS_TO_TICKS(1)` (1 kHz), `dt = 0.001f`, and a software `m_stepFraction` accumulator calling blocking `pulseStep()`. | Both untouched since `091e6ea` (pre-SDD baseline). | **Needs Decision** — Either upgrade Core 1 loop to 250 µs + `startPulseTrain()` or adjust spec jitter/rate targets to match ESP32 FreeRTOS 1 kHz reality. |
+| **C-02** | `SPEC_NO_CODE` | Motion / HAL | **`IDROScaleHAL`, `IEndstopHAL`, and `Esp32EndstopHAL` missing:** [`HAL_SPECIFICATION.md`](../../docs/motion/HAL_SPECIFICATION.md#L243-L315) and [`MOTION_ENGINE_SPECIFICATION.md`](../../docs/motion/MOTION_ENGINE_SPECIFICATION.md#L387) require these HALs in `MotionEngine`. [`MotionEngine.h`](../../src/motion/kernel/MotionEngine.h#L70) only takes stepper + spindle HALs; [`DRO_Scale.h`](../../src/motion/DRO_Scale.h) remains coupled to `Arduino.h` & `float` mm. | Untouched since `091e6ea`. | **Update Code** (implement HAL seams for physical safety/endstops) or defer explicitly in spec roadmap. |
+| **C-03** | `CODE_VS_SPEC` | Machine Profile | **`LatheProfile.cpp` JSON keys silently drop polarity/enable settings:** [`LATHE_MACHINE_PROFILE.md`](../../docs/machine/LATHE_MACHINE_PROFILE.md#L466-L487), [`lathe-profile.schema.json`](../../data/schemas/lathe-profile.schema.json#L166-L248), and [`profiles.json`](../../data/presets/profiles.json#L54-L93) use `kinematics.direction_inverted` and `drive.enable_active_low`. [`LatheProfile.cpp`](../../src/motion/LatheProfile.cpp#L119-L136) reads `drive.invert_dir`, `drive.invert_enable`, `drive.needs_rest`. | All untouched since `091e6ea`; schema & `profiles.json` agree against C++. | **Update Code** — Align `LatheProfile.cpp` keys to `lathe-profile.schema.json` / `profiles.json`. |
+| **C-04** | `SPEC_NO_CODE` | Modes | **7 canned/specialized modes + multi-pass Taper unimplemented:** [`docs/modes/`](../../docs/modes) specifies `TURNING`, `FACING`, `THREADING` (4-layer + wizard), `CUTOFF`, `SLOTTING`, `SPHERE`, `JOYSTICK`, and multi-pass `TAPER`. Only `UnifiedGearboxMode` (`CMD.startFeed`, including continuous `ZX` taper) is implemented; `CMD.startCycle` and `CMD.step` return `UNAVAILABLE`. | Intentionally pruned in `252c269` (`purge phantom cycle modes`) and tracked via Issue #10. | **Keep as Roadmap** — Mark unimplemented modes as `Planned / Not Implemented` in `docs/modes/README.md` so specs don't imply live availability. |
+| **C-05** | `SPEC_NO_CODE` | Clients / SDK | **`WhatelsClient` JS SDK class missing:** [`CLIENT_SDK_SPECIFICATION.md`](../../docs/clients/sdk/CLIENT_SDK_SPECIFICATION.md#L350-L388) and [`whatels-client.d.ts`](../../clients/sdk/js/whatels-client.d.ts#L118-L150) define `WhatelsClient` (`whatels-client.js`), but only transports exist in [`clients/sdk/js/transports/`](../../clients/sdk/js/transports). [`whatels-service.js`](../../clients/web_ui/whatels-service.js#L7-L228) talks directly to `ClientTransport`. | `CLIENT_SDK_SPECIFICATION.md` updated `2026-10-29` (`4086ab7`, `bd59a4a`); `whatels-service.js` refactored `2026-10-26` (`c3a0a46`). | **Needs Decision** — Implement `whatels-client.js` and wrap it in `WhatelsService`, or update SDK spec if `WhatelsService` *is* the JS client. |
+| **C-06** | `CODE_VS_SPEC` | Clients / Web UI | **Web UI still emits decommissioned `CMD.on=1` & legacy modal setters:** [`ELS_CLIENT_ARCHITECTURE.md`](../../docs/clients/ELS_CLIENT_ARCHITECTURE.md#L660-L673) decommissions `CMD.on=1`, `CMD.mode=`, `CMD.feedMm`, `CMD.feedTpi`. [`whatels-service.js`](../../clients/web_ui/whatels-service.js#L395) still appends `CMD.on=1\n`, and [`lathe-controller.js`](../../clients/web_ui/lathe-controller.js#L1315-L1411) emits legacy setters. | `lathe-controller.js` untouched since `091e6ea`; protocol & parser moved ahead in `71d5def` / `f4f4be2` / `a6916c2`. | **Update Code** — Purge `CMD.on=1` and legacy modal commands from `whatels-service.js` and `lathe-controller.js`. |
+
+---
+
+### 2.2 High
+
+| ID | Type | Subsystem | Summary & Citations | Git History Signal | Recommended Action |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **H-01** | `CODE_VS_SPEC` | Core / State | **`IntentState` & `I.feedRev=` vs `direction`/`targetDistDu`:** [`ELS_CORE_STATE_MODEL.md`](../../docs/state/ELS_CORE_STATE_MODEL.md#L238-L245) replaces `feedReverse` with `direction` + `targetDistDu`. [`MachineModel.h`](../../src/core/MachineModel.h#L69-L75) and [`TelemetrySerializer.cpp`](../../src/core/TelemetrySerializer.cpp#L50) still use `feedReverse` / `I.feedRev=`. | Spec updated `2026-10-29` (`e636302`); `TelemetrySerializer.cpp` untouched since `091e6ea`. | **Update Code** — Migrate `IntentState` and `TelemetrySerializer` to match `ELS_CORE_STATE_MODEL.md`. |
+| **H-02** | `CODE_VS_SPEC` | Core / Protocol | **`SettingsService` wire framing (`SETTING.<key>=...`) & error swallowing:** [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md#L33-L35) mandates `OK:<NS>.<name>:<data>` / `ERR:<NS>.<name>:<reason>`. [`SettingsService.cpp`](../../src/core/SettingsService.cpp#L1193) emits legacy `SETTING.` / `OK:SETTINGS.<key>=` and returns `true` on unknown keys. | Spec & `StandardCommandParser.cpp` updated `2026-10-29` (`71d5def`, `f4f4be2`); `SettingsService.cpp` response formatting wasn't migrated. | **Update Code** — Align `SettingsService` responses and return `false` on errors. |
+| **H-03** | `CODE_VS_SPEC` | Core / Web | **Duplicate hydration & 50 Hz telemetry bypass in `WebServerModule.cpp`:** [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L55) puts 10 Hz telemetry in `ClientManager::broadcastIfChanged()`. [`WebServerModule.cpp`](../../src/web/WebServerModule.cpp#L420-L432) sends raw hydration + runs its own 50 Hz `dispatchTelemetry()` loop. | `ADR-0005` updated `2026-10-29` (`71d5def`); `WebServerModule.cpp` partially updated (`c601a9c`) without removing legacy broadcast loop. | **Update Code** — Remove duplicate hydration & 50 Hz loop in `WebServerModule.cpp`. |
+| **H-04** | `CODE_NO_SPEC` | Core / Network | **`HttpServer` implemented but unwired:** [`HttpServer.h`](../../src/core/network/HttpServer.h) implements Port 80 HTTP + OTA, but is never instantiated; [`WebServerModule.cpp`](../../src/web/WebServerModule.cpp) still owns Port 80. | `HttpServer` created in `091e6ea`; `ADR-0005` assumes `HttpServer` + `PROGMEM`. | **Update Code** — Wire `HttpServer` (with `PROGMEM` assets) and retire `WebServerModule` HTTP ownership. |
+| **H-05** | `SPEC_NO_CODE` | Core / Transports | **WebSerial (`SerialTransport`, `ENABLE_WEBSERIAL_CDC`, `webserial-transport.js`) missing:** Specified in [`ADR-0004`](../../docs/adr/0004-pluggable-transports-and-webserial.md#L30) and [`CLIENT_SDK_SPECIFICATION.md`](../../docs/clients/sdk/CLIENT_SDK_SPECIFICATION.md#L48), absent in both `src/` and `clients/`. | Target feature not yet built. | **Keep as Backlog** — Track as a distinct feature issue. |
+| **H-06** | `SPEC_NO_CODE` | Core / Presets | **`PresetService` (`PRESET.*`) unwired in `StandardCommandParser`:** [`PresetService.cpp`](../../src/core/PresetService.cpp) implements `discover`/`get`, and [`StandardCommandParser.cpp`](../../src/core_client/StandardCommandParser.cpp#L6) includes `PresetService.h`, but `PRESET` is not routed in `parseAndDispatch()`. | Overridden by `ADR-0005` (which moved presets to `SETTINGS.presets` / `PROPERTIES.profiles`). | **Needs Decision** — Retire `PresetService` / `ELS_PRESET_CATALOG.md` wire section in favor of `ADR-0005` (`SETTINGS.presets`), or wire it. |
+| **H-07** | `SPEC_NO_CODE` | Core / Settings | **Multi-dot `SETTINGS.preset.*` & `SETTINGS.client.*` unparseable:** [`StandardCommandParser.cpp`](../../src/core_client/StandardCommandParser.cpp#L857-L861) rejects `>`1 dot in command headers, breaking [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md#L130-L237). | `StandardCommandParser.cpp` (`03ca997`, `c6edc2b`) intentionally enforces `<NS>.<action>`; `ELS_PROPERTIES_AND_SETTINGS.md` is stale from `091e6ea`. | **Update Spec** — Update `ELS_PROPERTIES_AND_SETTINGS.md` to match the 6-namespace single-dot grammar. |
+| **H-08** | `SPEC_NO_CODE` | Motion | **`StrokeParams` / `EXECUTE_STROKE`, Backlash compensation, & Watchdogs (50 ms Core 1 / 200 ms Jog) unimplemented:** Specified in [`MODE_INTEGRATION_CONTRACT.md`](../../docs/motion/MODE_INTEGRATION_CONTRACT.md#L68-L142), [`MOTION_ENGINE_SPECIFICATION.md`](../../docs/motion/MOTION_ENGINE_SPECIFICATION.md#L93-L94), [`CONCURRENCY_AND_TIMING.md`](../../docs/motion/CONCURRENCY_AND_TIMING.md#L253-L264); absent/ignored in [`MotionEngine.cpp`](../../src/motion/kernel/MotionEngine.cpp#L414-L475). | Pre-SDD baseline (`091e6ea`). | **Update Code** — Prioritize Core 1 TWDT & 200 ms jog lease watchdog for safety; backlog `StrokeParams` & backlash. |
+| **H-09** | `CODE_VS_SPEC` | Motion | **`MotionCommandPacket` fields & `configureAxis(timing)` ignored:** `respectSoftLimits`, `UPDATE_VELOCITY`, `UPDATE_SOFT_LIMITS`, `SpindleSyncParams::syncIndex`, `VelocityFeedParams::accelMmSec2`, and `StepTimingConfig` are dropped in [`MotionEngine.cpp`](../../src/motion/kernel/MotionEngine.cpp#L42-L48,L414-L475); `TrajectoryPlanner::verifyRunwaySpindle()` is never called; `IRAM_ATTR` is missing on `.cpp` definitions. | Pre-SDD baseline (`091e6ea`). | **Update Code** — Wire `StepTimingConfig`, `respectSoftLimits`, `IRAM_ATTR` on `.cpp` definitions, and runway verification. |
+| **H-10** | `CODE_VS_SPEC` | Modes | **`IELSMode.h`, `UnifiedGearboxMode`, `ModeRegistry`, & `CoreCommandService` drift:** Missing `ModeIds::CONE = 57`, `GEARBOX_PARAMS` manifest mismatch (`pitch_dupr`/`speed`/`dist` vs `feed`/`distance`/`cone_ratio`), `PROPERTIES.modes` emits integer bitmasks instead of string arrays & rejects args, and `CoreCommandService` never calls `canExecuteCommand()`. | `ELS_MODE_ARCHITECTURE.md` updated `2026-10-29` (`71d5def`); `IELSMode.h` & `ModeRegistry.cpp` untouched since `091e6ea`. | **Needs Decision** — Align `ModeRegistry` JSON & `CoreCommandService` gate to `ELS_MODE_ARCHITECTURE.md`, or update `ELS_MODE_ARCHITECTURE.md` to match `GEARBOX_PARAMS` (`pitch_dupr`, `speed`, `dist`). |
+| **H-11** | `CODE_VS_SPEC` | Clients | **Missing `CLIENT.hello` handshake & `INTERACTION_LEDGER.md` divergences:** Neither [`whatels-service.js`](../../clients/web_ui/whatels-service.js#L186-L200) nor [`client.py`](../../tests/hil/core/client.py#L78-L91) sends `CLIENT.hello`. `cycleMeasure()`/`cycleJogStep()` emit `CMD.measure`/`CMD.jogStepDu` despite ledger saying client-local; `whatels-emulator.js` uses `CMD.spindleSim` vs `CMD.simEncoder`/`CMD.simRpm`. | `INTERACTION_LEDGER.md` updated `2026-10-29` (`71d5def`, `7ba269c`, `edccbd1`); `whatels-emulator.js` & `client.py` updated `a6916c2` with partial alignment. | **Update Code & Spec** — Implement `CLIENT.hello`; align `CMD.spindleSim` vs `CMD.simEncoder` and clarify whether `CMD.measure`/`CMD.jogStepDu` are intentional. |
+| **H-12** | `BOUNDARY` | Tests | **Forbidden fake framework mocks in `test/mocks/`:** [`test/mocks/`](../../test/mocks) contains `Arduino.h`, `Preferences.h`, `LittleFS.h`, `driver/gpio.h`, and `freertos/*`, violating [`AGENTS.md`](../../AGENTS.md) §2.3. | Added `2026-10-29` (`bef5d65`) during Issue #2 work. | **Update Code** — Replace fake framework headers with pure C++ abstract interfaces (`ISystemInfoHAL` pattern). |
+
+---
+
+## 3. Cross-Doc Conflicts (`SPEC_CONFLICT`)
+
+These are internal contradictions between active documents in `docs/` that must be resolved before code/specs can converge:
+
+1. **Preset Command Protocol (3-Way Conflict):**
+   - [`ELS_PRESET_CATALOG.md`](../../docs/state/ELS_PRESET_CATALOG.md#L189-L204): `PRESET.discover` / `PRESET.get` (space-delimited OData).
+   - [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md#L190-L237): `SETTINGS.preset.*` (multi-dot).
+   - [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md#L20-L23) & [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L34-L41): Strictly 6 namespaces (`SETTINGS.presets`, `SETTINGS.set=preset:<id>`, `PROPERTIES.profiles`).
+   - *Git Signal:* `CANONICAL_COMMAND_REFERENCE.md` + `ADR-0005` were updated `2026-10-29` (`71d5def`); the other two are stale from `091e6ea`. **Recommend:** Standardize on `ADR-0005` / `CANONICAL_COMMAND_REFERENCE.md`.
+
+2. **`SETTINGS.set` & `SETTINGS.getGroup` Syntax:**
+   - [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md#L154-L176): Comma delimiter (`SETTINGS.set=<key>,<val>`), `SETTINGS.getGroup=`, `SETTING.<key>=...`.
+   - [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md#L22,L33-L35,L256-L259): Colon delimiter (`SETTINGS.set=<key>:<val>`), `SETTINGS.get=<group>`, `OK:SETTINGS.<action>:<data>`.
+   - *Recommend:* Update `ELS_PROPERTIES_AND_SETTINGS.md` to match `CANONICAL_COMMAND_REFERENCE.md`.
+
+3. **Core 0 vs Core 1 Assignment (2 Conflicts):**
+   - [`ELS_PRESET_CATALOG.md`](../../docs/state/ELS_PRESET_CATALOG.md#L30,L246,L254) inverts the cores (claims File I/O on Core 1, motion ISRs on Core 0).
+   - [`CONCURRENCY_AND_TIMING.md`](../../docs/motion/CONCURRENCY_AND_TIMING.md#L28) assigns Mode orchestration to Core 0 on line 28, then mandates Option A (Core 1) on lines 38 & 64–67.
+   - *Recommend:* Fix both docs to consistently state **Core 1 = Motion ISRs + Mode execution**, **Core 0 = File I/O + Comms**.
+
+4. **`ModeId` Enums, Gearbox Params, Wire Commands, & Capability Flags:**
+   - [`ELS_MODE_ARCHITECTURE.md`](../../docs/modes/ELS_MODE_ARCHITECTURE.md#L114-L126) (`ModeIds::GEARBOX=50..CONE=57`, no `JOYSTICK`, `CMD.startFeed`, `CAP_MOTOR_Z/X`) vs [`docs/modes/gearbox/SPECIFICATION.md`](../../docs/modes/gearbox/SPECIFICATION.md#L16-L63) (`MODE_GEARBOX=0`, `CMD.mode=GEARBOX`, `CMD.feedDupr`, `CMD.run`, `CAP_Z/X_STEPPER`).
+   - [`taper/SPECIFICATION.md`](../../docs/modes/taper/SPECIFICATION.md#L23,L56) defines `coneRatio` as diametral in §2, but radial `taper` in §4.
+   - *Git Signal:* `ELS_MODE_ARCHITECTURE.md` updated `2026-10-29` (`71d5def`); individual mode specs are from `091e6ea`. **Recommend:** Harmonize individual mode `SPECIFICATION.md` files to `ELS_MODE_ARCHITECTURE.md` + `CANONICAL_COMMAND_REFERENCE.md`.
+
+5. **Continuous Feed Sentinel (`-1` vs `0`):**
+   - [`MOTION_ENGINE_SPECIFICATION.md`](../../docs/motion/MOTION_ENGINE_SPECIFICATION.md#L376) & [`ADR-0001`](../../docs/adr/0001-motion-invocation-and-gearbox-consolidation.md#L110) specify `-1` (matches `MotionCommands.h`), whereas [`MODE_INTEGRATION_CONTRACT.md`](../../docs/motion/MODE_INTEGRATION_CONTRACT.md#L102,L118) specifies `0`.
+   - *Recommend:* Update `MODE_INTEGRATION_CONTRACT.md` to `-1`.
+
+6. **Telemetry Cadence & `CMD.feedNudge`:**
+   - Telemetry rate: `28 Hz` ([`ELS_CORE_STATE_MODEL.md`](../../docs/state/ELS_CORE_STATE_MODEL.md#L77)) vs `10 Hz` ([`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L55)) vs `50 Hz` in `WebServerModule.cpp`.
+   - `CMD.feedNudge` is in [`ADR-0002`](../../docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md#L61) but omitted from [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L36) and [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md).
+
+---
+
+## 4. Medium & Low-Severity Findings Summary
+
+### Medium
+- **Protocol/Core/State:**
+  - `SETTINGS.reset=ALL` rejected by [`SettingsService.cpp`](../../src/core/SettingsService.cpp#L522-L598).
+  - Raw `Preferences` `begin`/`put*`/`remove` calls in `SettingsService.cpp` violate the `PersistentSetting<T>` mandate (note: [`ISettingsStorage.h`](../../src/core/ISettingsStorage.h) & [`MockSettingsStorage.h`](../../test/mocks/MockSettingsStorage.h) were added in `368fdf2` as the pure boundary seam, but `SettingsService` and an ESP32 adapter are not yet wired to it).
+  - [`WebSocketTransport::isConnected()`](../../src/core_client/transports/WebSocketTransport.h#L21-L23) only checks `_server != nullptr`.
+  - [`CoreCommandService::holdFeed()`](../../src/core/CoreCommandService.cpp#L185-L195) lacks `CYCLE_HOLD` state / radial retract spec parity.
+  - [`src/main.cpp`](../../src/main.cpp#L90-L113) `loop()` still polls legacy `isOn()`/`dupr` instead of `getActiveMode()->update()`.
+  - `CMD.startCycle`, `CMD.step` (Issue #10), `CMD.feedNudge`, REST `/api/v1/cmd/...`, `GrblClient`, `DroClient`, and `PROGMEM` serving are unimplemented.
+- **Motion/HAL/Machine:**
+  - [`LatheProfile.h`](../../src/motion/LatheProfile.h#L61-L227) & [`lathe-profile.schema.json`](../../data/schemas/lathe-profile.schema.json) omit `ControlsHardwareConfig` and several drive/spindle/limit fields (and `LATHE_MACHINE_PROFILE.md:388` has a `lathe-profiles.schema.json` plural typo).
+  - [`Esp32StepperHAL.cpp`](../../src/motion/hal/Esp32StepperHAL.cpp#L87,L179-L206,L263) uses `esp_rom_delay_us()` busy-waits, GPTimer instead of RMT, and hardcodes active-LOW fault.
+  - [`MotionEngine.cpp`](../../src/motion/kernel/MotionEngine.cpp#L729-L733) reports `m_activeMode[0]` and `AXIS_Z` distance only in `TelemetryMailbox`.
+  - Undocumented simulation hooks in [`ISpindleEncoderHAL.h`](../../src/motion/hal/ISpindleEncoderHAL.h#L85-L102) & [`MotionEngine.cpp`](../../src/motion/kernel/MotionEngine.cpp#L509-L520) (1500 ms sim heartbeat).
+- **Modes:**
+  - `primitives/*` (`AsyncPrimitive`, `ConePrimitive`, `GearXPrimitive`, `GearZPrimitive`) are instantiated & registered in `ModeRegistry`, contradicting `ELS_MODE_ARCHITECTURE.md` §4.1.1 and `UnifiedGearboxMode.h:8-9`.
+- **Clients/Tests:**
+  - [`RICH_TOUCH_800X480.md`](../../docs/clients/hmi/RICH_TOUCH_800X480.md) layout/touch-target drift (`.col-dro` `338px` vs `270px`, `.status-deck` nested vs full-width, sub-36px buttons `.chip`/`status-log-btn`/`#btnWizPasses*`, `overflow-y: auto`).
+  - [`tests/hil/core/client.py`](../../tests/hil/core/client.py) drifts from `HIL_TEST_HARNESS_SPECIFICATION.md` (`SYS.get=info` vs `STATE.get=ALL`, missing `telemetry_seq`/`K.perms`, `"undefined"` vs `"NONE"`, `encoder_ppr` `1200*4` vs `2400*2`).
+  - Client-side limit & kinematic math (`recalcTurnLimits`, `recalcFaceLimits`, `254000 / tpiVal`, `2 * Math.tan(...)`) in [`lathe-controller.js`](../../clients/web_ui/lathe-controller.js#L537-L559,L1338-L1349) violates `AGENTS.md` §2.2.
+  - `data/www/*`, `lathe_dro_nanoels_controller.html`, `test/*.cpp`, `tests/clients/transports.test.mjs`, and `clients/sdk/{cpp,python}` (`SPEC_NO_CODE` / `CODE_NO_SPEC`).
+- **Cross-Cutting:** Missing `@see docs/...` (and `@file`) docblocks across ~47 C++ headers in `src/` (including [`ISettingsStorage.h`](../../src/core/ISettingsStorage.h), which references `ADR-0005` in `@details` without an explicit `@see docs/...`).
+
+### Low
+- `TelemetrySerializer.cpp` emits undocumented `K.perms`, `K.gearAxis`, `K.gearSync`, `K.gearDir` (only `K.gearDir` is in ADR-0001).
+- `SettingsService.cpp` has swapped `MeasureUnit` error text (`1 (TPI), 2 (IN)`), `dbTurns` bounds mismatch (`1.0` vs `10.0` vs `"0..100"`), and undocumented keys (`machine.name`, `machine.spindle.effectivePpr`, `sys.wifi.hasPassword`, `prefs.backlash*`, `prefs.db*.isAuto`, NVS `"sdm"`).
+- `ISettingsStorage.h` & `MockSettingsStorage.h` (`368fdf2`) are not yet referenced in `ELS_PROPERTIES_AND_SETTINGS.md` or `docs/testing/`.
+- `StandardCommandParser.h` docblock says "5 canonical namespaces" instead of 6.
+- `ControllerConfig` omits Tier 2 sub-structs (`MotionTimingConfig`, `GCodeConfig`, `KeyboardConfig`, `NextionTheme`, `JoystickConfig`).
+- `WebServerModule.cpp` registers legacy `/gcode/*`, `/wifi*`, `/status` HTTP endpoints; `UsbKeyboard` lacks a behavioral spec.
+- `SoftLimitTable::setLimit` (`LimitBound`), `TrajectoryPlanner` (trapezoidal vs jerk), `LatheCapabilityFlags` aliases, `MockStepperHAL`/`MockSpindleEncoderHAL` undocumented, and `MANUAL_JOG` unprofiled 1 kHz stepping.
+- `UnifiedGearboxMode` allows idle-axis `CMD_JOG` during active feed and mutates `SettingsService` directly.
+- Remaining stale/archived cross-references after `b0e329b`/`e7acde9`: `WHATELS_MASTER_ARCHITECTURE.md` links to `../plans/drift-map.md` (archived to `docs/archive/drift/drift-map.md`) and lists `TIER2_STATE_MAPPING.md` under `state/`; `ELS_CORE_STATE_MODEL.md` & `ELS_PROPERTIES_AND_SETTINGS.md` still link to `../archive/ELS_DESIGN_NOTEBOOK.md`.
