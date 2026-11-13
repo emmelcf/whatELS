@@ -66,32 +66,32 @@ The audit identified **74 distinct findings** across four subsystems, clustering
 
 These are internal contradictions between active documents in `docs/` that must be resolved before code/specs can converge:
 
-1. **Preset Command Protocol (3-Way Conflict):**
+1. **Preset Command Protocol (3-Way Conflict)** — `Tracked (#37)`:
    - [`ELS_PRESET_CATALOG.md`](../../docs/state/ELS_PRESET_CATALOG.md#L189-L204): `PRESET.discover` / `PRESET.get` (space-delimited OData).
    - [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md#L190-L237): `SETTINGS.preset.*` (multi-dot).
    - [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md#L20-L23) & [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L34-L41): Strictly 6 namespaces (`SETTINGS.presets`, `SETTINGS.set=preset:<id>`, `PROPERTIES.profiles`).
    - *Git Signal:* `CANONICAL_COMMAND_REFERENCE.md` + `ADR-0005` were updated `2026-10-29` (`71d5def`); the other two are stale from `091e6ea`. **Recommend:** Standardize on `ADR-0005` / `CANONICAL_COMMAND_REFERENCE.md`.
 
-2. **`SETTINGS.set` & `SETTINGS.getGroup` Syntax:**
+2. **`SETTINGS.set` & `SETTINGS.getGroup` Syntax** — `Tracked (#38)`:
    - [`ELS_PROPERTIES_AND_SETTINGS.md`](../../docs/state/ELS_PROPERTIES_AND_SETTINGS.md#L154-L176): Comma delimiter (`SETTINGS.set=<key>,<val>`), `SETTINGS.getGroup=`, `SETTING.<key>=...`.
    - [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md#L22,L33-L35,L256-L259): Colon delimiter (`SETTINGS.set=<key>:<val>`), `SETTINGS.get=<group>`, `OK:SETTINGS.<action>:<data>`.
    - *Recommend:* Update `ELS_PROPERTIES_AND_SETTINGS.md` to match `CANONICAL_COMMAND_REFERENCE.md`.
 
-3. **Core 0 vs Core 1 Assignment (2 Conflicts):**
+3. **Core 0 vs Core 1 Assignment (2 Conflicts)** — `Tracked (#40)`:
    - [`ELS_PRESET_CATALOG.md`](../../docs/state/ELS_PRESET_CATALOG.md#L30,L246,L254) inverts the cores (claims File I/O on Core 1, motion ISRs on Core 0).
    - [`CONCURRENCY_AND_TIMING.md`](../../docs/motion/CONCURRENCY_AND_TIMING.md#L28) assigns Mode orchestration to Core 0 on line 28, then mandates Option A (Core 1) on lines 38 & 64–67.
    - *Recommend:* Fix both docs to consistently state **Core 1 = Motion ISRs + Mode execution**, **Core 0 = File I/O + Comms**.
 
-4. **`ModeId` Enums, Gearbox Params, Wire Commands, & Capability Flags:**
+4. **`ModeId` Enums, Gearbox Params, Wire Commands, & Capability Flags** — `Tracked (#41, blocked by #27)`:
    - [`ELS_MODE_ARCHITECTURE.md`](../../docs/modes/ELS_MODE_ARCHITECTURE.md#L114-L126) (`ModeIds::GEARBOX=50..CONE=57`, no `JOYSTICK`, `CMD.startFeed`, `CAP_MOTOR_Z/X`) vs [`docs/modes/gearbox/SPECIFICATION.md`](../../docs/modes/gearbox/SPECIFICATION.md#L16-L63) (`MODE_GEARBOX=0`, `CMD.mode=GEARBOX`, `CMD.feedDupr`, `CMD.run`, `CAP_Z/X_STEPPER`).
    - [`taper/SPECIFICATION.md`](../../docs/modes/taper/SPECIFICATION.md#L23,L56) defines `coneRatio` as diametral in §2, but radial `taper` in §4.
    - *Git Signal:* `ELS_MODE_ARCHITECTURE.md` updated `2026-10-29` (`71d5def`); individual mode specs are from `091e6ea`. **Recommend:** Harmonize individual mode `SPECIFICATION.md` files to `ELS_MODE_ARCHITECTURE.md` + `CANONICAL_COMMAND_REFERENCE.md`.
 
-5. **Continuous Feed Sentinel (`-1` vs `0`):**
+5. **Continuous Feed Sentinel (`-1` vs `0`)** — `Tracked (#40)`:
    - [`MOTION_ENGINE_SPECIFICATION.md`](../../docs/motion/MOTION_ENGINE_SPECIFICATION.md#L376) & [`ADR-0001`](../../docs/adr/0001-motion-invocation-and-gearbox-consolidation.md#L110) specify `-1` (matches `MotionCommands.h`), whereas [`MODE_INTEGRATION_CONTRACT.md`](../../docs/motion/MODE_INTEGRATION_CONTRACT.md#L102,L118) specifies `0`.
    - *Recommend:* Update `MODE_INTEGRATION_CONTRACT.md` to `-1`.
 
-6. **Telemetry Cadence & `CMD.feedNudge`:**
+6. **Telemetry Cadence & `CMD.feedNudge`** — `Tracked (#42)`:
    - Telemetry rate: `28 Hz` ([`ELS_CORE_STATE_MODEL.md`](../../docs/state/ELS_CORE_STATE_MODEL.md#L77)) vs `10 Hz` ([`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L55)) vs `50 Hz` in `WebServerModule.cpp`.
    - `CMD.feedNudge` is in [`ADR-0002`](../../docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md#L61) but omitted from [`ADR-0005`](../../docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md#L36) and [`CANONICAL_COMMAND_REFERENCE.md`](../../docs/protocol/CANONICAL_COMMAND_REFERENCE.md).
 
