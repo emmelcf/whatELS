@@ -3,7 +3,7 @@
 
 > **Companion Architecture Documents:**
 > * For the Threading kinematic and state specification: see [`SPECIFICATION.md`](./SPECIFICATION.md).
-> * For the 800×480 Rich Touch HMI Profile standards: see [`../../hmi/RICH_TOUCH_800X480.md`](../../hmi/RICH_TOUCH_800X480.md).
+> * For the 800×480 Rich Touch HMI Profile standards: see [`../../clients/hmi/RICH_TOUCH_800X480.md`](../../clients/hmi/RICH_TOUCH_800X480.md).
 
 ---
 

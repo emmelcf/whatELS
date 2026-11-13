@@ -2,9 +2,9 @@
 ## Kinematics, Modulo Phase Tracking, Parameter Manifest & Deck Interaction Specification
 
 > **Companion Architecture Documents:**
-> * For the general mode lifecycle and interfaces: see [`../../ELS_MODE_ARCHITECTURE.md`](../../ELS_MODE_ARCHITECTURE.md).
-> * For the central state model and properties: see [`../../ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md).
-> * For the 800×480 Rich Touch HMI Profile standards: see [`../../hmi/RICH_TOUCH_800X480.md`](../../hmi/RICH_TOUCH_800X480.md).
+> * For the general mode lifecycle and interfaces: see [`../ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md).
+> * For the central state model and properties: see [`../state/ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md).
+> * For the 800×480 Rich Touch HMI Profile standards: see [`../../clients/hmi/RICH_TOUCH_800X480.md`](../../clients/hmi/RICH_TOUCH_800X480.md).
 > * For the multi-stage touch wizard workflow: see [`WIZARD_WORKFLOW.md`](./WIZARD_WORKFLOW.md).
 
 ---

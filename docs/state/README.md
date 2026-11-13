@@ -1,7 +1,7 @@
 # whatELS State, Properties & Persistence Subsystem
 
 > **Location:** `docs/state/`  
-> **Target Subsystems:** Subsystem 3 (Core State Model), Subsystem 4 (Properties & NVS Engine)
+> **Target Subsystem:** Subsystem 3 (State Model & Persistence — Core State Model, Properties & NVS engine)
 
 This directory contains the authoritative specifications for the whatELS state models, properties hierarchy, and serialization mechanisms:
 

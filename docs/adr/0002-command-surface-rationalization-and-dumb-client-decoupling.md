@@ -136,6 +136,6 @@ For clients that lack local state retention (such as the Nextion LCD or simple s
 ## 5. References
 
 * [ADR 0001: Consolidated Motion Invocation, Cartesian Polarity, and Kinematic Kernel Refactoring](./0001-motion-invocation-and-gearbox-consolidation.md)
-* [`docs/ELS_CLIENT_ARCHITECTURE.md`](../ELS_CLIENT_ARCHITECTURE.md)
-* [`docs/ELS_CORE_STATE_MODEL.md`](../ELS_CORE_STATE_MODEL.md)
+* [`docs/clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)
+* [`docs/state/ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md)
 * [`docs/clients/web_ui/INTERACTION_LEDGER.md`](../clients/web_ui/INTERACTION_LEDGER.md)

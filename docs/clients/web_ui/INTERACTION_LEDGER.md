@@ -6,7 +6,7 @@
 > **Date:** October 7, 2026  
 > **Location:** `docs/clients/web_ui/INTERACTION_LEDGER.md`  
 > **Companion Document:** [`OVERVIEW.md`](./OVERVIEW.md)  
-> **Parent Specifications:** [`ELS_CLIENT_ARCHITECTURE.md`](../../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md)
+> **Parent Specifications:** [`ELS_CLIENT_ARCHITECTURE.md`](../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../state/ELS_CORE_STATE_MODEL.md)
 
 ---
 

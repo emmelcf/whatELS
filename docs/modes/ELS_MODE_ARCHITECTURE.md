@@ -4,8 +4,8 @@
 > **Target Version:** whatELS Modular Architecture (Firmware & Multi-Client Suite)  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `docs/ELS_MODE_ARCHITECTURE.md`  
-> **Related Architecture Documents:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md)
+> **Location:** `docs/modes/ELS_MODE_ARCHITECTURE.md`
+> **Related Architecture Documents:** [`ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md), [`ELS_DESIGN_NOTEBOOK.md`](../archive/ELS_DESIGN_NOTEBOOK.md)
 
 ---
 
@@ -398,7 +398,7 @@ The most critical innovation of this architecture is **Controller-Side Orchestra
 
 ### 4.1 `GearboxMode` (Electronic Gearbox Workspace)
 
-The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a single, cohesive Operational Mode (Subsystem 3). It unifies longitudinal leadscrew feeds, transverse cross-feeds, coordinated tapers, and motorized velocity traverses under one roof.
+The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a single, cohesive Operational Mode (Subsystem 4). It unifies longitudinal leadscrew feeds, transverse cross-feeds, coordinated tapers, and motorized velocity traverses under one roof.
 
 #### 4.1.1 Architectural Tenets of the Gearbox Mode
 
@@ -587,7 +587,7 @@ stateDiagram-v2
 Lathe operators build, upgrade, and configure their electronic leadscrew machines in progressive stages. A user may begin with only a Z-axis leadscrew stepper and a spindle encoder (manual cross-slide), later add glass optical DRO scales, and eventually install an X-axis stepper motor for full 2-axis CNC automation.
 
 To support this physical reality cleanly, the architecture defines:
-1. A canonical **Machine Configuration Profile** (`LatheConfiguration`), specified authoritatively in [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md).
+1. A canonical **Machine Configuration Profile** (`LatheConfiguration`), specified authoritatively in [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md).
 2. A **Code-Inferred Mode Inheritance & Specialization Hierarchy** where modes extend and compose earlier modes without duplicating code, while preserving the operator's ability to choose manual control even on fully automated machines.
 3. A **Client Translation Layer** with full authority to reshape or break this hierarchy for optimal touch UI ergonomics.
 
@@ -597,7 +597,7 @@ To support this physical reality cleanly, the architecture defines:
 
 The machine's physical reality (axis motors, DRO scales, leadscrew pitches, travel limits, spindle encoder PPR, and physical bed/chuck dimensions) is maintained in `LatheConfiguration`.
 
-> **Authoritative Specification:** See [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md) for full struct definitions, coordinate reference frames, bitmask flags, and standard workshop presets (Mini Lathe $7\times14$, Benchtop $10\times22$, Large Toolroom $14\times40$).
+> **Authoritative Specification:** See [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md) for full struct definitions, coordinate reference frames, bitmask flags, and standard workshop presets (Mini Lathe $7\times14$, Benchtop $10\times22$, Large Toolroom $14\times40$).
 
 Summary of core flags used by the mode registry:
 ```cpp

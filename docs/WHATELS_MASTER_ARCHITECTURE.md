@@ -30,12 +30,12 @@ The **whatELS Architecture** modernizes and reimagines open-source embedded lath
 │ [Subsystem 1: HAL & Hardware Timing] ──► [Subsystem 2: Kinematic Kernel & Motion]     │
 │                                      ▲                                                 │
 │                                      │ Motion Primitives                               │
-│                      [Subsystem 3: Operational Modes Engine]                           │
+│                      [Subsystem 4: Operational Modes Engine]                           │
 └───────────────────────────────────────────▲────────────────────────────────────────────┘
                                             │ Atomic Point-in-Time Telemetry / CMDs
 ┌───────────────────────────────────────────┴────────────────────────────────────────────┐
 │ CORE 0: ASYNCHRONOUS SUPERVISORY & COMMUNICATIONS                                     │
-│ [Subsystem 4: State Model & Settings] ◄──► [Subsystem 5: Command Dispatcher & Transport]│
+│ [Subsystem 3: State Model & Settings] ◄──► [Subsystem 5: Command Dispatcher & Transport]│
 │                                                           │                            │
 │                                                           ▼                            │
 │                                            [Subsystem 6: HMI & Client Adapters]        │
@@ -97,15 +97,15 @@ To eliminate cross-file coupling and provide clear architectural homes for all c
 │                     │ backlash, accel/decel profiling│   enforced across ALL modes.             │
 │                     │ and hardware pulse generation. │ • Pure math & pulse coordination.        │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
-│ 3. Operational Mode │ Operational mode state machines│ • Implements `IELSMode` (enter/loop/exit)│
-│    Engine (`modes/`)| (`GearboxMode`, `TurnCycle`,   │ • Orchestrates functions from Subsystem 2│
-│                     │ `FaceCycle`, `ThreadCycle`).   │ • Atomic motion execution (`startFeed`). │
-│                     │ Prunes unavailable via `caps`. │ • Mode-agnostic extensibility.           │
-├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
-│ 4. State Model &    │ Single source of truth. 4-tier │ • Atomic point-in-time snapshots (K,I,C,P│
+│ 3. State Model &    │ Single source of truth. 4-tier │ • Atomic point-in-time snapshots (K,I,C,P│
 │    Persistence      │ properties (`machine`, `sys`,  │ • Sparse NVS overrides (pristine flash). │
 │    (`model/`,       │ `prefs`, `client`), LittleFS   │ • 3-tier preset fallback hierarchy:      │
 │    `settings/`)     │ JSON catalog & schema streaming│   Active (NVS) ──► Default ──► ROM Failsafe│
+├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
+│ 4. Operational Mode │ Operational mode state machines│ • Implements `IELSMode` (enter/loop/exit)│
+│    Engine (`modes/`)| (`GearboxMode`, `TurnCycle`,   │ • Orchestrates functions from Subsystem 2│
+│                     │ `FaceCycle`, `ThreadCycle`).   │ • Atomic motion execution (`startFeed`). │
+│                     │ Prunes unavailable via `caps`. │ • Mode-agnostic extensibility.           │
 ├─────────────────────┼────────────────────────────────┼──────────────────────────────────────────┤
 │ 5. Command          │ Line protocol decoder, client  │ • Canonical ASCII wire strings (`CMD.*`, │
 │    Dispatcher &     │ multiplexing, routing incoming │   `SETTINGS.*`).                         │
@@ -164,33 +164,9 @@ To guarantee that firmware upgrades never destroy user calibrations, custom mach
 
 ---
 
-## 4. Current Codebase File Audit & Target Subsystem Mapping
+## 4. Codebase File Map — Held Elsewhere
 
-Below is the complete audit of all implementation and header files across `src/`, detailing their current role, target subsystem, and migration path:
-
-| File (in `src/`) | Current Role in Codebase | Target Subsystem | Architectural Disposition & Migration Task |
-| :--- | :--- | :--- | :--- |
-| [`main.cpp`](../src/main.cpp) | Boot orchestrator, task creator, procedural `loop()` mode ladder. | **System Bootstrap** | Refactor `loop()` to delegate to `IELSModeRegistry::getActiveMode()->update()`. Remove procedural mode `if-else` ladder. |
-| [`Axis.cpp`](../src/motion/Axis.cpp)<br>[`Axis.h`](../src/motion/Axis.h) | `Axis` struct, hardware stepping pins, backlash, motor step math. | **Subsystem 1 (HAL)** | Extract hardware pin stepping and pulse generation into clean HAL classes. Remove coupling to legacy global variables. |
-| [`Motion.cpp`](../src/motion/Motion.cpp)<br>[`Motion.h`](../src/motion/Motion.h) | Mixed: Timer ISRs, spindle pulse tracking, legacy mode loops (`modeTurn`, etc.). | **Subsystem 2 (Kinematics)** | Separate real-time timer ISRs & spindle math from mode logic. Move canned cycles (`modeTurn`, `modeCone`) into Subsystem 3 `IELSMode` classes. |
-| [`Config.cpp`](../src/core/Config.cpp)<br>[`Config.h`](../src/core/Config.h) | System and network configuration, keyboard & WiFi settings, and persistent key mappings. | **Subsystem 4 (Persistence)** | Modernized foundation. Hardware pins isolated into `BoardPins.h`; active machine profile and persistence managed by `SettingsService`. |
-| [`Input.cpp`](../src/input/Input.cpp)<br>[`Input.h`](../src/input/Input.h) | Keypad matrix, button debounce, joystick ADC, Nextion input parser. Directly mutates state. | **Subsystem 6 (HMI Adapters)** | Refactor so input routines NEVER mutate motion state directly. They must emit canonical `CMD.*` strings into `CommandDispatcher`. |
-| `src/display/` (`Display.cpp`, `DisplayModel.cpp`) | Legacy Nextion LCD UART driver & display formatter. | **Decommissioned** | **[REMOVED]** Decommissioned from firmware. Any future UART display will be an isolated client adapter conforming to Client Architecture. |
-| [`WebServerModule.cpp`](../src/web/WebServerModule.cpp)<br>[`WebServerModule.h`](../src/web/WebServerModule.h) | Monolithic web, socket, and query server. | **Decommissioning** | **[IN-PROGRESS]** Being partitioned into single-responsibility services: `WifiService`, `HttpServer` (Port 80), and `WebSocketTransport` (Port 81), pending `PROGMEM` asset serving migration into `HttpServer.cpp`. |
-| [`WifiService.cpp`](../src/core/WifiService.cpp)<br>[`WifiService.h`](../src/core/WifiService.h) | Encapsulated Wi-Fi infrastructure (Station/AP state machine, exponential-backoff watchdog, mDNS, scan). | **Subsystem 5 (Transport)** | Clean core network service. Decoupled from HTTP serving; integrates directly with `SettingsService`. |
-| [`HttpServer.cpp`](../src/core/network/HttpServer.cpp)<br>[`HttpServer.h`](../src/core/network/HttpServer.h) | Dedicated Port 80 HTTP appliance web server. | **Subsystem 5 (Appliance)** | Serves static web assets (with transparent `.gz`), SPA routing, and multipart OTA firmware updates (`/firmware/upload`). Zero WebSocket or motion logic. |
-| [`CoreCommands.h`](../src/core/CoreCommands.h)<br>[`CoreCommandService.cpp`](../src/core/CoreCommandService.cpp) | Strongly typed C++ command structs and `[SAFE-01]` motion safety gatekeeper. | **Subsystem 4 (Core Domain)** | Pure C++ domain service. Receives typed structs; enforces in-motion lockouts and persistent shoulder limits (ADR-15). Accesses `MotionEngine` via compile-time `friend` gate. Zero string parsing. |
-| [`StandardCommandParser.cpp`](../src/core_client/StandardCommandParser.cpp)<br>[`StandardCommandParser.h`](../src/core_client/StandardCommandParser.h) | Authoritative canonical wire parser and response formatter. | **Subsystem 5 (Transport)** | Pure stack-allocated tokenizer (`CMD`, `STATE`, `SETTINGS`, `PROPERTIES`, `SYS`, `CLIENT`). Dispatches typed command structs to `CoreCommandService`. Decoupled from hardware vitals via `ISystemInfoHAL`. |
-| [`ISystemInfoHAL.h`](../src/core/ISystemInfoHAL.h)<br>[`Esp32SystemInfoHAL.cpp`](../src/core/Esp32SystemInfoHAL.cpp) | Abstract system diagnostics and ESP32-S3 hardware vitals HAL provider. | **Subsystem 1 (HAL) / Subsystem 5 (Appliance)** | Clean HAL seam. Decouples `StandardCommandParser` (`SYS.get`) from bare-metal ESP32 registers and platform APIs. Mockable via `MockSystemInfoHAL`. |
-| [`DRO_Scale.cpp`](../src/motion/DRO_Scale.cpp)<br>[`DRO_Scale.h`](../src/motion/DRO_Scale.h) | ESP32 PCNT hardware pulse counter for optical linear scales. | **Subsystem 1 (HAL)** | Clean HAL component. Keep and integrate with `QuadratureEncoderConfig`. |
-| [`UsbKeyboard.cpp`](../src/input/UsbKeyboard.cpp)<br>[`UsbKeyboard.h`](../src/input/UsbKeyboard.h) | USB Host keyboard driver. | **Subsystem 6 (HMI Adapters)** | Clean input driver. Maps USB key scancodes to canonical `CMD.*` strings. |
-| [`LatheProfile.cpp`](../src/motion/LatheProfile.cpp)<br>[`LatheProfile.h`](../src/motion/LatheProfile.h) | Typed `LatheConfiguration`, capabilities bitmask, baseline profiles. | **Subsystem 4 (Persistence)** | Modern foundation. Simplify to single ROM baseline `getDefaultProfile()`; presets migrate to LittleFS `/presets/profiles.json`. |
-| [`SettingsService.cpp`](../src/core/SettingsService.cpp)<br>[`SettingsService.h`](../src/core/SettingsService.h) | 4-tier parameter registry, sparse NVS overrides, in-memory RAM cache. | **Subsystem 4 (Persistence)** | Modern foundation. Add LittleFS profile catalog file I/O and dynamic schema streaming (`SETTINGS.schema=*`). |
-| [`MachineModel.cpp`](../src/core/MachineModel.cpp)<br>[`MachineModel.h`](../src/core/MachineModel.h) | Atomic state capture across 4 domains (`K`, `I`, `C`, `P`), delta detection. | **Subsystem 4 (State Model)** | Modern foundation. Authoritative state bridge between Core 1 and Core 0. |
-| [`CommandDispatcher.cpp`](../src/core/CommandDispatcher.cpp)<br>[`CommandDispatcher.h`](../src/core/CommandDispatcher.h) | Legacy line protocol command router. | **Decommissioning** | Being deconstructed: text parsing moves to `StandardCommandParser` in `src/core_client/`; execution logic moves to `CoreCommandService` in `src/core/`. |
-| [`ClientEndpoint.h`](../src/core_client/ClientEndpoint.h)<br>[`ClientManager.cpp`](../src/core_client/ClientManager.cpp) | Client session manager, transport abstraction, and broadcast distributor. | **Subsystem 5 (Transport)** | Modern foundation. Consolidated in `src/core_client/`; multiplexes connected clients, routes via `NativeClient`. |
-| [`TelemetrySerializer.cpp`](../src/core/TelemetrySerializer.cpp)<br>[`TelemetrySerializer.h`](../src/core/TelemetrySerializer.h) | Universal domain state serializer (`K.*`, `I.*`, `C.*`, `P.*`). | **Subsystem 4 (State & Telemetry Model)** | Modern foundation. Universal core state exporter. Serializes atomic `MachineModel` snapshots into canonical wire strings for all clients. Zero web coupling. |
-
+No file inventory is maintained in this blueprint. A static table of source files here goes stale the moment the tree changes, and stale rows pollute the context of every agent that reads this document. The authoritative, live mapping of subsystem → documentation → source is maintained as a separate artifact: [`plans/drift-map.md`](../plans/drift-map.md). Consult it, and re-derive from the live tree when in doubt.
 ---
 
 ## 5. Authoritative Specification Hierarchy & Deep-Dive Documents
@@ -204,11 +180,11 @@ WHATELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │    └── motion/ (HAL_SPECIFICATION.md, MOTION_ENGINE_SPECIFICATION.md,
 │                 CONCURRENCY_AND_TIMING.md, MODE_INTEGRATION_CONTRACT.md)
 │
-├── 2. Core State & Settings Subsystems (Subsystems 3 & 4)
+├── 2. Core State & Settings Subsystem (Subsystem 3)
 │    └── state/ (ELS_CORE_STATE_MODEL.md, ELS_PROPERTIES_AND_SETTINGS.md,
 │                ELS_PRESET_CATALOG.md, TIER2_STATE_MAPPING.md)
 │
-├── 3. Operational Mode Engine & Canned Cycles (Subsystem 5, Core 1)
+├── 3. Operational Mode Engine & Canned Cycles (Subsystem 4, Core 1)
 │    └── modes/ (ELS_MODE_ARCHITECTURE.md, README.md, cycle directories)
 │
 ├── 4. Machine Profile & Mechanics

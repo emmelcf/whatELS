@@ -1,11 +1,11 @@
 # whatELS Machining Preset Catalog & Storage Architecture
 
-> **Status:** Authoritative Specification (Subsystems 5, 6 & Core Storage)  
+> **Status:** Authoritative Specification (Subsystem 3 — State Model & Persistence; consumed by Subsystems 5 & 6)
 > **Target Version:** whatELS Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 14, 2026  
-> **Location:** `docs/ELS_PRESET_CATALOG.md`  
-> **Referenced By:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`modes/threading/WIZARD_WORKFLOW.md`](./modes/threading/WIZARD_WORKFLOW.md), [`modes/taper/SPECIFICATION.md`](./modes/taper/SPECIFICATION.md)
+> **Location:** `docs/state/ELS_PRESET_CATALOG.md`
+> **Referenced By:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../../clients/ELS_CLIENT_ARCHITECTURE.md), [`modes/threading/WIZARD_WORKFLOW.md`](../../modes/threading/WIZARD_WORKFLOW.md), [`modes/taper/SPECIFICATION.md`](../../modes/taper/SPECIFICATION.md)
 
 ---
 
@@ -206,7 +206,7 @@ PRESET.get path=<domain>/<catalog>[/<item_id>] [$select=<fields>] [$filter=<expr
 
 ## 6. Client Translation Layer Integration
 
-In conformance with **Tenet 2 (Strict Layer Decoupling)** of [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), the core returns raw canonical values. The Client Translation Layer translates this data to suit each client interface:
+In conformance with **Tenet 2 (Strict Layer Decoupling)** of [`ELS_CLIENT_ARCHITECTURE.md`](../../clients/ELS_CLIENT_ARCHITECTURE.md), the core returns raw canonical values. The Client Translation Layer translates this data to suit each client interface:
 
 ### 1. Rich Touch Web UI (`lathe_dro_whatels_controller.html`)
 - Directly consumes the structured JSON objects over WebSocket.

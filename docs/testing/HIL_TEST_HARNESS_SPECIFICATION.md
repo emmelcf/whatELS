@@ -1,9 +1,9 @@
 # whatELS Hardware-in-the-Loop (HIL) & WebSocket Test Harness Specification
 
 > **Status:** Authoritative Specification & Implementation Blueprint (v2.0)  
-> **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Motion Engine), Subsystem 3 (Unified Gearbox Mode), Subsystem 5 (Command Dispatcher), Subsystem 6 (Client Adapters & Testing)[cite: 1, 2, 5]  
-> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](../NANOELS_MASTER_ARCHITECTURE.md)[cite: 1]  
-> **Mode Architecture:** [`../ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md)[cite: 2, 3]  
+> **Target Subsystems:** Subsystem 1 (HAL Drivers), Subsystem 2 (Motion Engine), Subsystem 4 (Unified Gearbox Mode), Subsystem 5 (Command Dispatcher), Subsystem 6 (Client Adapters & Testing)[cite: 1, 2, 5]
+> **Master Blueprint:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md)[cite: 1]
+> **Mode Architecture:** [`modes/ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md)[cite: 2, 3]
 > **Client Specification:** [`../clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)[cite: 1]  
 > **Motion Engine Spec:** [`../motion/MOTION_ENGINE_SPECIFICATION.md`](../motion/MOTION_ENGINE_SPECIFICATION.md)[cite: 1]  
 > **Date:** October 2026[cite: 1]  

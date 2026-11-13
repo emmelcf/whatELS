@@ -7,7 +7,7 @@
 > **Location:** `docs/clients/web_ui/OVERVIEW.md`  
 > **Primary Prototype File:** [`lathe_dro_whatels_controller.html`](../../../clients/web_ui/lathe_dro_whatels_controller.html)  
 > **Companion Document:** [`INTERACTION_LEDGER.md`](./INTERACTION_LEDGER.md)  
-> **Core Architecture References:** [`ELS_CLIENT_ARCHITECTURE.md`](../../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../ELS_CORE_STATE_MODEL.md)
+> **Core Architecture References:** [`ELS_CLIENT_ARCHITECTURE.md`](../ELS_CLIENT_ARCHITECTURE.md), [`ELS_CORE_STATE_MODEL.md`](../../state/ELS_CORE_STATE_MODEL.md)
 
 ---
 

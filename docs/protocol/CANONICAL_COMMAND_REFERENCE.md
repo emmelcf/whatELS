@@ -1,7 +1,7 @@
 # whatELS Canonical Command & Protocol Wire Reference
 
 > **Status:** Authoritative Wire Specification  
-> **Target Subsystem:** Subsystem 4 (`CoreCommandService`) & Subsystem 5 (`StandardCommandParser` & Transports)  
+> **Target:** Core ↔ core-client boundary gateway (`CoreCommandService`) & Subsystem 5 (`StandardCommandParser` & Transports)
 > **Master Architecture:** [`docs/clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)  
 > **Implementation Reference:** [`src/core_client/StandardCommandParser.cpp`](../../src/core_client/StandardCommandParser.cpp), [`src/core/CoreCommandService.cpp`](../../src/core/CoreCommandService.cpp)  
 > **Date:** October 2026  

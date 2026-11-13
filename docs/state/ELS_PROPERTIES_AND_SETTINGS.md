@@ -4,8 +4,8 @@
 > **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `docs/ELS_PROPERTIES_AND_SETTINGS.md`  
-> **Referenced By:** [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
+> **Location:** `docs/state/ELS_PROPERTIES_AND_SETTINGS.md`
+> **Referenced By:** [`ELS_DESIGN_NOTEBOOK.md`](../archive/ELS_DESIGN_NOTEBOOK.md), [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md), [`ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md)
 
 ---
 

@@ -50,7 +50,7 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
   * *Reason for rejection:* Conflates spindle gearing ($\text{mm/rev}$) with time-based velocity ($\text{mm/min}$); a $150$ in the wrong mode would destroy the machine tool.
 * **Option 3 (Accepted):** Clean separation of concerns:
   * Demote primitives to pure kinematic functions in Subsystem 2.
-  * Consolidate Gearbox into a single operational mode in Subsystem 3.
+  * Consolidate Gearbox into a single operational mode in Subsystem 3 [now Subsystem 4 — Operational Mode Engine].
   * Standardize direction on Cartesian coordinate polarity ($-1$ / $+1$).
   * Adopt G94/G95 "Feed is Feed" rate context.
   * Implement atomic motion invocation (`CMD.startFeed`) for rich clients, isolating legacy modal setters in an ingress staging adapter.
@@ -63,7 +63,7 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
 * **Subsystem 2 (Kinematic Kernel & Motion)** provides pure, stateless kinematic functions:
   * `stepSynchronized(axis, spindleDelta, pitchDupr)`: Slaved to spindle encoder ticks.
   * `stepVelocity(axis, speedDuPerMin, directionSign, targetDistDu)`: Driven by hardware clock timer interrupts.
-* **Subsystem 3 (Operational Modes)** contains only user-facing lathe modes (`GearboxMode`, `TurnCycle`, `FaceCycle`, `ThreadCycle`).
+* **Subsystem 3 (Operational Modes) [now Subsystem 4 — Operational Mode Engine]** contains only user-facing lathe modes (`GearboxMode`, `TurnCycle`, `FaceCycle`, `ThreadCycle`).
 * `AsyncPrimitive`, `GearZPrimitive`, and `GearXPrimitive` are retired as `IELSMode` classes.
 
 ### 4.2 "Feed is Feed" Principle (G94 / G95 Standard)
@@ -140,6 +140,6 @@ During testing of the Electronic Gearbox in asynchronous mode ($Z$-axis feeding 
 
 ## 6. References
 * [`docs/WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md)
-* [`docs/ELS_MODE_ARCHITECTURE.md`](../ELS_MODE_ARCHITECTURE.md)
-* [`docs/ELS_CORE_STATE_MODEL.md`](../ELS_CORE_STATE_MODEL.md)
-* [`docs/ELS_CLIENT_ARCHITECTURE.md`](../ELS_CLIENT_ARCHITECTURE.md)
+* [`docs/modes/ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md)
+* [`docs/state/ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md)
+* [`docs/clients/ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)

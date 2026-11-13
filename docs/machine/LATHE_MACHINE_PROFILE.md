@@ -4,8 +4,8 @@
 > **Target Version:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `docs/LATHE_MACHINE_PROFILE.md`  
-> **Referenced By:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md), [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md), [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md), `lathe-viz-profiles.js`, `MachineModel.h`
+> **Location:** `docs/machine/LATHE_MACHINE_PROFILE.md`
+> **Referenced By:** [`ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md), [`ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md), [`ELS_DESIGN_NOTEBOOK.md`](../archive/ELS_DESIGN_NOTEBOOK.md), `lathe-viz-profiles.js`, `MachineModel.h`
 
 ---
 

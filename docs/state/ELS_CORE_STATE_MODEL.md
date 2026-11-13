@@ -4,7 +4,7 @@
 > **Target System:** whatELS Modular Architecture  
 > **Author:** Antigravity & Emil  
 > **Date:** October 7, 2026  
-> **Location:** `docs/ELS_CORE_STATE_MODEL.md`  
+> **Location:** `docs/state/ELS_CORE_STATE_MODEL.md`
 > **Referenced By:** `LATHE_MACHINE_PROFILE.md`, `ELS_MODE_ARCHITECTURE.md`, `ELS_CLIENT_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`
 
 ---
@@ -439,7 +439,7 @@ The controller captures `MachineModel::captureAll()` at instant $t_0$ and stream
 
 ## 8. Client-Side Reactive Model (`Alpine.store('machine')`)
 
-In the browser and Web UI, [`whatels-state.js`](../clients/web_ui/whatels-state.js) implements an isomorphic reactive representation of `MachineModel`:
+In the browser and Web UI, [`whatels-state.js`](../../clients/web_ui/whatels-state.js) implements an isomorphic reactive representation of `MachineModel`:
 
 ```javascript
 Alpine.store('machine', {
@@ -498,7 +498,7 @@ The **Core State Model** provides the unshakeable bedrock of the whatELS ecosyst
 4. **Bandwidth Efficiency:** Strict change-driven dispatch and dynamic encoder deadbands prevent network radio saturation.
 
 ### Cross-Index:
-* **Hardware Geometry & Capabilities:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
-* **Mode Lifecycle & Orchestration:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
-* **Client Architecture & Protocols:** [`ELS_CLIENT_ARCHITECTURE.md`](./ELS_CLIENT_ARCHITECTURE.md)
-* **UI Design Decisions & Ergonomics:** [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md)
+* **Hardware Geometry & Capabilities:** [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md)
+* **Mode Lifecycle & Orchestration:** [`ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md)
+* **Client Architecture & Protocols:** [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md)
+* **UI Design Decisions & Ergonomics:** [`ELS_DESIGN_NOTEBOOK.md`](../archive/ELS_DESIGN_NOTEBOOK.md)

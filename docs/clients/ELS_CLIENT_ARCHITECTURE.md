@@ -1,12 +1,12 @@
 # whatELS Client Architecture & Protocol Specification
 
 > **Status:** Authoritative Specification (Subsystems 5 & 6)  
-> **Master Blueprint:** [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md)  
+> **Master Blueprint:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md)
 > **Target Version:** whatELS Modular Multi-Client Suite  
 > **Author:** Antigravity & Emil  
 > **Date:** October 13, 2026  
-> **Location:** `docs/ELS_CLIENT_ARCHITECTURE.md`  
-> **Referenced By:** `NANOELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `ELS_PRESET_CATALOG.md`
+> **Location:** `docs/clients/ELS_CLIENT_ARCHITECTURE.md`
+> **Referenced By:** `WHATELS_MASTER_ARCHITECTURE.md`, `ELS_DESIGN_NOTEBOOK.md`, `ELS_MODE_ARCHITECTURE.md`, `LATHE_MACHINE_PROFILE.md`, `ELS_PRESET_CATALOG.md`
 
 ---
 
@@ -14,7 +14,7 @@
 
 The **whatELS Client Architecture** defines the structure, communication protocol, state synchronization, and presentation layer for all operator interfaces interacting with the whatELS motion controller. It serves as the authoritative deep-dive for **Subsystem 5 (Command Dispatcher & Transport)** and **Subsystem 6 (Human-Machine Interface Adapters)**.
 
-For the system-wide 6-subsystem architecture, dual-core concurrency model, and full firmware file disposition, refer directly to the master blueprint: 👉 [`NANOELS_MASTER_ARCHITECTURE.md`](./NANOELS_MASTER_ARCHITECTURE.md).  
+For the system-wide 6-subsystem architecture and dual-core concurrency model, refer directly to the master blueprint: 👉 [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md).
 For the developer implementation walkthrough and interface reference, see: 👉 [`CLIENT_IMPLEMENTATION_GUIDE.md`](./CLIENT_IMPLEMENTATION_GUIDE.md).  
 For the universal, language-agnostic Client SDK specification and transport contracts, see: 👉 [`sdk/CLIENT_SDK_SPECIFICATION.md`](./sdk/CLIENT_SDK_SPECIFICATION.md).
 
@@ -524,7 +524,7 @@ Machine shop environments feature high electrical interference (VFD spindle driv
 
 ## 6. Multi-Domain State Protocol (`MachineModel`)
 
-> **Authoritative Specification:** Complete C++ struct definitions, bitmask flags (`DomainFlags`), and temporal snapshot mechanics are specified authoritatively in [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md).
+> **Authoritative Specification:** Complete C++ struct definitions, bitmask flags (`DomainFlags`), and temporal snapshot mechanics are specified authoritatively in [`ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md).
 
 State synchronization between controller and clients is partitioned into four independent, cohesive domains:
 
@@ -614,8 +614,8 @@ CMD.jogStep=<axis>,<dir>   // Discrete 1-step increment in semantic direction
 Because different physical clients (Web touchscreens, Nextion LCDs, wireless pendants) have different input capabilities, button layouts, and touch timings, **each client maintains its own interaction mapping and ledger**.
 
 * For the canonical reference implementation of the Modern Web / Touch DRO interface, see:
-  👉 **[`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)**  
-  👉 **[`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)** (Complete 40-row interaction-to-wire ledger)
+  👉 **[`web_ui/OVERVIEW.md`](./web_ui/OVERVIEW.md)**
+  👉 **[`web_ui/INTERACTION_LEDGER.md`](./web_ui/INTERACTION_LEDGER.md)** (Complete 40-row interaction-to-wire ledger)
 
 ---
 
@@ -735,12 +735,12 @@ This specification establishes:
 * **Maximum shop safety**: Semantic operator directions and hardware heartbeats prevent tool crashes.
 
 ### Related Architecture Documents:
-* **Core State Model & Domains:** [`ELS_CORE_STATE_MODEL.md`](./ELS_CORE_STATE_MODEL.md)
-* **Physical Lathe Hardware & Presets:** [`LATHE_MACHINE_PROFILE.md`](./LATHE_MACHINE_PROFILE.md)
-* **Mode Lifecycle & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](./ELS_MODE_ARCHITECTURE.md)
-* **UI Design Decisions & Ergonomics:** [`ELS_DESIGN_NOTEBOOK.md`](./ELS_DESIGN_NOTEBOOK.md)
+* **Core State Model & Domains:** [`ELS_CORE_STATE_MODEL.md`](../state/ELS_CORE_STATE_MODEL.md)
+* **Physical Lathe Hardware & Presets:** [`LATHE_MACHINE_PROFILE.md`](../machine/LATHE_MACHINE_PROFILE.md)
+* **Mode Lifecycle & Inheritance:** [`ELS_MODE_ARCHITECTURE.md`](../modes/ELS_MODE_ARCHITECTURE.md)
+* **UI Design Decisions & Ergonomics:** [`ELS_DESIGN_NOTEBOOK.md`](../archive/ELS_DESIGN_NOTEBOOK.md)
 
 ### Client Reference Implementations:
-* **Modern Web UI / Touch DRO:** [`clients/web_ui/OVERVIEW.md`](./clients/web_ui/OVERVIEW.md)
-* **Web UI Interaction Ledger:** [`clients/web_ui/INTERACTION_LEDGER.md`](./clients/web_ui/INTERACTION_LEDGER.md)
+* **Modern Web UI / Touch DRO:** [`web_ui/OVERVIEW.md`](./web_ui/OVERVIEW.md)
+* **Web UI Interaction Ledger:** [`web_ui/INTERACTION_LEDGER.md`](./web_ui/INTERACTION_LEDGER.md)
 
