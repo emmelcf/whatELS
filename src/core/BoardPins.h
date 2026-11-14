@@ -7,7 +7,11 @@
  * @see docs/WHATELS_MASTER_ARCHITECTURE.md
  */
 
+#if defined(ESP32) || defined(ARDUINO)
 #include <driver/gpio.h>
+#else
+using gpio_num_t = int;
+#endif
 
 /**
  * =============================================================================

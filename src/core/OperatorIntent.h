@@ -7,7 +7,7 @@
  * @see docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md
  */
 
-#include <Arduino.h>
+#include <cstdint>
 
 // --- Authoritative Operator Intent Models ---
 enum ThreadFormat {

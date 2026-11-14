@@ -7,7 +7,8 @@
  * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
  */
 
-#include <Arduino.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace whatels {
 namespace core_client {

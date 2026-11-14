@@ -7,8 +7,9 @@
  * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
  */
 
-#include <Arduino.h>
+#include <cstdint>
 #include <cmath>
+#include "core/PlatformCompat.h"
 #include "ISettingsStorage.h"
 
 #if defined(ARDUINO) || defined(ESP32)

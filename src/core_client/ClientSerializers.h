@@ -6,6 +6,7 @@
  * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
  */
 
+#if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>
 #include "MachineModel.h"
 #include "Config.h"
@@ -44,3 +45,4 @@ public:
 
 } // namespace core_client
 } // namespace whatels
+#endif

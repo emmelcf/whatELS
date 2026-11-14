@@ -38,5 +38,10 @@ To decouple `SettingsService` and `PersistentSetting<T>` from ESP32 `Preferences
 | Interface | Host Test Double | Domain |
 | :--- | :--- | :--- |
 | [`src/core/ISystemInfoHAL.h`](../../src/core/ISystemInfoHAL.h) | [`test/mocks/MockSystemInfoHAL.h`](../../test/mocks/MockSystemInfoHAL.h) | Chip/heap/uptime system info |
+| [`src/motion/IProfileStorage.h`](../../src/motion/IProfileStorage.h) | [`test/mocks/MockProfileStorage.h`](../../test/mocks/MockProfileStorage.h) | Machine profile JSON storage |
 | [`src/motion/hal/IStepperHAL.h`](../../src/motion/hal/IStepperHAL.h) | [`src/motion/hal/MockStepperHAL.h`](../../src/motion/hal/MockStepperHAL.h) | Stepper pulse generation |
 | [`src/motion/hal/ISpindleEncoderHAL.h`](../../src/motion/hal/ISpindleEncoderHAL.h) | [`src/motion/hal/MockSpindleEncoderHAL.h`](../../src/motion/hal/MockSpindleEncoderHAL.h) | Spindle quadrature & simulation |
+
+### 2.3 Host Portability Shim (`PlatformCompat.h`)
+
+Host-compiled headers in `src/core/`, `src/core_client/`, and `src/motion/` include [`src/core/PlatformCompat.h`](../../src/core/PlatformCompat.h) instead of `<Arduino.h>`. On ESP32/Arduino targets it includes `<Arduino.h>`; on native host builds it aliases `String` to `std::string` using standard C++17 headers. ESP32-only FreeRTOS, GPIO, and peripheral includes are guarded with `#if defined(ESP32) || defined(ARDUINO)`, leaving zero fake framework headers in `test/mocks/`.

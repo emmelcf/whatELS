@@ -9,12 +9,7 @@
  */
 
 #include <cstdint>
-#if defined(ESP32) || defined(ARDUINO)
-#include <Arduino.h>
-#else
-#include <string>
-using String = std::string;
-#endif
+#include "core/PlatformCompat.h"
 
 namespace whatels::core {
 

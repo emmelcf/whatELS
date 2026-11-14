@@ -7,9 +7,7 @@
  * @see docs/WHATELS_MASTER_ARCHITECTURE.md
  */
 
-#include <Arduino.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
+#include <cstdint>
 #include "Config.h"
 #include "OperatorIntent.h"
 

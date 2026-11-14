@@ -8,6 +8,13 @@
 #include "motion/hal/MockStepperHAL.h"
 #include "motion/hal/MockSpindleEncoderHAL.h"
 #include "motion/contract/MotionCommands.h"
+#include "core/SettingsService.h"
+
+// Minimal test double for SettingsService::getActiveProfile() used as fallback in MotionEngine
+static LatheConfiguration s_mockConfig;
+const LatheConfiguration& SettingsService::getActiveProfile() {
+  return s_mockConfig;
+}
 
 // Test harness listener to record callbacks from MotionEngine
 class TestMotionEventListener : public IMotionEventListener {

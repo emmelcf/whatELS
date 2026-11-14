@@ -7,7 +7,7 @@
  * @see docs/state/ELS_PROPERTIES_AND_SETTINGS.md
  */
 
-#include <Arduino.h>
+#include "core/PlatformCompat.h"
 #include "BoardPins.h"
 #include "LatheProfile.h"
 

@@ -7,7 +7,7 @@
  * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
  */
 
-#include <Arduino.h>
+#include "core/PlatformCompat.h"
 #include "MachineModel.h"
 
 class TelemetrySerializer {

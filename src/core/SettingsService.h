@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include "core/PlatformCompat.h"
 #include <optional>
 #include "Config.h"
 #include "ISettingsStorage.h"

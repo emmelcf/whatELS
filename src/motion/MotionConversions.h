@@ -1,9 +1,10 @@
 #pragma once
 
-#include <Arduino.h>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <strings.h>
 #include "core/SettingsService.h"
 
 /**

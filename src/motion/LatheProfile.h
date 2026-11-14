@@ -1,13 +1,6 @@
 #pragma once
 
-#if defined(ESP32) || defined(ARDUINO)
-#include <Arduino.h>
-#else
-#include <cstddef>
-#include <cstdint>
-#include <string>
-using String = std::string;
-#endif
+#include "core/PlatformCompat.h"
 #include <cmath>
 #include "kernel/AxisState.h"
 #include "motion/IProfileStorage.h"

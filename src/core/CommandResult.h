@@ -7,12 +7,7 @@
  * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
  */
 
-#if defined(ESP32) || defined(ARDUINO)
-#include <Arduino.h>
-#else
-#include <string>
-using String = std::string;
-#endif
+#include "core/PlatformCompat.h"
 
 namespace whatels::core {
 

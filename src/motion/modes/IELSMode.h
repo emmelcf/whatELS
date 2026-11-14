@@ -7,7 +7,7 @@
  * @see docs/motion/MODE_INTEGRATION_CONTRACT.md
  */
 
-#include <Arduino.h>
+#include <cstdint>
 #include "LatheProfile.h"
 
 // -----------------------------------------------------------------------------
