@@ -78,7 +78,6 @@ private:
   int64_t               m_accumulatedPulses{0};
 
   std::atomic<bool>     m_hasIndexSynced{false};
-  int64_t               m_lastIndexPulseTimeUs{0};
 
   // Speed estimation
   int64_t               m_lastRpmCalcTimeUs{0};

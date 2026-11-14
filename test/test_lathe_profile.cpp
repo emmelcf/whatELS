@@ -21,6 +21,8 @@ int main() {
     LatheConfiguration cfg = {};
     assert(loadProfileFromLittleFS("wm210v_stock", &cfg));
     assert(std::strcmp(cfg.profileId, "wm210v_stock") == 0);
+    assert(cfg.zAxis.drive.invertEnable == false); // profiles.json enable_active_low: true
+    assert(cfg.zAxis.drive.invertDir == false);    // profiles.json direction_inverted: false
 
     // Mutating operations fail gracefully when no storage is injected
     LatheConfiguration custom = getDefaultProfile();
@@ -40,6 +42,13 @@ int main() {
     std::strcpy(custom.modelName, "Custom 10x22 Bench Lathe");
     custom.zAxis.leadscrewPitchMm = 3.0f;
     custom.zAxis.hasDroScale = true;
+    custom.zAxis.drive.invertDir = true;
+    custom.zAxis.drive.invertEnable = true;   // enable_active_low: false
+    custom.xAxis.drive.invertDir = false;
+    custom.xAxis.drive.invertEnable = false;  // enable_active_low: true
+    custom.spindle.encoder.invertDir = true;
+    custom.zAxis.limits.travelMinMm = -5.0f;
+    custom.zAxis.limits.travelMaxMm = 400.0f;
 
     assert(saveProfileToLittleFS(custom));
     assert(mockStorage.exists("/presets/profiles.json"));
@@ -56,11 +65,23 @@ int main() {
     assert(std::strcmp(loaded.modelName, "Custom 10x22 Bench Lathe") == 0);
     assert(loaded.zAxis.leadscrewPitchMm == 3.0f);
     assert(loaded.hasCapability(CAP_DRO_Z));
+    assert(loaded.zAxis.drive.invertDir == true);
+    assert(loaded.zAxis.drive.invertEnable == true);
+    assert(loaded.xAxis.drive.invertDir == false);
+    assert(loaded.xAxis.drive.invertEnable == false);
+    assert(loaded.spindle.encoder.invertDir == true);
+    assert(loaded.zAxis.limits.travelMinMm == -5.0f);
+    assert(loaded.zAxis.limits.travelMaxMm == 400.0f);
 
-    // JSON export contains custom profile
+    // JSON export contains canonical schema keys (direction_inverted, enable_active_low)
     String json;
     assert(getProfileJsonFromLittleFS("custom_1022", &json));
     assert(json.find("custom_1022") != std::string::npos);
+    assert(json.find("\"direction_inverted\":true") != std::string::npos);
+    assert(json.find("\"enable_active_low\":false") != std::string::npos);
+    assert(json.find("\"enable_active_low\":true") != std::string::npos);
+    assert(json.find("\"invert_dir\"") == std::string::npos);
+    assert(json.find("\"invert_enable\"") == std::string::npos);
 
     // List catalog includes both ROM :sys and user :user
     String list;

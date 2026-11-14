@@ -31,7 +31,6 @@ void IRAM_ATTR Esp32SpindleEncoderHAL::indexIsrHandler(void* arg) {
   auto* self = static_cast<Esp32SpindleEncoderHAL*>(arg);
   if (self) {
     self->m_hasIndexSynced.store(true, std::memory_order_relaxed);
-    self->m_lastIndexPulseTimeUs = esp_timer_get_time();
   }
 }
 

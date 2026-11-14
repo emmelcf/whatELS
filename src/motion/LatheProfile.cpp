@@ -99,6 +99,65 @@ LatheConfiguration getDefaultProfile() {
   return p;
 }
 
+static void parseAxisObject(JsonObject axisObj, AxisHardwareConfig& axisCfg) {
+  if (axisObj.isNull()) return;
+
+  JsonObject kin = axisObj["kinematics"];
+  if (!kin.isNull()) {
+    axisCfg.leadscrewPitchMm = kin["leadscrew_pitch_mm"] | axisCfg.leadscrewPitchMm;
+    axisCfg.backlashMm = kin["backlash_mm"] | axisCfg.backlashMm;
+    if (kin["direction_inverted"].is<bool>()) {
+      axisCfg.drive.invertDir = kin["direction_inverted"].as<bool>();
+    } else if (axisObj["drive"]["invert_dir"].is<bool>()) {
+      axisCfg.drive.invertDir = axisObj["drive"]["invert_dir"].as<bool>();
+    }
+    axisCfg.maxVelocityMmMin = kin["max_velocity_mm_min"] | axisCfg.maxVelocityMmMin;
+    axisCfg.maxAccelMmSec2 = kin["max_accel_mm_sec2"] | axisCfg.maxAccelMmSec2;
+    axisCfg.startVelocityMmMin = kin["start_velocity_mm_min"] | axisCfg.startVelocityMmMin;
+  }
+
+  JsonObject drv = axisObj["drive"];
+  if (!drv.isNull()) {
+    axisCfg.stepsPerMm = drv["steps_per_mm"] | axisCfg.stepsPerMm;
+    if (drv["enable_active_low"].is<bool>()) {
+      axisCfg.drive.invertEnable = !drv["enable_active_low"].as<bool>();
+    } else if (drv["invert_enable"].is<bool>()) {
+      axisCfg.drive.invertEnable = drv["invert_enable"].as<bool>();
+    }
+    axisCfg.drive.needsRest = drv["needs_rest"] | axisCfg.drive.needsRest;
+  }
+
+  JsonObject softLim = axisObj["limits"]["soft"];
+  if (!softLim.isNull()) {
+    axisCfg.limits.travelMinMm = softLim["min_mm"] | axisCfg.limits.travelMinMm;
+    axisCfg.limits.travelMaxMm = softLim["max_mm"] | axisCfg.limits.travelMaxMm;
+  }
+
+  axisCfg.hasDroScale = axisObj["feedback"]["has_dro"] | false;
+}
+
+static void serializeAxisObject(JsonObject axisObj, const AxisHardwareConfig& axisCfg) {
+  JsonObject kin = axisObj["kinematics"].to<JsonObject>();
+  kin["leadscrew_pitch_mm"] = axisCfg.leadscrewPitchMm;
+  kin["backlash_mm"] = axisCfg.backlashMm;
+  kin["direction_inverted"] = axisCfg.drive.invertDir;
+  kin["max_velocity_mm_min"] = axisCfg.maxVelocityMmMin;
+  kin["max_accel_mm_sec2"] = axisCfg.maxAccelMmSec2;
+  kin["start_velocity_mm_min"] = axisCfg.startVelocityMmMin;
+
+  JsonObject drv = axisObj["drive"].to<JsonObject>();
+  drv["steps_per_mm"] = axisCfg.stepsPerMm;
+  drv["enable_active_low"] = !axisCfg.drive.invertEnable;
+  drv["needs_rest"] = axisCfg.drive.needsRest;
+
+  JsonObject softLim = axisObj["limits"]["soft"].to<JsonObject>();
+  softLim["enabled"] = false;
+  softLim["min_mm"] = axisCfg.limits.travelMinMm;
+  softLim["max_mm"] = axisCfg.limits.travelMaxMm;
+
+  axisObj["feedback"]["has_dro"] = axisCfg.hasDroScale;
+}
+
 static bool parseProfileObject(JsonObject target, const char* slug, LatheConfiguration* outProfile) {
   if (target.isNull() || !outProfile) return false;
 
@@ -139,38 +198,13 @@ static bool parseProfileObject(JsonObject target, const char* slug, LatheConfigu
     outProfile->spindle.minSyncRpm = sp["kinematics"]["min_sync_rpm"] | outProfile->spindle.minSyncRpm;
     outProfile->spindle.encoder.ppr = sp["feedback"]["encoder"]["ppr"] | outProfile->spindle.encoder.ppr;
     outProfile->spindle.encoder.hasIndex = sp["feedback"]["encoder"]["has_index"] | outProfile->spindle.encoder.hasIndex;
+    outProfile->spindle.encoder.invertDir = sp["feedback"]["encoder"]["inverted"] | outProfile->spindle.encoder.invertDir;
     outProfile->spindle.pulleyRatio = sp["feedback"]["pulley_ratio"] | outProfile->spindle.pulleyRatio;
   }
 
-  // Axes: Z
-  JsonObject zAxis = target["axes"]["z"];
-  if (!zAxis.isNull()) {
-    outProfile->zAxis.leadscrewPitchMm = zAxis["kinematics"]["leadscrew_pitch_mm"] | outProfile->zAxis.leadscrewPitchMm;
-    outProfile->zAxis.backlashMm = zAxis["kinematics"]["backlash_mm"] | outProfile->zAxis.backlashMm;
-    outProfile->zAxis.maxVelocityMmMin = zAxis["kinematics"]["max_velocity_mm_min"] | outProfile->zAxis.maxVelocityMmMin;
-    outProfile->zAxis.maxAccelMmSec2 = zAxis["kinematics"]["max_accel_mm_sec2"] | outProfile->zAxis.maxAccelMmSec2;
-    outProfile->zAxis.startVelocityMmMin = zAxis["kinematics"]["start_velocity_mm_min"] | outProfile->zAxis.startVelocityMmMin;
-    outProfile->zAxis.stepsPerMm = zAxis["drive"]["steps_per_mm"] | outProfile->zAxis.stepsPerMm;
-    outProfile->zAxis.drive.invertDir = zAxis["drive"]["invert_dir"] | outProfile->zAxis.drive.invertDir;
-    outProfile->zAxis.drive.invertEnable = zAxis["drive"]["invert_enable"] | outProfile->zAxis.drive.invertEnable;
-    outProfile->zAxis.drive.needsRest = zAxis["drive"]["needs_rest"] | outProfile->zAxis.drive.needsRest;
-    outProfile->zAxis.hasDroScale = zAxis["feedback"]["has_dro"] | false;
-  }
-
-  // Axes: X
-  JsonObject xAxis = target["axes"]["x"];
-  if (!xAxis.isNull()) {
-    outProfile->xAxis.leadscrewPitchMm = xAxis["kinematics"]["leadscrew_pitch_mm"] | outProfile->xAxis.leadscrewPitchMm;
-    outProfile->xAxis.backlashMm = xAxis["kinematics"]["backlash_mm"] | outProfile->xAxis.backlashMm;
-    outProfile->xAxis.maxVelocityMmMin = xAxis["kinematics"]["max_velocity_mm_min"] | outProfile->xAxis.maxVelocityMmMin;
-    outProfile->xAxis.maxAccelMmSec2 = xAxis["kinematics"]["max_accel_mm_sec2"] | outProfile->xAxis.maxAccelMmSec2;
-    outProfile->xAxis.startVelocityMmMin = xAxis["kinematics"]["start_velocity_mm_min"] | outProfile->xAxis.startVelocityMmMin;
-    outProfile->xAxis.stepsPerMm = xAxis["drive"]["steps_per_mm"] | outProfile->xAxis.stepsPerMm;
-    outProfile->xAxis.drive.invertDir = xAxis["drive"]["invert_dir"] | outProfile->xAxis.drive.invertDir;
-    outProfile->xAxis.drive.invertEnable = xAxis["drive"]["invert_enable"] | outProfile->xAxis.drive.invertEnable;
-    outProfile->xAxis.drive.needsRest = xAxis["drive"]["needs_rest"] | outProfile->xAxis.drive.needsRest;
-    outProfile->xAxis.hasDroScale = xAxis["feedback"]["has_dro"] | false;
-  }
+  // Axes: Z & X
+  parseAxisObject(target["axes"]["z"], outProfile->zAxis);
+  parseAxisObject(target["axes"]["x"], outProfile->xAxis);
 
   // Ensure capabilities bitmask stays in sync with axes
   if (outProfile->zAxis.hasDroScale) outProfile->capabilities |= CAP_DRO_Z;
@@ -429,31 +463,11 @@ bool saveProfileToLittleFS(const LatheConfiguration& profile) {
   sp["kinematics"]["min_sync_rpm"] = profile.spindle.minSyncRpm;
   sp["feedback"]["encoder"]["ppr"] = profile.spindle.encoder.ppr;
   sp["feedback"]["encoder"]["has_index"] = profile.spindle.encoder.hasIndex;
+  sp["feedback"]["encoder"]["inverted"] = profile.spindle.encoder.invertDir;
   sp["feedback"]["pulley_ratio"] = profile.spindle.pulleyRatio;
 
-  JsonObject zA = target["axes"]["z"].to<JsonObject>();
-  zA["kinematics"]["leadscrew_pitch_mm"] = profile.zAxis.leadscrewPitchMm;
-  zA["kinematics"]["backlash_mm"] = profile.zAxis.backlashMm;
-  zA["kinematics"]["max_velocity_mm_min"] = profile.zAxis.maxVelocityMmMin;
-  zA["kinematics"]["max_accel_mm_sec2"] = profile.zAxis.maxAccelMmSec2;
-  zA["kinematics"]["start_velocity_mm_min"] = profile.zAxis.startVelocityMmMin;
-  zA["drive"]["steps_per_mm"] = profile.zAxis.stepsPerMm;
-  zA["drive"]["invert_dir"] = profile.zAxis.drive.invertDir;
-  zA["drive"]["invert_enable"] = profile.zAxis.drive.invertEnable;
-  zA["drive"]["needs_rest"] = profile.zAxis.drive.needsRest;
-  zA["feedback"]["has_dro"] = profile.zAxis.hasDroScale;
-
-  JsonObject xA = target["axes"]["x"].to<JsonObject>();
-  xA["kinematics"]["leadscrew_pitch_mm"] = profile.xAxis.leadscrewPitchMm;
-  xA["kinematics"]["backlash_mm"] = profile.xAxis.backlashMm;
-  xA["kinematics"]["max_velocity_mm_min"] = profile.xAxis.maxVelocityMmMin;
-  xA["kinematics"]["max_accel_mm_sec2"] = profile.xAxis.maxAccelMmSec2;
-  xA["kinematics"]["start_velocity_mm_min"] = profile.xAxis.startVelocityMmMin;
-  xA["drive"]["steps_per_mm"] = profile.xAxis.stepsPerMm;
-  xA["drive"]["invert_dir"] = profile.xAxis.drive.invertDir;
-  xA["drive"]["invert_enable"] = profile.xAxis.drive.invertEnable;
-  xA["drive"]["needs_rest"] = profile.xAxis.drive.needsRest;
-  xA["feedback"]["has_dro"] = profile.xAxis.hasDroScale;
+  serializeAxisObject(target["axes"]["z"].to<JsonObject>(), profile.zAxis);
+  serializeAxisObject(target["axes"]["x"].to<JsonObject>(), profile.xAxis);
 
   return writeCatalogDoc(doc);
 }
