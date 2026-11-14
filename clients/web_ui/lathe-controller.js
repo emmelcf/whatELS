@@ -1647,54 +1647,25 @@
     $('modeOverlay').classList.add('show');
   });
   function syncModeToController(targetMode){
-    if(state.runState !== 'running') return; // Zero wire traffic while idle!
-    if(!window.whatElsClient) return;
-    var modeMap = {
-      'GEARBOX': 'GEARS',
-      'JOYSTICK': 'JOYSTICK',
-      'TURNING': 'TURN',
-      'FACING': 'FACE',
-      'THREADING': 'THREAD',
-      'TAPER': 'CONE',
-      'CUTOFF': 'CUT',
-      'SLOTTING': 'SLOT',
-      'SPHERE': 'ELLIPSE'
-    };
-    var m = targetMode || state.mode;
-    var actionKey = modeMap[m];
-    if(m === 'GEARBOX'){
-      window.whatElsClient.setMode('gearbox');
-      var ax = state.activeFeedAxis === 'X' ? 'X' : (state.activeFeedAxis === 'Z+X' ? 'ZX' : 'Z');
-      window.whatElsClient.setGearAxis(ax);
-      window.whatElsClient.setGearSync(state.gearboxMode === 'SYNC');
-      var dirVal = (state.activeFeedAxis === 'X') ? (state.gearDirX === 'IN' ? -1 : 1) : (state.gearDirZ === 'FWD' ? -1 : 1);
-      window.whatElsClient.setGearDir(dirVal);
-      return;
-    }
-    if(actionKey){
-      window.whatElsClient.setMode(actionKey);
-    }
+    // Mode/axis/sync/dir are sent atomically via CMD.startFeed / CMD.startCycle;
+    // zero legacy CMD.mode= / CMD.gear*= wire traffic.
+    void targetMode;
   }
 
   function syncPitchToController(targetPitch){
-    var isRunning = (state.runState === 'running');
+    // Updates local display-intent in Alpine store; pitch/taper are sent atomically on START
+    // via CMD.startFeed / CMD.startCycle (and live feed trim uses CMD.feedNudge).
+    var store = (window.Alpine && Alpine.store) ? Alpine.store('machine') : null;
+    if(!store) return;
 
     // 1. Threading Mode
     if(state.mode === 'THREADING'){
       if(state.threadUnit === 'tpi'){
-        var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
-        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedTpi(tpi);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').thFmt = 1;
-          Alpine.store('machine').thPitch = tpi;
-        }
+        store.thFmt = 1;
+        store.thPitch = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
       } else {
-        var pMm = targetPitch || state.pitch || 1.5;
-        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(pMm);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').thFmt = 0;
-          Alpine.store('machine').thPitch = pMm;
-        }
+        store.thFmt = 0;
+        store.thPitch = targetPitch || state.pitch || 1.5;
       }
       return;
     }
@@ -1703,33 +1674,22 @@
     if(state.mode === 'TAPER' || (state.mode === 'GEARBOX' && state.activeFeedAxis === 'Z+X')){
       if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
         var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperPreset(state.gearTaperPresetIdx, p.angle, 1.0 / p.ratio);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').tpPreset = state.gearTaperPresetIdx;
-          Alpine.store('machine').tpMode = 2;
-          Alpine.store('machine').tpVal = 1.0 / p.ratio;
-          Alpine.store('machine').coneRatio = p.ratio;
-        }
+        store.tpPreset = state.gearTaperPresetIdx;
+        store.tpMode = 2;
+        store.tpVal = 1.0 / p.ratio;
+        store.coneRatio = p.ratio;
       } else if(state.gearTaperAuthMode === 'ANGLE'){
-        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperAngle(state.gearTaperAuthVal || state.gearTaperAngle || 1.432);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').tpPreset = -1;
-          Alpine.store('machine').tpMode = 1;
-          Alpine.store('machine').tpVal = state.gearTaperAuthVal || state.gearTaperAngle;
-          Alpine.store('machine').coneRatio = state.gearTaperRatio;
-        }
+        store.tpPreset = -1;
+        store.tpMode = 1;
+        store.tpVal = state.gearTaperAuthVal || state.gearTaperAngle;
+        store.coneRatio = state.gearTaperRatio;
       } else {
         var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-        if(isRunning && window.whatElsClient) window.whatElsClient.setTaperRatio(rVal);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').tpPreset = -1;
-          Alpine.store('machine').tpMode = 0;
-          Alpine.store('machine').tpVal = rVal;
-          Alpine.store('machine').coneRatio = state.gearTaperRatio;
-        }
+        store.tpPreset = -1;
+        store.tpMode = 0;
+        store.tpVal = rVal;
+        store.coneRatio = state.gearTaperRatio;
       }
-      var taperPitch = targetPitch || state.gearPitchZ || 0.15;
-      if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(taperPitch);
       return;
     }
 
@@ -1737,39 +1697,29 @@
     if(state.mode === 'GEARBOX'){
       if(state.gearboxMode === 'ASYNC') return;
       if(state.gearThreadUnit === 'tpi'){
-        var tpiVal = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
-        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedTpi(tpiVal);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').thFmt = 1;
-          Alpine.store('machine').thPitch = tpiVal;
-        }
+        store.thFmt = 1;
+        store.thPitch = state.gearPitchZ_tpi || +(25.4 / (targetPitch || state.gearPitchZ || 2.0)).toFixed(2);
         return;
       }
-      var p = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
-      if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-        if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(p);
-        if(window.Alpine && Alpine.store('machine')){
-          Alpine.store('machine').thFmt = 0;
-          Alpine.store('machine').thPitch = p;
-        }
+      var gp = (targetPitch !== undefined && targetPitch !== null) ? targetPitch : ((state.activeFeedAxis === 'X') ? state.gearPitchX : state.gearPitchZ);
+      if(gp !== undefined && gp !== null && !isNaN(gp) && gp > 0){
+        store.thFmt = 0;
+        store.thPitch = gp;
       }
       return;
     }
 
-    var p = targetPitch;
-    if(p === undefined || p === null){
+    var cp = targetPitch;
+    if(cp === undefined || cp === null){
       if(state.mode === 'TURNING'){
-        p = state.turnPitch;
+        cp = state.turnPitch;
       } else if(state.mode === 'FACING'){
-        p = state.facePitch;
+        cp = state.facePitch;
       }
     }
-    if(p !== undefined && p !== null && !isNaN(p) && p > 0){
-      if(isRunning && window.whatElsClient) window.whatElsClient.setFeedMm(p);
-      if(window.Alpine && Alpine.store('machine')){
-        Alpine.store('machine').thFmt = 0;
-        Alpine.store('machine').thPitch = p;
-      }
+    if(cp !== undefined && cp !== null && !isNaN(cp) && cp > 0){
+      store.thFmt = 0;
+      store.thPitch = cp;
     }
   }
 
