@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file MockStepperHAL.h
+ * @brief Host test double for IStepperHAL.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/testing/README.md
+ */
 #include "IStepperHAL.h"
 #include <cstdint>
 #include <cstddef>

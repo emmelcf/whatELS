@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file HttpServer.h
+ * @brief Port 80 appliance HTTP server for static assets, schemas, and OTA firmware uploads.
+ * @see docs/WHATELS_MASTER_ARCHITECTURE.md
+ * @see docs/clients/web_ui/OVERVIEW.md
+ */
+
 #include <Arduino.h>
 #include <WebServer.h>
 #include <LittleFS.h>

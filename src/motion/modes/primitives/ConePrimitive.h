@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file ConePrimitive.h
+ * @brief Legacy coordinated Z+X taper turning primitive mode.
+ * @see docs/modes/taper/SPECIFICATION.md
+ * @see docs/modes/ELS_MODE_ARCHITECTURE.md
+ */
+
 #include "../IELSMode.h"
 #include "../../kernel/MotionEngine.h"
 

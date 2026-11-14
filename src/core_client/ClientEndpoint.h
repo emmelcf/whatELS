@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file ClientEndpoint.h
+ * @brief Base class for connected client sessions binding transport and permissions.
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ * @see docs/adr/0004-pluggable-transports-and-webserial.md
+ */
+
 #include "transports/ITransport.h"
 #include "ClientContext.h"
 #include "core/CommandResult.h"

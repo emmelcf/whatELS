@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file TrajectoryPlanner.h
+ * @brief Real-time acceleration profiler and deceleration window calculator.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 #include <cmath>
 #if defined(ESP32) || defined(ARDUINO)

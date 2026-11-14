@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file BoardPins.h
+ * @brief Hardware pinout and GPIO assignments for the whatELS ESP32-S3 controller PCB.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/WHATELS_MASTER_ARCHITECTURE.md
+ */
+
 #include <driver/gpio.h>
 
 /**

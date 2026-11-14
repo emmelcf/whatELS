@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file ClientManager.h
+ * @brief Multi-client session registry and telemetry broadcast coordinator.
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ * @see docs/adr/0003-command-result-and-baseline-client-architecture.md
+ */
+
 #include "ClientEndpoint.h"
 #include "clients/native/NativeClient.h"
 #include "transports/WebSocketTransport.h"

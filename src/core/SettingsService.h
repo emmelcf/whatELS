@@ -24,6 +24,8 @@ enum LimitDirection : uint8_t {
  * @brief Authoritative configuration manager and parameter broker for whatELS.
  * @details Implements the 4-tier properties taxonomy, active lathe machine profile,
  *          sparse NVS overrides, and universal reset architecture.
+ * @see docs/state/ELS_PROPERTIES_AND_SETTINGS.md
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
  */
 class SettingsService {
 public:

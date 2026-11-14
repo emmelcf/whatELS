@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file Config.h
+ * @brief Central hardware, motion defaults, and legacy global configuration.
+ * @see docs/WHATELS_MASTER_ARCHITECTURE.md
+ * @see docs/state/ELS_PROPERTIES_AND_SETTINGS.md
+ */
+
 #include <Arduino.h>
 #include <Preferences.h>
 #include "BoardPins.h"

@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file Esp32SpindleEncoderHAL.h
+ * @brief Concrete ESP32-S3 PCNT hardware spindle quadrature counter implementation.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/testing/HIL_TEST_HARNESS_SPECIFICATION.md
+ */
 #include "ISpindleEncoderHAL.h"
 #include <driver/pulse_cnt.h>
 #include <esp_attr.h>

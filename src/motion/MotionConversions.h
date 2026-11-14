@@ -11,6 +11,9 @@
  * @brief Subsystem 2 pure conversion utilities: canonical units, coordinate signs, and semantic intents.
  * @details Implements ADR 0001 & ADR 0002 standards for lossless conversion between human semantics,
  *          metric/imperial engineering units, and canonical integer deci-microns (du).
+ * @see docs/adr/0001-motion-invocation-and-gearbox-consolidation.md
+ * @see docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
  */
 
 namespace MotionConversions {

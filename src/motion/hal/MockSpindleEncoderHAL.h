@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file MockSpindleEncoderHAL.h
+ * @brief Host test double for ISpindleEncoderHAL.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/testing/README.md
+ */
 #include "ISpindleEncoderHAL.h"
 #include <cstdint>
 #include <cmath>

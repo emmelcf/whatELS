@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file MotionCommands.h
+ * @brief Motion halt reasons and typed motion command structures.
+ * @see docs/motion/MODE_INTEGRATION_CONTRACT.md
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 #include "hal/IStepperHAL.h"
 #include "kernel/SoftLimit.h"

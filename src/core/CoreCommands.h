@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file CoreCommands.h
+ * @brief Typed internal command structs for Subsystem 5 domain dispatch.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
 #include <cstdint>
 #include "hal/IStepperHAL.h"
 

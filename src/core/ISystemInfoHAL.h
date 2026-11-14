@@ -1,5 +1,13 @@
 #pragma once
 
+/**
+ * @file ISystemInfoHAL.h
+ * @brief Abstract system diagnostics and appliance vitals hardware abstraction layer.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ * @see docs/testing/README.md
+ */
+
 #include <cstdint>
 #if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>

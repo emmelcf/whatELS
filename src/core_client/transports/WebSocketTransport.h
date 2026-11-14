@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file WebSocketTransport.h
+ * @brief WebSocket implementation of ITransport over ESP32 WebSocketsServer.
+ * @see docs/adr/0004-pluggable-transports-and-webserial.md
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ */
+
 #include "ITransport.h"
 #include <WebSocketsServer.h>
 

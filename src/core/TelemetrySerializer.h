@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file TelemetrySerializer.h
+ * @brief Domain-masked telemetry frame serializer (K, I, C, P) for client transports.
+ * @see docs/state/ELS_CORE_STATE_MODEL.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
+
 #include <Arduino.h>
 #include "MachineModel.h"
 

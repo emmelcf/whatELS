@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file ISpindleEncoderHAL.h
+ * @brief Abstract spindle encoder hardware abstraction layer with simulation hooks.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/testing/HIL_TEST_HARNESS_SPECIFICATION.md
+ */
 #include <cstdint>
 
 /**

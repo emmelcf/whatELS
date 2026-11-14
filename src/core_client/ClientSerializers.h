@@ -1,5 +1,11 @@
 #pragma once
 
+/**
+ * @file ClientSerializers.h
+ * @brief Protocol-specific telemetry serializers (e.g., GRBL-compatible status).
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ */
+
 #include <Arduino.h>
 #include "MachineModel.h"
 #include "Config.h"

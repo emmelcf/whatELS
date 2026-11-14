@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file MachineModel.h
+ * @brief Authoritative 4-domain machine state snapshot model (K, I, C, P).
+ * @see docs/state/ELS_CORE_STATE_MODEL.md
+ * @see docs/WHATELS_MASTER_ARCHITECTURE.md
+ */
+
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>

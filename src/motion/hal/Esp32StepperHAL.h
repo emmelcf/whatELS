@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file Esp32StepperHAL.h
+ * @brief Concrete ESP32-S3 GPTimer/RMT stepper pulse generation HAL.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/motion/CONCURRENCY_AND_TIMING.md
+ */
+
 #include "IStepperHAL.h"
 #include <cstdint>
 #include <cstddef>

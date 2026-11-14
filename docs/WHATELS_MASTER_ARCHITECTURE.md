@@ -166,7 +166,7 @@ To guarantee that firmware upgrades never destroy user calibrations, custom mach
 
 ## 4. Codebase File Map — Held Elsewhere
 
-No file inventory is maintained in this blueprint. A static table of source files here goes stale the moment the tree changes, and stale rows pollute the context of every agent that reads this document. The authoritative, live mapping of subsystem → documentation → source is maintained as a separate artifact: [`plans/drift-map.md`](../plans/drift-map.md). Consult it, and re-derive from the live tree when in doubt.
+No file inventory is maintained in this blueprint. A static table of source files here goes stale the moment the tree changes, and stale rows pollute the context of every agent that reads this document. The authoritative, live mapping of subsystem → documentation → source is maintained as a separate artifact: [`archive/drift/drift-map.md`](archive/drift/drift-map.md). Consult it, and re-derive from the live tree when in doubt.
 ---
 
 ## 5. Authoritative Specification Hierarchy & Deep-Dive Documents
@@ -182,7 +182,7 @@ WHATELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │
 ├── 2. Core State & Settings Subsystem (Subsystem 3)
 │    └── state/ (ELS_CORE_STATE_MODEL.md, ELS_PROPERTIES_AND_SETTINGS.md,
-│                ELS_PRESET_CATALOG.md, TIER2_STATE_MAPPING.md)
+│                ELS_PRESET_CATALOG.md)
 │
 ├── 3. Operational Mode Engine & Canned Cycles (Subsystem 4, Core 1)
 │    └── modes/ (ELS_MODE_ARCHITECTURE.md, README.md, cycle directories)
@@ -195,7 +195,7 @@ WHATELS_MASTER_ARCHITECTURE.md (This Master Blueprint)
 │
 └── 6. Architecture Decision Records & Historical Archive
      ├── adr/ (0001, 0002, 0003, 0004, 0005)
-     └── archive/ (reviews/argon/, ELS_DESIGN_NOTEBOOK.md, IMPLEMENTATION_PLAN_V1.md)
+     └── archive/ (TIER2_STATE_MAPPING.md, drift/drift-map.md, ELS_DESIGN_NOTEBOOK.md, IMPLEMENTATION_PLAN_V1.md)
 ```
 
 ---

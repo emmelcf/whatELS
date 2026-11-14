@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file SoftLimit.h
+ * @brief Operator-clamped virtual soft limit and shoulder stop model.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 
 enum class LimitBound : uint8_t {

@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file TelemetryMailbox.h
+ * @brief Lock-free seqlock telemetry mailbox passed from Core 1 to Core 0.
+ * @see docs/motion/CONCURRENCY_AND_TIMING.md
+ * @see docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md
+ */
 #include <cstdint>
 #include <cstring>
 #include <atomic>

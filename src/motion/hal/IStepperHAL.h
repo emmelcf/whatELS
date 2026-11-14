@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file IStepperHAL.h
+ * @brief Abstract stepper/servo hardware abstraction layer.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ */
 #include <cstdint>
 #include "StepTimingConfig.h"
 

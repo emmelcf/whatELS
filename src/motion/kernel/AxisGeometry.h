@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file AxisGeometry.h
+ * @brief Physical geometry, leadscrew pitch, and kinematic constraints of a lathe axis.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 
 /**

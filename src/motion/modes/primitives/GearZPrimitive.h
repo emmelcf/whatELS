@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file GearZPrimitive.h
+ * @brief Legacy Z-axis spindle-synchronized gearing primitive mode.
+ * @see docs/modes/ELS_MODE_ARCHITECTURE.md
+ * @see docs/adr/0001-motion-invocation-and-gearbox-consolidation.md
+ */
+
 #include "../IELSMode.h"
 #include "../../kernel/MotionEngine.h"
 

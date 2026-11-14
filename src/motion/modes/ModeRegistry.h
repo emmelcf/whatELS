@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file ModeRegistry.h
+ * @brief Authoritative mode registry and active mode state manager.
+ * @see docs/modes/ELS_MODE_ARCHITECTURE.md
+ * @see docs/motion/MODE_INTEGRATION_CONTRACT.md
+ */
+
 #include "IELSMode.h"
 
 class UnifiedGearboxMode;

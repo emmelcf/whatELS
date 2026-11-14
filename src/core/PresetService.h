@@ -7,6 +7,8 @@
  * @brief Authoritative machining preset catalog service for whatELS.
  * @details Implements the Preset Catalog specification defined in docs/ELS_PRESET_CATALOG.md.
  *          Resolves queries over ROM Flash PROGMEM standards and LittleFS user overrides.
+ * @see docs/state/ELS_PRESET_CATALOG.md
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
  */
 class PresetService {
 public:

@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file NativeClient.h
+ * @brief Native canonical protocol client endpoint with domain-masked delta telemetry.
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
+
 #include "../../ClientEndpoint.h"
 #include "core/TelemetrySerializer.h"
 

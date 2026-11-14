@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file CoreCommandService.h
+ * @brief Authoritative core domain execution service and motion safety gate.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
+
 #include "CoreCommands.h"
 #include "CommandResult.h"
 #include "core_client/ClientContext.h"

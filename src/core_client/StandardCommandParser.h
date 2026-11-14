@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file StandardCommandParser.h
+ * @brief Authoritative wire protocol string parser for Subsystem 5.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
+
 #include <cstddef>
 #include <cstdint>
 #include <string>

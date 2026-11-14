@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file OperatorIntent.h
+ * @brief Operator intent structs for thread pitch, taper, and feed settings.
+ * @see docs/state/ELS_CORE_STATE_MODEL.md
+ * @see docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md
+ */
+
 #include <Arduino.h>
 
 // --- Authoritative Operator Intent Models ---

@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file ITransport.h
+ * @brief Pluggable byte/text transport interface for client adapters.
+ * @see docs/adr/0004-pluggable-transports-and-webserial.md
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ */
+
 #include <Arduino.h>
 
 namespace whatels {

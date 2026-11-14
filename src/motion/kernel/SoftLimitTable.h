@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file SoftLimitTable.h
+ * @brief Multi-stop drum and soft limit lookahead subsystem.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 #include <cstddef>
 #if defined(ESP32) || defined(ARDUINO)

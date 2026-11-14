@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file PersistentSetting.h
+ * @brief Template wrapper for NVS-backed persistent settings with dirty tracking.
+ * @see docs/state/ELS_PROPERTIES_AND_SETTINGS.md
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ */
+
 #include <Arduino.h>
 #include <Preferences.h>
 #include <cmath>

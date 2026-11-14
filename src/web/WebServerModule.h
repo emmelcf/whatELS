@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file WebServerModule.h
+ * @brief Legacy WebSocket/HTTP server circular buffer and task declarations.
+ * @see docs/WHATELS_MASTER_ARCHITECTURE.md
+ * @see docs/clients/web_ui/OVERVIEW.md
+ */
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>

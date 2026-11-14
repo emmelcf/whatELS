@@ -1,5 +1,13 @@
 #pragma once
 
+/**
+ * @file UnifiedGearboxMode.h
+ * @brief Consolidated electronic gearbox operational mode (G95 sync & G94 async).
+ * @see docs/modes/gearbox/SPECIFICATION.md
+ * @see docs/modes/ELS_MODE_ARCHITECTURE.md
+ * @see docs/adr/0001-motion-invocation-and-gearbox-consolidation.md
+ */
+
 #include "../IELSMode.h"
 #include "../../MotionConversions.h"
 

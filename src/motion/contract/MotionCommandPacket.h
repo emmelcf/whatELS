@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file MotionCommandPacket.h
+ * @brief Lock-free command queue packet consumed by Core 1 MotionEngine.
+ * @see docs/motion/CONCURRENCY_AND_TIMING.md
+ * @see docs/adr/0002-command-surface-rationalization-and-dumb-client-decoupling.md
+ */
 #include <cstdint>
 #include "hal/IStepperHAL.h"
 

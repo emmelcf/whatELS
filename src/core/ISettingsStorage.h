@@ -11,6 +11,9 @@ namespace whatels::core {
  * @details Conforms to ADR-0005 and AGENTS.md Tier 1 invariant: Zero fake framework mocks.
  *          Decouples persistent configuration storage from ESP32-specific Preferences.h
  *          and flash memory SDKs, enabling native host testing without vendor headers.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/state/ELS_PROPERTIES_AND_SETTINGS.md
+ * @see docs/testing/README.md
  */
 class ISettingsStorage {
 public:

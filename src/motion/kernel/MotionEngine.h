@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file MotionEngine.h
+ * @brief Core 1 real-time deterministic motion kernel and trajectory orchestrator.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ * @see docs/motion/CONCURRENCY_AND_TIMING.md
+ */
 #include <cstdint>
 #include <atomic>
 #if defined(ESP32) || defined(ARDUINO)

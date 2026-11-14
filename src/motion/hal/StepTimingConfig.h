@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file StepTimingConfig.h
+ * @brief Electrical signal timing and logic polarity constraints for stepper/servo drives.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ */
 #include <cstdint>
 
 /**

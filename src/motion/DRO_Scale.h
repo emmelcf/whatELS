@@ -1,6 +1,13 @@
 #ifndef _DRO_SCALE_h
 #define _DRO_SCALE_h
 
+/**
+ * @file DRO_Scale.h
+ * @brief Hardware PCNT quadrature linear glass scale (DRO) driver.
+ * @see docs/motion/HAL_SPECIFICATION.md
+ * @see docs/machine/LATHE_MACHINE_PROFILE.md
+ */
+
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <driver/pulse_cnt.h>

@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file IELSMode.h
+ * @brief Operational mode interface, ModeIds registry constants, and ModeManifest contract.
+ * @see docs/modes/ELS_MODE_ARCHITECTURE.md
+ * @see docs/motion/MODE_INTEGRATION_CONTRACT.md
+ */
+
 #include <Arduino.h>
 #include "LatheProfile.h"
 

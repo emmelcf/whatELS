@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file Esp32SystemInfoHAL.h
+ * @brief Production ESP32-S3 implementation of ISystemInfoHAL.
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ * @see docs/protocol/CANONICAL_COMMAND_REFERENCE.md
+ */
+
 #include "ISystemInfoHAL.h"
 
 namespace whatels::core {

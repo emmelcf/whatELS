@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @file CommandResult.h
+ * @brief Standardized command execution status and result payload.
+ * @see docs/adr/0003-command-result-and-baseline-client-architecture.md
+ * @see docs/adr/0005-protocol-rationalization-and-subsystem-5-decoupling.md
+ */
+
 #if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>
 #else

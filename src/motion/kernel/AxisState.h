@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file AxisState.h
+ * @brief Pure kinematic state and position tracking for a machine axis.
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 #if defined(ESP32) || defined(ARDUINO)
 #include <esp_attr.h>

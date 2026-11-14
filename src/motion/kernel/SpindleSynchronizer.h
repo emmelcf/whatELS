@@ -1,4 +1,10 @@
 #pragma once
+
+/**
+ * @file SpindleSynchronizer.h
+ * @brief Spindle synchronous gearing engine (Electronic Leadscrew).
+ * @see docs/motion/MOTION_ENGINE_SPECIFICATION.md
+ */
 #include <cstdint>
 #if defined(ESP32) || defined(ARDUINO)
 #include <esp_attr.h>

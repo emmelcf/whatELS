@@ -1,4 +1,11 @@
 #pragma once
+
+/**
+ * @file ClientContext.h
+ * @brief Formal client capability and permission bitmask context.
+ * @see docs/clients/ELS_CLIENT_ARCHITECTURE.md
+ * @see docs/adr/0003-command-result-and-baseline-client-architecture.md
+ */
 #include <cstdint>
 
 namespace whatels::core_client {
