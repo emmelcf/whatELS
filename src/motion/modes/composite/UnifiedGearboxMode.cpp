@@ -6,10 +6,11 @@
 static const ParamDescriptor GEARBOX_PARAMS[] = {
     { "axis", "Active Feed Axis", ParamType::ENUM, "", 0.0f, 0.0f, 2.0f, 1.0f, "Z,X,ZX" },
     { "sync", "Spindle Synchronized", ParamType::BOOL, "", 1.0f, 0.0f, 1.0f, 1.0f, nullptr },
-    { "dir", "Travel Direction", ParamType::ENUM, "", 0.0f, 0.0f, 3.0f, 1.0f, "CHUCK,TAIL,INFEED,RETRACT" },
-    { "pitch_dupr", "Pitch in deci-microns/rev", ParamType::INT32, "dupr", 1000.0f, 10.0f, 500000.0f, 100.0f, nullptr },
-    { "speed", "Async Speed in deci-microns/min", ParamType::INT32, "du/min", 1500000.0f, 1000.0f, 100000000.0f, 100000.0f, nullptr },
-    { "dist", "Target Distance in deci-microns (-1 = continuous)", ParamType::INT32, "du", -1.0f, -1.0f, 100000000.0f, 1000.0f, nullptr }
+    { "dir", "Travel Direction", ParamType::ENUM, "", 0.0f, 0.0f, 3.0f, 1.0f, "CHUCK,TAIL,CENTER,RETRACT" },
+    { "feed", "Feed Rate (dupr if sync=1, du/min if sync=0)", ParamType::INT32, "du", 1000.0f, 1.0f, 100000000.0f, 100.0f, nullptr },
+    { "dist", "Target Distance in deci-microns (-1 = continuous)", ParamType::INT32, "du", -1.0f, -1.0f, 100000000.0f, 1000.0f, nullptr },
+    { "xdir", "Secondary X Direction (for axis=ZX)", ParamType::ENUM, "", 0.0f, 0.0f, 1.0f, 1.0f, "CENTER,RETRACT" },
+    { "taper", "Radial X Taper per 10000 du Z (for axis=ZX)", ParamType::INT32, "du", 0.0f, 0.0f, 1000000.0f, 100.0f, nullptr }
 };
 
 static const ModeManifest GEARBOX_MANIFEST = {
@@ -186,9 +187,16 @@ bool UnifiedGearboxMode::nudgeFeed(int direction) {
 bool UnifiedGearboxMode::setParam(const char* key, float value) {
     if (!key) return false;
     if (strcmp(key, "sync") == 0) return setSync(value != 0.0f);
-    if (strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) return setFeedRate(static_cast<int32_t>(value));
+    if (strcmp(key, "feed") == 0 || strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) return setFeedRate(static_cast<int32_t>(value));
     if (strcmp(key, "dist") == 0) {
         m_targetDistDu = static_cast<int32_t>(value);
+        return true;
+    }
+    if (strcmp(key, "taper") == 0) {
+        if (m_state == ModeState::RUNNING) return false;
+        int32_t ratio = static_cast<int32_t>(value);
+        if (ratio < 0) return false;
+        m_taperRatioDu = ratio;
         return true;
     }
     if (strcmp(key, "nudge") == 0) return nudgeFeed(static_cast<int>(value));
@@ -200,9 +208,23 @@ bool UnifiedGearboxMode::setParam(const char* key, const char* strValue) {
     if (strcmp(key, "axis") == 0) return setActiveAxis(strValue);
     if (strcmp(key, "sync") == 0) return setSync(atoi(strValue) != 0);
     if (strcmp(key, "dir") == 0) return setDirection(strValue);
-    if (strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) return setFeedRate(atol(strValue));
+    if (strcmp(key, "xdir") == 0) {
+        if (m_state == ModeState::RUNNING) return false;
+        int8_t dir = MotionConversions::semanticToDirection(AXIS_X, strValue);
+        if (dir == 0) return false;
+        m_xDirection = dir;
+        return true;
+    }
+    if (strcmp(key, "feed") == 0 || strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) return setFeedRate(atol(strValue));
     if (strcmp(key, "dist") == 0) {
         m_targetDistDu = atol(strValue);
+        return true;
+    }
+    if (strcmp(key, "taper") == 0) {
+        if (m_state == ModeState::RUNNING) return false;
+        int32_t ratio = atol(strValue);
+        if (ratio < 0) return false;
+        m_taperRatioDu = ratio;
         return true;
     }
     if (strcmp(key, "nudge") == 0) return nudgeFeed(atoi(strValue));
@@ -215,12 +237,16 @@ bool UnifiedGearboxMode::getParam(const char* key, float& outVal) const {
         outVal = m_isSync ? 1.0f : 0.0f;
         return true;
     }
-    if (strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) {
+    if (strcmp(key, "feed") == 0 || strcmp(key, "speed") == 0 || strcmp(key, "pitch_dupr") == 0) {
         outVal = static_cast<float>(m_feedRateDu);
         return true;
     }
     if (strcmp(key, "dist") == 0) {
         outVal = static_cast<float>(m_targetDistDu);
+        return true;
+    }
+    if (strcmp(key, "taper") == 0) {
+        outVal = static_cast<float>(m_taperRatioDu);
         return true;
     }
     return false;
@@ -312,15 +338,6 @@ void UnifiedGearboxMode::writeTelemetry(TelemetryWriter& writer) const {
 }
 
 bool UnifiedGearboxMode::canExecuteCommand(CommandId cmd, ModeState state, AxisId targetAxis) const {
-    if (cmd == CommandId::CMD_JOG) {
-        if (state == ModeState::RUNNING || state == ModeState::ARMED) {
-            // In single-axis feed, manual jog is permitted on the idle axis (e.g. X cross-slide while Z feeds)
-            if (targetAxis != m_axis) {
-                return true;
-            }
-            return false; // Deny jog on active feed axis
-        }
-    }
     return IELSMode::canExecuteCommand(cmd, state, targetAxis);
 }
 

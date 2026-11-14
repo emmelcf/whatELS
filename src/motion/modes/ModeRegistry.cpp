@@ -86,6 +86,45 @@ bool ModeRegistry::isModeSupported(const IELSMode* mode, uint32_t hardwareCapabi
     return (hardwareCapabilities & req) == req;
 }
 
+namespace {
+
+struct LivePermMapping {
+    LivePermissionFlags flag;
+    const char* name;
+};
+
+constexpr LivePermMapping kLivePermMappings[] = {
+    { PERM_FEED_HOLD,            "FEED_HOLD" },
+    { PERM_LIVE_FEED_TRIM,       "LIVE_FEED_TRIM" },
+    { PERM_LIVE_STEP_CYCLE,      "LIVE_STEP_CYCLE" },
+    { PERM_LIVE_RPM_OVERRIDE,    "LIVE_RPM_OVERRIDE" },
+    { PERM_PAUSE_MANUAL_JOG,     "PAUSE_MANUAL_JOG" },
+    { PERM_LIVE_LIMIT_TRIM,      "LIVE_LIMIT_TRIM" },
+    { PERM_MULTI_PASS_TELEMETRY, "MULTI_PASS_TELEMETRY" }
+};
+
+void populateRequiredHardware(JsonArray arr, uint32_t caps) {
+    for (uint8_t bit = 0; bit < 32; ++bit) {
+        uint32_t mask = 1u << bit;
+        if ((caps & mask) != 0) {
+            const char* name = getCapabilityName(static_cast<LatheCapabilityFlags>(mask));
+            if (name && strcmp(name, "NONE") != 0) {
+                arr.add(name);
+            }
+        }
+    }
+}
+
+void populateLivePermissions(JsonArray arr, uint32_t perms) {
+    for (const auto& entry : kLivePermMappings) {
+        if ((perms & entry.flag) != 0) {
+            arr.add(entry.name);
+        }
+    }
+}
+
+} // namespace
+
 String ModeRegistry::serializeDiscoveryJson(uint32_t hardwareCapabilities, bool includeAll) {
     JsonDocument doc;
     doc["active_mode_id"] = getActiveModeId();
@@ -106,8 +145,8 @@ String ModeRegistry::serializeDiscoveryJson(uint32_t hardwareCapabilities, bool 
         mObj["name"] = manifest.name;
         mObj["family"] = manifest.family;
         mObj["category"] = (manifest.category == ModeCategory::COMPOSITE) ? "COMPOSITE" : "PRIMITIVE";
-        mObj["required_hardware"] = manifest.requiredHardwareCaps;
-        mObj["live_permissions"] = manifest.livePermissions;
+        populateRequiredHardware(mObj["required_hardware"].to<JsonArray>(), manifest.requiredHardwareCaps);
+        populateLivePermissions(mObj["live_permissions"].to<JsonArray>(), manifest.livePermissions);
 
         if (manifest.paramCount > 0 && manifest.params) {
             JsonArray params = mObj["params"].to<JsonArray>();

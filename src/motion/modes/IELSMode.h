@@ -35,6 +35,7 @@ namespace ModeIds {
     constexpr ModeId CUTOFF       = 54;
     constexpr ModeId SLOTTING     = 55;
     constexpr ModeId SPHERE       = 56;
+    constexpr ModeId CONE         = 57;
 }
 
 // Execution State Machine

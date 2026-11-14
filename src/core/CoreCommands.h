@@ -8,6 +8,7 @@
  */
 #include <cstdint>
 #include "hal/IStepperHAL.h"
+#include "kernel/SoftLimit.h"
 
 namespace whatels::core {
 
@@ -26,7 +27,7 @@ struct StartFeedCmd {
   int32_t feedRate     = 0;             // Mandatory: Magnitude of feed rate (> 0)
   int32_t targetDistDu = -1;            // Optional fallback: Travel stroke in deci-microns (-1 = continuous to limit)
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
@@ -75,14 +76,14 @@ struct StartFeedCmd {
  */
 struct JogStepCmd {
   AxisId  axis   = AXIS_INVALID;        // Mandatory: AXIS_Z or AXIS_X
-  int32_t distDu = 0;                   // Mandatory: Signed distance in deci-microns (!= 0)
+  int32_t distDu = 0;                   // Mandatory: Signed distance in deci-microns (!= 0, != INT32_MIN)
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
     }
-    if (distDu == 0) {
+    if (distDu == 0 || distDu == INT32_MIN) {
       if (errReason) *errReason = "INVALID_PARAM:dist";
       return false;
     }
@@ -97,7 +98,7 @@ struct JogHoldCmd {
   AxisId axis      = AXIS_INVALID;      // Mandatory: AXIS_Z or AXIS_X
   int8_t direction = 0;                 // Mandatory: -1 or +1
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
@@ -117,7 +118,7 @@ struct JogReleaseCmd {
   bool   hasAxis = false;               // If false, stops all axes
   AxisId axis    = AXIS_INVALID;
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (hasAxis && axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
@@ -132,7 +133,7 @@ struct JogReleaseCmd {
 struct AxisZeroCmd {
   AxisId axis = AXIS_INVALID;           // Mandatory: AXIS_Z or AXIS_X
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
@@ -148,7 +149,7 @@ struct AxisPosCmd {
   AxisId  axis  = AXIS_INVALID;         // Mandatory: AXIS_Z or AXIS_X
   int32_t posDu = 0;                    // Mandatory: Target coordinate in deci-microns
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
@@ -161,16 +162,16 @@ struct AxisPosCmd {
  * @brief Set Axis Travel Limit Command (CMD.axisLimitDu).
  */
 struct AxisLimitCmd {
-  AxisId  axis       = AXIS_INVALID;    // Mandatory: AXIS_Z or AXIS_X
-  int8_t  limitBound = 0;               // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
-  int32_t coordDu    = 0;               // Mandatory: Coordinate in deci-microns
+  AxisId     axis       = AXIS_INVALID;     // Mandatory: AXIS_Z or AXIS_X
+  LimitBound limitBound = LimitBound::AUTO; // Mandatory: LOWER = Chuck/Up, UPPER = Tailstock/Down
+  int32_t    coordDu    = 0;                // Mandatory: Coordinate in deci-microns
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
     }
-    if (limitBound != 1 && limitBound != 2) {
+    if (limitBound != LimitBound::LOWER && limitBound != LimitBound::UPPER) {
       if (errReason) *errReason = "INVALID_PARAM:bound";
       return false;
     }
@@ -182,15 +183,15 @@ struct AxisLimitCmd {
  * @brief Clear Axis Travel Limit Command (CMD.axisClearLimit).
  */
 struct AxisClearLimitCmd {
-  AxisId axis       = AXIS_INVALID;     // Mandatory: AXIS_Z or AXIS_X
-  int8_t limitBound = 0;                // Mandatory: 1 = Lower / Chuck, 2 = Upper / Tailstock
+  AxisId     axis       = AXIS_INVALID;     // Mandatory: AXIS_Z or AXIS_X
+  LimitBound limitBound = LimitBound::AUTO; // Mandatory: LOWER = Chuck/Up, UPPER = Tailstock/Down
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (axis != AXIS_Z && axis != AXIS_X) {
       if (errReason) *errReason = "INVALID_PARAM:axis";
       return false;
     }
-    if (limitBound != 1 && limitBound != 2) {
+    if (limitBound != LimitBound::LOWER && limitBound != LimitBound::UPPER) {
       if (errReason) *errReason = "INVALID_PARAM:bound";
       return false;
     }
@@ -204,7 +205,7 @@ struct AxisClearLimitCmd {
 struct SimRpmCmd {
   float rpm = -1.0f;
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (rpm < 0.0f) {
       if (errReason) *errReason = "INVALID_PARAM:rpm";
       return false;
@@ -220,7 +221,7 @@ struct SimEncoderCmd {
   bool hasActive = false;
   bool active    = false;
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (!hasActive) {
       if (errReason) *errReason = "INVALID_PARAM:active";
       return false;
@@ -235,9 +236,24 @@ struct SimEncoderCmd {
 struct SimPulsesCmd {
   int32_t pulses = 0;
 
-  bool validate(const char** errReason = nullptr) const {
+  [[nodiscard]] bool validate(const char** errReason = nullptr) const {
     if (pulses == 0) {
       if (errReason) *errReason = "INVALID_PARAM:pulses";
+      return false;
+    }
+    return true;
+  }
+};
+
+/**
+ * @brief Live Feed Rate Nudge Command (CMD.feedNudge).
+ */
+struct FeedNudgeCmd {
+  int8_t delta{0};
+
+  [[nodiscard]] bool validate(const char** outErr = nullptr) const {
+    if (delta != -1 && delta != 1) {
+      if (outErr) *outErr = "INVALID_PARAM:delta";
       return false;
     }
     return true;
@@ -248,35 +264,35 @@ struct SimPulsesCmd {
  * @brief In-Cut Radial Retract Feed Hold Command (CMD.hold).
  */
 struct HoldCmd {
-  bool validate(const char** = nullptr) const { return true; }
+  [[nodiscard]] bool validate(const char** = nullptr) const { return true; }
 };
 
 /**
  * @brief Resume Feed from Hold Command (CMD.resume).
  */
 struct ResumeCmd {
-  bool validate(const char** = nullptr) const { return true; }
+  [[nodiscard]] bool validate(const char** = nullptr) const { return true; }
 };
 
 /**
  * @brief Advance Next Pass in Step Mode Command (CMD.step).
  */
 struct StepCmd {
-  bool validate(const char** = nullptr) const { return true; }
+  [[nodiscard]] bool validate(const char** = nullptr) const { return true; }
 };
 
 /**
  * @brief Universal Emergency Stop Command (CMD.stop).
  */
 struct StopCmd {
-  bool validate(const char** = nullptr) const { return true; }
+  [[nodiscard]] bool validate(const char** = nullptr) const { return true; }
 };
 
 /**
  * @brief Line Flush and Heartbeat Ping Command (CMD.ping).
  */
 struct PingCmd {
-  bool validate(const char** = nullptr) const { return true; }
+  [[nodiscard]] bool validate(const char** = nullptr) const { return true; }
 };
 
 } // namespace whatels::core

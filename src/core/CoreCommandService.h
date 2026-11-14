@@ -36,6 +36,7 @@ public:
   CommandResult execute(const HoldCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const ResumeCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const StepCmd& cmd, const core_client::ClientContext& ctx);
+  CommandResult execute(const FeedNudgeCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const StopCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const PingCmd& cmd, const core_client::ClientContext& ctx);
   CommandResult execute(const SimRpmCmd& cmd, const core_client::ClientContext& ctx);
