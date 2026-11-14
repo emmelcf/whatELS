@@ -1,7 +1,16 @@
 #pragma once
 
+#if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>
+#else
+#include <cstddef>
+#include <cstdint>
+#include <string>
+using String = std::string;
+#endif
+#include <cmath>
 #include "kernel/AxisState.h"
+#include "motion/IProfileStorage.h"
 
 /**
  * @file LatheProfile.h
@@ -228,8 +237,11 @@ struct LatheConfiguration {
 };
 
 // -----------------------------------------------------------------------------
-// 4. Standard Lathe Preset API & LittleFS Catalog
+// 4. Standard Lathe Preset API & Decoupled Profile Catalog Storage
 // -----------------------------------------------------------------------------
+
+void setProfileStorage(whatels::motion::IProfileStorage* storage);
+whatels::motion::IProfileStorage* getProfileStorage();
 
 LatheConfiguration getDefaultProfile();
 const LatheConfiguration* findPresetBySlug(const char* slug);
