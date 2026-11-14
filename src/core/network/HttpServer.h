@@ -54,6 +54,16 @@ private:
   void registerRoutes();
   void handleNotFound();
   bool serveStaticFile(const String& path);
+  void serveProgmemGzip(const char* contentType, const uint8_t* data, uint32_t len,
+                        const char* cacheControl = "no-cache, no-store, must-revalidate");
+  void handleWifiGet();
+  void handleWifiSave();
+  void handleWifiReset();
+  void handleWifiScan();
+  void handleStatus();
+  bool readBoolConfigArg(const char* name, bool* value, String* error);
+  bool readWifiConfigFromRequest(String* error);
+  bool isConfigChangeBlocked() const;
   void handleFirmwareUpload();
   void handleFirmwareUploadResult();
 
@@ -63,13 +73,17 @@ private:
   uint16_t _port{80};
   bool _running{false};
 
-  // OTA state tracking
+  // OTA & config restart state tracking
+  bool _otaInProgress{false};
   bool _otaRestartPending{false};
   uint32_t _otaRestartAt{0};
   bool _otaSuccess{false};
+  int _otaHttpStatus{200};
   String _otaErrorMsg{""};
   size_t _otaTotalSize{0};
   size_t _otaReceivedSize{0};
+  bool _configRestartPending{false};
+  uint32_t _configRestartAt{0};
 };
 
 } // namespace network

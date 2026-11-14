@@ -2,14 +2,13 @@
 
 /**
  * @file WebServerModule.h
- * @brief Legacy WebSocket/HTTP server circular buffer and task declarations.
+ * @brief WiFi/WebSocket (Port 81) supervisory task and circular buffer declarations.
  * @see docs/WHATELS_MASTER_ARCHITECTURE.md
  * @see docs/clients/web_ui/OVERVIEW.md
  */
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WebServer.h>
 #include <WebSocketsServer.h>
 #include "Config.h"
 
@@ -43,29 +42,13 @@ struct ClientSession {
 extern ClientSession clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX];
 extern uint8_t activeChannelMask;
 
-extern WebServer server;
 extern WebSocketsServer webSocket;
 extern volatile int webSocketClientCount;
-extern String lastMachineStatus;
 extern String wifiStatus;
 extern unsigned long wifiStatusMillis;
 extern bool wifiSetupApActive;
 extern bool wifiStationConnected;
 extern String wifiIpAddress;
-
-
-extern volatile bool firmwareUploadActive;
-extern bool firmwareUploadFailed;
-extern int firmwareUploadHttpStatus;
-extern String firmwareUploadMessage;
-extern size_t firmwareUploadExpectedSize;
-extern size_t firmwareUploadReceivedSize;
-extern int firmwareUploadProgressPercent;
-extern bool firmwareUploadRestartPending;
-extern unsigned long firmwareUploadRestartAt;
-extern bool configRestartPending;
-extern unsigned long configRestartAt;
-
 
 bool bufferAvailable(CircleBuffer* b);
 bool writeBuffer(CircleBuffer* b, char c);
@@ -78,7 +61,6 @@ void clearBuffer(CircleBuffer* b);
 
 bool webUiIsConnected();
 void queueWebSocketText(const String& text);
-void publishMachineStatus();
 
 void requestWebUiMoveRelease();
 

@@ -3,14 +3,11 @@
 #include <esp_log.h>
 
 static const char* TAG = "WEB";
-#include "core/TelemetrySerializer.h"
-#include "core_client/ClientSerializers.h"
+#include "core/MachineModel.h"
 #include "core/WifiService.h"
+#include "core/network/HttpServer.h"
 #include "SettingsService.h"
-#include "ControllerWebAssets.h"
-#include "SystemSchemaJson.h"
 #include <LittleFS.h>
-#include <Update.h>
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
 #include "core_client/ClientManager.h"
@@ -25,27 +22,13 @@ ClientSession clientSessions[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
 uint8_t activeChannelMask = CHANNEL_NONE;
 static SemaphoreHandle_t wsMutex = NULL;
 
-WebServer server(80);
 WebSocketsServer webSocket(81);
 volatile int webSocketClientCount = 0;
-static volatile bool machineStatusForcePublish = false;
-String lastMachineStatus = "";
 String wifiStatus = "No WiFi";
 unsigned long wifiStatusMillis = 0;
 bool wifiSetupApActive = false;
 bool wifiStationConnected = false;
 String wifiIpAddress = "";
-volatile bool firmwareUploadActive = false;
-bool firmwareUploadFailed = false;
-int firmwareUploadHttpStatus = 200;
-String firmwareUploadMessage = "";
-size_t firmwareUploadExpectedSize = 0;
-size_t firmwareUploadReceivedSize = 0;
-int firmwareUploadProgressPercent = 0;
-bool firmwareUploadRestartPending = false;
-unsigned long firmwareUploadRestartAt = 0;
-bool configRestartPending = false;
-unsigned long configRestartAt = 0;
 
 bool bufferAvailable(CircleBuffer* b) {
   return b->head != b->tail;
@@ -152,236 +135,8 @@ void queueWebSocketText(const String& text) {
   writeBuffer(&outBuffer, text);
 }
 
-static String webSafeText(const String& value) {
-  String result = "";
-  result.reserve(value.length());
-  for (int i = 0; i < value.length(); i++) {
-    byte c = byte(value.charAt(i));
-    if (c == 223) {
-      // skip
-    } else if (c >= 32 && c <= 126) {
-      result += char(c);
-    } else {
-      result += "?";
-    }
-  }
-  return result;
-}
-
-template <typename T>
-inline void appendConfigLine(String* response, const char* name, T value) {
-  *response += String(name) + "=" + String(value) + "\n";
-}
-
-static bool parseLongValue(const String& text, long* value) {
-  String trimmed = text;
-  trimmed.trim();
-  if (trimmed.length() == 0) return false;
-  char* end = nullptr;
-  long parsed = strtol(trimmed.c_str(), &end, 10);
-  if (end == trimmed.c_str() || *end != '\0') return false;
-  *value = parsed;
-  return true;
-}
-
-static bool parseFloatValue(const String& text, float* value) {
-  String trimmed = text;
-  trimmed.trim();
-  if (trimmed.length() == 0) return false;
-  char* end = nullptr;
-  float parsed = strtof(trimmed.c_str(), &end);
-  if (end == trimmed.c_str() || *end != '\0' || !isfinite(parsed)) return false;
-  *value = parsed;
-  return true;
-}
-
-static bool parseBoolValue(const String& text, bool* value) {
-  String normalized = text;
-  normalized.trim();
-  normalized.toLowerCase();
-  if (normalized == "1" || normalized == "true" || normalized == "on") {
-    *value = true;
-    return true;
-  }
-  if (normalized == "0" || normalized == "false" || normalized == "off") {
-    *value = false;
-    return true;
-  }
-  return false;
-}
-
-static bool readBoolConfigArg(const char* name, bool* value, String* error) {
-  if (server.hasArg(name)) {
-    String arg = server.arg(name);
-    if (arg == "true" || arg == "1") {
-      *value = true;
-    } else if (arg == "false" || arg == "0") {
-      *value = false;
-    } else {
-      if (error) *error = String("Invalid boolean value for ") + name;
-      return false;
-    }
-  }
-  return true;
-}
-
-static void appendUiLine(String* response, const char* name, const String& value) {
-  appendConfigLine(response, name, webSafeText(value));
-}
-
-static const unsigned long MIN_PUSH_INTERVAL_MS = 20; // 50 Hz push cadence ([CONC-01], Slice 3)
-static unsigned long lastPushMillis = 0;
-static MachineModel lastSentModel = {};
-static bool hasInitialSent = false;
-
-static void dispatchTelemetry() {
-  if (!webBuffersReady || activeChannelMask == 0) return;
-
-  unsigned long now = millis();
-  if (!machineStatusForcePublish && (now - lastPushMillis < MIN_PUSH_INTERVAL_MS)) {
-    return;
-  }
-
-  MachineModel current = MachineModel::captureAll();
-  uint8_t changedDomains = DOMAIN_NONE;
-  if (!hasInitialSent || machineStatusForcePublish) {
-    changedDomains = DOMAIN_ALL;
-    machineStatusForcePublish = false;
-    hasInitialSent = true;
-  } else {
-    changedDomains = MachineModel::detectChangedDomains(lastSentModel, current);
-  }
-
-  if (changedDomains == DOMAIN_NONE) {
-    return; // Lathe is idle: zero packets sent! True quiescence.
-  }
-
-  lastPushMillis = now;
-  lastSentModel = current;
-
-  // Single-pass serialization per active channel
-  String canonicalPayload = "";
-  String grblPayload = "";
-  String droPayload = "";
-
-  if (activeChannelMask & CHANNEL_CANONICAL) {
-    canonicalPayload = TelemetrySerializer::buildTelemetry(current, changedDomains);
-  }
-  if ((activeChannelMask & CHANNEL_GRBL) && (changedDomains & DOMAIN_KINEMATICS)) {
-    grblPayload = whatels::core_client::GrblSerializer::buildStatus(current);
-  }
-  if ((activeChannelMask & CHANNEL_DRO) && (changedDomains & DOMAIN_KINEMATICS)) {
-    droPayload = whatels::core_client::DroSerializer::buildStatus(current);
-  }
-
-  for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; i++) {
-    if (!clientSessions[i].active) continue;
-    if (clientSessions[i].channel == CHANNEL_CANONICAL && canonicalPayload.length() > 0) {
-      webSocket.sendTXT(i, canonicalPayload);
-    } else if (clientSessions[i].channel == CHANNEL_GRBL && grblPayload.length() > 0) {
-      webSocket.sendTXT(i, grblPayload);
-    } else if (clientSessions[i].channel == CHANNEL_DRO && droPayload.length() > 0) {
-      webSocket.sendTXT(i, droPayload);
-    }
-  }
-}
-
-void publishMachineStatus() {
-  if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-    dispatchTelemetry();
-    xSemaphoreGiveRecursive(wsMutex);
-  } else if (!wsMutex) {
-    dispatchTelemetry();
-  }
-}
-
 void requestWebUiMoveRelease() {
   MotionEngine::instance().stopAll();
-}
-
-
-
-static String getWifiMode() {
-  return whatels::core::WifiService::instance().getModeString();
-}
-
-static void handleWifiScan() {
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  std::vector<whatels::core::WifiScanResult> scan = whatels::core::WifiService::instance().scanNetworks();
-  String json = "[";
-  for (size_t i = 0; i < scan.size(); ++i) {
-    if (i > 0) json += ",";
-    json += "{\"ssid\":\"" + scan[i].ssid + "\",\"rssi\":" + String(scan[i].rssi) + ",\"open\":" + (scan[i].open ? "true" : "false") + "}";
-  }
-  json += "]";
-  server.send(200, "application/json", json);
-}
-
-static String getWifiConfigResponse() {
-  String response = "";
-  response.reserve(360);
-  appendConfigLine(&response, "wifiEnabled", sysConfig.wifi.enabled);
-  appendConfigLine(&response, "wifiSsid", sysConfig.wifi.ssid);
-  appendConfigLine(&response, "wifiHostname", sysConfig.wifi.hostname);
-  appendConfigLine(&response, "wifiPasswordSet", sysConfig.wifi.password.length() > 0);
-  appendConfigLine(&response, "wifiMode", getWifiMode());
-  appendConfigLine(&response, "wifiIp", wifiIpAddress);
-  appendConfigLine(&response, "wifiStatus", wifiStatus);
-  appendConfigLine(&response, "setupApSsid", sysConfig.wifi.setupApSsid.c_str());
-  return response;
-}
-
-static bool readWifiConfigFromRequest(String* error) {
-  bool enabled = sysConfig.wifi.enabled;
-  if (!readBoolConfigArg("wifiEnabled", &enabled, error)) {
-    return false;
-  }
-  if (!server.hasArg("wifiSsid")) {
-    *error = "Missing WiFi value: wifiSsid";
-    return false;
-  }
-  if (!server.hasArg("wifiPassword")) {
-    *error = "Missing WiFi value: wifiPassword";
-    return false;
-  }
-  if (!server.hasArg("wifiHostname")) {
-    *error = "Missing WiFi value: wifiHostname";
-    return false;
-  }
-
-  bool clearPassword = false;
-  if (!readBoolConfigArg("wifiClearPassword", &clearPassword, error)) {
-    return false;
-  }
-
-  String ssid = server.arg("wifiSsid");
-  ssid.trim();
-  String password = server.arg("wifiPassword");
-  String hostname = server.arg("wifiHostname");
-  hostname.trim();
-
-  sysConfig.wifi.enabled = enabled;
-  sysConfig.wifi.ssid = ssid;
-  sysConfig.wifi.hostname = hostname.length() > 0 ? hostname : "whatels";
-  if (clearPassword) {
-    sysConfig.wifi.password = "";
-  } else if (password.length() > 0) {
-    sysConfig.wifi.password = password;
-  }
-  return validateWifiConfig(error);
-}
-
-static void scheduleConfigRestart() {
-  configRestartPending = true;
-  configRestartAt = millis() + 1500;
-}
-
-
-static void firmwareUploadLog(const String& message) {
-  String line = String("FW: ") + message + "\n";
-  ESP_LOGI(TAG, "%s", message.c_str());
-  webSocket.broadcastTXT(line);
-  webSocket.loop();
 }
 
 static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
@@ -416,18 +171,6 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
     ESP_LOGI(TAG, "[WS] Client [%u] connected from %s (Channel: %s, Total: %d, Free Heap: %u bytes)",
              num, ip.toString().c_str(), chName, webSocketClientCount, (unsigned int)ESP.getFreeHeap());
 
-    // Unicast initial hydration frame strictly to the connecting client 'num'
-    MachineModel hydrationModel = MachineModel::captureAll();
-    if (ch == CHANNEL_CANONICAL) {
-      String hydration = TelemetrySerializer::buildTelemetry(hydrationModel, DOMAIN_ALL);
-      webSocket.sendTXT(num, hydration);
-    } else if (ch == CHANNEL_GRBL) {
-      String hydration = whatels::core_client::GrblSerializer::buildStatus(hydrationModel);
-      webSocket.sendTXT(num, hydration);
-    } else if (ch == CHANNEL_DRO) {
-      String hydration = whatels::core_client::DroSerializer::buildStatus(hydrationModel);
-      webSocket.sendTXT(num, hydration);
-    }
     whatels::core_client::ClientManager::instance().onClientConnected(num, (const char*)payload);
   } else if (type == WStype_DISCONNECTED) {
     whatels::core_client::ClientManager::instance().onClientDisconnected(num);
@@ -468,44 +211,11 @@ static void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, s
 
     // Native Client routing via ClientManager
     if (num < WEBSOCKETS_SERVER_CLIENT_MAX && clientSessions[num].channel == CHANNEL_CANONICAL) {
-      if (whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length)) {
-        bool isQuery = (length >= 9 && strncasecmp((const char*)payload, "STATE.get", 9) == 0) ||
-                       (length >= 8 && strncasecmp((const char*)payload, "CMD.ping", 8) == 0) ||
-                       (length >= 7 && strncasecmp((const char*)payload, "SYS.get", 7) == 0) ||
-                       (length >= 11 && strncasecmp((const char*)payload, "PROPERTIES.", 11) == 0) ||
-                       (length >= 12 && strncasecmp((const char*)payload, "SETTINGS.get", 12) == 0);
-        if (!isQuery) {
-          machineStatusForcePublish = true;
-        }
-        return;
-      }
+      whatels::core_client::ClientManager::instance().onClientMessage(num, payload, length);
       return;
     }
     webSocket.sendTXT(num, "ERR:UNKNOWN_COMMAND\n");
   }
-}
-
-static void handleClientIndex() {
-  server.sendHeader("Content-Encoding", "gzip");
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send_P(200, "text/html", (const char*)WWW_INDEX_HTML_GZ, WWW_INDEX_HTML_GZ_LEN);
-}
-
-static void handleClientStyle() {
-  server.sendHeader("Content-Encoding", "gzip");
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send_P(200, "text/css", (const char*)WWW_STYLE_CSS_GZ, WWW_STYLE_CSS_GZ_LEN);
-}
-
-static void handleClientAppJs() {
-  server.sendHeader("Content-Encoding", "gzip");
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send_P(200, "application/javascript", (const char*)WWW_APP_JS_GZ, WWW_APP_JS_GZ_LEN);
-}
-
-static void handleSchemaGet() {
-  server.sendHeader("Cache-Control", "public, max-age=86400");
-  server.send(200, "application/json", LATHE_PROFILE_SCHEMA_JSON);
 }
 
 int getGcodeProgramCount() {
@@ -639,238 +349,6 @@ String readGcodeProgram(const String& name) {
   return result;
 }
 
-static void handleGcodeAdd() {
-  if (server.hasArg("name") && server.hasArg("gcode")) {
-    if (saveGcode(server.arg("name"), server.arg("gcode"))) {
-      server.send(200, "text/plain", "G-code saved successfully");
-    } else {
-      server.send(500, "text/plain", "Failed to save G-code");
-    }
-  } else {
-    server.send(400, "text/plain", "Missing parameters");
-  }
-}
-
-static void handleGcodeList() {
-  String response = "";
-  File root = LittleFS.open("/");
-  if (root && root.isDirectory()) {
-    File file = root.openNextFile();
-    while (file) {
-      String filename = file.name();
-      if (filename.endsWith(".gcode")) {
-        response += filename.substring(0, filename.length() - 6) + "\n";
-      }
-      file.close();
-      file = root.openNextFile();
-    }
-  }
-  server.send(200, "text/plain", response);
-}
-
-static void handleGcodeGet() {
-  if (server.hasArg("name")) {
-    String gcode = readGcodeProgram(server.arg("name"));
-    if (gcode != "") {
-      server.send(200, "text/plain", gcode);
-    } else {
-      server.send(404, "text/plain", "G-code file not found");
-    }
-  } else {
-    server.send(400, "text/plain", "Missing parameter: name");
-  }
-}
-
-static void handleGcodeRemove() {
-  if (server.hasArg("name")) {
-    removeGcodeByName(server.arg("name"));
-    server.send(200, "text/plain", "G-code removed");
-  } else {
-    server.send(400, "text/plain", "Missing parameter: name");
-  }
-}
-
-static bool machineConfigChangeBlocked() {
-  return SettingsService::isOn() || firmwareUploadActive || firmwareUploadRestartPending || configRestartPending;
-}
-
-static void handleWifiGet() {
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send(200, "text/plain", getWifiConfigResponse());
-}
-
-static void handleWifiSave() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before changing WiFi config");
-    return;
-  }
-
-  String error = "";
-  if (!readWifiConfigFromRequest(&error)) {
-    loadWifiConfig();
-    server.send(400, "text/plain", error);
-    return;
-  }
-
-  saveWifiConfig();
-  scheduleConfigRestart();
-  server.send(200, "text/plain", "WiFi config saved. Restarting controller...");
-}
-
-static void handleWifiReset() {
-  if (machineConfigChangeBlocked()) {
-    server.send(409, "text/plain", "Stop the controller and wait for uploads to finish before resetting WiFi config");
-    return;
-  }
-
-  setWifiConfigDefaults();
-  saveWifiConfig();
-  scheduleConfigRestart();
-  server.send(200, "text/plain", "WiFi config reset. Restarting controller...");
-}
-
-
-
-static void setFirmwareUploadError(const String& message, int status) {
-  firmwareUploadFailed = true;
-  firmwareUploadHttpStatus = status;
-  firmwareUploadMessage = message;
-  firmwareUploadLog(message);
-}
-
-static bool startFirmwareUpload(size_t fileSize) {
-  firmwareUploadLog(String("upload started, size=") + String((unsigned long)fileSize) + " bytes");
-  firmwareUploadRestartPending = false;
-  if (fileSize == 0) {
-    setFirmwareUploadError("error: firmware file is empty", 400);
-    return false;
-  }
-  if (SettingsService::isOn()) {
-    setFirmwareUploadError("error: stop the controller before firmware upload", 409);
-    return false;
-  }
-
-  firmwareUploadActive = true;
-  firmwareUploadFailed = false;
-  firmwareUploadHttpStatus = 200;
-  firmwareUploadMessage = "Firmware upload started";
-  firmwareUploadExpectedSize = fileSize;
-  firmwareUploadReceivedSize = 0;
-  firmwareUploadProgressPercent = 0;
-
-  if (!Update.begin(fileSize, U_FLASH)) {
-    setFirmwareUploadError(String("error: firmware update could not start: ") + Update.errorString(), 500);
-    firmwareUploadActive = false;
-    return false;
-  }
-  return true;
-}
-
-static bool writeFirmwareUploadData(const byte* data, size_t length) {
-  size_t written = Update.write((uint8_t*)data, length);
-  firmwareUploadReceivedSize += written;
-  if (written != length) {
-    setFirmwareUploadError(String("error: firmware write failed: ") + Update.errorString(), 500);
-    return false;
-  }
-
-  int progress = firmwareUploadExpectedSize > 0 ? int(firmwareUploadReceivedSize * 100 / firmwareUploadExpectedSize) : 0;
-  if (progress >= firmwareUploadProgressPercent + 10 || progress == 100) {
-    firmwareUploadProgressPercent = progress;
-    firmwareUploadLog(String("progress ") + String(progress) + "%");
-  }
-  return true;
-}
-
-static void finishFirmwareUpload() {
-  if (!firmwareUploadFailed && firmwareUploadReceivedSize != firmwareUploadExpectedSize) {
-    setFirmwareUploadError("error: firmware upload size mismatch", 400);
-  }
-  if (!firmwareUploadFailed && !Update.end(true)) {
-    setFirmwareUploadError(String("error: firmware update failed: ") + Update.errorString(), 500);
-  }
-  if (!firmwareUploadFailed) {
-    firmwareUploadMessage = "Firmware upload complete. Restarting controller...";
-    firmwareUploadLog("upload complete, restarting controller");
-    firmwareUploadRestartPending = true;
-    firmwareUploadRestartAt = millis() + 1500;
-  } else if (firmwareUploadActive) {
-    Update.abort();
-  }
-  firmwareUploadActive = false;
-}
-
-static void handleFirmwareUpload() {
-  const HTTPUpload& upload = server.upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    String filename = upload.filename;
-    filename.toLowerCase();
-    size_t fileSize = server.hasArg("size") ? server.arg("size").toInt() : upload.totalSize;
-    firmwareUploadLog(String("selected ") + upload.filename);
-    if (!filename.endsWith(".bin")) {
-      setFirmwareUploadError("error: only .bin firmware files can be uploaded", 400);
-      return;
-    }
-    startFirmwareUpload(fileSize);
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (!firmwareUploadFailed) {
-      writeFirmwareUploadData(upload.buf, upload.currentSize);
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    finishFirmwareUpload();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    if (firmwareUploadActive) {
-      Update.abort();
-    }
-    setFirmwareUploadError("error: firmware upload aborted", 400);
-    firmwareUploadActive = false;
-  }
-}
-
-static void handleFirmwareUploadResult() {
-  server.sendHeader("Connection", "close");
-  server.send(firmwareUploadHttpStatus, "text/plain", firmwareUploadMessage);
-}
-
-static void handleStatus() {
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.send(200, "text/plain",
-    String("LittleFS.freeSpace=") + String(LittleFS.totalBytes() - LittleFS.usedBytes()) + "\n" +
-    "FW.uploadActive=" + String(firmwareUploadActive ? 1 : 0) + "\n" +
-    "FW.uploaded=" + String((unsigned long)firmwareUploadReceivedSize) + "\n" +
-    "FW.size=" + String((unsigned long)firmwareUploadExpectedSize) + "\n" +
-    "FW.message=" + firmwareUploadMessage + "\n" +
-    "WiFi.mode=" + getWifiMode() + "\n" +
-    "WiFi.ip=" + wifiIpAddress + "\n" +
-    "WiFi.status=" + wifiStatus + "\n" +
-    "Config.restartPending=" + String(configRestartPending ? 1 : 0) + "\n");
-}
-
-static void setWiFiStatus(const String& status) {
-  wifiStatus = status;
-  wifiStatusMillis = millis();
-}
-
-static void registerWebRoutes() {
-  server.on("/", handleClientIndex);
-  server.on("/index.html", handleClientIndex);
-  server.on("/style.css", handleClientStyle);
-  server.on("/app.js", handleClientAppJs);
-  server.on("/api/schema/profile", HTTP_GET, handleSchemaGet);
-  server.on("/schemas/lathe-profile.schema.json", HTTP_GET, handleSchemaGet);
-  server.on("/gcode/add", HTTP_POST, handleGcodeAdd);
-  server.on("/gcode/list", HTTP_GET, handleGcodeList);
-  server.on("/gcode/get", HTTP_GET, handleGcodeGet);
-  server.on("/gcode/remove", HTTP_POST, handleGcodeRemove);
-
-  server.on("/wifi", HTTP_GET, handleWifiGet);
-  server.on("/wifi", HTTP_POST, handleWifiSave);
-  server.on("/wifi/reset", HTTP_POST, handleWifiReset);
-  server.on("/api/wifi/scan", HTTP_GET, handleWifiScan);
-  server.on("/firmware/upload", HTTP_POST, handleFirmwareUploadResult, handleFirmwareUpload);
-  server.on("/status", HTTP_GET, handleStatus);
-}
-
 void taskWiFi(void *param) {
   ESP_LOGI(TAG, "Starting WiFi task...");
   whatels::core::WifiService& wifiSvc = whatels::core::WifiService::instance();
@@ -884,8 +362,7 @@ void taskWiFi(void *param) {
   initBuffer(&outBuffer, 4096);
   webBuffersReady = true;
 
-  registerWebRoutes();
-  server.begin();
+  whatels::core::network::HttpServer::instance().begin(80);
 
   if (!wsMutex) {
     wsMutex = xSemaphoreCreateRecursiveMutex();
@@ -896,9 +373,10 @@ void taskWiFi(void *param) {
   whatels::core_client::ClientManager::instance().init(&webSocket);
 
   static bool s_wasConnected = false;
+  static uint32_t s_lastTelemetryPushMs = 0;
 
   while (emergencyStop == EstopCode::NONE) {
-    server.handleClient();
+    whatels::core::network::HttpServer::instance().loop();
     wifiSvc.update();
 
     wifiStationConnected = wifiSvc.isStationConnected();
@@ -917,13 +395,20 @@ void taskWiFi(void *param) {
     }
     s_wasConnected = wifiStationConnected;
 
-    if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    auto serviceWebSocket = [&]() {
       webSocket.loop();
-      dispatchTelemetry();
+      const uint32_t nowMs = millis();
+      if (webSocketClientCount > 0 && (nowMs - s_lastTelemetryPushMs >= 100)) {
+        s_lastTelemetryPushMs = nowMs;
+        whatels::core_client::ClientManager::instance().broadcastIfChanged(MachineModel::captureAll());
+      }
+    };
+
+    if (wsMutex && xSemaphoreTakeRecursive(wsMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+      serviceWebSocket();
       xSemaphoreGiveRecursive(wsMutex);
     } else if (!wsMutex) {
-      webSocket.loop();
-      dispatchTelemetry();
+      serviceWebSocket();
     }
 
     static unsigned long lastHealthLog = 0;
@@ -933,17 +418,6 @@ void taskWiFi(void *param) {
         ESP_LOGI(TAG, "[HEALTH] WiFi IP: %s, WS clients: %d, Free Heap: %u bytes",
                  wifiIpAddress.c_str(), webSocketClientCount, (unsigned int)ESP.getFreeHeap());
       }
-    }
-
-    if (firmwareUploadRestartPending && ((long)(millis() - firmwareUploadRestartAt) >= 0)) {
-      firmwareUploadLog("restarting now");
-      vTaskDelay(pdMS_TO_TICKS(50));
-      ESP.restart();
-    }
-    if (configRestartPending && ((long)(millis() - configRestartAt) >= 0)) {
-      ESP_LOGI(TAG, "Machine config saved, restarting now");
-      vTaskDelay(pdMS_TO_TICKS(50));
-      ESP.restart();
     }
 
     if (bufferAvailable(&outBuffer)) {
