@@ -11,7 +11,6 @@ static const char* TAG = "WEB";
 #include "SystemSchemaJson.h"
 #include <LittleFS.h>
 #include <Update.h>
-#include <Preferences.h>
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
 #include "core_client/ClientManager.h"

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <optional>
 #include "Config.h"
+#include "ISettingsStorage.h"
 #include "LatheProfile.h"
 #include "OperatorIntent.h"
 
@@ -29,6 +30,11 @@ enum LimitDirection : uint8_t {
  */
 class SettingsService {
 public:
+  // --- Storage Seam Injection (Issue #29) ---
+  // Host unit tests inject MockSettingsStorage; ESP32 builds lazily default to NvsSettingsStorage.
+  static void setStorage(whatels::core::ISettingsStorage* storage);
+  static whatels::core::ISettingsStorage* getStorage();
+
   // Boot Initialization: Loads active preset into RAM, scans NVS for sparse overrides,
   // and synchronizes physical parameters to legacy globals for Core 1 compatibility.
   static void init();

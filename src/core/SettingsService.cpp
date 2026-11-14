@@ -7,6 +7,9 @@
 
 static const char* TAG = "SETTINGS";
 #include "PersistentSetting.h"
+#if defined(ARDUINO) || defined(ESP32)
+#include "NvsSettingsStorage.h"
+#endif
 #include "motion/kernel/MotionEngine.h"
 #include "motion/MotionConversions.h"
 #include "motion/DRO_Scale.h"
@@ -57,53 +60,97 @@ static PersistentSetting<long> s_feedStepDu(PREF_NAMESPACE, PREF_FEED_STEP, FEED
   operatorPrefs.feedStepDu = val;
 });
 
+static whatels::core::ISettingsStorage* s_storage = nullptr;
+
+void SettingsService::setStorage(whatels::core::ISettingsStorage* storage) {
+  s_storage = storage;
+  PersistentSettingBase::setDefaultStorage(storage);
+}
+
+whatels::core::ISettingsStorage* SettingsService::getStorage() {
+#if defined(ARDUINO) || defined(ESP32)
+  if (!s_storage) {
+    static whatels::core::NvsSettingsStorage s_nvsStorage;
+    s_storage = &s_nvsStorage;
+    PersistentSettingBase::setDefaultStorage(s_storage);
+  }
+#endif
+  return s_storage;
+}
+
 static void migrateSettingsIfNeeded() {
-  Preferences sysPref;
-  if (!sysPref.begin("sys", false)) {
+  whatels::core::ISettingsStorage* storage = SettingsService::getStorage();
+  if (!storage) {
     return;
   }
 
   // Migrate legacy "h5" operator preferences to "prefs" namespace if present
-  Preferences oldH5;
-  if (oldH5.begin("h5", true)) {
-    Preferences prefsPref;
-    if (prefsPref.begin("prefs", false)) {
-      if (oldH5.isKey(PREF_MEASURE)) prefsPref.putInt(PREF_MEASURE, oldH5.getInt(PREF_MEASURE));
-      if (oldH5.isKey(PREF_MOVE_STEP)) prefsPref.putLong(PREF_MOVE_STEP, oldH5.getLong(PREF_MOVE_STEP));
-      if (oldH5.isKey(PREF_DIAMETER_MODE)) prefsPref.putBool(PREF_DIAMETER_MODE, oldH5.getBool(PREF_DIAMETER_MODE));
-      if (oldH5.isKey(PREF_ABSOLUTE_MODE)) prefsPref.putBool(PREF_ABSOLUTE_MODE, oldH5.getBool(PREF_ABSOLUTE_MODE));
-      if (oldH5.isKey(PREF_Z_DRO_MODE)) prefsPref.putBool(PREF_Z_DRO_MODE, oldH5.getBool(PREF_Z_DRO_MODE));
-      if (oldH5.isKey(PREF_X_DRO_MODE)) prefsPref.putBool(PREF_X_DRO_MODE, oldH5.getBool(PREF_X_DRO_MODE));
-      if (oldH5.isKey("sdm")) prefsPref.putInt("sdm", oldH5.getInt("sdm"));
-      if (oldH5.isKey(PREF_SHOW_ANGLE)) prefsPref.putBool(PREF_SHOW_ANGLE, oldH5.getBool(PREF_SHOW_ANGLE));
-      if (oldH5.isKey(PREF_SHOW_TACHO)) prefsPref.putBool(PREF_SHOW_TACHO, oldH5.getBool(PREF_SHOW_TACHO));
-      if (oldH5.isKey("db_angle")) prefsPref.putFloat("db_angle", oldH5.getFloat("db_angle"));
-      if (oldH5.isKey("db_turns")) prefsPref.putFloat("db_turns", oldH5.getFloat("db_turns"));
-      prefsPref.end();
+  if (storage->begin("h5", true)) {
+    bool hasMeasure = false; int32_t measureVal = 0;
+    bool hasMoveStep = false; int32_t moveStepVal = 0;
+    bool hasDia = false; bool diaVal = false;
+    bool hasAbs = false; bool absVal = false;
+    bool hasZDro = false; bool zDroVal = false;
+    bool hasXDro = false; bool xDroVal = false;
+    bool hasSdm = false; int32_t sdmVal = 0;
+    bool hasShowAngle = false; bool showAngleVal = false;
+    bool hasShowTacho = false; bool showTachoVal = false;
+    bool hasDbAngle = false; float dbAngleVal = 0.0f;
+    bool hasDbTurns = false; float dbTurnsVal = 0.0f;
+
+    if (storage->isKey(PREF_MEASURE)) hasMeasure = storage->getI32(PREF_MEASURE, measureVal);
+    if (storage->isKey(PREF_MOVE_STEP)) hasMoveStep = storage->getI32(PREF_MOVE_STEP, moveStepVal);
+    if (storage->isKey(PREF_DIAMETER_MODE)) hasDia = storage->getBool(PREF_DIAMETER_MODE, diaVal);
+    if (storage->isKey(PREF_ABSOLUTE_MODE)) hasAbs = storage->getBool(PREF_ABSOLUTE_MODE, absVal);
+    if (storage->isKey(PREF_Z_DRO_MODE)) hasZDro = storage->getBool(PREF_Z_DRO_MODE, zDroVal);
+    if (storage->isKey(PREF_X_DRO_MODE)) hasXDro = storage->getBool(PREF_X_DRO_MODE, xDroVal);
+    if (storage->isKey("sdm")) hasSdm = storage->getI32("sdm", sdmVal);
+    if (storage->isKey(PREF_SHOW_ANGLE)) hasShowAngle = storage->getBool(PREF_SHOW_ANGLE, showAngleVal);
+    if (storage->isKey(PREF_SHOW_TACHO)) hasShowTacho = storage->getBool(PREF_SHOW_TACHO, showTachoVal);
+    if (storage->isKey("db_angle")) hasDbAngle = storage->getFloat("db_angle", dbAngleVal);
+    if (storage->isKey("db_turns")) hasDbTurns = storage->getFloat("db_turns", dbTurnsVal);
+    storage->end();
+
+    if (storage->begin("prefs", false)) {
+      if (hasMeasure) storage->putI32(PREF_MEASURE, measureVal);
+      if (hasMoveStep) storage->putI32(PREF_MOVE_STEP, moveStepVal);
+      if (hasDia) storage->putBool(PREF_DIAMETER_MODE, diaVal);
+      if (hasAbs) storage->putBool(PREF_ABSOLUTE_MODE, absVal);
+      if (hasZDro) storage->putBool(PREF_Z_DRO_MODE, zDroVal);
+      if (hasXDro) storage->putBool(PREF_X_DRO_MODE, xDroVal);
+      if (hasSdm) storage->putI32("sdm", sdmVal);
+      if (hasShowAngle) storage->putBool(PREF_SHOW_ANGLE, showAngleVal);
+      if (hasShowTacho) storage->putBool(PREF_SHOW_TACHO, showTachoVal);
+      if (hasDbAngle) storage->putFloat("db_angle", dbAngleVal);
+      if (hasDbTurns) storage->putFloat("db_turns", dbTurnsVal);
+      storage->end();
     }
-    oldH5.end();
-    Preferences clearH5;
-    if (clearH5.begin("h5", false)) {
-      clearH5.clear();
-      clearH5.end();
+    if (storage->begin("h5", false)) {
+      storage->clear();
+      storage->end();
     }
   }
 
-  int storedVersion = sysPref.getInt("sw_ver", 0);
+  if (!storage->begin("sys", false)) {
+    return;
+  }
+
+  int32_t storedVersion = 0;
+  storage->getI32("sw_ver", storedVersion);
   if (SOFTWARE_VERSION > storedVersion) {
-    ESP_LOGI(TAG, "Migrating software settings from v%d to v%d...", storedVersion, SOFTWARE_VERSION);
+    ESP_LOGI(TAG, "Migrating software settings from v%d to v%d...", (int)storedVersion, SOFTWARE_VERSION);
 
     // Cascading non-destructive migration blocks for future firmware versions:
     // if (storedVersion < 39) { ... }
     // if (storedVersion < 40) { ... }
 
-    sysPref.putInt("sw_ver", SOFTWARE_VERSION);
+    storage->putI32("sw_ver", SOFTWARE_VERSION);
     sysConfig.swVersion = SOFTWARE_VERSION;
     ESP_LOGI(TAG, "Settings migration complete. Current version: v%d", SOFTWARE_VERSION);
   } else {
     sysConfig.swVersion = storedVersion;
   }
-  sysPref.end();
+  storage->end();
 }
 
 void SettingsService::init() {
@@ -114,27 +161,29 @@ void SettingsService::init() {
   loadMachineProfile();
 
   // Load deadband overrides from PREF_NAMESPACE ("prefs")
-  Preferences pref;
-  pref.begin(PREF_NAMESPACE, true);
-  if (pref.isKey("db_angle")) {
-    _deadbandAngle = pref.getFloat("db_angle");
-    operatorPrefs.deadbandAngle = _deadbandAngle.value();
-    operatorPrefs.isDeadbandAngleAuto = false;
-  } else {
-    _deadbandAngle = std::nullopt;
-    operatorPrefs.deadbandAngle = 0.0f;
-    operatorPrefs.isDeadbandAngleAuto = true;
+  _deadbandAngle = std::nullopt;
+  operatorPrefs.deadbandAngle = 0.0f;
+  operatorPrefs.isDeadbandAngleAuto = true;
+  _deadbandTurns = std::nullopt;
+  operatorPrefs.deadbandTurns = 0.0f;
+  operatorPrefs.isDeadbandTurnsAuto = true;
+
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin(PREF_NAMESPACE, true)) {
+      float dbVal = 0.0f;
+      if (storage->getFloat("db_angle", dbVal)) {
+        _deadbandAngle = dbVal;
+        operatorPrefs.deadbandAngle = dbVal;
+        operatorPrefs.isDeadbandAngleAuto = false;
+      }
+      if (storage->getFloat("db_turns", dbVal)) {
+        _deadbandTurns = dbVal;
+        operatorPrefs.deadbandTurns = dbVal;
+        operatorPrefs.isDeadbandTurnsAuto = false;
+      }
+      storage->end();
+    }
   }
-  if (pref.isKey("db_turns")) {
-    _deadbandTurns = pref.getFloat("db_turns");
-    operatorPrefs.deadbandTurns = _deadbandTurns.value();
-    operatorPrefs.isDeadbandTurnsAuto = false;
-  } else {
-    _deadbandTurns = std::nullopt;
-    operatorPrefs.deadbandTurns = 0.0f;
-    operatorPrefs.isDeadbandTurnsAuto = true;
-  }
-  pref.end();
 
   // Load observable operator & display preferences
   s_diameterMode.init();
@@ -211,14 +260,17 @@ void SettingsService::printMachineProfileBanner() {
 
 void SettingsService::loadMachineProfile() {
   ESP_LOGD(TAG, "Checking NVS 'machine'...");
-  Preferences pref;
-  pref.begin("machine", false);
+  whatels::core::ISettingsStorage* storage = getStorage();
+  bool hasStorage = (storage && storage->begin("machine", false));
 
   String presetSlug = "";
-  if (pref.isKey("preset")) {
-    presetSlug = pref.getString("preset");
-  } else if (pref.isKey("prof_id")) {
-    presetSlug = pref.getString("prof_id");
+  char slugBuf[64] = {0};
+  if (hasStorage) {
+    if (storage->getString("preset", slugBuf, sizeof(slugBuf))) {
+      presetSlug = String(slugBuf);
+    } else if (storage->getString("prof_id", slugBuf, sizeof(slugBuf))) {
+      presetSlug = String(slugBuf);
+    }
   }
 
   char defaultSlug[32] = "wm210v_stock";
@@ -235,48 +287,51 @@ void SettingsService::loadMachineProfile() {
     activeMachineProfile = getDefaultProfile();
   }
 
-  // Apply sparse user overrides from NVS if explicitly customized
-  if (pref.isKey("model_name")) {
-    String modelName = pref.getString("model_name", activeMachineProfile.modelName);
-    strncpy(activeMachineProfile.modelName, modelName.c_str(), sizeof(activeMachineProfile.modelName) - 1);
-    activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
-  }
+  if (hasStorage) {
+    // Apply sparse user overrides from NVS if explicitly customized
+    char modelBuf[sizeof(activeMachineProfile.modelName)] = {0};
+    if (storage->getString("model_name", modelBuf, sizeof(modelBuf))) {
+      strncpy(activeMachineProfile.modelName, modelBuf, sizeof(activeMachineProfile.modelName) - 1);
+      activeMachineProfile.modelName[sizeof(activeMachineProfile.modelName) - 1] = '\0';
+    }
 
-  if (pref.isKey("screw_z_du")) {
-    int32_t screwZDu = pref.getInt("screw_z_du");
-    activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwZDu / 10000.0f;
-  }
+    int32_t screwDu = 0;
+    if (storage->getI32("screw_z_du", screwDu)) {
+      activeMachineProfile.zAxis.leadscrewPitchMm = (float)screwDu / 10000.0f;
+    }
 
-  if (pref.isKey("screw_x_du")) {
-    int32_t screwXDu = pref.getInt("screw_x_du");
-    activeMachineProfile.xAxis.leadscrewPitchMm = (float)screwXDu / 10000.0f;
-  }
+    if (storage->getI32("screw_x_du", screwDu)) {
+      activeMachineProfile.xAxis.leadscrewPitchMm = (float)screwDu / 10000.0f;
+    }
 
-  if (pref.isKey("mot_steps_z")) {
-    activeMachineProfile.zAxis.stepsPerMm = pref.getFloat("mot_steps_z");
-  }
+    float fVal = 0.0f;
+    if (storage->getFloat("mot_steps_z", fVal)) {
+      activeMachineProfile.zAxis.stepsPerMm = fVal;
+    }
 
-  if (pref.isKey("mot_steps_x")) {
-    activeMachineProfile.xAxis.stepsPerMm = pref.getFloat("mot_steps_x");
-  }
+    if (storage->getFloat("mot_steps_x", fVal)) {
+      activeMachineProfile.xAxis.stepsPerMm = fVal;
+    }
 
-  if (pref.isKey("enc_ppr")) {
-    activeMachineProfile.spindle.encoder.ppr = pref.getUShort("enc_ppr");
-  }
+    uint16_t u16Val = 0;
+    if (storage->getU16("enc_ppr", u16Val)) {
+      activeMachineProfile.spindle.encoder.ppr = u16Val;
+    }
 
-  if (pref.isKey("spindle_ratio")) {
-    activeMachineProfile.spindle.pulleyRatio = pref.getFloat("spindle_ratio");
-  }
+    if (storage->getFloat("spindle_ratio", fVal)) {
+      activeMachineProfile.spindle.pulleyRatio = fVal;
+    }
 
-  // Clean up any stale DRO flags from NVS; DROs are disabled by default
-  if (pref.isKey("has_dro_z")) {
-    pref.remove("has_dro_z");
-  }
-  if (pref.isKey("has_dro_x")) {
-    pref.remove("has_dro_x");
-  }
+    // Clean up any stale DRO flags from NVS; DROs are disabled by default
+    if (storage->isKey("has_dro_z")) {
+      storage->remove("has_dro_z");
+    }
+    if (storage->isKey("has_dro_x")) {
+      storage->remove("has_dro_x");
+    }
 
-  pref.end();
+    storage->end();
+  }
 
   // Ensure capabilities bitmask stays strictly synchronized with physical hardware
   if (activeMachineProfile.zAxis.hasDroScale) {
@@ -296,25 +351,25 @@ void SettingsService::loadMachineProfile() {
 
 void SettingsService::saveMachineProfile() {
   ESP_LOGI(TAG, "Persisting sparse overrides to NVS 'machine'...");
-  Preferences pref;
-  pref.begin("machine", false);
+  whatels::core::ISettingsStorage* storage = getStorage();
+  if (storage && storage->begin("machine", false)) {
+    storage->putString("preset", activeMachineProfile.profileId);
+    storage->putString("prof_id", activeMachineProfile.profileId);
+    storage->putString("model_name", activeMachineProfile.modelName);
 
-  pref.putString("preset", activeMachineProfile.profileId);
-  pref.putString("prof_id", activeMachineProfile.profileId);
-  pref.putString("model_name", activeMachineProfile.modelName);
+    if (activeMachineProfile.zAxis.hasDroScale) {
+      storage->putBool("has_dro_z", true);
+    } else if (storage->isKey("has_dro_z")) {
+      storage->remove("has_dro_z");
+    }
+    if (activeMachineProfile.xAxis.hasDroScale) {
+      storage->putBool("has_dro_x", true);
+    } else if (storage->isKey("has_dro_x")) {
+      storage->remove("has_dro_x");
+    }
 
-  if (activeMachineProfile.zAxis.hasDroScale) {
-    pref.putBool("has_dro_z", true);
-  } else if (pref.isKey("has_dro_z")) {
-    pref.remove("has_dro_z");
+    storage->end();
   }
-  if (activeMachineProfile.xAxis.hasDroScale) {
-    pref.putBool("has_dro_x", true);
-  } else if (pref.isKey("has_dro_x")) {
-    pref.remove("has_dro_x");
-  }
-
-  pref.end();
 }
 
 
@@ -357,13 +412,15 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
   }
 
   // Clear prior machine overrides from NVS to prevent calibration leakage across machines
-  Preferences pref;
-  pref.begin("machine", false);
-  pref.clear();
-  pref.putString("preset", pPreset->profileId);
-  pref.putString("prof_id", pPreset->profileId);
-  pref.putString("model_name", pPreset->modelName);
-  pref.end();
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      storage->clear();
+      storage->putString("preset", pPreset->profileId);
+      storage->putString("prof_id", pPreset->profileId);
+      storage->putString("model_name", pPreset->modelName);
+      storage->end();
+    }
+  }
 
   activeMachineProfile = *pPreset;
 
@@ -428,11 +485,13 @@ bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
 
   if (saveProfileToLittleFS(activeMachineProfile)) {
     // Persist new preset identity to NVS
-    Preferences pref;
-    pref.begin("machine", false);
-    pref.putString("preset", activeMachineProfile.profileId);
-    pref.putString("prof_id", activeMachineProfile.profileId);
-    pref.end();
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin("machine", false)) {
+        storage->putString("preset", activeMachineProfile.profileId);
+        storage->putString("prof_id", activeMachineProfile.profileId);
+        storage->end();
+      }
+    }
 
     if (reply) *reply = "OK:SETTINGS.preset.save=" + String(targetSlug) + "\n";
       return true;
@@ -534,54 +593,53 @@ bool SettingsService::reset(const char* key, String* reply) {
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
 
-  Preferences pref;
-  pref.begin("machine", false);
+  auto removeMachineKey = [](const char* nvsKey) {
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin("machine", false)) {
+        storage->remove(nvsKey);
+        storage->end();
+      }
+    }
+  };
 
   if (strcasecmp(key, "machine.z.pitchDu") == 0 || strcasecmp(key, "screwZDu") == 0) {
     activeMachineProfile.zAxis.leadscrewPitchMm = pBaseline->zAxis.leadscrewPitchMm;
-    pref.remove("screw_z_du");
-    pref.end();
+    removeMachineKey("screw_z_du");
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.x.pitchDu") == 0 || strcasecmp(key, "screwXDu") == 0) {
     activeMachineProfile.xAxis.leadscrewPitchMm = pBaseline->xAxis.leadscrewPitchMm;
-    pref.remove("screw_x_du");
-    pref.end();
+    removeMachineKey("screw_x_du");
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.z.motorSteps") == 0 || strcasecmp(key, "motorStepsZ") == 0) {
     activeMachineProfile.zAxis.stepsPerMm = pBaseline->zAxis.stepsPerMm;
-    pref.remove("mot_steps_z");
-    pref.end();
+    removeMachineKey("mot_steps_z");
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.x.motorSteps") == 0 || strcasecmp(key, "motorStepsX") == 0) {
     activeMachineProfile.xAxis.stepsPerMm = pBaseline->xAxis.stepsPerMm;
-    pref.remove("mot_steps_x");
-    pref.end();
+    removeMachineKey("mot_steps_x");
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.spindle.ppr") == 0 || strcasecmp(key, "encoderPpr") == 0) {
     activeMachineProfile.spindle.encoder.ppr = pBaseline->spindle.encoder.ppr;
-    pref.remove("enc_ppr");
-    pref.end();
+    removeMachineKey("enc_ppr");
     applyDerivedMachineConfig();
     reportOk(key);
     return true;
   }
   if (strcasecmp(key, "machine.spindle.ratio") == 0) {
     activeMachineProfile.spindle.pulleyRatio = pBaseline->spindle.pulleyRatio;
-    pref.remove("spindle_ratio");
-    pref.end();
+    removeMachineKey("spindle_ratio");
     applyDerivedMachineConfig();
     reportOk(key);
     return true;
   }
-  pref.end();
   if (strcasecmp(key, "deadbandAngle") == 0) {
     setDeadbandAngle("auto");
     reportOk(key);
@@ -661,14 +719,16 @@ bool SettingsService::setScrewZDu(long du) {
   activeMachineProfile.zAxis.leadscrewPitchMm = pitchMm;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  if (pBaseline && pBaseline->zAxis.leadscrewPitchDu() == du) {
-    pref.remove("screw_z_du");
-  } else {
-    pref.putInt("screw_z_du", (int32_t)du);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      if (pBaseline && pBaseline->zAxis.leadscrewPitchDu() == du) {
+        storage->remove("screw_z_du");
+      } else {
+        storage->putI32("screw_z_du", (int32_t)du);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -684,14 +744,16 @@ bool SettingsService::setScrewXDu(long du) {
   activeMachineProfile.xAxis.leadscrewPitchMm = pitchMm;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  if (pBaseline && pBaseline->xAxis.leadscrewPitchDu() == du) {
-    pref.remove("screw_x_du");
-  } else {
-    pref.putInt("screw_x_du", (int32_t)du);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      if (pBaseline && pBaseline->xAxis.leadscrewPitchDu() == du) {
+        storage->remove("screw_x_du");
+      } else {
+        storage->putI32("screw_x_du", (int32_t)du);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -710,15 +772,17 @@ bool SettingsService::setMotorStepsZ(long steps) {
   activeMachineProfile.zAxis.stepsPerMm = stepsPerMm;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  long baseSteps = pBaseline ? pBaseline->zAxis.motorSteps() : -1;
-  if (baseSteps == steps) {
-    pref.remove("mot_steps_z");
-  } else {
-    pref.putFloat("mot_steps_z", stepsPerMm);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      long baseSteps = pBaseline ? pBaseline->zAxis.motorSteps() : -1;
+      if (baseSteps == steps) {
+        storage->remove("mot_steps_z");
+      } else {
+        storage->putFloat("mot_steps_z", stepsPerMm);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -737,15 +801,17 @@ bool SettingsService::setMotorStepsX(long steps) {
   activeMachineProfile.xAxis.stepsPerMm = stepsPerMm;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  long baseSteps = pBaseline ? pBaseline->xAxis.motorSteps() : -1;
-  if (baseSteps == steps) {
-    pref.remove("mot_steps_x");
-  } else {
-    pref.putFloat("mot_steps_x", stepsPerMm);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      long baseSteps = pBaseline ? pBaseline->xAxis.motorSteps() : -1;
+      if (baseSteps == steps) {
+        storage->remove("mot_steps_x");
+      } else {
+        storage->putFloat("mot_steps_x", stepsPerMm);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -760,14 +826,16 @@ bool SettingsService::setEncoderPpr(int ppr) {
   activeMachineProfile.spindle.encoder.ppr = (uint16_t)ppr;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  if (pBaseline && pBaseline->spindle.encoder.ppr == (uint16_t)ppr) {
-    pref.remove("enc_ppr");
-  } else {
-    pref.putUShort("enc_ppr", (uint16_t)ppr);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      if (pBaseline && pBaseline->spindle.encoder.ppr == (uint16_t)ppr) {
+        storage->remove("enc_ppr");
+      } else {
+        storage->putU16("enc_ppr", (uint16_t)ppr);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -782,14 +850,16 @@ bool SettingsService::setSpindleRatio(float ratio) {
   activeMachineProfile.spindle.pulleyRatio = ratio;
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
-  Preferences pref;
-  pref.begin("machine", false);
-  if (pBaseline && fabsf(pBaseline->spindle.pulleyRatio - ratio) < 0.0001f) {
-    pref.remove("spindle_ratio");
-  } else {
-    pref.putFloat("spindle_ratio", ratio);
+  if (whatels::core::ISettingsStorage* storage = getStorage()) {
+    if (storage->begin("machine", false)) {
+      if (pBaseline && fabsf(pBaseline->spindle.pulleyRatio - ratio) < 0.0001f) {
+        storage->remove("spindle_ratio");
+      } else {
+        storage->putFloat("spindle_ratio", ratio);
+      }
+      storage->end();
+    }
   }
-  pref.end();
 
   applyDerivedMachineConfig();
   return true;
@@ -1131,10 +1201,12 @@ bool SettingsService::setDeadbandAngle(const char* val) {
     _deadbandAngle = std::nullopt;
     operatorPrefs.deadbandAngle = 0.0f;
     operatorPrefs.isDeadbandAngleAuto = true;
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.remove("db_angle");
-    pref.end();
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin(PREF_NAMESPACE, false)) {
+        storage->remove("db_angle");
+        storage->end();
+      }
+    }
   } else {
     float deg = atof(val);
     if (deg < 0.0f || deg > 360.0f) return false;
@@ -1145,10 +1217,12 @@ bool SettingsService::setDeadbandAngle(const char* val) {
     _deadbandAngle = deg;
     operatorPrefs.deadbandAngle = deg;
     operatorPrefs.isDeadbandAngleAuto = false;
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.putFloat("db_angle", deg);
-    pref.end();
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin(PREF_NAMESPACE, false)) {
+        storage->putFloat("db_angle", deg);
+        storage->end();
+      }
+    }
   }
   return true;
 }
@@ -1162,10 +1236,12 @@ bool SettingsService::setDeadbandTurns(const char* val) {
     _deadbandTurns = std::nullopt;
     operatorPrefs.deadbandTurns = 0.0f;
     operatorPrefs.isDeadbandTurnsAuto = true;
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.remove("db_turns");
-    pref.end();
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin(PREF_NAMESPACE, false)) {
+        storage->remove("db_turns");
+        storage->end();
+      }
+    }
   } else {
     float turns = atof(val);
     if (turns < 0.0f || turns > 10.0f) return false;
@@ -1176,10 +1252,12 @@ bool SettingsService::setDeadbandTurns(const char* val) {
     _deadbandTurns = turns;
     operatorPrefs.deadbandTurns = turns;
     operatorPrefs.isDeadbandTurnsAuto = false;
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE, false);
-    pref.putFloat("db_turns", turns);
-    pref.end();
+    if (whatels::core::ISettingsStorage* storage = getStorage()) {
+      if (storage->begin(PREF_NAMESPACE, false)) {
+        storage->putFloat("db_turns", turns);
+        storage->end();
+      }
+    }
   }
   return true;
 }

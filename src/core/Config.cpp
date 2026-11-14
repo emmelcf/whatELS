@@ -123,25 +123,38 @@ void loadKeyboardConfig() {
   setKeyboardConfigDefaults();
 
   // Transparent migration from legacy "h5keys" namespace if present
-  Preferences oldKeys;
-  if (oldKeys.begin("h5keys", true)) {
-    Preferences sysPref;
-    if (sysPref.begin("sys", false)) {
-      if (oldKeys.isKey(KCFG_SHOW_KEY_PRESSES)) {
-        sysPref.putBool(KCFG_SHOW_KEY_PRESSES, oldKeys.getBool(KCFG_SHOW_KEY_PRESSES));
+  if (whatels::core::ISettingsStorage* storage = SettingsService::getStorage()) {
+    if (storage->begin("h5keys", true)) {
+      bool hasShowKeys = false;
+      bool showKeysVal = false;
+      if (storage->isKey(KCFG_SHOW_KEY_PRESSES)) {
+        hasShowKeys = storage->getBool(KCFG_SHOW_KEY_PRESSES, showKeysVal);
       }
+      uint8_t keyVals[KEYBOARD_BINDING_COUNT] = {};
+      bool hasKey[KEYBOARD_BINDING_COUNT] = {};
       for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
-        if (oldKeys.isKey(keyboardBindings[i].id)) {
-          sysPref.putUChar(keyboardBindings[i].id, oldKeys.getUChar(keyboardBindings[i].id));
+        if (storage->isKey(keyboardBindings[i].id)) {
+          hasKey[i] = storage->getU8(keyboardBindings[i].id, keyVals[i]);
         }
       }
-      sysPref.end();
-    }
-    oldKeys.end();
-    Preferences clearOld;
-    if (clearOld.begin("h5keys", false)) {
-      clearOld.clear();
-      clearOld.end();
+      storage->end();
+
+      if (storage->begin("sys", false)) {
+        if (hasShowKeys) {
+          storage->putBool(KCFG_SHOW_KEY_PRESSES, showKeysVal);
+        }
+        for (int i = 0; i < KEYBOARD_BINDING_COUNT; i++) {
+          if (hasKey[i]) {
+            storage->putU8(keyboardBindings[i].id, keyVals[i]);
+          }
+        }
+        storage->end();
+      }
+
+      if (storage->begin("h5keys", false)) {
+        storage->clear();
+        storage->end();
+      }
     }
   }
 
@@ -207,31 +220,32 @@ void loadWifiConfig() {
   setWifiConfigDefaults();
 
   // Transparent migration from legacy "h5wifi" namespace if present
-  Preferences oldWifi;
-  if (oldWifi.begin("h5wifi", true)) {
-    if (oldWifi.isKey("ssid")) {
-      String oldSsid = oldWifi.getString("ssid", "");
-      String oldPwd = oldWifi.getString("pwd", "");
-      String oldHn = oldWifi.getString("hn", "whatels");
-      bool oldEn = oldWifi.getBool("en", true);
-      oldWifi.end();
+  if (whatels::core::ISettingsStorage* storage = SettingsService::getStorage()) {
+    if (storage->begin("h5wifi", true)) {
+      if (storage->isKey("ssid")) {
+        char buf[64];
+        String oldSsid = storage->getString("ssid", buf, sizeof(buf)) ? String(buf) : String("");
+        String oldPwd = storage->getString("pwd", buf, sizeof(buf)) ? String(buf) : String("");
+        String oldHn = storage->getString("hn", buf, sizeof(buf)) ? String(buf) : String("whatels");
+        bool oldEn = true;
+        storage->getBool("en", oldEn);
+        storage->end();
 
-      Preferences sysPref;
-      if (sysPref.begin("sys", false)) {
-        sysPref.putString("wifi_ssid", oldSsid);
-        sysPref.putString("wifi_pwd", oldPwd);
-        sysPref.putString("wifi_host", oldHn);
-        sysPref.putBool("wifi_en", oldEn);
-        sysPref.end();
-      }
+        if (storage->begin("sys", false)) {
+          storage->putString("wifi_ssid", oldSsid.c_str());
+          storage->putString("wifi_pwd", oldPwd.c_str());
+          storage->putString("wifi_host", oldHn.c_str());
+          storage->putBool("wifi_en", oldEn);
+          storage->end();
+        }
 
-      Preferences clearOld;
-      if (clearOld.begin("h5wifi", false)) {
-        clearOld.clear();
-        clearOld.end();
+        if (storage->begin("h5wifi", false)) {
+          storage->clear();
+          storage->end();
+        }
+      } else {
+        storage->end();
       }
-    } else {
-      oldWifi.end();
     }
   }
 
@@ -280,26 +294,28 @@ void loadMpgConfig() {
   setMpgConfigDefaults();
 
   // One-time migration from legacy "h5cfg" if present
-  Preferences oldCfg;
-  if (oldCfg.begin("h5cfg", true)) {
-    float legacyPulsePerRevolution = oldCfg.getFloat("pulseRev", -1.0f);
-    float zPulse = oldCfg.getFloat("zPulseRev", legacyPulsePerRevolution >= 1.0f ? legacyPulsePerRevolution : -1.0f);
-    float xPulse = oldCfg.getFloat("xPulseRev", legacyPulsePerRevolution >= 1.0f ? legacyPulsePerRevolution : -1.0f);
-    oldCfg.end();
+  if (whatels::core::ISettingsStorage* storage = SettingsService::getStorage()) {
+    if (storage->begin("h5cfg", true)) {
+      float legacyPulsePerRevolution = -1.0f;
+      storage->getFloat("pulseRev", legacyPulsePerRevolution);
+      float zPulse = (legacyPulsePerRevolution >= 1.0f) ? legacyPulsePerRevolution : -1.0f;
+      float xPulse = (legacyPulsePerRevolution >= 1.0f) ? legacyPulsePerRevolution : -1.0f;
+      storage->getFloat("zPulseRev", zPulse);
+      storage->getFloat("xPulseRev", xPulse);
+      storage->end();
 
-    if (zPulse >= 1.0f || xPulse >= 1.0f) {
-      Preferences sysPref;
-      if (sysPref.begin("sys", false)) {
-        if (zPulse >= 1.0f) sysPref.putFloat("mpg_z_ppr", zPulse);
-        if (xPulse >= 1.0f) sysPref.putFloat("mpg_x_ppr", xPulse);
-        sysPref.end();
+      if (zPulse >= 1.0f || xPulse >= 1.0f) {
+        if (storage->begin("sys", false)) {
+          if (zPulse >= 1.0f) storage->putFloat("mpg_z_ppr", zPulse);
+          if (xPulse >= 1.0f) storage->putFloat("mpg_x_ppr", xPulse);
+          storage->end();
+        }
       }
-    }
 
-    Preferences clearOld;
-    if (clearOld.begin("h5cfg", false)) {
-      clearOld.clear();
-      clearOld.end();
+      if (storage->begin("h5cfg", false)) {
+        storage->clear();
+        storage->end();
+      }
     }
   }
 

@@ -8,24 +8,97 @@
  */
 
 #include <Arduino.h>
-#include <Preferences.h>
 #include <cmath>
+#include "ISettingsStorage.h"
+
+#if defined(ARDUINO) || defined(ESP32)
 #include <esp_log.h>
+#include "NvsSettingsStorage.h"
+#else
+#ifndef ESP_LOGD
+#define ESP_LOGD(tag, fmt, ...) ((void)0)
+#endif
+#endif
+
+/**
+ * @brief Non-template base holding the shared default ISettingsStorage pointer.
+ */
+class PersistentSettingBase {
+ public:
+  static void setDefaultStorage(whatels::core::ISettingsStorage* storage) {
+    defaultStorageRef() = storage;
+  }
+
+  static whatels::core::ISettingsStorage* getDefaultStorage() {
+#if defined(ARDUINO) || defined(ESP32)
+    if (!defaultStorageRef()) {
+      static whatels::core::NvsSettingsStorage s_nvsStorage;
+      defaultStorageRef() = &s_nvsStorage;
+    }
+#endif
+    return defaultStorageRef();
+  }
+
+ private:
+  static whatels::core::ISettingsStorage*& defaultStorageRef() {
+    static whatels::core::ISettingsStorage* s_defaultStorage = nullptr;
+    return s_defaultStorage;
+  }
+};
 
 namespace detail {
-inline bool readPref(Preferences& p, const char* key, bool def) { return p.getBool(key, def); }
-inline int readPref(Preferences& p, const char* key, int def) { return p.getInt(key, def); }
-inline long readPref(Preferences& p, const char* key, long def) { return p.getLong(key, def); }
-inline float readPref(Preferences& p, const char* key, float def) { return p.getFloat(key, def); }
-inline uint8_t readPref(Preferences& p, const char* key, uint8_t def) { return p.getUChar(key, def); }
-inline String readPref(Preferences& p, const char* key, const String& def) { return p.getString(key, def); }
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, bool& out) {
+  return s.getBool(key, out);
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, uint8_t& out) {
+  return s.getU8(key, out);
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, uint16_t& out) {
+  return s.getU16(key, out);
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, int& out) {
+  int32_t tmp = 0;
+  if (!s.getI32(key, tmp)) return false;
+  out = static_cast<int>(tmp);
+  return true;
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, long& out) {
+  int32_t tmp = 0;
+  if (!s.getI32(key, tmp)) return false;
+  out = static_cast<long>(tmp);
+  return true;
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, float& out) {
+  return s.getFloat(key, out);
+}
+inline bool readStorage(whatels::core::ISettingsStorage& s, const char* key, String& out) {
+  char buf[256];
+  if (!s.getString(key, buf, sizeof(buf))) return false;
+  out = String(buf);
+  return true;
+}
 
-inline size_t writePref(Preferences& p, const char* key, bool val) { return p.putBool(key, val); }
-inline size_t writePref(Preferences& p, const char* key, int val) { return p.putInt(key, val); }
-inline size_t writePref(Preferences& p, const char* key, long val) { return p.putLong(key, val); }
-inline size_t writePref(Preferences& p, const char* key, float val) { return p.putFloat(key, val); }
-inline size_t writePref(Preferences& p, const char* key, uint8_t val) { return p.putUChar(key, val); }
-inline size_t writePref(Preferences& p, const char* key, const String& val) { return p.putString(key, val); }
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, bool val) {
+  return s.putBool(key, val);
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, uint8_t val) {
+  return s.putU8(key, val);
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, uint16_t val) {
+  return s.putU16(key, val);
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, int val) {
+  return s.putI32(key, static_cast<int32_t>(val));
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, long val) {
+  return s.putI32(key, static_cast<int32_t>(val));
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, float val) {
+  return s.putFloat(key, val);
+}
+inline bool writeStorage(whatels::core::ISettingsStorage& s, const char* key, const String& val) {
+  return s.putString(key, val.c_str());
+}
 
 template <typename T>
 inline bool equals(const T& a, const T& b) { return a == b; }
@@ -44,7 +117,7 @@ inline bool equals<float>(const float& a, const float& b) { return fabsf(a - b) 
  * 4. Lightweight optional onChanged callback hook for telemetry / reactivity.
  */
 template <typename T>
-class PersistentSetting {
+class PersistentSetting : public PersistentSettingBase {
  public:
   using CallbackFn = void (*)(const T& newValue);
 
@@ -54,6 +127,7 @@ class PersistentSetting {
         _defaultValue(T{}),
         _value(T{}),
         _onChange(nullptr),
+        _storage(nullptr),
         _loaded(false) {}
 
   PersistentSetting(const char* nvsNamespace, const char* nvsKey, T defaultValue, CallbackFn onChange = nullptr)
@@ -62,6 +136,7 @@ class PersistentSetting {
         _defaultValue(defaultValue),
         _value(defaultValue),
         _onChange(onChange),
+        _storage(nullptr),
         _loaded(false) {}
 
   void setup(const char* nvsNamespace, const char* nvsKey, T defaultValue, CallbackFn onChange = nullptr) {
@@ -73,17 +148,23 @@ class PersistentSetting {
     _loaded = false;
   }
 
+  void setStorage(whatels::core::ISettingsStorage* storage) {
+    _storage = storage;
+  }
+
   void init() {
     load();
   }
 
   void load() {
-    Preferences pref;
-    if (pref.begin(_ns, true)) { // Read-only mode
-      _value = detail::readPref(pref, _key, _defaultValue);
-      pref.end();
-    } else {
-      _value = _defaultValue;
+    whatels::core::ISettingsStorage* storage = resolveStorage();
+    _value = _defaultValue;
+    if (storage && storage->begin(_ns, true)) {
+      T stored = _defaultValue;
+      if (detail::readStorage(*storage, _key, stored)) {
+        _value = stored;
+      }
+      storage->end();
     }
     _loaded = true;
   }
@@ -101,10 +182,10 @@ class PersistentSetting {
 
     _value = newVal;
 
-    Preferences pref;
-    if (pref.begin(_ns, false)) { // Read-write mode
-      detail::writePref(pref, _key, _value);
-      pref.end();
+    whatels::core::ISettingsStorage* storage = resolveStorage();
+    if (storage && storage->begin(_ns, false)) {
+      detail::writeStorage(*storage, _key, _value);
+      storage->end();
       ESP_LOGD("NVS", "Persisted '%s'", _key);
     }
 
@@ -123,10 +204,15 @@ class PersistentSetting {
   const char* ns() const { return _ns; }
 
  private:
+  whatels::core::ISettingsStorage* resolveStorage() const {
+    return _storage ? _storage : getDefaultStorage();
+  }
+
   const char* _ns;
   const char* _key;
   T _defaultValue;
   T _value;
   CallbackFn _onChange;
+  whatels::core::ISettingsStorage* _storage;
   bool _loaded;
 };
