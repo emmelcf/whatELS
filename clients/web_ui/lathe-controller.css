@@ -67,21 +67,21 @@
   .chip {
     border: 1px solid var(--line); background: #12181d; border-radius: 4px; padding: 4px 12px;
     font-size: 14px; letter-spacing: .3px; color: var(--fg); display: inline-flex; align-items: center;
-    justify-content: center; gap: 5px; min-height: 35px; font-weight: 700;
+    justify-content: center; gap: 5px; min-height: 36px; min-width: 48px; font-weight: 700;
   }
-  .chip.icon { padding: 4px 11px; font-size: 16px; min-width: 38px; }
+  .chip.icon { padding: 4px 11px; font-size: 16px; min-width: 48px; }
   .chip-doc { color: var(--blue); border-color: #213c52; background: var(--blue-bg); font-weight: 700; }
   .tap { cursor: pointer; }
   .tap:active { opacity: .7; }
 
-  /* MAIN WORKSPACE LAYOUT (480px total height - 42px topbar) */
-  .main { display: flex; height: calc(480px - 42px); }
-  .col-left-wrap { width: 540px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+  /* MAIN WORKSPACE LAYOUT (480px total height - 42px topbar - 36px statusbar) */
+  .main { display: flex; height: calc(480px - 42px - 36px); }
+  .col-left-wrap { width: 472px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
   .col-left-body { display: flex; flex: 1; min-height: 0; }
 
   /* DRO COLUMN: Static 50px font, non-shifting tabular width */
   .col-dro {
-    width: 338px; padding: 8px 14px; display: flex; flex-direction: column;
+    width: 270px; padding: 8px 10px; display: flex; flex-direction: column;
     justify-content: flex-start; gap: 14px; border-right: 1px solid var(--line);
   }
   .axis-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; }
@@ -189,7 +189,7 @@
 
   /* Live Controller Telemetry Bar */
   .status-deck {
-    height: 30px; border-top: 1px solid var(--line); background: #080c0e; display: flex; align-items: center;
+    height: 36px; border-top: 1px solid var(--line); background: #080c0e; display: flex; align-items: center;
     padding: 0 8px 0 12px; gap: 8px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: .3px;
     position: relative; overflow: hidden;
   }
@@ -199,12 +199,12 @@
   .status-log-btn {
     border: 1px solid var(--line); background: #11171d; border-radius: 3px; padding: 4px 10px;
     font-size: 11px; font-weight: 700; color: var(--dim); flex: 0 0 auto; cursor: pointer;
-    min-height: 24px; min-width: 48px; display: inline-flex; align-items: center; justify-content: center;
+    min-height: 36px; min-width: 48px; display: inline-flex; align-items: center; justify-content: center;
   }
   .status-log-btn:active { color: var(--fg); background: #1b242e; }
 
   /* RIGHT COLUMN: Mode Config, Spindle and Action Deck */
-  .col-info { width: 260px; padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
+  .col-info { flex: 1; min-width: 260px; padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
   .spindle-card {
     border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; min-height: 42px;
     display: flex; align-items: center; justify-content: space-between; background: #0e1317;

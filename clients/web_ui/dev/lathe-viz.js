@@ -372,7 +372,7 @@
     rebuild();
 
     // -------------------------------------------------- spindle encoder simulation
-    // Sends CMD.spindleSim / CMD.spindleSimTurn through the shared client, so the
+    // Sends CMD.simEncoder / CMD.simRpm / CMD.simPulses through the shared client, so the
     // emulator and the real controller are driven identically.
     const spin = { active: false, motorOn: false, cw: true, rpm: 300 };
     const signedRpm = () => (spin.active && spin.motorOn ? (spin.cw ? 1 : -1) * spin.rpm : 0);
@@ -384,7 +384,31 @@
       const c = window.whatElsClient;
       return !!(c && c.state && Array.isArray(c.state.features) && c.state.features.includes('spindleSim'));
     };
-    const pushSim = () => { if (supported() || !spin.active) { if (supported()) qsend(`CMD.spindleSim=${spin.active ? 1 : 0},${signedRpm()}`); } };
+    const pushSim = () => {
+      if (!supported() && spin.active) return;
+      if (supported()) {
+        const c = window.whatElsClient;
+        if (c && typeof c.simEncoder === 'function' && typeof c.simRpm === 'function') {
+          c.simEncoder(spin.active);
+          if (spin.active) c.simRpm(signedRpm());
+        } else {
+          qsend(`CMD.simEncoder=${spin.active ? 1 : 0}`);
+          if (spin.active) qsend(`CMD.simRpm=${signedRpm()}`);
+        }
+      }
+    };
+    const sendTurnDeg = (deg) => {
+      const s = window.Alpine && Alpine.store && Alpine.store('machine');
+      const ppr = (s && s.encoderPpr > 0) ? s.encoderPpr : 4800;
+      const pulses = Math.round((deg * ppr) / 360);
+      if (!pulses) return;
+      const c = window.whatElsClient;
+      if (c && typeof c.simPulses === 'function') {
+        c.simPulses(pulses);
+      } else {
+        qsend(`CMD.simPulses=${pulses}`);
+      }
+    };
     function refreshSpinUi() {
       const ok = supported();
       if (!ok && spin.active) { spin.active = false; spin.motorOn = false; turnQueue = 0; $('lvOvr').checked = false; }
@@ -420,7 +444,7 @@
       if (!spin.active || !turnQueue) return;
       const step = Math.max(-4.5, Math.min(4.5, turnQueue));
       turnQueue -= step;
-      qsend(`CMD.spindleSimTurn=${step.toFixed(2)}`);
+      sendTurnDeg(step);
     }, 25);
 
     // Hand rotation: drag the chuck gauge. Needle follows the pointer immediately.
@@ -453,11 +477,11 @@
       if (now - lastSend >= 25 && Math.abs(dragAcc) >= 0.05) {
         // clamp so a wild flick can't command an absurd instantaneous speed
         const send = Math.max(-60, Math.min(60, dragAcc));
-        qsend(`CMD.spindleSimTurn=${send.toFixed(2)}`);
+        sendTurnDeg(send);
         dragAcc -= send; lastSend = now;
       }
     });
-    const endDrag = () => { if (dragging && dragAcc) qsend(`CMD.spindleSimTurn=${Math.max(-60, Math.min(60, dragAcc)).toFixed(2)}`); dragging = false; dragAcc = 0; };
+    const endDrag = () => { if (dragging && dragAcc) sendTurnDeg(Math.max(-60, Math.min(60, dragAcc))); dragging = false; dragAcc = 0; };
     $('lvSvg').addEventListener('pointerup', endDrag);
     $('lvSvg').addEventListener('pointercancel', endDrag);
     refreshSpinUi();

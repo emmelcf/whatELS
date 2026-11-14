@@ -534,30 +534,6 @@
     return { count: count, doc: actual };
   }
 
-  function recalcTurnLimits(){
-    if(state.turnDir === 'CHUCK'){
-      state.zLeft = state.turnLength;
-      state.zRight = 0.000;
-      setStatusMsg('ENVELOPE APPLIED: CHUCK SHOULDER SET TO ' + lenStr(state.zLeft) + ' ' + unitLabel());
-    } else {
-      state.zRight = state.turnLength;
-      state.zLeft = 0.000;
-      setStatusMsg('ENVELOPE APPLIED: TAIL SHOULDER SET TO ' + lenStr(state.zRight) + ' ' + unitLabel());
-    }
-  }
-
-  function recalcFaceLimits(){
-    if(state.faceDir === 'CENTER'){
-      state.xLeft = state.faceStroke;
-      state.xRight = 0.000;
-      setStatusMsg('ENVELOPE APPLIED: CENTER STOP SET TO ' + lenStr(state.xLeft) + ' ' + unitLabel());
-    } else {
-      state.xRight = state.faceStroke;
-      state.xLeft = 0.000;
-      setStatusMsg('ENVELOPE APPLIED: RETRACT STOP SET TO ' + lenStr(state.xRight) + ' ' + unitLabel());
-    }
-  }
-
   function renderDynamicDeck(){
     var deck = $('dynamicDeck');
     var isRun = state.runState === 'running';
@@ -1206,7 +1182,6 @@
       });
       $('fld-turnDir').addEventListener('click', function(){
         state.turnDir = state.turnDir === 'CHUCK' ? 'TAIL' : 'CHUCK';
-        recalcTurnLimits();
         updateStatusMsg();
         render(true);
       });
@@ -1221,7 +1196,6 @@
     } else if(state.mode === 'FACING'){
       $('fld-faceDir').addEventListener('click', function(){
         state.faceDir = state.faceDir === 'CENTER' ? 'RETRACT' : 'CENTER';
-        recalcFaceLimits();
         updateStatusMsg();
         render(true);
       });
@@ -1309,45 +1283,28 @@
   function buildInceptionBundle(){
     var bundle = [];
     if(state.mode === 'GEARBOX'){
-      var ax = state.activeFeedAxis === 'X' ? 'X' : 'Z';
+      var isSync = (state.gearboxMode === 'SYNC');
+      var syncParam = isSync ? '1' : '0';
+      var dirZ = state.gearDirZ === 'FWD' ? 'CHUCK' : 'TAIL';
+      var dirX = state.gearDirX === 'IN' ? 'CENTER' : 'RETRACT';
       if(state.activeFeedAxis === 'Z+X'){
-        // Compound taper/cone mode
-        bundle.push('CMD.mode=cone');
-        if(state.gearTaperPresetIdx >= 0 && TAPER_PRESETS[state.gearTaperPresetIdx]){
-          var p = TAPER_PRESETS[state.gearTaperPresetIdx];
-          bundle.push('CMD.taperPreset=' + state.gearTaperPresetIdx + ',' + p.angle + ',' + (1.0 / p.ratio));
-        } else if(state.gearTaperAuthMode === 'ANGLE'){
-          bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || 1.432));
-        } else {
-          var rVal = state.gearTaperAuthVal || (state.gearTaperRatio > 0 ? (1.0 / state.gearTaperRatio) : 20.0);
-          bundle.push('CMD.taperRatio=' + rVal);
+        var feedRateDu = isSync
+          ? Math.round((state.gearPitchZ || 0.15) * 10000.0)
+          : Math.round((state.gearAsyncSpeed || 150) * 10000.0);
+        var diamRatio = state.gearTaperRatio || 0.05;
+        var taperDu = Math.max(1, Math.round((diamRatio / 2.0) * 10000.0));
+        var zxCmd = 'CMD.startFeed=axis:ZX,sync:' + syncParam + ',feed:' + feedRateDu + ',dir:' + dirZ + ',xdir:' + dirX + ',taper:' + taperDu;
+        if(state.gearTargetDist && state.gearTargetDist > 0){
+          zxCmd += ',dist:' + Math.round(state.gearTargetDist * 10000.0);
         }
-        var taperPitch = state.gearPitchZ || 0.15;
-        bundle.push('CMD.feedMm=' + taperPitch);
+        bundle.push(zxCmd);
       } else {
-        // Key-Value Atomic Motion Invocation (ADR 0001 & ADR 0002)
-        var isSync = (state.gearboxMode === 'SYNC');
-        var syncParam = isSync ? '1' : '0';
-        // Cartesian direction semantics:
-        // Z: CHUCK (-1), TAIL (+1)
-        // X: CENTER (-1), RETRACT (+1)
-        var dirSemantic = (ax === 'X') ? (state.gearDirX === 'IN' ? 'CENTER' : 'RETRACT') : (state.gearDirZ === 'FWD' ? 'CHUCK' : 'TAIL');
-        
-        var feedRateDu = 1000;
-        if(isSync){
-          if(state.gearThreadUnit === 'tpi'){
-            var tpiVal = state.gearPitchZ_tpi || +(25.4 / (state.gearPitchZ || 2.0)).toFixed(2);
-            feedRateDu = Math.round(254000.0 / tpiVal);
-          } else {
-            var p = (ax === 'X') ? state.gearPitchX : state.gearPitchZ;
-            feedRateDu = Math.round((p || 0.1) * 10000.0);
-          }
-        } else {
-          // ASYNC velocity: convert mm/min to deci-microns/min
-          var speedMm = state.gearAsyncSpeed || 150;
-          feedRateDu = Math.round(speedMm * 10000.0);
-        }
-        
+        var ax = state.activeFeedAxis === 'X' ? 'X' : 'Z';
+        var dirSemantic = (ax === 'X') ? dirX : dirZ;
+        var pitchMm = (ax === 'X') ? (state.gearPitchX || 0.1) : (state.gearPitchZ || 0.1);
+        var feedRateDu = isSync
+          ? Math.round(pitchMm * 10000.0)
+          : Math.round((state.gearAsyncSpeed || 150) * 10000.0);
         var cmd = 'CMD.startFeed=axis:' + ax + ',sync:' + syncParam + ',feed:' + feedRateDu + ',dir:' + dirSemantic;
         if(state.gearTargetDist && state.gearTargetDist > 0){
           cmd += ',dist:' + Math.round(state.gearTargetDist * 10000.0);
@@ -1355,59 +1312,42 @@
         bundle.push(cmd);
       }
     } else if(state.mode === 'TURNING'){
-      bundle.push('CMD.mode=turn');
-      if(state.zMin !== null && state.zMin !== undefined){
-        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
-      }
-      if(state.zMax !== null && state.zMax !== undefined){
-        bundle.push('CMD.axisLimitDu=Z,0,' + Math.round(state.zMax * 10000.0));
-      }
-      if(state.xMinDia !== null && state.xMinDia !== undefined){
-        var radMm = (state.xRep === 'diameter') ? state.xMinDia / 2.0 : state.xMinDia;
-        bundle.push('CMD.axisLimitDu=X,1,' + Math.round(radMm * 10000.0));
-      }
-      if(state.turnPitch){
-        bundle.push('CMD.feedMm=' + state.turnPitch);
-      }
+      var zStartDu = Math.round((state.z || 0) * 10000.0);
+      var zEndDu = Math.round(((state.z || 0) + (state.turnDir === 'CHUCK' ? -1 : 1) * (state.turnLength || 0)) * 10000.0);
+      var xStartDu = Math.round(((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) || 0) * 10000.0);
+      var docDu = Math.max(1, Math.round((state.turnMaxDoc || 0.25) * 10000.0));
+      var feedDu = Math.max(1, Math.round((state.turnPitch || 0.15) * 10000.0));
+      var passes = Math.max(1, state.turnPasses || 1);
+      bundle.push('CMD.startCycle=mode:turn,feed:' + feedDu + ',doc:' + docDu + ',zStart:' + zStartDu + ',zEnd:' + zEndDu + ',xStart:' + xStartDu + ',xClear:' + (xStartDu + 10000) + ',passes:' + passes);
     } else if(state.mode === 'FACING'){
-      bundle.push('CMD.mode=face');
-      if(state.xMinDia !== null && state.xMinDia !== undefined){
-        var radMm = (state.xRep === 'diameter') ? state.xMinDia / 2.0 : state.xMinDia;
-        bundle.push('CMD.axisLimitDu=X,1,' + Math.round(radMm * 10000.0));
-      }
-      if(state.zMin !== null && state.zMin !== undefined){
-        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
-      }
-      if(state.facePitch){
-        bundle.push('CMD.feedMm=' + state.facePitch);
-      }
+      var xStartDu = Math.round(((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) || 0) * 10000.0);
+      var xEndDu = Math.round(Math.max(0, (xStartDu / 10000.0) - (state.faceStroke || 0)) * 10000.0);
+      var zStartDu = Math.round((state.z || 0) * 10000.0);
+      var zEndDu = Math.round(((state.z || 0) - (state.faceTotalDepth || 0)) * 10000.0);
+      var docDu = Math.max(1, Math.round((state.faceMaxDoc || 0.2) * 10000.0));
+      var feedDu = Math.max(1, Math.round((state.facePitch || 0.1) * 10000.0));
+      bundle.push('CMD.startCycle=mode:face,doc:' + docDu + ',feed:' + feedDu + ',xStart:' + xStartDu + ',xEnd:' + xEndDu + ',zStart:' + zStartDu + ',zEnd:' + zEndDu + ',retract:10000');
     } else if(state.mode === 'THREADING'){
-      bundle.push('CMD.mode=thread');
-      if(state.threadUnit === 'tpi'){
-        var tpi = state.threadTpiVal || (state.pitch > 0 ? +(25.4 / state.pitch).toFixed(2) : 13.0);
-        bundle.push('CMD.feedTpi=' + tpi);
-      } else {
-        bundle.push('CMD.feedMm=' + (state.pitch || 1.5));
-      }
-      if(state.zMin !== null && state.zMin !== undefined){
-        bundle.push('CMD.axisLimitDu=Z,1,' + Math.round(state.zMin * 10000.0));
-      }
-      if(state.zMax !== null && state.zMax !== undefined){
-        bundle.push('CMD.axisLimitDu=Z,0,' + Math.round(state.zMax * 10000.0));
-      }
+      var pitchDu = Math.max(1, Math.round((state.pitch || 1.5) * 10000.0));
+      var depthDu = Math.max(1, Math.round((state.threadTotalDepth || 0.8) * 10000.0));
+      var passes = Math.max(1, state.threadPassCount || 6);
+      var zStartDu = Math.round((state.z || 0) * 10000.0);
+      var zEndDu = Math.round(((state.z || 0) + (state.threadDir === 'CHUCK' ? -1 : 1) * (state.threadLength || 20)) * 10000.0);
+      var xClearDu = Math.round(((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) || 0) * 10000.0) + 10000;
+      bundle.push('CMD.startCycle=mode:thread,pitch:' + pitchDu + ',depth:' + depthDu + ',passes:' + passes + ',spring:1,angle:29.5,zStart:' + zStartDu + ',zEnd:' + zEndDu + ',xClear:' + xClearDu);
     } else if(state.mode === 'TAPER'){
-      bundle.push('CMD.mode=cone');
-      bundle.push('CMD.taperAngle=' + (state.gearTaperAuthVal || state.gearTaperAngle || state.taperAngle || 1.432));
-      bundle.push('CMD.feedMm=' + (state.gearPitchZ || state.taperPitch || 0.15));
-    } else {
-      var modeMap = {
-        'JOYSTICK': 'JOYSTICK',
-        'CUTOFF': 'CUT',
-        'SLOTTING': 'SLOT',
-        'SPHERE': 'ELLIPSE'
-      };
-      var m = modeMap[state.mode] || state.mode.toLowerCase();
-      bundle.push('CMD.mode=' + m);
+      var feedDu = Math.max(1, Math.round((state.gearPitchZ || state.taperPitch || 0.15) * 10000.0));
+      var angle = state.gearTaperAuthVal || state.gearTaperAngle || state.taperAngle || 1.432;
+      var zStartDu = Math.round((state.z || 0) * 10000.0);
+      var zEndDu = Math.round(((state.z || 0) - (state.taperLen || 20)) * 10000.0);
+      var xStartDu = Math.round(((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) || 0) * 10000.0);
+      bundle.push('CMD.startCycle=mode:taper,angle:' + angle + ',feed:' + feedDu + ',zStart:' + zStartDu + ',zEnd:' + zEndDu + ',xStart:' + xStartDu);
+    } else if(state.mode === 'CUTOFF'){
+      var feedDu = Math.max(1, Math.round((state.cutoffFeed || 0.05) * 10000.0));
+      var peckDu = Math.max(1, Math.round((state.cutoffPeck || 1.0) * 10000.0));
+      var xStartDu = Math.round(((state.xRep === 'diameter' ? state.xDia / 2.0 : state.xDia) || 0) * 10000.0);
+      var zPosDu = Math.round((state.z || 0) * 10000.0);
+      bundle.push('CMD.startCycle=mode:cutoff,feed:' + feedDu + ',peck:' + peckDu + ',retract:5000,xStart:' + xStartDu + ',xEnd:0,zPos:' + zPosDu);
     }
     return bundle;
   }
@@ -3515,9 +3455,6 @@
           JOG_STEPS_IN[state.stepIdx % JOG_STEPS_IN.length] = stepVal;
         }
         var stepDu = Math.round((state.unit === 'in' ? stepVal * 254000.0 : stepVal * 10000.0));
-        if(window.whatElsClient){
-          window.whatElsClient.setJogStepDu(stepDu);
-        }
         if(window.Alpine && Alpine.store('machine')){
           Alpine.store('machine').jogStepDu = stepDu;
         }
@@ -3562,7 +3499,6 @@
       }
       else if(kpTarget==='turnLength'){ 
         state.turnLength = Math.abs(mm);
-        recalcTurnLimits();
       }
       else if(kpTarget==='turnTotalDepth'){ 
         state.turnTotalDepth = Math.abs(mm);
@@ -3583,7 +3519,6 @@
       }
       else if(kpTarget==='faceStroke'){ 
         state.faceStroke = Math.abs(mm);
-        recalcFaceLimits();
       }
       else if(kpTarget==='faceTotalDepth'){ 
         state.faceTotalDepth = Math.abs(mm);
@@ -3673,7 +3608,7 @@
       else if(kpTarget==='taperAngle'){ state.taperAngle = v; }
       else if(kpTarget==='gearTaperAngle'){
         state.gearTaperAngle = Math.abs(v);
-        state.gearTaperRatio = +(2 * Math.tan((state.gearTaperAngle * Math.PI) / 180)).toFixed(5);
+        state.gearTaperRatio = +convertTaperValue(state.gearTaperAngle, 'ANGLE', 'DECIMAL').toFixed(5);
         var matchIdx = -1;
         for(var i = 0; i < TAPER_PRESETS.length; i++){
           if(Math.abs(TAPER_PRESETS[i].angle - state.gearTaperAngle) < 0.05){

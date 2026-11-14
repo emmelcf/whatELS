@@ -43,6 +43,8 @@ function registerMachineStore() {
     tpPreset: -1,
     feedStepDu: 500,    // 0.05 mm/rev = 500 du
     jogStepDu: 10000,   // 1.0 mm = 10000 du
+    direction: 1,       // Intent travel direction (+1 or -1)
+    targetDistDu: -1,   // Target travel distance in du (-1 = continuous)
     feedRev: false,
 
     // -------------------------------------------------------------
@@ -223,8 +225,14 @@ function registerMachineStore() {
 
     cycleJogStep() {
       const c = window.whatElsClient;
-      if (c) {
+      if (c && typeof c.cycleJogStep === 'function') {
+        c.cycleJogStep();
+      } else if (c && typeof c.cycleStep === 'function') {
         c.cycleStep();
+      } else {
+        const stepsDu = this.measure === 1 ? [25400, 2540, 254] : [10000, 1000, 100];
+        const idx = stepsDu.indexOf(this.jogStepDu);
+        this.jogStepDu = stepsDu[(idx + 1) % stepsDu.length];
       }
     },
 
@@ -264,7 +272,7 @@ function registerMachineStore() {
           if (k === 'dia' || k === 'diameter') continue; // Decoupled: Diameter/Radius is purely client-local
           if (k in this && typeof this[k] !== 'function') {
             if (k === 'zLeftDu' || k === 'zRightDu' || k === 'xUpDu' || k === 'xDownDu') {
-              if (c[k] === undefined || c[k] === null || c[k] === 'undefined' || isNaN(Number(c[k]))) {
+              if (c[k] === undefined || c[k] === null || c[k] === 'undefined' || c[k] === 'NONE' || isNaN(Number(c[k]))) {
                 this[k] = null;
               } else {
                 this[k] = Number(c[k]);
