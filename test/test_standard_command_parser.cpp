@@ -118,7 +118,7 @@ long SettingsService::getJogStepDu() { return 1000; }
 
 static UnifiedGearboxMode s_gearboxMode;
 IELSMode* ModeRegistry::getActiveMode() {
-  return &s_gearboxMode;
+  return nullptr;
 }
 
 UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
