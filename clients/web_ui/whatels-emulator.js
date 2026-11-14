@@ -62,6 +62,7 @@ class WhatelsEmulator {
     this.gearAxis = 'Z';
     this.gearSync = true;
     this.gearDir = -1;
+    this.targetDistDu = -1;
 
     // Pass cycle progression
     this.cycleStage = 0;
@@ -125,12 +126,36 @@ class WhatelsEmulator {
       this.isOn = true;
       return;
     }
-    if (line === 'PROPERTIES.modes') {
+    if (line.startsWith('CLIENT.hello=')) {
+      const payload = line.substring(13);
+      let clientType = '';
+      for (const pair of payload.split(',')) {
+        const idx = pair.indexOf(':');
+        if (idx === -1) continue;
+        const k = pair.substring(0, idx).trim();
+        const v = pair.substring(idx + 1).trim().replace(/^"|"$/g, '');
+        if (k === 'type') clientType = v;
+      }
+      if (!clientType) {
+        this._emitRaw('ERR:CLIENT.hello:MISSING_PARAM:type\n');
+      } else {
+        this._emitRaw(`OK:CLIENT.hello:session_id=1,type=${clientType},controllerVer=H${this.HARDWARE_VERSION}V${this.SOFTWARE_VERSION},perms=0x000F\n`);
+      }
+      return;
+    }
+    if (line === 'PROPERTIES.modes' || line === 'PROPERTIES.modes=all') {
       const disc = {
         active_mode_id: 50,
         active_mode_slug: "gearbox",
         modes: [
-          { id: 50, slug: "gearbox", name: "Electronic Gearbox", category: "COMPOSITE", required_hardware: 9, live_permissions: 15 }
+          {
+            id: 50,
+            slug: "gearbox",
+            name: "Electronic Gearbox",
+            category: "COMPOSITE",
+            required_hardware: ["SPINDLE_ENCODER", "MOTOR_Z"],
+            live_permissions: ["FEED_HOLD", "LIVE_FEED_TRIM", "LIVE_STEP_CYCLE", "LIVE_RPM_OVERRIDE"]
+          }
         ]
       };
       this._emitRaw(`OK:PROPERTIES.modes:${JSON.stringify(disc)}\n`);
@@ -140,6 +165,8 @@ class WhatelsEmulator {
     // 2. Canonical CMD.* Handlers
     if (line.startsWith('CMD.')) {
       const cmd = line.substring(4);
+      const eqIdx = cmd.indexOf('=');
+      const cmdName = eqIdx !== -1 ? cmd.substring(0, eqIdx) : cmd;
       if (cmd.startsWith('get=')) {
         this._emitDomainQuery(cmd);
         return;
@@ -178,6 +205,7 @@ class WhatelsEmulator {
         this.gearAxis = ax;
         this.gearSync = sync;
         this.gearDir = dir;
+        this.targetDistDu = dist;
         this.mode = sync ? (ax === 'X' ? 'XGEAR' : 'GEAR') : 'ASYNC';
         if (sync) {
           this.dupr = (dir < 0 ? 1 : -1) * Math.round(rate);
@@ -189,11 +217,20 @@ class WhatelsEmulator {
         this.isOn = true;
         this.spindleRunning = sync;
         this._lastTelemetryStr = '';
+        this._emitRaw('OK:CMD.startFeed\n');
         return;
       }
       if (cmd === 'stop') {
         this.isOn = false;
+        this.heldMoveAction = 0;
         this._lastTelemetryStr = '';
+        this._emitRaw('OK:CMD.stop\n');
+        return;
+      }
+      if (cmd === 'hold' || cmd === 'resume' || cmd === 'step' || cmd === 'ping') {
+        if (cmd === 'hold') this.isOn = false;
+        if (cmd === 'resume') this.isOn = true;
+        this._emitRaw(`OK:CMD.${cmdName}\n`);
         return;
       }
       if (cmd.startsWith('feedDupr=')) {
@@ -267,16 +304,23 @@ class WhatelsEmulator {
         const ratio = parseFloat(parts[2]) || 0.0;
         this.tpVal = ratio > 0 ? ratio : deg;
         this.coneRatio = ratio > 0 ? (1.0 / ratio) : (2.0 * Math.tan(deg * (Math.PI / 180.0)));
-      } else if (cmd.startsWith('spindleSim=')) {
-        const parts = cmd.substring(11).split(',');
-        this.simActive = parts[0].trim() === '1';
-        this.simRpm = parseFloat(parts[1]) || 0;
+      } else if (cmd.startsWith('simEncoder=')) {
+        const raw = cmd.substring(11).trim();
+        const val = raw.startsWith('active:') ? raw.substring(7).trim() : raw;
+        this.simActive = val === '1' || val === 'true';
         this.simHeartbeat = Date.now();
         if (!this.simActive) { this.simRpm = 0; this.simPendingDeg = 0; }
-        this._emitRaw(`SIM.spindle=${this.simActive ? 1 : 0},${this.simRpm.toFixed(1)}\n`);
-      } else if (cmd.startsWith('spindleSimTurn=')) {
+      } else if (cmd.startsWith('simRpm=')) {
+        const raw = cmd.substring(7).trim();
+        const val = raw.startsWith('rpm:') ? raw.substring(4).trim() : raw;
+        this.simRpm = parseFloat(val) || 0;
+        this.simHeartbeat = Date.now();
+      } else if (cmd.startsWith('simPulses=')) {
+        const raw = cmd.substring(10).trim();
+        const val = raw.startsWith('pulses:') ? raw.substring(7).trim() : raw;
+        const pulses = parseInt(val, 10) || 0;
         if (this.simActive) {
-          this.simPendingDeg += parseFloat(cmd.substring(15)) || 0;
+          this.simPendingDeg += (pulses / this.ENCODER_STEPS) * 360.0;
           this.simHeartbeat = Date.now();
         }
       } else if (cmd.startsWith('axisZero=')) {
@@ -333,6 +377,7 @@ class WhatelsEmulator {
         this.measure = (m === 1) ? 'IN' : ((m === 2) ? 'TPI' : 'MM');
       }
       this._lastTelemetryStr = '';
+      this._emitRaw(`OK:CMD.${cmdName}\n`);
       return;
     }
 
@@ -567,7 +612,7 @@ class WhatelsEmulator {
     if (this.isOn && this.mode === 'ASYNC') {
       const speedDuPerMin = this.asyncSpeed || 1500000;
       const dir = this.asyncDir || -1;
-      const duDelta = dir * (speedDuPerMin * (deltaMillis / 60000.0));
+      const duDelta = dir * (speedDuPerMin * (50 / 60000.0));
       if (this.gearAxis === 'X') {
         this.x += duDelta;
         if (dir < 0 && this.xLeft !== null && this.x <= this.xLeft) { this.x = this.xLeft; this.isOn = false; }
@@ -706,7 +751,9 @@ class WhatelsEmulator {
              `I.tpPreset=${this.tpPreset}\n` +
              `I.feedStepDu=${this.feedStepDu}\n` +
              `I.jogStepDu=${this.moveStep}\n` +
-             `I.feedRev=${this.dupr < 0 ? 1 : 0}\n`;
+             `I.feedRev=${this.dupr < 0 ? 1 : 0}\n` +
+             `I.direction=${this.gearDir < 0 ? -1 : 1}\n` +
+             `I.targetDistDu=${this.targetDistDu !== undefined ? Math.round(this.targetDistDu) : -1}\n`;
     }
     if (domainMask & 0x04) { // Cycle (C)
       out += `C.passes=${this.turnPasses}\n` +
@@ -819,4 +866,9 @@ class WhatelsEmulator {
   }
 }
 
-window.WhatelsEmulator = WhatelsEmulator;
+if (typeof globalThis !== 'undefined') {
+  globalThis.WhatelsEmulator = WhatelsEmulator;
+}
+if (typeof window !== 'undefined') {
+  window.WhatelsEmulator = WhatelsEmulator;
+}

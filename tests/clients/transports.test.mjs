@@ -4,6 +4,12 @@ import assert from 'node:assert/strict';
 import { ClientTransport } from '../../clients/sdk/js/transports/client-transport.js';
 import { WebSocketTransport } from '../../clients/sdk/js/transports/websocket-transport.js';
 import { EmulatorTransport } from '../../clients/sdk/js/transports/emulator-transport.js';
+import {
+  WhatelsClient,
+  ControllerError,
+  CommandTimeoutError,
+  TransportDisconnectedError
+} from '../../clients/sdk/js/whatels-client.js';
 
 test('ClientTransport base class invariants', async (t) => {
   const transport = new ClientTransport();
@@ -164,7 +170,7 @@ test('WebSocketTransport connection, line framing, and exponential backoff sched
   }
 });
 
-test('WhatelsService delegates I/O through ClientTransport', async (t) => {
+test('WhatelsService delegates I/O through WhatelsClient & ClientTransport', async (t) => {
   await import('../../clients/web_ui/whatels-service.js');
   const ServiceClass = globalThis.WhatelsService;
   assert.ok(ServiceClass, 'WhatelsService should be defined');
@@ -182,22 +188,50 @@ test('WhatelsService delegates I/O through ClientTransport', async (t) => {
     }
     async send(line) {
       this.sent.push(line);
+      if (line.startsWith('CLIENT.hello=')) {
+        queueMicrotask(() => {
+          this._emitLine('OK:CLIENT.hello:session_id=7,type=webui,controllerVer=H5V38,perms=0x000F');
+        });
+      } else if (line.startsWith('CMD.stop')) {
+        queueMicrotask(() => {
+          this._emitLine('OK:CMD.stop');
+        });
+      }
     }
   }
 
   const mockTransport = new MockTestTransport();
   const service = new ServiceClass({ transport: mockTransport });
 
-  service.connect();
+  await service.connect();
   assert.equal(service.state.connected, true);
+  assert.equal(service.client.sessionId, 7);
 
   // Send raw command
   service.sendRaw('CMD.stop\n');
-  assert.deepEqual(mockTransport.sent, ['STATE.get=ALL\n', 'SYS.get=info\n', 'CMD.stop\n']);
+  assert.ok(mockTransport.sent.some((l) => l.startsWith('CLIENT.hello=')));
+  assert.ok(mockTransport.sent.includes('STATE.get=ALL\n'));
+  assert.ok(mockTransport.sent.includes('SYS.get=info\n'));
+  assert.ok(mockTransport.sent.includes('CMD.stop\n'));
+
+  // startCycle must NOT emit CMD.on=1
+  const beforeCount = mockTransport.sent.length;
+  service.startCycle(['CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK']);
+  const afterLines = mockTransport.sent.slice(beforeCount);
+  assert.deepEqual(afterLines, ['CMD.startFeed=axis:Z,sync:1,feed:15000,dir:CHUCK\n']);
+  assert.equal(afterLines.some((l) => l.includes('CMD.on=')), false);
+
+  // cycleMeasure and cycleStep are purely client-local
+  const txCountBeforeLocal = mockTransport.sent.length;
+  service.cycleMeasure();
+  assert.equal(service.state.measure, 'IN');
+  service.cycleStep();
+  assert.equal(service.canonical.jogStepDu, 1000);
+  assert.equal(mockTransport.sent.length, txCountBeforeLocal);
 
   // Handle incoming line
   let telemetryFired = false;
-  service.addEventListener('telemetry', (e) => {
+  service.addEventListener('telemetry', () => {
     telemetryFired = true;
   });
   mockTransport._emitLine('K.zDu=-250000');
@@ -206,6 +240,141 @@ test('WhatelsService delegates I/O through ClientTransport', async (t) => {
 
   service.disconnect();
   assert.equal(service.state.connected, false);
+});
+
+test('WhatelsClient handshake, OK/ERR correlation, timeout, jog watchdog, and teardown', async (t) => {
+  class LoopbackMockTransport extends ClientTransport {
+    constructor() {
+      super();
+      this.sent = [];
+      this.autoAckHello = true;
+    }
+    async connect() {
+      this._emitStatus('connected');
+    }
+    async disconnect() {
+      this._emitStatus('disconnected');
+    }
+    async send(line) {
+      this.sent.push(line);
+      if (this.autoAckHello && line.startsWith('CLIENT.hello=')) {
+        queueMicrotask(() => {
+          this._emitLine('OK:CLIENT.hello:session_id=42,type=webui,controllerVer=H5V38,perms=0x001F');
+        });
+      }
+    }
+  }
+
+  const transport = new LoopbackMockTransport();
+  const client = new WhatelsClient(transport, { timeoutMs: 60, handshakeTimeoutMs: 60 });
+
+  const connEvents = [];
+  client.addEventListener('connection', (e) => connEvents.push(e.detail));
+
+  await client.connect();
+  assert.equal(client.connected, true);
+  assert.equal(client.sessionId, 42);
+  assert.equal(client.perms, 0x001F);
+  assert.equal(connEvents.at(-1).connected, true);
+  assert.equal(transport.sent[0].startsWith('CLIENT.hello=type:webui,ver:1.0.0,label:'), true);
+  assert.equal(transport.sent[1], 'STATE.get=ALL\n');
+
+  // OK correlation + canonical command formatting
+  const feedPromise = client.startFeed({ axis: 'ZX', sync: 1, feed: 10000, dir: 'CHUCK', xdir: 'RETRACT', taper: 1000, dist: 50000 });
+  assert.equal(transport.sent.at(-1), 'CMD.startFeed=axis:ZX,sync:1,feed:10000,dir:CHUCK,xdir:RETRACT,taper:1000,dist:50000\n');
+  transport._emitLine('OK:CMD.startFeed');
+  await feedPromise;
+
+  // ERR correlation -> ControllerError
+  const nudgePromise = client.feedNudge(-1);
+  assert.equal(transport.sent.at(-1), 'CMD.feedNudge=-1\n');
+  transport._emitLine('ERR:CMD.feedNudge:MOTION_LOCKED');
+  await assert.rejects(nudgePromise, (err) => err instanceof ControllerError && err.reason === 'MOTION_LOCKED');
+
+  // Timeout -> CommandTimeoutError
+  const timeoutPromise = client.getCatalog('path=threads');
+  assert.equal(transport.sent.at(-1), 'PROPERTIES.catalog=path=threads\n');
+  await assert.rejects(timeoutPromise, (err) => err instanceof CommandTimeoutError);
+
+  // Catalog & profile commands
+  const saveP = client.catalogSave({ domain: 'threads', id: 'custom_m12' });
+  assert.ok(transport.sent.at(-1).startsWith('SETTINGS.catalogSave='));
+  transport._emitLine('OK:SETTINGS.catalogSave');
+  await saveP;
+
+  const delP = client.catalogDelete({ domain: 'threads', id: 'custom_m12' });
+  assert.ok(transport.sent.at(-1).startsWith('SETTINGS.catalogDelete='));
+  transport._emitLine('OK:SETTINGS.catalogDelete');
+  await delP;
+
+  const profP = client.setProfile('wm210v');
+  assert.equal(transport.sent.at(-1), 'SETTINGS.set=profile:wm210v\n');
+  transport._emitLine('OK:SETTINGS.set');
+  await profP;
+
+  // Log multiplexing & telemetry
+  const logs = [];
+  client.addEventListener('log', (e) => logs.push(e.detail));
+  transport._emitLine('# Diagnostic comment');
+  assert.deepEqual(logs, ['# Diagnostic comment']);
+
+  const snapshots = [];
+  client.addEventListener('snapshot', (e) => snapshots.push(e.detail));
+  transport._emitLine('K.zDu=12345|I.direction=-1|I.targetDistDu=50000');
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].snapshot.kinematics.zDu, 12345);
+  assert.equal(snapshots[0].snapshot.intent.direction, -1);
+  assert.equal(snapshots[0].snapshot.intent.targetDistDu, 50000);
+
+  // 200ms jog heartbeat watchdog
+  const jogP = client.jogHold('Z', 'CHUCK');
+  transport._emitLine('OK:CMD.jogHold');
+  await jogP;
+  await new Promise((r) => setTimeout(r, 460));
+  const jogHolds = transport.sent.filter((l) => l === 'CMD.jogHold=Z,CHUCK\n');
+  assert.ok(jogHolds.length >= 2, `Expected >= 2 jogHold heartbeats, got ${jogHolds.length}`);
+
+  // Unconditional disconnect teardown cancels timers & rejects pending promises
+  const pendingStop = client.stop();
+  await transport.disconnect();
+  await assert.rejects(pendingStop, (err) => err instanceof TransportDisconnectedError);
+  assert.equal(client.connected, false);
+  assert.equal(client.sessionId, null);
+
+  // Handshake timeout drops transport
+  transport.autoAckHello = false;
+  await assert.rejects(client.connect(), (err) => err instanceof CommandTimeoutError);
+  assert.equal(transport.isConnected(), false);
+});
+
+test('WhatelsEmulator handles CLIENT.hello, STATE.get=ALL, PROPERTIES.modes arrays, and sim* commands', async (t) => {
+  await import('../../clients/web_ui/whatels-emulator.js');
+  const EmuClass = globalThis.WhatelsEmulator;
+  assert.ok(EmuClass, 'WhatelsEmulator should be defined');
+
+  const emu = new EmuClass();
+  const transport = new EmulatorTransport({ emulator: emu });
+  const client = new WhatelsClient(transport);
+
+  try {
+    await client.connect();
+    assert.equal(client.connected, true);
+    assert.equal(client.sessionId, 1);
+
+    const modesJson = await client.getModes();
+    const modesObj = JSON.parse(modesJson);
+    assert.ok(Array.isArray(modesObj.modes[0].required_hardware));
+    assert.ok(Array.isArray(modesObj.modes[0].live_permissions));
+    assert.equal(typeof modesObj.modes[0].required_hardware[0], 'string');
+
+    await client.simEncoder(1);
+    await client.simRpm(600);
+    await client.simPulses(120);
+    await client.startFeed({ axis: 'Z', sync: 1, feed: 15000, dir: 'CHUCK', dist: 20000 });
+    await client.stop();
+  } finally {
+    await client.disconnect();
+  }
 });
 
 test('Transports expose standard type property and handle streaming chunks and errors', async (t) => {
