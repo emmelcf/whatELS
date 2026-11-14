@@ -117,6 +117,10 @@ bool SettingsService::setFeedrateDupr(long /*dupr*/, bool /*preserveDirection*/)
 long SettingsService::getJogStepDu() { return 1000; }
 
 static UnifiedGearboxMode s_gearboxMode;
+IELSMode* ModeRegistry::getActiveMode() {
+  return &s_gearboxMode;
+}
+
 UnifiedGearboxMode* ModeRegistry::getGearboxMode() {
   return &s_gearboxMode;
 }
@@ -895,7 +899,8 @@ int main() {
 
   static MockStepperHAL mockStepper;
   static MockSpindleEncoderHAL mockEncoder;
-  MotionEngine engine(&mockStepper, &mockEncoder);
+  MotionEngine::instance().setStepperHAL(&mockStepper);
+  MotionEngine::instance().setEncoderHAL(&mockEncoder);
 
   testCleanBreakQueries();
   testCycleContract();
