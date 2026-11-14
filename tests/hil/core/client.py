@@ -26,6 +26,7 @@ class ControllerState:
     is_moving: bool = False
     mode: int = 0
     estop: int = 0
+    perms: int = 0
     z_left_du: int | None = None
     z_right_du: int | None = None
     x_up_du: int | None = None
@@ -38,14 +39,17 @@ class ControllerState:
     th_pitch: float = 0.0
     tp_mode: int = 0
     tp_val: float = 0.0
+    direction: int = 0
+    target_dist_du: int = -1
 
     # Properties Domain (P.*)
     screw_z_du: int = 20000
     motor_steps_z: int = 800
-    encoder_ppr: int = 1200  # Default 1200 lines (4x quadrature = 4800 counts/spindle rev)
+    encoder_ppr: int = 2400  # Effective quadrature counts per spindle revolution = encoder_ppr * 2
 
-    # Raw key-value dictionary of all received wire lines
+    # Raw key-value dictionary of all received wire lines and monotonic frame counter
     raw: dict[str, str] = field(default_factory=dict)
+    telemetry_seq: int = 0
 
 
 class WhatElsClient:
@@ -86,8 +90,22 @@ class WhatElsClient:
 
         self._rx_task = asyncio.create_task(self._rx_loop())
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-        # Request sysinfo to ensure line is open and hydrated
-        await self.send("SYS.get=info", wait_ack=False)
+        try:
+            await self.send(
+                'CLIENT.hello=type:hil,ver:1.0.0,label:"HIL Test Harness"',
+                wait_ack=True,
+                timeout_s=min(timeout_s, 2.0),
+            )
+            # Request full domain state hydration and wait for first telemetry frame
+            await self.send("STATE.get=ALL", wait_ack=False)
+            await self.wait_for(
+                lambda s: s.telemetry_seq > 0,
+                timeout_s=timeout_s,
+                description="initial hydration",
+            )
+        except Exception:
+            await self.disconnect()
+            raise
 
     async def disconnect(self) -> None:
         """Stops active feeds, clears simulation, cancels heartbeat and closes socket cleanly."""
@@ -130,7 +148,8 @@ class WhatElsClient:
     async def send(self, cmd: str, wait_ack: bool = True, timeout_s: float = 2.0, expect_ack: bool | None = None) -> str:
         """Transmits a newline-delimited command frame.
         
-        When wait_ack is True (or expect_ack is True) and cmd starts with CMD., awaits matching 'OK:CMD.<name>' response.
+        When wait_ack is True (or expect_ack is True) and cmd starts with CMD. or CLIENT.,
+        awaits matching 'OK:CMD.<name>' or 'OK:CLIENT.<name>' response.
         Raises CommandRejectedError if firmware rejects with ERR:<reason>.
         """
         if expect_ack is not None:
@@ -143,12 +162,8 @@ class WhatElsClient:
         tag = None
         fut: asyncio.Future | None = None
 
-        if wait_ack and clean_cmd.startswith("CMD."):
-            tag = clean_cmd[4:]
-            if "=" in tag:
-                tag = tag.split("=")[0].strip()
-            else:
-                tag = tag.strip()
+        if wait_ack and (clean_cmd.startswith("CMD.") or clean_cmd.startswith("CLIENT.")):
+            tag = clean_cmd.split("=", 1)[0].strip()
 
             loop = asyncio.get_running_loop()
             fut = loop.create_future()
@@ -162,23 +177,38 @@ class WhatElsClient:
         if fut is not None and tag is not None:
             try:
                 res = await asyncio.wait_for(fut, timeout=timeout_s)
-                return str(res) if isinstance(res, str) else f"OK:CMD.{tag}"
+                return str(res) if isinstance(res, str) else f"OK:{tag}"
             except asyncio.TimeoutError as exc:
                 if tag in self._pending_acks and fut in self._pending_acks[tag]:
                     self._pending_acks[tag].remove(fut)
                 raise TimeoutError(f"Timeout ({timeout_s}s) awaiting ACK for '{cmd}'") from exc
         return ""
 
+    async def wait_next_telemetry(self, timeout_s: float = 1.0) -> ControllerState:
+        """Waits for at least one fresh 50Hz telemetry broadcast frame to arrive."""
+        start_seq = self.state.telemetry_seq
+        return await self.wait_for(
+            lambda s: s.telemetry_seq > start_seq,
+            timeout_s=timeout_s,
+            description="next telemetry frame",
+            require_fresh_frame=False,
+        )
+
     async def wait_for(
         self,
         predicate: Callable[[ControllerState], bool],
         timeout_s: float = 5.0,
         description: str = "condition",
+        require_fresh_frame: bool = False,
     ) -> ControllerState:
         """Asynchronously waits until predicate(self.state) evaluates to True.
 
+        If require_fresh_frame is True, waits for at least one new telemetry packet after invocation.
         Raises TimeoutError with diagnostic state snapshot if timeout expires.
         """
+        if require_fresh_frame:
+            await self.wait_next_telemetry(timeout_s=min(timeout_s, 0.5))
+
         # Fast path check
         if predicate(self.state):
             return self.state
@@ -209,11 +239,11 @@ class WhatElsClient:
 
     def revs_to_pulses(self, revs: float) -> int:
         """Computes exact quadrature pulse counts for `revs` revolutions from controller P.encoderPpr."""
-        cpr = self.state.encoder_ppr * 4 if self.state.encoder_ppr > 0 else 4800
+        cpr = self.state.encoder_ppr * 2 if self.state.encoder_ppr > 0 else 4800
         return int(round(revs * cpr))
 
     async def inject_spindle_revs(self, revs: float, rpm: float = 600.0) -> None:
-        """Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr * 4,
+        """Calculates exact pulse counts for `revs` revolutions based on state.encoder_ppr * 2,
         injects them, and waits for command confirmation.
         """
         total_pulses = self.revs_to_pulses(revs)
@@ -247,23 +277,20 @@ class WhatElsClient:
                         continue
 
                     # 1. Synchronous Command Acknowledgment Handling:
-                    if line.startswith("OK:CMD."):
-                        cmd_name = line[7:].strip()
-                        if "=" in cmd_name:
-                            cmd_name = cmd_name.split("=")[0].strip()
-                        if ":" in cmd_name:
-                            cmd_name = cmd_name.split(":")[0].strip()
-                        if cmd_name in self._pending_acks and self._pending_acks[cmd_name]:
-                            fut = self._pending_acks[cmd_name].pop(0)
+                    if line.startswith("OK:CMD.") or line.startswith("OK:CLIENT."):
+                        payload = line[3:].strip()
+                        cmd_key = payload.split(":", 1)[0].split("=", 1)[0].strip()
+                        if cmd_key in self._pending_acks and self._pending_acks[cmd_key]:
+                            fut = self._pending_acks[cmd_key].pop(0)
                             if not fut.done():
-                                fut.set_result(True)
+                                fut.set_result(line)
                         continue
 
                     if line == "PONG":
-                        if "ping" in self._pending_acks and self._pending_acks["ping"]:
-                            fut = self._pending_acks["ping"].pop(0)
+                        if "CMD.ping" in self._pending_acks and self._pending_acks["CMD.ping"]:
+                            fut = self._pending_acks["CMD.ping"].pop(0)
                             if not fut.done():
-                                fut.set_result(True)
+                                fut.set_result(line)
                         continue
 
                     if line.startswith("ERR:"):
@@ -280,6 +307,7 @@ class WhatElsClient:
                         changed = True
 
                 if changed:
+                    self.state.telemetry_seq += 1
                     # Notify active condition listeners
                     for check_fn in list(self._listeners):
                         check_fn(self.state)
@@ -315,14 +343,16 @@ class WhatElsClient:
                 self.state.mode = int(val)
             elif key == "K.estop":
                 self.state.estop = int(val)
+            elif key == "K.perms":
+                self.state.perms = int(val, 0)
             elif key == "K.zLeftDu":
-                self.state.z_left_du = None if val == "undefined" else int(val)
+                self.state.z_left_du = None if val == "NONE" else int(val)
             elif key == "K.zRightDu":
-                self.state.z_right_du = None if val == "undefined" else int(val)
+                self.state.z_right_du = None if val == "NONE" else int(val)
             elif key == "K.xUpDu":
-                self.state.x_up_du = None if val == "undefined" else int(val)
+                self.state.x_up_du = None if val == "NONE" else int(val)
             elif key == "K.xDownDu":
-                self.state.x_down_du = None if val == "undefined" else int(val)
+                self.state.x_down_du = None if val == "NONE" else int(val)
             elif key == "K.dupr":
                 self.state.dupr = int(val)
             elif key == "K.nextDupr":
@@ -336,6 +366,10 @@ class WhatElsClient:
                 self.state.tp_mode = int(val)
             elif key == "I.tpVal":
                 self.state.tp_val = float(val)
+            elif key == "I.direction":
+                self.state.direction = int(val)
+            elif key == "I.targetDistDu":
+                self.state.target_dist_du = int(val)
             # Properties Domain
             elif key == "P.encoderPpr":
                 self.state.encoder_ppr = int(val)

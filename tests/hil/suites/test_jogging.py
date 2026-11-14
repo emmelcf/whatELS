@@ -14,9 +14,7 @@ class TestManualJogStepPrecision(HilTestCase):
     async def run(self) -> None:
         # 1. 0.100 mm (1,000 du) incremental step jog on Z
         step_1000 = 1000
-        await self.client.send(f"CMD.jogStepDu={step_1000}", wait_ack=True)
-
-        await self.client.send("CMD.jogStep=Z,TAIL", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=Z,{step_1000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.z_du == step_1000,
             timeout_s=4.0,
@@ -25,7 +23,7 @@ class TestManualJogStepPrecision(HilTestCase):
         assert_pos_du(state.z_du, step_1000, tolerance_du=1, axis="Z")
         assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
 
-        await self.client.send("CMD.jogStep=Z,CHUCK", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=Z,{-step_1000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.z_du == 0,
             timeout_s=4.0,
@@ -36,9 +34,7 @@ class TestManualJogStepPrecision(HilTestCase):
 
         # 2. 1.000 mm (10,000 du) incremental step jog on Z
         step_10000 = 10000
-        await self.client.send(f"CMD.jogStepDu={step_10000}", wait_ack=True)
-
-        await self.client.send("CMD.jogStep=Z,TAIL", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=Z,{step_10000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.z_du == step_10000,
             timeout_s=5.0,
@@ -47,7 +43,7 @@ class TestManualJogStepPrecision(HilTestCase):
         assert_pos_du(state.z_du, step_10000, tolerance_du=1, axis="Z")
         assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
 
-        await self.client.send("CMD.jogStep=Z,CHUCK", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=Z,{-step_10000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.z_du == 0,
             timeout_s=5.0,
@@ -57,7 +53,7 @@ class TestManualJogStepPrecision(HilTestCase):
         assert_pos_du(state.x_du, 0, tolerance_du=0, axis="X")
 
         # 3. 1.000 mm (10,000 du) incremental step jog on X
-        await self.client.send("CMD.jogStep=X,RETRACT", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=X,{step_10000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.x_du == step_10000,
             timeout_s=5.0,
@@ -66,7 +62,7 @@ class TestManualJogStepPrecision(HilTestCase):
         assert_pos_du(state.x_du, step_10000, tolerance_du=1, axis="X")
         assert_pos_du(state.z_du, 0, tolerance_du=0, axis="Z")
 
-        await self.client.send("CMD.jogStep=X,CENTER", wait_ack=True)
+        await self.client.send(f"CMD.jogStep=X,{-step_10000}", wait_ack=True)
         state = await self.client.wait_for(
             lambda s: s.x_du == 0,
             timeout_s=5.0,
