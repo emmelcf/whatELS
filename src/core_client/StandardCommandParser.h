@@ -44,12 +44,12 @@ public:
    * @param ctx Calling client session identity and permission bitmask
    * @return Formatted CommandResult
    */
-  core::CommandResult parseAndDispatch(const char* line, size_t length, const ClientContext& ctx);
+  [[nodiscard]] core::CommandResult parseAndDispatch(const char* line, size_t length, const ClientContext& ctx);
 
   /**
    * @brief Formats a CommandResult into a canonical wire ASCII response terminated with \n.
    */
-  static String formatWireResponse(const core::CommandResult& res);
+  [[nodiscard]] static String formatWireResponse(const core::CommandResult& res);
 
 private:
   StandardCommandParser() = default;

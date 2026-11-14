@@ -1,11 +1,31 @@
 #include "PresetService.h"
 #include "SystemPresetsJson.h"
+#include "SystemProfilesJson.h"
+#include "SettingsService.h"
+#include "motion/LatheProfile.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <strings.h>
 #include <vector>
 
-// Helper to split a comma-separated list into tokens
-static std::vector<String> splitTokens(const String& s, char delim = ',') {
+namespace {
+
+bool isSafeSegment(const String& s) {
+  if (s.isEmpty() || s.indexOf("..") != -1 || s.indexOf('/') != -1 || s.indexOf('\\') != -1) {
+    return false;
+  }
+  return true;
+}
+
+void appendUnique(std::vector<String>& list, const String& val) {
+  if (val.isEmpty()) return;
+  for (const auto& existing : list) {
+    if (existing.equalsIgnoreCase(val)) return;
+  }
+  list.push_back(val);
+}
+
+std::vector<String> splitTokens(const String& s, char delim = ',') {
   std::vector<String> tokens;
   int start = 0;
   int end = s.indexOf(delim);
@@ -22,187 +42,207 @@ static std::vector<String> splitTokens(const String& s, char delim = ',') {
   return tokens;
 }
 
-// Helper to extract a query parameter by key, e.g. "path=threads/iso_metric" or "$select=id,name"
-static String extractParam(const char* query, const char* key) {
+String extractParam(const char* query, const char* key) {
   if (!query || !key) return "";
   String q = query;
-  String target = key;
-  target += "=";
+  String target = String(key) + "=";
 
   int idx = q.indexOf(target);
   if (idx == -1) return "";
 
   int start = idx + target.length();
-  // Find delimiter (space, &, or end of string)
   int end = start;
   bool inQuotes = false;
-  while (end < (int)q.length()) {
+  while (end < static_cast<int>(q.length())) {
     char c = q.charAt(end);
     if (c == '\'' || c == '"') inQuotes = !inQuotes;
     else if (!inQuotes && (c == ' ' || c == '&' || c == '\n' || c == '\r')) break;
     end++;
   }
+
   String val = q.substring(start, end);
   val.trim();
-  if (val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2) {
-    val = val.substring(1, val.length() - 1);
-  } else if (val.startsWith("'") && val.endsWith("'") && val.length() >= 2) {
+  if (val.length() >= 2 &&
+      ((val.startsWith("\"") && val.endsWith("\"")) ||
+       (val.startsWith("'") && val.endsWith("'")))) {
     val = val.substring(1, val.length() - 1);
   }
   return val;
 }
 
-bool PresetService::dispatch(const char* payload, size_t length, String* reply) {
-  if (!payload || length == 0) return false;
-
-  // Trim leading whitespace
-  while (length > 0 && (*payload == ' ' || *payload == '\t' || *payload == '\r' || *payload == '\n')) {
-    payload++;
-    length--;
-  }
-
-  if (strncasecmp(payload, "discover", 8) == 0) {
-    const char* sub = payload + 8;
-    while (*sub == ' ' || *sub == '\t') sub++;
-    String path = extractParam(sub, "path");
-    return discover(path.c_str(), reply);
-  } else if (strncasecmp(payload, "get", 3) == 0) {
-    const char* sub = payload + 3;
-    while (*sub == ' ' || *sub == '\t') sub++;
-    return get(sub, reply);
-  }
-
-  if (reply) *reply = "{\"status\":\"error\",\"message\":\"Unknown PRESET sub-command\"}";
-  return false;
+String extractBasename(const char* rawName) {
+  String name = rawName ? rawName : "";
+  if (name.startsWith("/")) name = name.substring(1);
+  int slash = name.lastIndexOf('/');
+  if (slash != -1) name = name.substring(slash + 1);
+  return name;
 }
 
+void scanJsonCatalogsInDir(const char* dirPath, std::vector<String>& outCatalogs) {
+  if (!LittleFS.exists(dirPath)) return;
+  File dir = LittleFS.open(dirPath);
+  if (!dir || !dir.isDirectory()) return;
+
+  File f = dir.openNextFile();
+  while (f) {
+    if (!f.isDirectory()) {
+      String name = extractBasename(f.name());
+      if (name.endsWith(".json")) {
+        appendUnique(outCatalogs, name.substring(0, name.length() - 5));
+      }
+    }
+    f = dir.openNextFile();
+  }
+}
+
+void ensureUserDomainDir(const String& domain) {
+  if (!LittleFS.exists("/presets")) LittleFS.mkdir("/presets");
+  if (!LittleFS.exists("/presets/user")) LittleFS.mkdir("/presets/user");
+  String domainDir = "/presets/user/" + domain;
+  if (!LittleFS.exists(domainDir.c_str())) LittleFS.mkdir(domainDir.c_str());
+}
+
+bool loadProfilesAsCatalog(JsonDocument& outDoc) {
+  String fileContent;
+  if (LittleFS.exists("/presets/profiles.json")) {
+    File f = LittleFS.open("/presets/profiles.json", "r");
+    if (f) {
+      fileContent = f.readString();
+      f.close();
+    }
+  }
+
+  JsonDocument rawDoc;
+  DeserializationError err = fileContent.isEmpty()
+      ? deserializeJson(rawDoc, SYSTEM_PROFILES_JSON)
+      : deserializeJson(rawDoc, fileContent);
+  if (err) return false;
+
+  JsonObject meta = outDoc["meta"].to<JsonObject>();
+  meta["domain"] = "profiles";
+  meta["standard_id"] = "system";
+  meta["standard_title"] = "Machine Hardware Profiles";
+  meta["version"] = rawDoc["version"] | 1;
+  meta["default_profile_id"] = rawDoc["default_profile_id"] | "wm210v_stock";
+
+  JsonArray items = outDoc["items"].to<JsonArray>();
+  JsonArray profiles = rawDoc["profiles"].as<JsonArray>();
+  for (JsonObject p : profiles) {
+    JsonObject item = items.add<JsonObject>();
+    const char* id = p["identity"]["profile_id"] | "";
+    const char* name = p["identity"]["model_name"] | id;
+    item["id"] = id;
+    item["designation"] = name;
+    for (JsonPair kv : p) {
+      item[kv.key()] = kv.value();
+    }
+  }
+  return true;
+}
+
+bool removeFromFile(const char* filePath, const char* targetId, bool* outRemoved) {
+  *outRemoved = false;
+  if (!LittleFS.exists(filePath)) return true;
+
+  File f = LittleFS.open(filePath, "r");
+  if (!f) return false;
+  String content = f.readString();
+  f.close();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, content)) return false;
+
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.isNull()) return true;
+
+  for (size_t i = 0; i < items.size(); ++i) {
+    const char* idStr = items[i]["id"];
+    if (idStr && strcasecmp(idStr, targetId) == 0) {
+      items.remove(i);
+      *outRemoved = true;
+      break;
+    }
+  }
+
+  if (!*outRemoved) return true;
+
+  if (items.size() == 0) {
+    return LittleFS.remove(filePath);
+  }
+
+  File outFile = LittleFS.open(filePath, "w");
+  if (!outFile) return false;
+  serializeJson(doc, outFile);
+  outFile.close();
+  return true;
+}
+
+} // namespace
+
 bool PresetService::discover(const char* path, String* reply) {
-  // If path is empty, return list of domains
   if (!path || *path == '\0' || strcmp(path, "/") == 0) {
     std::vector<String> domains;
+    appendUnique(domains, "profiles");
+    appendUnique(domains, "threads");
+    appendUnique(domains, "tapers");
 
-    // 1. From Flash ROM
-    for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; i++) {
-      String d = SYSTEM_PRESET_ENTRIES[i].domain;
-      bool exists = false;
-      for (const auto& existing : domains) {
-        if (existing == d) { exists = true; break; }
-      }
-      if (!exists) domains.push_back(d);
+    for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; ++i) {
+      appendUnique(domains, SYSTEM_PRESET_ENTRIES[i].domain);
     }
 
-    // 2. From LittleFS /presets/
     if (LittleFS.exists("/presets")) {
       File root = LittleFS.open("/presets");
       if (root && root.isDirectory()) {
         File f = root.openNextFile();
         while (f) {
           if (f.isDirectory()) {
-            String d = f.name();
-            // Strip leading slash if present
-            if (d.startsWith("/")) d = d.substring(1);
-            if (d.indexOf('/') != -1) d = d.substring(d.lastIndexOf('/') + 1);
-            if (d.length() > 0 && d != "user") {
-              bool exists = false;
-              for (const auto& existing : domains) {
-                if (existing == d) { exists = true; break; }
-              }
-              if (!exists) domains.push_back(d);
-            }
+            String d = extractBasename(f.name());
+            if (!d.isEmpty() && d != "user") appendUnique(domains, d);
           }
           f = root.openNextFile();
         }
       }
     }
 
-    // Serialize reply
     JsonDocument outDoc;
     outDoc["status"] = "ok";
     JsonArray arr = outDoc["domains"].to<JsonArray>();
-    for (const auto& d : domains) {
-      arr.add(d);
-    }
+    for (const auto& d : domains) arr.add(d);
     if (reply) serializeJson(outDoc, *reply);
     return true;
   }
 
-  // Otherwise, discover catalogs within a domain (e.g. "threads" or "tapers")
   String targetDomain = path;
   targetDomain.trim();
   if (targetDomain.startsWith("/")) targetDomain = targetDomain.substring(1);
   if (targetDomain.endsWith("/")) targetDomain = targetDomain.substring(0, targetDomain.length() - 1);
+  if (!isSafeSegment(targetDomain)) {
+    if (reply) *reply = "{\"status\":\"error\",\"message\":\"Invalid domain path\"}";
+    return false;
+  }
 
   std::vector<String> catalogs;
+  if (targetDomain.equalsIgnoreCase("profiles")) {
+    appendUnique(catalogs, "system");
+  }
 
-  // 1. From Flash ROM
-  for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; i++) {
+  for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; ++i) {
     if (targetDomain.equalsIgnoreCase(SYSTEM_PRESET_ENTRIES[i].domain)) {
-      String c = SYSTEM_PRESET_ENTRIES[i].catalog;
-      bool exists = false;
-      for (const auto& existing : catalogs) {
-        if (existing == c) { exists = true; break; }
-      }
-      if (!exists) catalogs.push_back(c);
+      appendUnique(catalogs, SYSTEM_PRESET_ENTRIES[i].catalog);
     }
   }
 
-  // 2. From LittleFS /presets/<domain>/
   String fsDir = "/presets/" + targetDomain;
-  if (LittleFS.exists(fsDir.c_str())) {
-    File dir = LittleFS.open(fsDir.c_str());
-    if (dir && dir.isDirectory()) {
-      File f = dir.openNextFile();
-      while (f) {
-        if (!f.isDirectory()) {
-          String name = f.name();
-          if (name.startsWith("/")) name = name.substring(1);
-          if (name.indexOf('/') != -1) name = name.substring(name.lastIndexOf('/') + 1);
-          if (name.endsWith(".json")) {
-            String c = name.substring(0, name.length() - 5);
-            bool exists = false;
-            for (const auto& existing : catalogs) {
-              if (existing == c) { exists = true; break; }
-            }
-            if (!exists) catalogs.push_back(c);
-          }
-        }
-        f = dir.openNextFile();
-      }
-    }
-  }
+  scanJsonCatalogsInDir(fsDir.c_str(), catalogs);
 
-  // 3. From LittleFS /presets/user/<domain>/
   String userFsDir = "/presets/user/" + targetDomain;
-  if (LittleFS.exists(userFsDir.c_str())) {
-    File dir = LittleFS.open(userFsDir.c_str());
-    if (dir && dir.isDirectory()) {
-      File f = dir.openNextFile();
-      while (f) {
-        if (!f.isDirectory()) {
-          String name = f.name();
-          if (name.startsWith("/")) name = name.substring(1);
-          if (name.indexOf('/') != -1) name = name.substring(name.lastIndexOf('/') + 1);
-          if (name.endsWith(".json")) {
-            String c = name.substring(0, name.length() - 5);
-            bool exists = false;
-            for (const auto& existing : catalogs) {
-              if (existing == c) { exists = true; break; }
-            }
-            if (!exists) catalogs.push_back(c);
-          }
-        }
-        f = dir.openNextFile();
-      }
-    }
-  }
+  scanJsonCatalogsInDir(userFsDir.c_str(), catalogs);
 
   JsonDocument outDoc;
   outDoc["status"] = "ok";
   outDoc["domain"] = targetDomain;
   JsonArray arr = outDoc["catalogs"].to<JsonArray>();
-  for (const auto& c : catalogs) {
-    arr.add(c);
-  }
+  for (const auto& c : catalogs) arr.add(c);
   if (reply) serializeJson(outDoc, *reply);
   return true;
 }
@@ -219,7 +259,6 @@ bool PresetService::get(const char* query, String* reply) {
     return false;
   }
 
-  // Parse path components: <domain>/<catalog>[/<item_id>]
   if (path.startsWith("/")) path = path.substring(1);
   if (path.endsWith("/")) path = path.substring(0, path.length() - 1);
 
@@ -232,21 +271,21 @@ bool PresetService::get(const char* query, String* reply) {
   String domain = parts[0];
   String catalog = parts[1];
   String itemId = (parts.size() >= 3) ? parts[2] : "";
+  if (!isSafeSegment(domain) || !isSafeSegment(catalog) || (!itemId.isEmpty() && !isSafeSegment(itemId))) {
+    if (reply) *reply = "{\"status\":\"error\",\"message\":\"Invalid path segment\"}";
+    return false;
+  }
 
-  // Parse query options
   String selectStr = extractParam(query, "$select");
   String filterStr = extractParam(query, "$filter");
   String metaStr = extractParam(query, "$metadata");
   bool metadataOnly = (metaStr.equalsIgnoreCase("true") || metaStr == "1");
 
   std::vector<String> selectFields;
-  if (!selectStr.isEmpty()) {
-    selectFields = splitTokens(selectStr, ',');
-  }
+  if (!selectStr.isEmpty()) selectFields = splitTokens(selectStr, ',');
 
-  // Simple filter parser: e.g. "choice eq 1" or "series eq 'coarse'" or "id eq 'm12_6g'"
-  String filterKey = "";
-  String filterVal = "";
+  String filterKey;
+  String filterVal;
   if (!filterStr.isEmpty()) {
     int eqIdx = filterStr.indexOf(" eq ");
     if (eqIdx != -1) {
@@ -254,21 +293,21 @@ bool PresetService::get(const char* query, String* reply) {
       filterKey.trim();
       filterVal = filterStr.substring(eqIdx + 4);
       filterVal.trim();
-      if ((filterVal.startsWith("'") && filterVal.endsWith("'")) ||
-          (filterVal.startsWith("\"") && filterVal.endsWith("\""))) {
+      if (filterVal.length() >= 2 &&
+          ((filterVal.startsWith("'") && filterVal.endsWith("'")) ||
+           (filterVal.startsWith("\"") && filterVal.endsWith("\"")))) {
         filterVal = filterVal.substring(1, filterVal.length() - 1);
       }
     }
   }
 
-  // If itemId wasn't in path, but filter specified "id eq '...'", treat as itemId lookup
   if (itemId.isEmpty() && filterKey == "id" && !filterVal.isEmpty()) {
     itemId = filterVal;
-    filterKey = ""; // Consumed as itemId
+    filterKey = "";
     filterVal = "";
   }
 
-  // 1. Resolve JSON source: LittleFS user override vs LittleFS domain vs Flash ROM
+  JsonDocument inDoc;
   String fileContent;
   const char* romJson = nullptr;
 
@@ -281,9 +320,18 @@ bool PresetService::get(const char* query, String* reply) {
   } else if (LittleFS.exists(stdPath.c_str())) {
     File f = LittleFS.open(stdPath.c_str(), "r");
     if (f) { fileContent = f.readString(); f.close(); }
+  } else if (domain.equalsIgnoreCase("profiles") &&
+             (catalog.equalsIgnoreCase("system") || catalog.equalsIgnoreCase("profiles"))) {
+    if (!loadProfilesAsCatalog(inDoc)) {
+      if (reply) *reply = "{\"status\":\"error\",\"message\":\"Failed to parse profiles catalog\"}";
+      return false;
+    }
+    if (!metadataOnly && itemId.isEmpty() && selectFields.empty() && filterKey.isEmpty()) {
+      if (reply) serializeJson(inDoc, *reply);
+      return true;
+    }
   } else {
-    // Check Flash ROM
-    for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; i++) {
+    for (size_t i = 0; i < SYSTEM_PRESET_ENTRY_COUNT; ++i) {
       if (domain.equalsIgnoreCase(SYSTEM_PRESET_ENTRIES[i].domain) &&
           catalog.equalsIgnoreCase(SYSTEM_PRESET_ENTRIES[i].catalog)) {
         romJson = SYSTEM_PRESET_ENTRIES[i].json;
@@ -292,30 +340,25 @@ bool PresetService::get(const char* query, String* reply) {
     }
   }
 
-  if (fileContent.isEmpty() && !romJson) {
-    if (reply) *reply = "{\"status\":\"error\",\"message\":\"Preset catalog not found\"}";
-    return false;
-  }
-
-  // Fast-path: if full catalog requested with no $select, no $filter, no itemId, no $metadata:
-  if (!metadataOnly && itemId.isEmpty() && selectFields.empty() && filterKey.isEmpty()) {
-    if (reply) {
-      if (!fileContent.isEmpty()) *reply = fileContent;
-      else if (romJson) *reply = romJson;
+  if (inDoc.isNull()) {
+    if (fileContent.isEmpty() && !romJson) {
+      if (reply) *reply = "{\"status\":\"error\",\"message\":\"Preset catalog not found\"}";
+      return false;
     }
-    return true;
+
+    if (!metadataOnly && itemId.isEmpty() && selectFields.empty() && filterKey.isEmpty()) {
+      if (reply) *reply = fileContent.isEmpty() ? String(romJson) : fileContent;
+      return true;
+    }
+
+    DeserializationError err = fileContent.isEmpty() ? deserializeJson(inDoc, romJson)
+                                                     : deserializeJson(inDoc, fileContent);
+    if (err) {
+      if (reply) *reply = "{\"status\":\"error\",\"message\":\"Failed to parse catalog JSON\"}";
+      return false;
+    }
   }
 
-  // Otherwise, deserialize and process
-  JsonDocument inDoc;
-  DeserializationError err = fileContent.isEmpty() ? deserializeJson(inDoc, romJson)
-                                                   : deserializeJson(inDoc, fileContent);
-  if (err) {
-    if (reply) *reply = "{\"status\":\"error\",\"message\":\"Failed to parse catalog JSON\"}";
-    return false;
-  }
-
-  // 2. Metadata-only request
   if (metadataOnly) {
     JsonDocument outDoc;
     outDoc["status"] = "ok";
@@ -324,7 +367,6 @@ bool PresetService::get(const char* query, String* reply) {
     return true;
   }
 
-  // 3. Single Item Request (by ID or designation)
   if (!itemId.isEmpty()) {
     JsonArray items = inDoc["items"].as<JsonArray>();
     JsonObject matchedItem;
@@ -347,7 +389,6 @@ bool PresetService::get(const char* query, String* reply) {
 
     JsonDocument outDoc;
     outDoc["status"] = "ok";
-
     if (selectFields.empty()) {
       outDoc["item"] = matchedItem;
     } else {
@@ -358,33 +399,28 @@ bool PresetService::get(const char* query, String* reply) {
         }
       }
     }
-
     if (reply) serializeJson(outDoc, *reply);
     return true;
   }
 
-  // 4. Catalog query with $select and/or $filter
   JsonArray inItems = inDoc["items"].as<JsonArray>();
   JsonDocument outDoc;
   outDoc["status"] = "ok";
   JsonArray outItems = outDoc["items"].to<JsonArray>();
 
   for (JsonObject it : inItems) {
-    // Check filter condition if present
     if (!filterKey.isEmpty()) {
       JsonVariant val = it[filterKey.c_str()];
       if (val.isNull()) continue;
 
       if (val.is<int>() || val.is<long>()) {
-        long numVal = filterVal.toInt();
-        if (val.as<long>() != numVal) continue;
+        if (val.as<long>() != filterVal.toInt()) continue;
       } else {
         const char* strVal = val.as<const char*>();
         if (!strVal || !filterVal.equalsIgnoreCase(strVal)) continue;
       }
     }
 
-    // Apply projection ($select)
     if (selectFields.empty()) {
       outItems.add(it);
     } else {
@@ -398,5 +434,173 @@ bool PresetService::get(const char* query, String* reply) {
   }
 
   if (reply) serializeJson(outDoc, *reply);
+  return true;
+}
+
+bool PresetService::save(const char* jsonPayload, String* reply) {
+  if (!jsonPayload || *jsonPayload == '\0') {
+    if (reply) *reply = "MISSING_PAYLOAD";
+    return false;
+  }
+
+  JsonDocument entryDoc;
+  if (deserializeJson(entryDoc, jsonPayload) || !entryDoc.is<JsonObject>()) {
+    if (reply) *reply = "INVALID_JSON";
+    return false;
+  }
+
+  String domain = entryDoc["domain"] | "";
+  String id = entryDoc["id"] | "";
+  String catalog = entryDoc["catalog"] | "custom";
+  domain.trim();
+  id.trim();
+  catalog.trim();
+
+  if (!isSafeSegment(domain) || !isSafeSegment(id) || !isSafeSegment(catalog)) {
+    if (reply) *reply = "INVALID_PARAM";
+    return false;
+  }
+
+  if (!domain.equalsIgnoreCase("profiles") &&
+      !domain.equalsIgnoreCase("threads") &&
+      !domain.equalsIgnoreCase("tapers")) {
+    if (reply) *reply = "INVALID_DOMAIN";
+    return false;
+  }
+  domain.toLowerCase();
+
+  if (domain == "profiles" && isSystemCatalogProfile(id.c_str())) {
+    if (reply) *reply = "PROTECTED_SYSTEM_ENTRY";
+    return false;
+  }
+
+  ensureUserDomainDir(domain);
+  String filePath = "/presets/user/" + domain + "/" + catalog + ".json";
+
+  JsonDocument catalogDoc;
+  if (LittleFS.exists(filePath.c_str())) {
+    File inFile = LittleFS.open(filePath.c_str(), "r");
+    if (inFile) {
+      String content = inFile.readString();
+      inFile.close();
+      deserializeJson(catalogDoc, content);
+    }
+  }
+
+  if (catalogDoc["meta"].isNull()) {
+    JsonObject meta = catalogDoc["meta"].to<JsonObject>();
+    meta["domain"] = domain;
+    meta["catalog"] = catalog;
+    meta["user"] = true;
+  }
+
+  JsonArray items = catalogDoc["items"].as<JsonArray>();
+  if (items.isNull()) {
+    items = catalogDoc["items"].to<JsonArray>();
+  }
+
+  bool replaced = false;
+  for (size_t i = 0; i < items.size(); ++i) {
+    const char* existingId = items[i]["id"];
+    if (existingId && strcasecmp(existingId, id.c_str()) == 0) {
+      items[i].set(entryDoc.as<JsonObject>());
+      replaced = true;
+      break;
+    }
+  }
+  if (!replaced) {
+    items.add(entryDoc.as<JsonObject>());
+  }
+
+  File outFile = LittleFS.open(filePath.c_str(), "w");
+  if (!outFile) {
+    if (reply) *reply = "STORAGE_WRITE_FAILED";
+    return false;
+  }
+  serializeJson(catalogDoc, outFile);
+  outFile.close();
+
+  if (reply) *reply = id;
+  return true;
+}
+
+bool PresetService::remove(const char* jsonPayload, String* reply) {
+  if (!jsonPayload || *jsonPayload == '\0') {
+    if (reply) *reply = "MISSING_PAYLOAD";
+    return false;
+  }
+
+  JsonDocument reqDoc;
+  if (deserializeJson(reqDoc, jsonPayload) || !reqDoc.is<JsonObject>()) {
+    if (reply) *reply = "INVALID_JSON";
+    return false;
+  }
+
+  String domain = reqDoc["domain"] | "";
+  String id = reqDoc["id"] | "";
+  String catalog = reqDoc["catalog"] | "";
+  domain.trim();
+  id.trim();
+  catalog.trim();
+
+  if (!isSafeSegment(domain) || !isSafeSegment(id) || (!catalog.isEmpty() && !isSafeSegment(catalog))) {
+    if (reply) *reply = "INVALID_PARAM";
+    return false;
+  }
+  domain.toLowerCase();
+
+  if (domain == "profiles") {
+    if (strcasecmp(SettingsService::getActiveProfile().profileId, id.c_str()) == 0) {
+      if (reply) *reply = "PROTECTED_ACTIVE_PROFILE";
+      return false;
+    }
+    if (isSystemCatalogProfile(id.c_str())) {
+      if (reply) *reply = "PROTECTED_SYSTEM_ENTRY";
+      return false;
+    }
+    char defaultSlug[32] = {0};
+    if (getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug)) &&
+        strcasecmp(defaultSlug, id.c_str()) == 0) {
+      if (reply) *reply = "PROTECTED_DEFAULT_PROFILE";
+      return false;
+    }
+  }
+
+  bool removed = false;
+  if (!catalog.isEmpty()) {
+    String filePath = "/presets/user/" + domain + "/" + catalog + ".json";
+    if (!removeFromFile(filePath.c_str(), id.c_str(), &removed)) {
+      if (reply) *reply = "STORAGE_WRITE_FAILED";
+      return false;
+    }
+  } else {
+    String userDir = "/presets/user/" + domain;
+    if (LittleFS.exists(userDir.c_str())) {
+      File dir = LittleFS.open(userDir.c_str());
+      if (dir && dir.isDirectory()) {
+        File f = dir.openNextFile();
+        while (f && !removed) {
+          if (!f.isDirectory()) {
+            String name = extractBasename(f.name());
+            if (name.endsWith(".json")) {
+              String filePath = userDir + "/" + name;
+              if (!removeFromFile(filePath.c_str(), id.c_str(), &removed)) {
+                if (reply) *reply = "STORAGE_WRITE_FAILED";
+                return false;
+              }
+            }
+          }
+          f = dir.openNextFile();
+        }
+      }
+    }
+  }
+
+  if (!removed) {
+    if (reply) *reply = "NOT_FOUND_OR_ROM_PROTECTED";
+    return false;
+  }
+
+  if (reply) *reply = id;
   return true;
 }

@@ -9,6 +9,7 @@
 #include "core/CoreCommands.h"
 #include "core/CoreCommandService.h"
 #include "core/SettingsService.h"
+#include "core/PresetService.h"
 #include "core/TelemetrySerializer.h"
 #include "modes/ModeRegistry.h"
 #include "modes/composite/UnifiedGearboxMode.h"
@@ -54,6 +55,51 @@ bool SettingsService::listPresets(String* out) {
   return true;
 }
 
+bool SettingsService::setPreset(const char* slug, String* reply) {
+  if (!slug || std::strcmp(slug, "unknown") == 0) {
+    if (reply) *reply = "unknown preset slug";
+    return false;
+  }
+  if (reply) *reply = String("OK:SETTINGS.preset=") + slug + "\n";
+  return true;
+}
+
+static std::string s_lastCatalogCall;
+bool PresetService::discover(const char* path, String* reply) {
+  s_lastCatalogCall = std::string("discover:") + (path ? path : "<root>");
+  if (reply) {
+    *reply = path ? (String("{\"status\":\"ok\",\"domain\":\"") + path + "\",\"catalogs\":[\"iso_metric\"]}")
+                  : "{\"status\":\"ok\",\"domains\":[\"profiles\",\"threads\",\"tapers\"]}";
+  }
+  return true;
+}
+
+bool PresetService::get(const char* query, String* reply) {
+  s_lastCatalogCall = std::string("get:") + (query ? query : "");
+  if (reply) *reply = "{\"status\":\"ok\",\"items\":[{\"id\":\"m10\"}]}";
+  return true;
+}
+
+bool PresetService::save(const char* jsonPayload, String* reply) {
+  s_lastCatalogCall = std::string("save:") + (jsonPayload ? jsonPayload : "");
+  if (!jsonPayload || std::strstr(jsonPayload, "\"id\"") == nullptr) {
+    if (reply) *reply = "INVALID_JSON";
+    return false;
+  }
+  if (reply) *reply = "custom_m12";
+  return true;
+}
+
+bool PresetService::remove(const char* jsonPayload, String* reply) {
+  s_lastCatalogCall = std::string("remove:") + (jsonPayload ? jsonPayload : "");
+  if (!jsonPayload || std::strstr(jsonPayload, "\"id\"") == nullptr) {
+    if (reply) *reply = "INVALID_JSON";
+    return false;
+  }
+  if (reply) *reply = "custom_m12";
+  return true;
+}
+
 bool SettingsService::setAxisLimitDu(AxisId axis, LimitDirection dir, long limitDu) {
   size_t slot = (dir == LIMIT_LEFT_OR_UP) ? 0 : 1;
   const char* label = (dir == LIMIT_LEFT_OR_UP) ? "LEFT" : "RIGHT";
@@ -79,8 +125,9 @@ bool ModeRegistry::activateMode(ModeId /*id*/) {
   return true;
 }
 
-String ModeRegistry::serializeDiscoveryJson(uint32_t /*caps*/, bool /*all*/) {
-  return "{\"modes\":[{\"id\":50,\"name\":\"GEARBOX\"}]}";
+String ModeRegistry::serializeDiscoveryJson(uint32_t /*caps*/, bool all) {
+  return all ? "{\"modes\":[{\"id\":50,\"name\":\"GEARBOX\"},{\"id\":57,\"name\":\"CONE\",\"status\":\"UNAVAILABLE\"}]}"
+             : "{\"modes\":[{\"id\":50,\"name\":\"GEARBOX\"}]}";
 }
 
 String TelemetrySerializer::buildTelemetry(const MachineModel& /*model*/, uint8_t domainMask) {
@@ -149,7 +196,7 @@ void testCycleContract() {
   auto ctx = makeAdminContext();
 
   // Reset engine to idle via stop command
-  parser.parseAndDispatch("CMD.stop", 8, ctx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, ctx).isOk());
 
   // Canned cycles are not yet implemented as IELSMode classes (Refs Issue #10);
   // they deterministically report UNAVAILABLE instead of faking execution.
@@ -438,7 +485,7 @@ void testManualJogging() {
   auto readOnlyCtx = makeReadOnlyContext();
 
   // Reset to idle
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
 
   // jogStep positional
   const char* stepPos = "CMD.jogStep=Z,100";
@@ -448,7 +495,7 @@ void testManualJogging() {
   assert(res.isOk());
   assert(wire == "OK:CMD.jogStep\n");
 
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
 
   // jogStep key-value
   const char* stepKv = "CMD.jogStep=axis:Z,dist:-500";
@@ -458,7 +505,7 @@ void testManualJogging() {
   assert(res.isOk());
   assert(wire == "OK:CMD.jogStep\n");
 
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
 
   // jogHold positional
   const char* holdPos = "CMD.jogHold=Z,+";
@@ -491,7 +538,7 @@ void testManualJogging() {
   std::cout << "jogHold (KV) -> " << wire;
   assert(res.isOk());
   assert(wire == "OK:CMD.jogHold\n");
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
 
   // Permission check: read-only client must be rejected
   res = parser.parseAndDispatch(stepPos, std::strlen(stepPos), readOnlyCtx);
@@ -560,7 +607,7 @@ void testPositionalFeedAndPing() {
   auto adminCtx = makeAdminContext();
   auto readOnlyCtx = makeReadOnlyContext();
 
-  parser.parseAndDispatch("CMD.stop", 8, adminCtx);
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
 
   // Positional startFeed must be rejected (KV required for 5-arg startFeed)
   const char* feedPos = "CMD.startFeed=Z,2500,-,1";
@@ -736,6 +783,111 @@ void testSettingsAndExtendedIntrospection() {
   }
 }
 
+void testCatalogFeedNudgeAndRefactorFixes() {
+  printHeader("10. Unified Catalog (#37), Feed Nudge (#42), Modes=all (#27) & #48 Fixes");
+  auto& parser = StandardCommandParser::instance();
+  auto adminCtx = makeAdminContext();
+  auto readOnlyCtx = makeReadOnlyContext();
+
+  // Ensure idle
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
+
+  // 1. PROPERTIES.modes=all (#27)
+  const char* modesAll = "PROPERTIES.modes=all";
+  CommandResult res = parser.parseAndDispatch(modesAll, std::strlen(modesAll), adminCtx);
+  String wire = StandardCommandParser::formatWireResponse(res);
+  assert(res.isOk());
+  assert(wire.find("CONE") != std::string::npos);
+
+  const char* modesBad = "PROPERTIES.modes=invalid";
+  res = parser.parseAndDispatch(modesBad, std::strlen(modesBad), adminCtx);
+  assert(!res.isHandled());
+
+  // 2. PROPERTIES.catalog (#37) with '=' and spaces inside OData argsStr (#48)
+  const char* catRoot = "PROPERTIES.catalog";
+  res = parser.parseAndDispatch(catRoot, std::strlen(catRoot), adminCtx);
+  assert(res.isOk());
+  assert(s_lastCatalogCall == "discover:<root>");
+
+  const char* catDomain = "PROPERTIES.catalog=path=threads";
+  res = parser.parseAndDispatch(catDomain, std::strlen(catDomain), adminCtx);
+  assert(res.isOk());
+  assert(s_lastCatalogCall == "discover:threads");
+
+  const char* catOdata = "PROPERTIES.catalog=path=threads/iso_metric&$select=id,designation&$filter=series eq 'coarse'";
+  res = parser.parseAndDispatch(catOdata, std::strlen(catOdata), adminCtx);
+  assert(res.isOk());
+  assert(s_lastCatalogCall == "get:path=threads/iso_metric&$select=id,designation&$filter=series eq 'coarse'");
+
+  // 3. SETTINGS.catalogSave / SETTINGS.catalogDelete (#37) + permissions + [SAFE-01]
+  const char* catSave = "SETTINGS.catalogSave={\"domain\":\"threads\",\"id\":\"custom_m12\",\"pitch_du\":17500}";
+  res = parser.parseAndDispatch(catSave, std::strlen(catSave), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.catalogSave:custom_m12\n");
+
+  res = parser.parseAndDispatch(catSave, std::strlen(catSave), readOnlyCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(!res.isOk());
+  assert(wire == "ERR:SETTINGS.catalogSave:PERMISSION_DENIED\n");
+
+  const char* catDel = "SETTINGS.catalogDelete={\"domain\":\"threads\",\"id\":\"custom_m12\"}";
+  res = parser.parseAndDispatch(catDel, std::strlen(catDel), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.catalogDelete:custom_m12\n");
+
+  // 4. SETTINGS.set=profile:<id> (#37) + [SAFE-01] motion lockout
+  const char* setProf = "SETTINGS.set=profile:wm210v_stock";
+  res = parser.parseAndDispatch(setProf, std::strlen(setProf), adminCtx);
+  wire = StandardCommandParser::formatWireResponse(res);
+  assert(res.isOk());
+  assert(wire == "OK:SETTINGS.set:profile:wm210v_stock\n");
+
+  const char* setProfEmpty = "SETTINGS.set=profile:";
+  res = parser.parseAndDispatch(setProfEmpty, std::strlen(setProfEmpty), adminCtx);
+  assert(!res.isOk());
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:SETTINGS.set:INVALID_PARAM:profile\n");
+
+  // Engage motion and verify [SAFE-01] lockouts on profile, catalogSave, catalogDelete
+  const char* startFeed = "CMD.startFeed=axis:Z,feed:1500,dir:-,sync:0";
+  res = parser.parseAndDispatch(startFeed, std::strlen(startFeed), adminCtx);
+  assert(res.isOk());
+
+  res = parser.parseAndDispatch(setProf, std::strlen(setProf), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:SETTINGS.set:MOTION_LOCKED\n");
+  res = parser.parseAndDispatch(catSave, std::strlen(catSave), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:SETTINGS.catalogSave:MOTION_LOCKED\n");
+  res = parser.parseAndDispatch(catDel, std::strlen(catDel), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:SETTINGS.catalogDelete:MOTION_LOCKED\n");
+
+  assert(parser.parseAndDispatch("CMD.stop", 8, adminCtx).isOk());
+
+  // 5. CMD.feedNudge (#42)
+  const char* nudgeBad = "CMD.feedNudge=+2";
+  res = parser.parseAndDispatch(nudgeBad, std::strlen(nudgeBad), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:CMD.feedNudge:INVALID_PARAM:delta\n");
+
+  const char* nudgeZero = "CMD.feedNudge=0";
+  res = parser.parseAndDispatch(nudgeZero, std::strlen(nudgeZero), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:CMD.feedNudge:INVALID_PARAM:delta\n");
+
+  const char* nudgeMissing = "CMD.feedNudge";
+  res = parser.parseAndDispatch(nudgeMissing, std::strlen(nudgeMissing), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:CMD.feedNudge:MISSING_ARGUMENTS\n");
+
+  const char* nudgeUp = "CMD.feedNudge=+1";
+  res = parser.parseAndDispatch(nudgeUp, std::strlen(nudgeUp), adminCtx);
+  // Note: CoreCommandService may return OK or UNAVAILABLE depending on active mode; parser must dispatch it (not INVALID_PARAM/UNKNOWN_COMMAND)
+  assert(res.isHandled());
+  assert(res.payload != "INVALID_PARAM:delta");
+
+  // 6. Float overflow rejection in CMD.simRpm (#48 std::from_chars)
+  const char* simOverflow = "CMD.simRpm=1e40";
+  res = parser.parseAndDispatch(simOverflow, std::strlen(simOverflow), adminCtx);
+  assert(StandardCommandParser::formatWireResponse(res) == "ERR:CMD.simRpm:INVALID_PARAM:rpm\n");
+}
+
 int main() {
   std::cout << "========================================================\n";
   std::cout << " RUNNING STANDARD COMMAND PARSER NATIVE UNIT TEST SUITE\n";
@@ -754,9 +906,10 @@ int main() {
   testCoordinatesAndLimits();
   testPositionalFeedAndPing();
   testSettingsAndExtendedIntrospection();
+  testCatalogFeedNudgeAndRefactorFixes();
 
   std::cout << "\n========================================================\n";
-  std::cout << " ALL 9 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
+  std::cout << " ALL 10 TEST SUITES PASSED CLEANLY (100% SUCCESS)\n";
   std::cout << "========================================================\n";
   return 0;
 }
