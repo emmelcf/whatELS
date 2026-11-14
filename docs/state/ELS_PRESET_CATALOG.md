@@ -5,13 +5,13 @@
 > **Author:** Antigravity & Emil  
 > **Date:** October 14, 2026  
 > **Location:** `docs/state/ELS_PRESET_CATALOG.md`
-> **Referenced By:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../../clients/ELS_CLIENT_ARCHITECTURE.md), [`modes/threading/WIZARD_WORKFLOW.md`](../../modes/threading/WIZARD_WORKFLOW.md), [`modes/taper/SPECIFICATION.md`](../../modes/taper/SPECIFICATION.md)
+> **Referenced By:** [`WHATELS_MASTER_ARCHITECTURE.md`](../WHATELS_MASTER_ARCHITECTURE.md), [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md), [`modes/threading/WIZARD_WORKFLOW.md`](../modes/threading/WIZARD_WORKFLOW.md), [`modes/taper/SPECIFICATION.md`](../modes/taper/SPECIFICATION.md)
 
 ---
 
 ## 1. Executive Summary & Design Principles
 
-The **whatELS Machining Preset Catalog** provides a unified, domain-extensible repository of machining specifications (threads, tapers, tooling, feeds/speeds, and custom shop recipes). It serves as the single point of truth across all operator interfaces (Web UI, Nextion LCD, wireless DRO tablets, and hardware pendants).
+The **whatELS Machining Preset Catalog** provides a unified, transport-agnostic, domain-extensible repository of machine and machining specifications (**machine profiles, threads, tapers**, tooling, feeds/speeds, and custom shop recipes). It serves as the single point of truth across all operator interfaces (Web UI, Nextion LCD, wireless DRO tablets, and hardware pendants).
 
 ### Governing Architectural Tenets
 
@@ -21,22 +21,23 @@ The **whatELS Machining Preset Catalog** provides a unified, domain-extensible r
    whatELS core developers do not hand-type or manually curate thousands of complex engineering tolerance numbers. Standard catalog datasets are ingested automatically from authoritative, machine-verified, open-source engineering engines (specifically **ThreadBuddy** for threads and **DIN 228 / ISO 296 / ASME B5.10** for tapers) via automated extraction pipelines.
 3. **Two-Tier Storage Topology (ROM Flash vs LittleFS):**  
    - **Tier 1 (Factory ROM):** Standard international standards are compiled directly into microcontroller Flash ROM (`PROGMEM`) via `scripts/embed_controller_assets.py`. Upgrading standard tables occurs seamlessly with regular firmware updates via USB/OTA without touching or re-flashing the LittleFS partition.
-   - **Tier 2 (Operator LittleFS):** Custom shop presets, shop favorites, and user overrides reside in LittleFS (`/presets/user/`). The filesystem is never wiped or required for basic factory operation.
+   - **Tier 2 (Operator LittleFS):** Custom shop presets, shop favorites, and user overrides reside in LittleFS (`/presets/user/<domain>/`). The filesystem is never wiped or required for basic factory operation.
 4. **Targeted, Step-Wise Querying (Buffer-Safe):**  
-   To prevent buffer overruns on memory-constrained serial links (e.g. 256-byte UART ring buffers on Nextion) and avoid heap fragmentation on ESP32 Core 1, the controller exposes an OData-inspired query protocol (`PRESET.discover`, `PRESET.get`). Clients request only the data needed for the active wizard step rather than dumping multi-kilobyte JSON blobs.
+   To prevent buffer overruns on memory-constrained serial links (e.g. 256-byte UART ring buffers on Nextion) and avoid heap fragmentation on ESP32 Core 0, the controller exposes an OData-inspired query protocol (`PROPERTIES.catalog`) and JSON mutation commands (`SETTINGS.catalogSave`, `SETTINGS.catalogDelete`). Clients request only the data needed for the active wizard step rather than dumping multi-kilobyte JSON blobs.
 5. **Decoupled Units & Granular Presentation:**  
    All dimensions in the core catalog use exact canonical integer units (deci-microns `du`, deci-microns per revolution `dupr`, or tenths of degrees). Compound specifications are decomposed into atomic attributes (`standard_org`, `standard_id`, `tolerance_class`, `major_dia`, `pitch_dia`, `minor_dia`), allowing the Client Translation Layer to project either condensed display strings (Nextion) or rich graphical inspection cards (Web UI).
 6. **Zero Motion Impact:**  
-   Preset discovery and queries occur strictly while the machine is in `STANDBY` state (wizard authoring). In addition, File I/O and command dispatching execute on **Core 1**, completely isolated from the real-time PCNT and motion ISRs on **Core 0**.
+   Preset discovery and queries occur strictly while the machine is in `STANDBY` state (wizard authoring). In addition, File I/O and command dispatching execute on **Core 0**, completely isolated from the real-time PCNT, motion ISRs, and mode execution on **Core 1**.
 
 ---
 
 ## 2. Domain-Extensible Taxonomy
 
-The preset architecture is organized into distinct, pluggable domains. While initial focus is dedicated to **Threads** and **Tapers**, the schema is intentionally structured to accommodate tooling, materials, and composite workshop operations.
+The preset architecture is organized into distinct, pluggable domains across factory ROM (`SystemPresetsJson.h`) and LittleFS (`/presets/user/<domain>/`). The unified catalog spans **Profiles**, **Threads**, and **Tapers**, and is structured to accommodate tooling, materials, and composite workshop operations.
 
 ```text
 /presets/ (Root Catalog)
+  ├── profiles/            (Lathe machine hardware profiles)
   ├── threads/             (Thread standards: ISO, ASME, NPT, Whitworth, ACME)
   │     ├── iso_metric.json
   │     ├── unified_national.json
@@ -53,7 +54,8 @@ The preset architecture is organized into distinct, pluggable domains. While ini
   │     └── brass_360.json
   ├── tooling/             (Future: Insert geometries, nose radii, parting blades)
   │     └── lathe_carbide_inserts.json
-  └── user/                (User custom additions & shop favorites)
+  └── user/                (User custom additions & shop favorites: /presets/user/<domain>/)
+        ├── profiles/
         ├── threads/
         └── tapers/
 ```
@@ -182,31 +184,40 @@ Every preset item stores the **complete geometric triplet**:
 
 ## 5. Command Protocol & Step-Wise OData-Style Querying
 
-Presets are queried through the central `CommandDispatcher` over any transport (WebSocket, Serial1 UART). To maintain low latency and prevent serial buffer overruns, the protocol supports targeted filtering and projections.
+The unified preset catalog is queried and mutated through `StandardCommandParser` and `CoreCommandService` over any transport (WebSocket, USB CDC, Serial1 UART). To maintain low latency and prevent serial buffer overruns, the protocol supports targeted filtering and projections.
+
+*(Legacy `PRESET.*` and `SETTINGS.preset.*` wire commands are retired.)*
 
 ### Command Syntax
 
 ```text
-PRESET.discover [path=<domain>]
-PRESET.get path=<domain>/<catalog>[/<item_id>] [$select=<fields>] [$filter=<expression>] [$metadata=true]
+PROPERTIES.catalog=path=<domain>[/<catalog>[/<id>]]&$select=<fields>&$filter=<expression>&$metadata=true
+SETTINGS.catalogSave=<json_payload>
+SETTINGS.catalogDelete=<json_payload>
+SETTINGS.set=profile:<id>
+SETTINGS.presets
+PROPERTIES.profiles
 ```
 
-### Query Operations
+### Query & Mutation Operations
 
 | Operation | Command Example | Controller Response | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Discover Domains** | `PRESET.discover` | `{"domains":["threads","tapers","materials","user"]}` | Populates root UI navigation. |
-| **Discover Families** | `PRESET.discover path=threads` | `{"files":["iso_metric","unified_national","pipe_npt"]}` | Populates wizard standard tabs. |
-| **Read Catalog Meta** | `PRESET.get path=threads/iso_metric $metadata=true` | Returns `meta` header block only. | Displays standard title, flank angle, and authoring unit. |
-| **Field Projection** | `PRESET.get path=threads/iso_metric $select=id,designation` | `[{"id":"m10","designation":"M10x1.5"},...]` | Extremely lightweight payload for populating touch dropdown pickers. |
-| **Item Detail** | `PRESET.get path=threads/iso_metric/iso_m12x1_75_6g` | Returns complete JSON record for M12x1.75. | Hydrates wizard calculation engine, prep alerts, and infeed passes. |
-| **Attribute Filter** | `PRESET.get path=threads/iso_metric $filter=series eq 'coarse'` | Returns coarse sizes only. | Reduces picker list size for user convenience. |
+| **Discover Domains** | `PROPERTIES.catalog` | `{"domains":["profiles","threads","tapers","user"]}` | Populates root UI navigation. |
+| **Discover Families** | `PROPERTIES.catalog=path=threads` | `{"files":["iso_metric","unified_national","pipe_npt"]}` | Populates wizard standard tabs. |
+| **Read Catalog Meta** | `PROPERTIES.catalog=path=threads/iso_metric&$metadata=true` | Returns `meta` header block only. | Displays standard title, flank angle, and authoring unit. |
+| **Field Projection** | `PROPERTIES.catalog=path=threads/iso_metric&$select=id,designation` | `[{"id":"m10","designation":"M10x1.5"},...]` | Extremely lightweight payload for populating touch dropdown pickers. |
+| **Item Detail** | `PROPERTIES.catalog=path=threads/iso_metric/iso_m12x1_75_6g` | Returns complete JSON record for M12x1.75. | Hydrates wizard calculation engine, prep alerts, and infeed passes. |
+| **Attribute Filter** | `PROPERTIES.catalog=path=threads/iso_metric&$filter=series eq 'coarse'` | Returns coarse sizes only. | Reduces picker list size for user convenience. |
+| **Save Custom Entry** | `SETTINGS.catalogSave={"domain":"threads","id":"custom_m12",...}` | `OK:SETTINGS.catalogSave:custom_m12` | Persists a custom user entry to LittleFS `/presets/user/<domain>/`. |
+| **Delete Custom Entry** | `SETTINGS.catalogDelete={"domain":"threads","id":"custom_m12"}` | `OK:SETTINGS.catalogDelete:custom_m12` | Deletes a custom user entry (ROM, active, and default entries are protected). |
+| **Activate Profile** | `SETTINGS.set=profile:wm210v_stock` | `OK:SETTINGS.set:profile=wm210v_stock` | Activates a machine profile (gated by `[SAFE-01]`; rejected if motion is active). |
 
 ---
 
 ## 6. Client Translation Layer Integration
 
-In conformance with **Tenet 2 (Strict Layer Decoupling)** of [`ELS_CLIENT_ARCHITECTURE.md`](../../clients/ELS_CLIENT_ARCHITECTURE.md), the core returns raw canonical values. The Client Translation Layer translates this data to suit each client interface:
+In conformance with **Tenet 2 (Strict Layer Decoupling)** of [`ELS_CLIENT_ARCHITECTURE.md`](../clients/ELS_CLIENT_ARCHITECTURE.md), the core returns raw canonical values. The Client Translation Layer translates this data to suit each client interface:
 
 ### 1. Rich Touch Web UI (`lathe_dro_whatels_controller.html`)
 - Directly consumes the structured JSON objects over WebSocket.
@@ -243,7 +254,7 @@ stateDiagram-v2
     state ModeActive {
         note right of ModeActive
             Preset queries locked out during active cutting.
-            Core 0 PCNT & motion ISRs have 100% bus priority.
+            Core 1 PCNT, motion ISRs, and mode execution have 100% bus priority.
         end note
     }
 
@@ -251,6 +262,6 @@ stateDiagram-v2
 ```
 
 1. **Read-On-Demand (Zero Permanent SRAM):**  
-   Neither system nor user presets reside permanently in ESP32 RAM. When a query is received, Core 1 opens the stream (`PROGMEM` string or LittleFS file), serializes the filtered response to the transport buffer, and immediately frees memory.
+   Neither system nor user presets reside permanently in ESP32 RAM. When a query is received, Core 0 opens the stream (`PROGMEM` string or LittleFS file), serializes the filtered response to the transport buffer, and immediately frees memory.
 2. **Deterministic Motion Safety:**  
    Preset queries are strictly servicing configuration in `STANDBY` state. Once an operational mode is active (Threading, Taper, Turning), client configuration commands are ignored or rejected, ensuring zero bus contention while the spindle and lead screw are coupled.

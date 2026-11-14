@@ -74,7 +74,7 @@ In conventional CNC systems, user authoring values are immediately flattened int
 ### 2.5 Strict Change-Driven Quiescence (Zero Polling Overhead)
 * State capture and telemetry broadcast are **strictly change-driven**.
 * When the lathe is stationary and idle, **zero state packets are generated or pushed**, preserving network bandwidth and CPU cycles.
-* Telemetry rates during high-speed motion are rate-clamped to a safe ceiling ($\approx 28\text{ Hz}$ / $35\text{ ms}$) to prevent TCP buffer bloat while leaving Core 1 stepper timing unstarved.
+* Telemetry cadence is split across the inter-core boundary: Core 1 publishes motion state to `TelemetryMailbox` at **50 Hz** (20 ms), while Core 0 WebSocket telemetry pushes via `ClientManager::broadcastIfChanged()` are strictly change-only and rate-clamped to **max 10 Hz** (100 ms) to prevent TCP buffer bloat while leaving Core 1 stepper timing unstarved.
 
 ### 2.6 Concurrency & Temporal Isolation
 On dual-core ESP32 hardware:
@@ -138,7 +138,7 @@ The Core State Model partitions machine state into four independent, cohesive do
 
 | Domain | Key | Mask Bit | Update Frequency | Purpose |
 | :--- | :---: | :---: | :--- | :--- |
-| **Kinematics** | `'K'` | `0x01` | High (20–50 Hz during cut) | Real-time physical machine dynamics: axis positions, soft limits, spindle dynamics, motion state, active mode. |
+| **Kinematics** | `'K'` | `0x01` | High (50 Hz Core 1→0 mailbox; max 10 Hz change-only WS push) | Real-time physical machine dynamics: axis positions, soft limits, spindle dynamics, motion state, active mode. |
 | **Intent** | `'I'` | `0x02` | Low (On user edit) | Exact operator authoring parameters: thread lead/TPI, taper ratio/angle, manual feed/jog step increments, feed direction. |
 | **Cycle** | `'C'` | `0x04` | Medium (Per pass / step) | Automated multi-pass canned cycle progress: total pass count, current pass index, multi-start indexing. |
 | **Properties** | `'P'` | `0x08` | Very Low (On boot / setup) | Persistent machine hardware constants: leadscrew pitches, motor steps, encoder PPR, DRO scale sources, deadband thresholds. |
@@ -344,8 +344,8 @@ struct MotionTelemetrySnapshot {
 };
 ```
 
-* **Zero Lock Contention:** Core 1 motion tasks publish to `TelemetryMailbox` with memory fences on every tick without ever blocking on FreeRTOS queues or Core 0 memory.
-* **Tear-Free Direct Sampling:** Core 0 supervisory tasks (`MachineModel::captureKinematics()`, `ClientManager`, and active transport adapters) sample directly from `TelemetryMailbox` via atomic sequence validation. If a write is in progress, it retries lock-free.
+* **Zero Lock Contention (50 Hz Publish):** Core 1 motion tasks publish to `TelemetryMailbox` at **50 Hz** (20 ms) with memory fences without ever blocking on FreeRTOS queues or Core 0 memory.
+* **Tear-Free Direct Sampling (Max 10 Hz WS Push):** Core 0 supervisory tasks (`MachineModel::captureKinematics()`, `ClientManager`, and active transport adapters) sample directly from `TelemetryMailbox` via atomic sequence validation, and `ClientManager::broadcastIfChanged()` pushes WebSocket updates strictly on change at **max 10 Hz** (100 ms). If a write is in progress, sampling retries lock-free.
 * **Single Source of Truth:** Core 0 captures canonical `KinematicsState` directly from this mailbox and active axis configuration without maintaining parallel redundant snapshot queues.
 
 ---

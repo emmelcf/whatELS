@@ -149,6 +149,13 @@ Immediately halts all axis stepping, cancels any active jog or cutting cycle, an
 * **Required Permission:** `PERM_READ_TELEMETRY` *(Emergency Stop authority is always granted to any connected client).*
 * **Returns:** `OK:CMD.stop`
 
+#### `CMD.feedNudge`
+Incrementally adjusts the active feed rate up or down by one configured `feedStepDu` increment.
+* **Arguments:** `<+1|-1>`
+* **Examples:** `CMD.feedNudge=+1`, `CMD.feedNudge=-1`
+* **Required Permission:** `PERM_MOTION_START`
+* **Returns:** `OK:CMD.feedNudge` or `ERR:CMD.feedNudge:<reason>`
+
 ---
 
 ### 2.2 Manual Jogging & Positioning
@@ -255,12 +262,15 @@ Manages non-volatile storage (NVS) configuration, machine profile selection, and
 | `SETTINGS.get` | Returns all key-value settings. | `SETTINGS.get` |
 | `SETTINGS.get=<key>` | Reads a single configuration key or group (`machine`, `sys`, `prefs`). | `SETTINGS.get=machine.z.pitchDu` |
 | `SETTINGS.set=<key>:<val>` | Writes a configuration key to persistent NVS. | `SETTINGS.set=machine.z.pitchDu:40000` |
-| `SETTINGS.set=preset:<id>` | Applies a machine profile preset to active controller settings. | `SETTINGS.set=preset:wm210v` |
+| `SETTINGS.set=profile:<id>` | Activates a machine profile preset (gated by `[SAFE-01]`; rejected if motion is active). | `SETTINGS.set=profile:wm210v` |
 | `SETTINGS.reset=<key>` | Resets a specific key or `ALL` to factory default. | `SETTINGS.reset=ALL` |
 | `SETTINGS.presets` | Returns JSON list of available machine profile presets. | `SETTINGS.presets` |
+| `SETTINGS.catalogSave=<json>` | Saves or updates a custom user catalog entry (`profiles`, `threads`, `tapers`) in LittleFS `/presets/user/<domain>/`. | `SETTINGS.catalogSave={"domain":"threads","id":"custom_m12",...}` |
+| `SETTINGS.catalogDelete=<json>` | Deletes a custom user catalog entry from LittleFS `/presets/user/<domain>/` (ROM entries, active profile, and default profile are protected). | `SETTINGS.catalogDelete={"domain":"threads","id":"custom_m12"}` |
 | `SETTINGS.schema` | Returns JSON schema defining valid settings keys, types, and ranges. | `SETTINGS.schema` |
 
-* **Required Permission:** `PERM_SETTINGS_WRITE` for `set` and `reset` (Reads permitted with `PERM_READ_TELEMETRY`).
+* **Required Permission:** `PERM_SETTINGS_WRITE` for `set`, `reset`, `catalogSave`, and `catalogDelete` (Reads permitted with `PERM_READ_TELEMETRY`).
+* **Retired Commands:** Legacy `PRESET.*` and `SETTINGS.preset.*` commands are retired in favor of `PROPERTIES.catalog`, `SETTINGS.catalogSave`, `SETTINGS.catalogDelete`, and `SETTINGS.set=profile:<id>`.
 
 ---
 
@@ -303,10 +313,11 @@ Requests an immediate atomic snapshot of machine state across one or more teleme
 * **Returns:** Canonical multi-line or pipe-delimited telemetry frame.
 
 ### 4.3 Mode & Profile Discovery (`PROPERTIES.*`)
-Introspects machine physical capabilities, available cutting modes, and profile geometry.
+Introspects machine physical capabilities, available cutting modes, profile geometry, and the unified preset catalog.
 * **Available Endpoints:**
-  * `PROPERTIES.modes` — Returns JSON list of cutting modes and conversational wizards physically supported by the active hardware profile (replaces legacy `MODE.discover`).
+  * `PROPERTIES.modes[=all]` — Returns JSON list of cutting modes (`PROPERTIES.modes` returns modes supported by the active hardware profile; `PROPERTIES.modes=all` returns all registered modes including those unavailable on the current hardware profile, replacing legacy `MODE.discover`).
   * `PROPERTIES.profiles` — Returns JSON list of available machine hardware profiles.
+  * `PROPERTIES.catalog=path=<domain>[/<catalog>[/<id>]]&$select=...&$filter=...&$metadata=true` — Unified transport-agnostic OData-style query across `profiles`, `threads`, and `tapers` (merging factory ROM `SystemPresetsJson.h` and LittleFS `/presets/user/<domain>/`).
   * `PROPERTIES.get=<path>` — Queries a specific hardware property key.
 * **Example `PROPERTIES.modes` Response (JSON):**
   ```json

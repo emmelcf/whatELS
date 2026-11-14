@@ -383,7 +383,7 @@ struct CachedProperty {
 
 1. **Unmodified System:** When a user unpacks or initializes whatELS and selects `wm210v_dual`, NVS flash contains **zero axis override keys**. The RAM cache holds `std::nullopt`.
 2. **User Calibration:** When the user measures minor leadscrew error and adjusts $Z$ pitch from $20{,}000\text{ du}$ ($2.0\text{ mm}$) to $20{,}025\text{ du}$, `SettingsService` writes only `"z_screw"` to NVS and updates `overrideLong = 20025`.
-3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu,default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
+3. **Inheritance & Reset:** If the user sends `SETTINGS.reset=screwZDu` or `SETTINGS.set=screwZDu:default`, `SettingsService` removes `"z_screw"` from NVS and resets the RAM cache to `std::nullopt`. The effective value instantly snaps back to the preset's baseline.
 
 ### 3.3 Preset Architecture: ROM System Templates & User-Dedicated LittleFS
 
@@ -393,11 +393,11 @@ To ensure that firmware upgrades never erase user data or require flashing raw f
    - **System Templates (`"system": true`):** Sourced from ROM or marked read-only. Cannot be overwritten or deleted.
    - **User Presets (`"system": false`):** Created by the workshop operator. Can be edited in-place, saved, or deleted.
 3. **Deletion & Default Safety Guards:**
-   - **System Templates Protected:** `SETTINGS.preset.delete` unconditionally rejects removing templates tagged `"system": true`.
+   - **System Templates Protected:** `SETTINGS.catalogDelete` unconditionally rejects removing templates tagged `"system": true`.
    - **Active Preset Protected:** The preset currently loaded and in use (`activeMachineProfile.profileId`) cannot be deleted while active.
    - **Catalog Default Protected:** The preset designated as the catalog default (`default_profile_id`) cannot be deleted.
 4. **Zero LittleFS Overwrite on Update:** Upgrading firmware via USB or Web OTA writes only to the application partition (`firmware.bin`). User presets on LittleFS are never wiped.
-5. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via canonical `SETTINGS.preset.*` wire commands.
+5. **Core Ownership:** The core controller scans, reads, serializes, and applies these JSON presets. All connected clients (Web UI, native LVGL display, serial pendants) interact with presets identically via the unified catalog wire commands (`PROPERTIES.catalog`, `SETTINGS.catalogSave`, `SETTINGS.catalogDelete`, `SETTINGS.presets`, `PROPERTIES.profiles`, and `SETTINGS.set=profile:<id>`).
 
 ### 3.4 Dynamic Schema Introspection (JSON Schema Standard)
 
@@ -410,7 +410,7 @@ To provide clean, zero-coupling introspection:
 
 ### 3.5 Smart Observable Properties (`PersistentSetting<T>`) & Redundant Write Suppression
 
-To eliminate repetitive manual `Preferences` operations, flash wear, and accidental redundant writes, all persistent settings across the firmware—including Controller Infrastructure (WiFi, keyboard bindings in Tier 2), Operator Preferences (Tier 3), and UI Presentation (Tier 4)—MUST use the `PersistentSetting<T>` C++ observable property template (`src/core/PersistentSetting.h`). Ad-hoc raw `Preferences.put*()` calls are strictly forbidden.
+To eliminate repetitive manual `Preferences` operations, flash wear, and accidental redundant writes, all persistent settings across the firmware—including Controller Infrastructure (WiFi, keyboard bindings in Tier 2), Operator Preferences (Tier 3), and UI Presentation (Tier 4)—MUST use the `PersistentSetting<T>` C++ observable property template ([`src/core/PersistentSetting.h`](../../src/core/PersistentSetting.h)) backed by the pure abstract `whatels::core::ISettingsStorage` boundary ([`src/core/ISettingsStorage.h`](../../src/core/ISettingsStorage.h)). Ad-hoc raw `Preferences.put*()` calls are strictly forbidden in core logic; native host unit tests inject `MockSettingsStorage` against `ISettingsStorage` with zero vendor `Preferences.h` headers.
 
 #### Architectural Tenets of `PersistentSetting<T>`:
 1. **Universal Usage Across Subsystems:** Any setting that persists across reboots (whether in namespace `"prefs"`, `"wifi"`, `"keyboard"`, or sparse `"machine"`) must be encapsulated in a `PersistentSetting<T>` instance. Supported types include `bool`, `int`, `long`, `float`, `uint8_t`, and Arduino `String`.
@@ -675,97 +675,79 @@ public:
 
 ## 7. Canonical Wire Protocol Contracts
 
-All communication with `SettingsService` adheres to clean, line-oriented ASCII formatting:
+All communication with `SettingsService` adheres to [`CANONICAL_COMMAND_REFERENCE.md`](../protocol/CANONICAL_COMMAND_REFERENCE.md) single-`=` / colon-delimited (`<NAMESPACE>.<action>[=<arguments>]`) ASCII formatting and `OK:SETTINGS.<action>:<data>` / `ERR:SETTINGS.<action>:<reason>` response grammar:
 
 ### 7.1 Querying Settings (`SETTINGS.get`)
-Clients query individual keys, whole groups, or all settings:
+Clients query all settings, a group (`machine`, `sys`, `prefs`), or an individual key:
 ```text
 -> SETTINGS.get=machine.z.pitchDu\n
-<- SETTING.machine.z.pitchDu=20000 (default=20000, overridden=0)\n
+<- OK:SETTINGS.get:machine.z.pitchDu=20000\n
 
--> SETTINGS.getGroup=machine.dim\n
-<- SETTING.machine.dim.bedLength=400.0\n
-<- SETTING.machine.dim.chuckDia=125.0\n
-<- SETTING.machine.dim.spindleBore=38.0\n
+-> SETTINGS.get=machine.dim\n
+<- OK:SETTINGS.get:machine.dim.bedLength=400.0,machine.dim.chuckDia=125.0,machine.dim.spindleBore=38.0\n
 ```
 
 ### 7.2 Mutating Settings (`SETTINGS.set`)
-Clients update settings with automatic range validation:
+Clients update settings using the strict colon delimiter (`<key>:<val>`) with automatic range validation:
 ```text
--> SETTINGS.set=machine.z.pitchDu,20025\n
-<- OK:SETTINGS.machine.z.pitchDu=20025\n
+-> SETTINGS.set=machine.z.pitchDu:20025\n
+<- OK:SETTINGS.set:machine.z.pitchDu=20025\n
 
--> SETTINGS.set=machine.z.pitchDu,-50\n
-<- ERR:SETTINGS.machine.z.pitchDu=out of bounds (100..1000000)\n
+-> SETTINGS.set=machine.z.pitchDu:-50\n
+<- ERR:SETTINGS.set:OUT_OF_BOUNDS\n
 ```
 
 ### 7.3 Resetting to Baseline Defaults (`SETTINGS.reset`)
-Clients can reset an individual key or an entire machine group back to preset baseline:
+Clients can reset an individual key, a group, or `ALL` back to preset baseline:
 ```text
 -> SETTINGS.reset=machine.z.pitchDu\n
-<- OK:SETTINGS.machine.z.pitchDu=20000 (reverted to preset default)\n
+<- OK:SETTINGS.reset:machine.z.pitchDu=20000\n
 
--> SETTINGS.resetGroup=machine\n
-<- OK:SETTINGS.resetGroup=machine (all physical parameters reverted to WM210V)\n
+-> SETTINGS.reset=machine\n
+<- OK:SETTINGS.reset:machine\n
 ```
 
-### 7.4 Client-Scoped Storage Hook (`SETTINGS.client.*`)
-Stateless clients persist their UI presentation preferences on the controller broker:
+### 7.4 Client-Scoped Storage Hook (`client.<clientId>.*`)
+Stateless clients persist their UI presentation preferences on the controller broker using standard `SETTINGS.set` / `SETTINGS.get`:
 ```text
--> SETTINGS.client.set=tablet_shop,diaRad=1\n
-<- OK:SETTINGS.client.set=tablet_shop,diaRad=1\n
+-> SETTINGS.set=client.tablet_shop.diaRad:1\n
+<- OK:SETTINGS.set:client.tablet_shop.diaRad=1\n
 
--> SETTINGS.client.get=tablet_shop,diaRad\n
-<- SETTING.client.tablet_shop.diaRad=1\n
+-> SETTINGS.get=client.tablet_shop.diaRad\n
+<- OK:SETTINGS.get:client.tablet_shop.diaRad=1\n
 ```
 
-### 7.5 Machine Preset Operations (`SETTINGS.preset.*`)
-Clients discover, inspect, apply, and save machine profiles on LittleFS without touching compiled firmware:
+### 7.5 Unified Catalog & Machine Profile Operations
+*(Legacy `PRESET.*` and `SETTINGS.preset.*` commands are retired.)*
+
+Clients discover, inspect, activate, save, and delete catalog entries across `profiles`, `threads`, and `tapers` (merging factory ROM `SystemPresetsJson.h` and LittleFS `/presets/user/<domain>/`):
 ```text
--> SETTINGS.preset.list\n
-<- PRESET.list=wm210v_stock:sys,mini_7x14:sys,my_lathe:user;active=wm210v_stock;default=wm210v_stock\n
+-- Discover machine profiles:
+-> SETTINGS.presets\n
+<- OK:SETTINGS.presets:[...]\n
 
--> SETTINGS.preset.get=wm210v_stock\n
-<- {"identity":{"profile_id":"wm210v_stock","system":true,...},...}\n
+-> PROPERTIES.profiles\n
+<- OK:PROPERTIES.profiles:[...]\n
 
--> SETTINGS.preset.apply=wm210v_stock\n
-<- OK:SETTINGS.preset.apply=wm210v_stock\n
+-- Query unified catalog with OData parameters:
+-> PROPERTIES.catalog=path=profiles/wm210v_stock\n
+<- OK:PROPERTIES.catalog:{"identity":{"profile_id":"wm210v_stock","system":true,...},...}\n
 
--- Setting a new catalog default profile:
--> SETTINGS.preset.setDefault=my_lathe\n
-<- OK:SETTINGS.preset.setDefault=my_lathe\n
+-- Activate a machine profile (gated by [SAFE-01]; rejected if motion is active):
+-> SETTINGS.set=profile:wm210v_stock\n
+<- OK:SETTINGS.set:profile=wm210v_stock\n
 
--- Reverting to the catalog default profile:
--> SETTINGS.preset.resetToDefault\n
-<- OK:SETTINGS.preset.resetToDefault=wm210v_stock\n
+-- Save or update a custom user catalog entry in LittleFS (/presets/user/<domain>/):
+-> SETTINGS.catalogSave={"domain":"profiles","id":"my_lathe",...}\n
+<- OK:SETTINGS.catalogSave:my_lathe\n
 
--- Attempting to overwrite a system template:
--> SETTINGS.preset.save\n
-<- ERR:SETTINGS.preset.save=cannot overwrite system template: wm210v_stock (use save=<new_name>)\n
+-- Attempting to overwrite or delete a protected system/active/default entry:
+-> SETTINGS.catalogDelete={"domain":"profiles","id":"wm210v_stock"}\n
+<- ERR:SETTINGS.catalogDelete:PROTECTED_ENTRY\n
 
--- Saving customizations as a new user preset:
--> SETTINGS.preset.save=my_lathe\n
-<- OK:SETTINGS.preset.save=my_lathe\n
-
--- Updating an active user preset in-place:
--> SETTINGS.preset.save\n
-<- OK:SETTINGS.preset.save=my_lathe\n
-
--- Attempting to delete a system template (rejected):
--> SETTINGS.preset.delete=wm210v_stock\n
-<- ERR:SETTINGS.preset.delete=cannot delete system template: wm210v_stock\n
-
--- Attempting to delete the currently active preset (rejected):
--> SETTINGS.preset.delete=my_lathe\n
-<- ERR:SETTINGS.preset.delete=cannot delete active preset: my_lathe\n
-
--- Attempting to delete the catalog default preset (rejected):
--> SETTINGS.preset.delete=my_default_lathe\n
-<- ERR:SETTINGS.preset.delete=cannot delete default preset: my_default_lathe\n
-
--- Deleting an inactive user preset:
--> SETTINGS.preset.delete=old_test_preset\n
-<- OK:SETTINGS.preset.delete=old_test_preset\n
+-- Deleting an inactive custom user entry:
+-> SETTINGS.catalogDelete={"domain":"profiles","id":"old_test_preset"}\n
+<- OK:SETTINGS.catalogDelete:old_test_preset\n
 ```
 
 ### 7.6 Dynamic Schema Introspection (`SETTINGS.schema=*`)

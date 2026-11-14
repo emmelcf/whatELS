@@ -33,10 +33,10 @@ The whatELS firmware inherited two major architectural bottlenecks from early mo
 
 ### Pillar 1: Strict 6-Namespace Grammar Matrix
 The external wire surface is rationalized into six distinct namespaces:
-1. **`CMD` (Physical Motion Intents):** `CMD.startFeed`, `CMD.startCycle`, `CMD.hold`, `CMD.resume`, `CMD.step`, `CMD.stop`, `CMD.jogStep`, `CMD.jogHold`, `CMD.jogRelease`, `CMD.axisZero`, `CMD.axisPosDu`, `CMD.axisLimitDu`, `CMD.axisClearLimit`, `CMD.ping`, `CMD.simEncoder`, `CMD.simRpm`, `CMD.simPulses`.
+1. **`CMD` (Physical Motion Intents):** `CMD.startFeed`, `CMD.startCycle`, `CMD.hold`, `CMD.resume`, `CMD.step`, `CMD.stop`, `CMD.feedNudge`, `CMD.jogStep`, `CMD.jogHold`, `CMD.jogRelease`, `CMD.axisZero`, `CMD.axisPosDu`, `CMD.axisLimitDu`, `CMD.axisClearLimit`, `CMD.ping`, `CMD.simEncoder`, `CMD.simRpm`, `CMD.simPulses`.
 2. **`STATE` (Machine Dynamic State):** `STATE.get[=<domains>]` (e.g. `STATE.get=ALL` or `STATE.get=K,I`).
-3. **`SETTINGS` (User Preferences & Machine Config):** `SETTINGS.get[=<path>]`, `SETTINGS.set=<key>:<val>`, `SETTINGS.reset`, `SETTINGS.presets`, `SETTINGS.schema`.
-4. **`PROPERTIES` (Machine Iron Invariants & Profiles):** `PROPERTIES.get[=<path>]`, `PROPERTIES.modes`, `PROPERTIES.profiles`.
+3. **`SETTINGS` (User Preferences & Machine Config):** `SETTINGS.get[=<path>]`, `SETTINGS.set=<key>:<val>`, `SETTINGS.reset`, `SETTINGS.presets`, `SETTINGS.schema`, `SETTINGS.catalogSave`, `SETTINGS.catalogDelete`.
+4. **`PROPERTIES` (Machine Iron Invariants & Profiles):** `PROPERTIES.get[=<path>]`, `PROPERTIES.modes[=all]`, `PROPERTIES.profiles`, `PROPERTIES.catalog`.
 5. **`SYS` (Appliance & Host Diagnostics):** `SYS.get[=<path>]` (e.g. `SYS.get=info`, `SYS.get=health`).
 6. **`CLIENT` (Session & Capability Handshake):** `CLIENT.hello=type:<profile>,ver:<version>,label:"<friendly_label>"`.
 
@@ -52,7 +52,7 @@ We cleanly decouple text parsing from domain execution:
 The 979-line `WebServerModule.cpp` monolith is being decomposed into three single-responsibility classes:
 1. **`WifiService` (`src/core/WifiService.h/.cpp`):** AP/STA connection state machine, exponential-backoff reconnect watchdog (3s to 30s), disabled modem sleep for real-time telemetry, and mDNS responder (`whatels.local`).
 2. **`HttpServer` (`src/core/network/HttpServer.h/.cpp`):** Dedicated Port 80 HTTP server for web assets, transparent `.gz` compression, SPA routing, and multipart OTA updates (`POST /firmware/upload`). *(Note: `WebServerModule.cpp` remains temporarily active until embedded `PROGMEM` asset serving is migrated into `HttpServer.cpp`).*
-3. **`WebSocketTransport` (`src/core_client/transports/`):** Dedicated Port 81 client transport implementing `ITransport` on `/canonical`. Status telemetry is managed exclusively by `ClientManager::broadcastIfChanged()` at the 10 Hz global cadence.
+3. **`WebSocketTransport` (`src/core_client/transports/`):** Dedicated Port 81 client transport implementing `ITransport` on `/canonical`. Core 1 publishes motion snapshots to `TelemetryMailbox` at 50 Hz; Core 0 status telemetry is pushed exclusively by `ClientManager::broadcastIfChanged()` at a change-only max 10 Hz cadence.
 
 ### Pillar 4: Formal Cycle Start Contract & Zero Ghost Limits
 * **Atomic Single-Frame Initiation:** Canned cycles are initiated atomically in a single frame via `CMD.startCycle=mode:<type>,<key1>:<val1>,...` using order-independent key-value tokens.
