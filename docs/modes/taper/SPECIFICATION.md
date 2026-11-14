@@ -11,35 +11,39 @@
 ## Part 1: Kinematic & State Specification (Controller Domain)
 
 ### 1. Mode Identity & Hardware Capabilities
-* **Mode Identifier:** `MODE_CONE` (Legacy Code `100` / Canonical Enum `ELSModeId::Taper` & `ELSModeId::GearboxZX`).
+* **Mode Identifiers:**
+  * **Continuous Coupled Taper Feed:** `ModeIds::GEARBOX` (`50`, `axis:ZX`) invoked via `CMD.startFeed`.
+  * **Multi-Pass Taper Canned Cycle (Planned, Issue #10):** `ModeIds::CONE` (`57`) invoked via `CMD.startCycle=mode:taper,...`.
 * **Required Machine Capabilities:**
-  * Mandatory: `CAP_Z_STEPPER`, `CAP_X_STEPPER`, `CAP_SPINDLE_ENCODER`.
+  * Mandatory: `CAP_MOTOR_Z`, `CAP_MOTOR_X`, `CAP_SPINDLE_ENCODER`.
 
 ### 2. Parameter Manifest
 
 | Parameter | Key | Type | Unit | Range | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Z Primary Feed**| `zDupr` | Int32 | deci-microns/rev | $10 \dots 500{,}000$ | $1{,}000$ ($0.100\text{ mm/rev}$) | Primary carriage feed rate. |
-| **Taper Ratio** | `coneRatio`| Float | scalar ($\Delta\text{Dia}/\Delta Z$) | $0.0001 \dots 10.0$ | $0.04995$ (MT2) | Physical slope ratio $C$. |
+| **Wire Radial Taper (`CMD.startFeed`)** | `taper` | Int32 | `du` per $10{,}000\text{ du}$ | `> 0` | *Mandatory* | Radial $X$ travel in integer `du` per $10{,}000\text{ du}$ ($1.0\text{ mm}$) of $Z$ travel (`taper = round(10000 * coneRatio / 2)`). |
+| **Wire X Direction (`CMD.startFeed`)** | `xdir` | Enum | semantic | `CENTER`/`RETRACT`/`-1`/`+1` | *Mandatory* | Secondary $X$-axis direction when `axis:ZX`. |
+| **Z Primary Feed** | `feed` / `zDupr` | Int32 | `dupr` (or `du/min`) | `> 0` | $1{,}000$ ($0.100\text{ mm/rev}$) | Primary carriage feed rate. |
+| **Diametral Taper Ratio (UI / Cycle)** | `coneRatio` | Float | scalar ($\Delta\text{Dia}/\Delta Z$) | $0.0001 \dots 10.0$ | $0.04995$ (MT2) | Engineering diametral slope ratio $C = 2 \tan(\theta)$ (client converts to radial `taper` for `CMD.startFeed`). |
 | **Authoring Mode** | `tpMode` | Enum | int | `RATIO (0)`, `ANGLE (1)`, `PRESET (2)` | `PRESET` | Exact operator intent mode. |
-| **Authoring Scalar**| `tpVal` | Float | scalar | $0.001 \dots 1000.0$ | $19.25$ | User-typed ratio or angle degrees. |
+| **Authoring Scalar** | `tpVal` | Float | scalar | $0.001 \dots 1000.0$ | $19.25$ | User-typed ratio or angle degrees. |
 | **Preset Index** | `tpPreset` | Int16 | ID | $-1$ (Custom) or $\ge 0$ | $1$ (MT2) | Selected standard preset ID. |
-| **Slope Direction**| `invert` | Boolean | flag | `NORMAL (false)`, `INVERT (true)` | `NORMAL` | Normal (wide at chuck) vs. Inverted. |
-| **Surface Type** | `surface` | Enum | semantic | `EXTERNAL` (OD), `INTERNAL` (ID) | `EXTERNAL` | OD turning vs. internal taper boring. |
-| **Taper Length** | `zLength` | Int32 | deci-microns | $100 \dots 10{,}000{,}000$ | $250{,}000$ ($25.0\text{ mm}$) | Axial taper cut length along $Z$. |
+| **Slope Direction** | `invert` | Boolean | flag | `NORMAL (false)`, `INVERT (true)` | `NORMAL` | Normal (wide at chuck) vs. Inverted (used by canned cycle & UI). |
+| **Surface Type** | `surface` | Enum | semantic | `EXTERNAL` (OD), `INTERNAL` (ID) | `EXTERNAL` | OD turning vs. internal taper boring (used by canned cycle & UI). |
+| **Taper Length** | `zLength` | Int32 | `du` | $100 \dots 10{,}000{,}000$ | $250{,}000$ ($25.0\text{ mm}$) | Axial taper cut length along $Z$. |
 
-### 3. Kinematic Formulas & Dual-Axis Slaving
+### 3. Kinematic Formulas & Dual-Axis Slaving (Radial vs. Diametral)
 
-A lathe taper is fundamentally defined by its diametral slope ratio $C$:
+Engineering taper specifications use the **diametral slope ratio** $C$, whereas the firmware wire protocol (`CMD.startFeed=axis:ZX`) uses the **radial slope** `taper` (matching physical radial $X$-axis stepping):
 
-$$C = \frac{\Delta\text{Dia}}{\Delta Z} = 2 \tan(\theta)$$
+$$C = \frac{\Delta\text{Dia}}{\Delta Z} = 2 \tan(\theta) \qquad \Longleftrightarrow \qquad \text{taper}_{\text{radial}} = \text{round}\!\left(10{,}000 \times \frac{\Delta X_{\text{radius}}}{\Delta Z}\right) = \text{round}\!\left(10{,}000 \times \frac{C}{2}\right) = \text{round}\!\left(10{,}000 \times \tan(\theta)\right)$$
 
 Where $\theta$ is the half-angle off the spindle centerline.
 
 #### Coordinated Cross-Slide Slaving
-During synchronized spindle rotation, the longitudinal carriage $Z$ advances at $\text{dupr}_Z$. The transverse cross-slide $X$ is slaved proportionally:
+During synchronized spindle rotation, the longitudinal carriage $Z$ advances at $\text{dupr}_Z$. The transverse cross-slide $X$ is slaved radially:
 
-$$\text{dupr}_X = \frac{C}{2.0} \times \text{dupr}_Z = \tan(\theta) \times \text{dupr}_Z$$
+$$\text{dupr}_X = \frac{\text{taper}_{\text{radial}}}{10{,}000} \times \text{dupr}_Z = \frac{C}{2.0} \times \text{dupr}_Z = \tan(\theta) \times \text{dupr}_Z$$
 
 #### Direction & Inversion Sign Logic
 Cross-slide motion direction is automatically resolved based on feed direction, surface type, and cone profile:
@@ -53,8 +57,8 @@ Cross-slide motion direction is automatically resolved based on feed direction, 
 
 ### 4. Mode Disambiguation: Continuous Gearing vs. Multi-Pass Canned Cycle
 whatELS firmware distinguishes two operational workflows for angled motion:
-1. **Continuous Coupled Gearing (`GEARBOX -> axis:ZX` via `CMD.startFeed`):** Single continuous feed stroke coupling $Z$ (`dir`) and $X$ (`xdir`) at an explicit atomic radial slope (`taper` in $\text{du}$ of $X$ per $10{,}000\text{ du}$ of $Z$), bounded by active soft limits or `dist`. Both `xdir` and `taper` are mandatory parameters in `CMD.startFeed=axis:ZX,...` with zero core defaults.
-2. **Automated Multi-Pass Cycle (`TAPER` via `CMD.startCycle=mode:taper`):** Autonomous multi-pass canned cycle (tracked in Issue #10) taking multiple roughing passes parallel to the taper slope using `surface` (`EXTERNAL` OD vs. `INTERNAL` ID) and `invert` (`NORMAL` vs. `INVERTED`) to resolve pass step-in and end-of-pass retract directions.
+1. **Continuous Coupled Gearing (`ModeIds::GEARBOX = 50`, `axis:ZX` via `CMD.startFeed`):** Single continuous feed stroke coupling $Z$ (`dir`) and $X$ (`xdir`) at an explicit atomic radial slope (`taper` in $\text{du}$ of $X$ per $10{,}000\text{ du}$ of $Z$), bounded by active soft limits or `dist`. Both `xdir` and `taper` are mandatory parameters in `CMD.startFeed=axis:ZX,...` with zero core defaults.
+2. **Automated Multi-Pass Cycle (`ModeIds::CONE = 57` via `CMD.startCycle=mode:taper`):** Autonomous multi-pass canned cycle (tracked in Issue #10) taking multiple roughing passes parallel to the taper slope using `surface` (`EXTERNAL` OD vs. `INTERNAL` ID) and `invert` (`NORMAL` vs. `INVERTED`) to resolve pass step-in and end-of-pass retract directions.
 
 ### 5. Multi-Client Disambiguation & Yield Triggers
 Because legacy telemetry uses `MODE_CONE` for both continuous feed and canned cycles, the display controller enforces state-ownership yield triggers:

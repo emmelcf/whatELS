@@ -385,7 +385,7 @@ Lathe profiles are exported and imported as self-contained catalog documents:
 
 ```json
 {
-  "$schema": "/schemas/lathe-profiles.schema.json",
+  "$schema": "/schemas/lathe-profile.schema.json",
   "version": 1,
   "default_profile_id": "wm210v_stock",
   "profiles": [

@@ -88,7 +88,7 @@ public:
 
   /**
    * @brief Sets the physical motion direction for an axis.
-   * @details Enforces dirSetupDelayUs if direction changes while stationary.
+   * @details Enforces StepTimingConfig::dirSetupDelayNs (and dirHoldTimeNs) if direction changes.
    * @param axis Target axis.
    * @param dir Cartesian polarity: -1 (Chuck / Centerline) or +1 (Tailstock / Retract).
    */
@@ -114,7 +114,7 @@ public:
   /**
    * @brief Fires a single non-blocking step pulse on the specified axis.
    * @details Used by synchronous spindle gearing (Bresenham step dispatch) and discrete jogs.
-   *          Enforces stepPulseWidthUs.
+   *          Enforces StepTimingConfig::stepPulseWidthNs.
    */
   virtual void pulseStep(AxisId axis) = 0;
 

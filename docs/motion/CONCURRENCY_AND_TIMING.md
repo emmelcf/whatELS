@@ -17,15 +17,15 @@ A lathe electronic leadscrew controller has two conflicting operational profiles
    - Spindle encoder sampling, quadrature counter phase tracking.
    - Stepper step pulse dispatch, hardware timer management, acceleration profiling.
    - Real-time limit lookahead and stopping distance enforcement.
+   - `IELSMode` state machine execution and canned cycle orchestration.
    - Emergency stop lines and hardware alarms.
    - *Failure Mode:* A jitter spike of even $20\,\mu\text{s}$ can cause stepper motor resonance, lost steps, or thread pitch lead error.
 
 2. **Asynchronous Soft Real-Time Supervisory Domain (Core 0):**  
-   - Web server (HTTP, WebSocket broadcast at 50 Hz - 100 Hz).
+   - Web server (HTTP, WebSocket broadcast at 10 Hz reading 50 Hz `TelemetryMailbox` snapshots).
    - WiFi/Ethernet network stack (LwIP).
-   - JSON serialization, parameter parsing, and HMI state updates.
-   - Flash filesystem reads/writes (LittleFS settings storage).
-   - Mode state machine transitions and canned cycle orchestration.
+   - JSON serialization, parameter parsing, and HMI command dispatch/validation.
+   - Flash filesystem reads/writes (LittleFS / NVS settings storage).
    - *Characteristic:* Network packet processing can block for hundreds of microseconds or milliseconds.
 
 **Core Invariant:**  
@@ -215,13 +215,18 @@ struct MotionCommandPacket {
     ```
 - **Glitch Filter:** Configure ESP32-S3 PCNT hardware glitch filter to $\approx 500\text{ ns}$ (40 APB clock cycles at 80 MHz) to reject industrial VFD switching noise without attenuating valid quadrature edges.
 
-### 4.2 Stepper Pulse Generation Strategies
+### 4.2 Stepper Pulse Generation & Hybrid Hardware Offload
 
 | Technique | Peripheral | Maximum Pulse Rate | Jitter | Use Case in whatELS |
 |---|---|---|---|---|
-| **Hardware RMT** | ESP32-S3 RMT | Up to $1\text{ MHz}$ | $< 50\text{ ns}$ | Asynchronous velocity rapids & smooth continuous feed |
-| **GPTimer ISR** | ESP32-S3 64-bit Timer | Up to $100\text{ kHz}$ | $< 0.5\,\mu\text{s}$ | Spindle-synchronized Bresenham gearing & multi-axis coordinated vectoring |
+| **Hardware RMT (`startPulseTrain()`)** | ESP32-S3 RMT | Up to $1\text{ MHz}$ | $< 50\text{ ns}$ | Offloaded asynchronous velocity feed (`VELOCITY_FEED`) & continuous jog (`JOG`) |
+| **4 kHz GPTimer Sync Dispatch** | ESP32-S3 64-bit Timer | Up to $100\text{ kHz}$ | $< 0.5\,\mu\text{s}$ | 4 kHz ($250\,\mu\text{s}$) paced `SPINDLE_SYNC_GEARING` Bresenham dispatch & multi-axis vectoring |
 | **High-Precision Direct Toggle** | Fast GPIO (`gpio_set_level`) | Up to $20\text{ MHz}$ | Bounded by ISR latency | Fine single-step discrete jogs & index homing touch-off |
+
+**System Execution Cadences (Hybrid Offload):**
+- **4 kHz Sync Dispatch ($250\,\mu\text{s}$):** GPTimer-paced Core 1 sync loop samples PCNT spindle delta, evaluates deceleration lookahead, and dispatches `SPINDLE_SYNC_GEARING` steps via `pulseStep()`.
+- **1 kHz Supervisory Queue ($1\text{ ms}$):** Core 1 `MotionEngine` task loop drains incoming `MotionCommandPacket` commands from Core 0 and services `IELSMode` orchestration.
+- **50 Hz `TelemetryMailbox` $\to$ 10 Hz WS Broadcast:** Core 1 publishes lock-free seqlock `MotionTelemetrySnapshot` records at 50 Hz ($20\text{ ms}$); Core 0 Web/WS task reads snapshots and broadcasts WebSocket updates to connected clients at 10 Hz.
 
 ### 4.3 Worst-Case Latency Budgets (Core 1)
 

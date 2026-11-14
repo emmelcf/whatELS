@@ -11,22 +11,22 @@
 ## Part 1: Kinematic & State Specification (Controller Domain)
 
 ### 1. Mode Identity & Hardware Capabilities
-* **Mode Identifier:** `MODE_GEARBOX` (Legacy Code `0` / Canonical Enum `ELSModeId::Gearbox`).
+* **Mode Identifier:** `ModeIds::GEARBOX` (`50`, slug: `"gearbox"`; legacy code `0`). Continuous coupled `ZX` taper feed executes within `ModeIds::GEARBOX (50)` (planned `#10` multi-pass taper canned cycle is `ModeIds::CONE (57)`).
 * **Required Machine Capabilities:**
-  * Synchronized Mode: `CAP_SPINDLE_ENCODER`, plus either `CAP_Z_STEPPER` or `CAP_X_STEPPER`.
-  * Asynchronous Mode: Either `CAP_Z_STEPPER` or `CAP_X_STEPPER` (operates independently of spindle).
+  * Synchronized Mode (`sync:1`): `CAP_SPINDLE_ENCODER`, plus `CAP_MOTOR_Z` and/or `CAP_MOTOR_X` (both required for `axis:ZX`).
+  * Asynchronous Mode (`sync:0`): `CAP_MOTOR_Z` and/or `CAP_MOTOR_X` (operates independently of spindle).
 
-### 2. Parameter Manifest
+### 2. Parameter Manifest (`CMD.startFeed`)
 
 | Parameter | Key | Type | Unit | Range | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Sync Type** | `sync` | Boolean | enum | `SYNC (true)`, `ASYNC (false)` | `SYNC` | Spindle synchronized vs. time-based feed. |
-| **Active Axis** | `axis` | Enum | char | `'Z'`, `'X'`, `'ZX'` | `'Z'` | Governed leadscrew or cross-slide motor. |
-| **Feed Rate (Z)** | `zDupr` | Int32 | deci-microns/rev | $10 \dots 500{,}000$ | $1{,}000$ ($0.100\text{ mm/rev}$) | Canonical longitudinal feed. |
-| **Feed Rate (X)** | `xDupr` | Int32 | deci-microns/rev | $10 \dots 250{,}000$ | $500$ ($0.050\text{ mm/rev}$) | Canonical transverse cross-feed. |
-| **Async Speed (Z)**| `zSpeed` | Int32 | deci-microns/min | $1{,}000 \dots 100{,}000{,}000$ | $1{,}500{,}000$ ($150\text{ mm/min}$) | Time-based rapid/feed speed. |
-| **Direction** | `dir` | Enum | semantic | `CHUCK` / `TAIL` ($Z$); `CENTER` / `RETRACT` ($X$) | `CHUCK` | Direction of active axis travel. |
-| **TPI Intent** | `thPitch`| Float | threads/inch | $1.0 \dots 128.0$ | $20.0$ | Exact operator authoring intent when in TPI mode. |
+| **Active Axis** | `axis` | Enum | string | `Z`, `X`, `ZX` | *Mandatory* | Governed leadscrew (`Z`), cross-slide (`X`), or coupled taper (`ZX`). |
+| **Sync Type** | `sync` | Binary | `0\|1` | `1` (sync), `0` (async) | `1` | Spindle-synchronized (`1`) vs. time-based velocity (`0`). |
+| **Direction** | `dir` | Enum/Sign | semantic | `-1`/`+1`, `CHUCK`/`TAIL` ($Z$), `CENTER`/`RETRACT` ($X$) | *Mandatory* | Primary axis Cartesian travel direction (`FWD`/`REV` forbidden). |
+| **Feed Rate** | `feed` | Int32 | `dupr` or `du/min` | `> 0` | *Mandatory* | Positive magnitude: `dupr` when `sync:1`; `du/min` when `sync:0`. |
+| **Distance** | `dist` | Int32 | `du` | `-1` or `> 0` | `-1` | Target travel distance in integer `du` (`-1` = continuous to soft limit). |
+| **X Direction** | `xdir` | Enum/Sign | semantic | `-1`/`+1`, `CENTER`/`RETRACT`/`IN`/`OUT` | *Mandatory if `ZX`* | Secondary $X$ axis direction (mandatory for `axis:ZX`; rejected on `Z`/`X`). |
+| **Radial Taper** | `taper` | Int32 | `du / 10000 du` | `> 0` | *Mandatory if `ZX`* | Radial $X$ travel in `du` per $10{,}000\text{ du}$ ($1.0\text{ mm}$) of $Z$ (mandatory for `axis:ZX`). |
 
 ### 3. Kinematic Formulas & Physical Execution
 
@@ -51,16 +51,12 @@ $$\text{Frequency}_{\text{step}} = \frac{\text{Speed}_{\text{du/min}} \times \te
 * The motion engine halts step pulses immediately without disabling motor holding torque.
 * When at limit ($0.000$ distance remaining), the tripping directional jog/feed is locked, but the reverse direction remains immediately operable to escape the limit.
 
-### 5. Canonical Wire Protocol
+### 5. Canonical Wire Protocol (`CANONICAL_COMMAND_REFERENCE.md`)
 
-* **Mode Activation:** `CMD.mode=GEARBOX`
-* **Feed Setpoints:**
-  * `CMD.feedDupr=Z,1000` (Sets Z feed to $0.100\text{ mm/rev}$)
-  * `CMD.feedTpi=20` (Sets Z pitch to $20\text{ TPI}$ and updates intent register)
-  * `CMD.feedMm=1.5` (Sets Z pitch to $1.500\text{ mm/rev}$)
-  * `CMD.asyncSpeed=Z,1500000` (Sets Z async speed to $150\text{ mm/min}$)
-* **Direction:** `CMD.feedDir=Z,CHUCK` / `CMD.feedDir=Z,TAIL`
-* **Motion Execution:** `CMD.run=1` (Engage feed) / `CMD.run=0` (Disengage feed)
+* **Engage Synchronized Z Feed:** `CMD.startFeed=axis:Z,feed:1500,dir:CHUCK,sync:1` ($0.150\text{ mm/rev}$ toward chuck, continuous `dist:-1`)
+* **Engage Asynchronous X Feed (Finite Stroke):** `CMD.startFeed=axis:X,feed:500000,dir:CENTER,sync:0,dist:20000` ($50\text{ mm/min}$ toward centerline for $2.0\text{ mm}$)
+* **Engage Coupled ZX Taper Feed:** `CMD.startFeed=axis:ZX,feed:10000,dir:CHUCK,xdir:RETRACT,taper:1000,sync:1` ($1.0\text{ mm/rev}$ $Z$, $0.1000$ radial slope)
+* **Lifecycle Controls:** `CMD.stop` (halt and return to `IDLE`), `CMD.hold` (feed hold), `CMD.resume` (resume from hold)
 
 ---
 

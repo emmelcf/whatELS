@@ -122,7 +122,7 @@ namespace ModeIds {
     constexpr ModeId CUTOFF       = 54; // Parting / cutoff cycle
     constexpr ModeId SLOTTING     = 55; // Spindle-locked broaching / slotting
     constexpr ModeId SPHERE       = 56; // Parametric contouring
-    constexpr ModeId CONE         = 57; // Standalone taper turning
+    constexpr ModeId CONE         = 57; // Planned (#10) multi-pass taper cycle (continuous ZX taper lives in GEARBOX=50)
 }
 
 // Mode Execution Status State Machine
@@ -421,40 +421,30 @@ The **Electronic Gearbox Mode** (`ModeIds::GEARBOX`, slug `"gearbox"`) is a sing
    - **Continuous move (`distance == -1`)**: Targets the active soft limit itself.
    Because the destination is known, the kinematic engine plans clean deceleration ramps ($d = v^2 / 2a$), smoothly gliding to a stop with zero mechanical shock.
 
-#### 4.1.2 Gearbox Mode Parameter Contract
+#### 4.1.2 Gearbox Mode Parameter Contract (`GEARBOX = 50`)
 
-| Parameter Key | Type | Unit | Default | Valid Range / Options | Wire Command | Description & Execution Semantics |
+All `CMD.startFeed` parameters conform strictly to [`CANONICAL_COMMAND_REFERENCE.md §2.1`](../protocol/CANONICAL_COMMAND_REFERENCE.md#cmdstartfeed) (integer deci-microns `du` / `dupr` / `du/min`, binary `0`/`1` flags, zero floating-point decimals on the wire):
+
+| Parameter Key | Type | Unit | Default | Valid Range / Options | Wire Parameter (`CMD.startFeed`) | Description & Execution Semantics |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `axis` | `ENUM` | — | `"Z"` | `"Z"`, `"X"`, `"ZX"` | `CMD.gearAxis=<Z\|X\|ZX>` | Active motion axis. `"Z"` (carriage), `"X"` (cross-slide), `"ZX"` (compound taper). |
-| `sync` | `BOOL` | — | `true` | `true` (1), `false` (0) | `CMD.gearSync=<1\|0>` | Synchronization source. `true`: Spindle encoder; `false`: Hardware velocity clock timer. |
-| `dir` | `INT8` | sign | `-1` | `-1`, `+1` | `CMD.gearDir=<-1\|+1>` | Cartesian coordinate direction. Ingress accepts `CHUCK`/`TAIL`/`CENTER`/`RETRACT` aliases. Axis feed never uses `FWD`/`REV`. |
-| `feed` | `INT32` | canonical | `1000` | `10` .. `100000000` | `CMD.feedMm=`, `CMD.feedRate=` | Feed rate magnitude ($F > 0$). Interpreted as du/rev if sync; du/min if async. |
-| `distance` | `INT32` | `du` | `-1` | `-1` .. `100000000` | `CMD.feedDistMm=`, `CMD.feedDistDu=` | Stroke travel distance in deci-microns. `-1` = continuous feed to soft limit. |
-| `cone_ratio` | `FLOAT` | `ratio` | `0.050` | `0.0001` .. `10.0` | `CMD.taperRatio=`, `CMD.taperAngle=` | Diametral taper ratio (active when `axis == "ZX"`). |
-| `nudge` | `INT32` | `step` | `0` | `-1`, `+1` | `CMD.feedNudge=<+1\|-1>` | Live in-cut chip load trimmer. Permitted while `RUNNING`. |
+| `axis` | `ENUM` | — | *Mandatory* | `"Z"`, `"X"`, `"ZX"` | `axis:<Z\|X\|ZX>` | Active motion axis. `"Z"` (carriage), `"X"` (cross-slide), `"ZX"` (continuous coupled taper). |
+| `sync` | `BOOL` | — | `1` | `1` (sync), `0` (async) | `sync:<0\|1>` | Synchronization source. `1`: Spindle encoder (`dupr`); `0`: Hardware velocity clock (`du/min`). |
+| `dir` | `INT8` | sign | *Mandatory* | `-1`, `+1` | `dir:<dir>` | Primary axis Cartesian direction. Ingress accepts `CHUCK`/`TAIL` ($Z$) and `CENTER`/`RETRACT`/`IN`/`OUT` ($X$) aliases; `FWD`/`REV` forbidden. |
+| `feed` | `INT32` | canonical | *Mandatory* | `> 0` (`dupr` or `du/min`) | `feed:<val>` | Feed rate magnitude ($F > 0$). Integer `dupr` when `sync:1`; integer `du/min` when `sync:0`. |
+| `dist` | `INT32` | `du` | `-1` | `-1` or `> 0` | `dist:<du>` | Target travel distance in integer `du`. `-1` = continuous feed to active soft limit. |
+| `xdir` | `ENUM` | sign | *Mandatory if `ZX`* | `-1`, `+1` | `xdir:<dir>` | Secondary $X$-axis Cartesian direction (`CENTER`/`IN`/`-` $\to -1$, `RETRACT`/`OUT`/`+` $\to +1$). Mandatory when `axis:ZX`; rejected on `Z`/`X`. |
+| `taper` | `INT32` | `du / 10000 du` | *Mandatory if `ZX`* | `> 0` | `taper:<du>` | Radial $X$ travel in integer `du` per $10{,}000\text{ du}$ ($1.0\text{ mm}$) of axial $Z$ travel. Mandatory when `axis:ZX`; rejected on `Z`/`X`. |
 
-#### 4.1.3 Dual Command Pathways: Atomic vs. Ingress Staging
+#### 4.1.3 Atomic Command Invocation (`CMD.startFeed` / `CMD.stop`)
 
-To support both advanced multi-client tablet UIs and simple hardware pendants, the Command Dispatcher provides two pathways into the exact same core API:
-
-##### 1. Atomic Motion Invocation (Rich Clients / Web UI / Macros)
-Dispatches the complete motion specification in a single atomic frame when engaging feed:
+Motion is engaged atomically in a single frame with zero modal parameter staging on the controller:
+```text
+CMD.startFeed=axis:<Z|X|ZX>,feed:<int>,dir:<dir>[,sync:<0|1>][,dist:<int>][,xdir:<dir>,taper:<int>]
 ```
-CMD.startFeed=axis:<axis>,sync:<0|1>,feed:<feedRate>,dir:<dir>,[dist:<distance>]
-```
-* Example (Sync): `CMD.startFeed=axis:Z,sync:1,feed:0.15,dir:CHUCK` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously.
-* Example (Async): `CMD.startFeed=axis:Z,sync:0,feed:150,dir:CHUCK,dist:25.0` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
-*(Note: Positional CSV `CMD.startFeed=Z,0.15,-1,1` is also supported for legacy/dumb hardware pendants).*
-
-##### 2. Ingress Staging Adapter (Dumb Clients / Pendants / Form Setters)
-Allows simple clients to update modal parameters one by one, staging them on Core 0 until engaged:
-- `CMD.gearAxis=<Z|X|ZX>`
-- `CMD.gearSync=<1|0>`
-- `CMD.gearDir=<-1|+1|CHUCK|TAIL|CENTER|RETRACT|IN|OUT>`
-- `CMD.feedMm=<val>` (interpreted by active sync context)
-- `CMD.feedDistMm=<val>` (optional stroke length)
-- `CMD.on=1` $\to$ Packages staged parameters and calls `startFeed()`.
-- `CMD.on=0` $\to$ Halts motion immediately.
+* Example (Sync Z): `CMD.startFeed=axis:Z,feed:1500,dir:CHUCK,sync:1` $\to$ Feed $Z$ toward chuck at $0.15\text{ mm/rev}$ continuously (`dist:-1`).
+* Example (Async Z): `CMD.startFeed=axis:Z,feed:1500000,dir:CHUCK,sync:0,dist:250000` $\to$ Feed $Z$ toward chuck at $150\text{ mm/min}$ for $25.0\text{ mm}$ with planned decel.
+* Example (Continuous ZX Taper): `CMD.startFeed=axis:ZX,feed:10000,dir:CHUCK,xdir:RETRACT,taper:1000,sync:1` $\to$ Feed $Z$ at $1.0\text{ mm/rev}$ while retracting $X$ at $0.1000$ radial slope.
+* Stop / Hold: `CMD.stop` (halts motion and returns to `IDLE`), `CMD.hold` (feed hold), `CMD.resume` (resume from hold).
 
 #### 4.1.3 MotionEngine Integration Implementation:
 ```cpp
@@ -467,7 +457,7 @@ private:
     bool             m_isSync = true;
     int32_t          m_feedPitchDupr = 1000;    // 0.10 mm/rev in sync
     int32_t          m_feedRateDuMin = 1000000; // 100 mm/min in async
-    int32_t          m_strokeDistDu = 0;        // 0 = continuous until stopped or soft limit reached
+    int32_t          m_strokeDistDu = -1;       // -1 = continuous until stopped or soft limit reached
     float            m_taperRatio = 0.050f;
 
 public:
@@ -793,7 +783,7 @@ From the Mode Engine's perspective, the registration handshake establishes:
 1. **Authoritative Session ID (`session_id`):** The core assigns a unique numeric handle to each connected client session.
 2. **Permission Verification:** Only sessions with `PERM_MOTION_START` can command mode inception.
 3. **Safe Monitor Lockout (Motion Ownership):**
-   * When an active session commands motion inception (`CMD.startCycle` or `CMD.on=1`), that session claims **exclusive execution ownership** of the running mode.
+   * When an active session commands motion inception (`CMD.startFeed` or `CMD.startCycle`), that session claims **exclusive execution ownership** of the running mode.
    * All secondary sessions immediately transition to **Safe Monitor Lockout**: they receive live telemetry updates (`K.*`, `I.*`) and retain emergency stop authority (`CMD.stop`), but any commands attempting to modify parameters or initiate secondary motion are rejected (`ERR:control_locked:active_session=<id>`).
 4. **Adapter Mode Synthesis & Decomposition:**
    * For constrained clients (e.g. Nextion LCD), the Translation Layer decomposes composite modes (such as Unified Gearbox Mode 50) into discrete button views and synthesizes canonical mode commands. Refer to [`ELS_CLIENT_ARCHITECTURE.md §3.7`](../clients/ELS_CLIENT_ARCHITECTURE.md#37-mode-decomposition--synthesis-in-translation-layers).
@@ -989,7 +979,7 @@ To ensure machine execution determinism and establish the controller as the sing
   - Implement `ModeRegistry` managing static mode instances, active mode pointer, and lifecycle transitions.
 - [ ] **Slice 1.5: Command Dispatcher & Telemetry Integration:**
   - Implement `PROPERTIES.modes` with capability filtering against `activeMachineProfile.capabilities`.
-  - Wire canonical commands (`CMD.mode=GEARBOX`, `CMD.gearAxis`, `CMD.gearSync`, `CMD.gearDir`, `CMD.feedNudge`) in `CommandDispatcher.cpp`.
+  - Wire canonical commands (`CMD.startFeed`, `CMD.stop`, `CMD.hold`, `CMD.resume`) in `StandardCommandParser.cpp` / `CoreCommandService.cpp`.
   - Broadcast `K.perms` and lock-free telemetry snapshots over WebSocket.
 
 ### Phase 2: Web UI Client Integration (`clients/web_ui/`)
@@ -999,7 +989,7 @@ To ensure machine execution determinism and establish the controller as the sing
 - [ ] Test multi-client interaction with concurrent live DRO feedback.
 
 ### Phase 3: Nextion Client Migration (External Protocol Adapter)
-- [ ] Implement an external protocol adapter mapping Nextion screen pages (`page_gear`, `page_xgear`, `page_async`, `page_cone`) to canonical controller commands (`CMD.gearAxis`, `CMD.gearSync`) without touching the core firmware.
+- [ ] Implement an external protocol adapter mapping Nextion screen pages (`page_gear`, `page_xgear`, `page_async`, `page_cone`) to canonical controller commands (`CMD.startFeed`, `CMD.stop`) without touching the core firmware.
 - [ ] Map Nextion touch events to standard `CommandId` dispatches.
 
 

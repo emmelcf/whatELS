@@ -99,7 +99,7 @@ struct SpindleSyncParams {
   int32_t maxRapidSpeedDuMin;    // Maximum rapid velocity clamp during spindle sync
   bool    respectSoftLimits;     // True = halt automatically at nearest enforced limit
   bool    syncIndex;             // True = wait for 1/rev index marker before initiating step pulses (Threading)
-  int32_t targetDistDu;          // Optional stroke limit (0 = continuous until stopped or limit reached)
+  int32_t targetDistDu;          // Optional stroke limit (-1 = continuous until stopped or limit reached)
 
   // Coordinated Dual-Axis / Taper Extension (for ZX Cones & NPT Taper Threads [KIN-04])
   bool    enableSecondaryAxis = false;
@@ -115,7 +115,7 @@ struct VelocityFeedParams {
   int32_t feedRateDuPerMin;      // Velocity in deci-microns per minute (e.g. 1000000 = 100 mm/min)
   float   accelMmSec2;           // Acceleration ramp rate (0.0 = use axis default)
   bool    respectSoftLimits;     // True = halt automatically at nearest enforced limit
-  int32_t targetDistDu;          // Optional stroke limit (0 = continuous until stopped or limit reached)
+  int32_t targetDistDu;          // Optional stroke limit (-1 = continuous until stopped or limit reached)
 
   // Coordinated Dual-Axis / Taper Extension
   bool    enableSecondaryAxis = false;
