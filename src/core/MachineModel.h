@@ -76,7 +76,8 @@ struct IntentState {
   TaperSetting taper;
   long feedStepDu;
   long jogStepDu;
-  bool feedReverse;
+  int8_t direction;      // Cartesian travel direction: -1 (negative coords) or +1 (positive coords)
+  int32_t targetDistDu;  // Target stroke distance in deci-microns (-1 = continuous / soft-limit bound)
 };
 
 struct CycleState {

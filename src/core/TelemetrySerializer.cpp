@@ -47,7 +47,8 @@ static void serializeIntent(String* out, const IntentState& i) {
   *out += "I.tpPreset=" + String(i.taper.presetId) + "\n";
   *out += "I.feedStepDu=" + String(i.feedStepDu) + "\n";
   *out += "I.jogStepDu=" + String(i.jogStepDu) + "\n";
-  *out += "I.feedRev=" + String(i.feedReverse ? 1 : 0) + "\n";
+  *out += "I.direction=" + String((int)i.direction) + "\n";
+  *out += "I.targetDistDu=" + String(i.targetDistDu) + "\n";
 }
 
 static void serializeCycle(String* out, const CycleState& c) {

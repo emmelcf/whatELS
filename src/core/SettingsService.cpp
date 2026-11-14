@@ -396,18 +396,18 @@ static const LatheConfiguration* getActiveBaseline() {
 
 bool SettingsService::setPreset(const char* slug, String* reply) {
   if (!slug || *slug == '\0') {
-    if (reply) *reply = "ERR:SETTINGS.preset=missing slug\n";
+    if (reply) *reply = "ERR:SETTINGS.preset:missing slug\n";
     return false;
   }
 
   // [CONC-02] In-motion flash write lockout to protect Core 1 from SPI flash cache freeze
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.preset=ERR_MOTION_ACTIVE: cannot switch preset while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.preset:ERR_MOTION_ACTIVE: cannot switch preset while motion is active\n";
     return false;
   }
   const LatheConfiguration* pPreset = findPresetBySlug(slug);
   if (!pPreset) {
-    if (reply) *reply = "ERR:SETTINGS.preset=unknown preset slug: " + String(slug) + "\n";
+    if (reply) *reply = "ERR:SETTINGS.preset:unknown preset slug: " + String(slug) + "\n";
     return false;
   }
 
@@ -424,7 +424,7 @@ bool SettingsService::setPreset(const char* slug, String* reply) {
 
   activeMachineProfile = *pPreset;
 
-  if (reply) *reply = "OK:SETTINGS.preset=" + String(activeMachineProfile.profileId) + "\n";
+  if (reply) *reply = "OK:SETTINGS.preset:" + String(activeMachineProfile.profileId) + "\n";
   return true;
 }
 
@@ -434,14 +434,14 @@ bool SettingsService::listPresets(String* reply) {
   listCatalogProfiles(&list);
   char defaultSlug[32] = "wm210v_stock";
   getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
-  *reply = "PRESET.list=" + list + ";active=" + String(activeMachineProfile.profileId) + ";default=" + String(defaultSlug) + "\n";
+  *reply = "OK:SETTINGS.presets:" + list + ";active=" + String(activeMachineProfile.profileId) + ";default=" + String(defaultSlug) + "\n";
   return true;
 }
 
 bool SettingsService::getPresetJson(const char* slug, String* reply) {
   if (!reply) return false;
   if (!slug || *slug == '\0') {
-    *reply = "ERR:SETTINGS.preset.get=missing slug\n";
+    *reply = "ERR:SETTINGS.preset.get:missing slug\n";
     return false;
   }
   String json;
@@ -449,14 +449,14 @@ bool SettingsService::getPresetJson(const char* slug, String* reply) {
     *reply = json + "\n";
     return true;
   }
-  *reply = "ERR:SETTINGS.preset.get=unknown preset slug: " + String(slug) + "\n";
+  *reply = "ERR:SETTINGS.preset.get:unknown preset slug: " + String(slug) + "\n";
   return false;
 }
 
 bool SettingsService::applyPreset(const char* slug, String* reply) {
   bool ok = setPreset(slug, reply);
   if (ok && reply) {
-    *reply = "OK:SETTINGS.preset.apply=" + String(slug) + "\n";
+    *reply = "OK:SETTINGS.preset.apply:" + String(slug) + "\n";
   }
   return ok;
 }
@@ -464,7 +464,7 @@ bool SettingsService::applyPreset(const char* slug, String* reply) {
 bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.preset.save=ERR_MOTION_ACTIVE: cannot save preset while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.save:ERR_MOTION_ACTIVE: cannot save preset while motion is active\n";
     return false;
   }
 
@@ -474,7 +474,7 @@ bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
   // Guard: Never allow overwriting a system template!
   if (isSystemCatalogProfile(targetSlug)) {
     if (reply) {
-      *reply = "ERR:SETTINGS.preset.save=cannot overwrite system template: " + String(targetSlug) + " (use save=<new_name>)\n";
+      *reply = "ERR:SETTINGS.preset.save:cannot overwrite system template: " + String(targetSlug) + " (use save=<new_name>)\n";
     }
     return false;
   }
@@ -493,63 +493,63 @@ bool SettingsService::saveCurrentAsPreset(const char* slug, String* reply) {
       }
     }
 
-    if (reply) *reply = "OK:SETTINGS.preset.save=" + String(targetSlug) + "\n";
+    if (reply) *reply = "OK:SETTINGS.preset.save:" + String(targetSlug) + "\n";
       return true;
   }
-  if (reply) *reply = "ERR:SETTINGS.preset.save=failed to save preset to LittleFS\n";
+  if (reply) *reply = "ERR:SETTINGS.preset.save:failed to save preset to LittleFS\n";
   return false;
 }
 
 bool SettingsService::deletePreset(const char* slug, String* reply) {
   if (!slug || *slug == '\0') {
-    if (reply) *reply = "ERR:SETTINGS.preset.delete=missing slug\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.delete:missing slug\n";
     return false;
   }
 
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.preset.delete=ERR_MOTION_ACTIVE: cannot delete preset while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.delete:ERR_MOTION_ACTIVE: cannot delete preset while motion is active\n";
     return false;
   }
   if (isSystemCatalogProfile(slug)) {
-    if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete system template: " + String(slug) + "\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.delete:cannot delete system template: " + String(slug) + "\n";
     return false;
   }
   if (strcasecmp(activeMachineProfile.profileId, slug) == 0) {
-    if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete active preset: " + String(slug) + "\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.delete:cannot delete active preset: " + String(slug) + "\n";
     return false;
   }
   char defaultSlug[32] = {0};
   if (getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug))) {
     if (strcasecmp(defaultSlug, slug) == 0) {
-      if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete default preset: " + String(slug) + "\n";
+      if (reply) *reply = "ERR:SETTINGS.preset.delete:cannot delete default preset: " + String(slug) + "\n";
       return false;
     }
   }
   if (deleteProfileFromLittleFS(slug)) {
-    if (reply) *reply = "OK:SETTINGS.preset.delete=" + String(slug) + "\n";
+    if (reply) *reply = "OK:SETTINGS.preset.delete:" + String(slug) + "\n";
     return true;
   }
-  if (reply) *reply = "ERR:SETTINGS.preset.delete=cannot delete preset: " + String(slug) + "\n";
+  if (reply) *reply = "ERR:SETTINGS.preset.delete:cannot delete preset: " + String(slug) + "\n";
   return false;
 }
 
 bool SettingsService::setDefaultPreset(const char* slug, String* reply) {
   if (!slug || *slug == '\0') {
-    if (reply) *reply = "ERR:SETTINGS.preset.setDefault=missing slug\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.setDefault:missing slug\n";
     return false;
   }
 
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.preset.setDefault=ERR_MOTION_ACTIVE: cannot set default preset while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.preset.setDefault:ERR_MOTION_ACTIVE: cannot set default preset while motion is active\n";
     return false;
   }
   if (setDefaultCatalogProfileId(slug)) {
-    if (reply) *reply = "OK:SETTINGS.preset.setDefault=" + String(slug) + "\n";
+    if (reply) *reply = "OK:SETTINGS.preset.setDefault:" + String(slug) + "\n";
     return true;
   }
-  if (reply) *reply = "ERR:SETTINGS.preset.setDefault=failed to set default preset: " + String(slug) + "\n";
+  if (reply) *reply = "ERR:SETTINGS.preset.setDefault:failed to set default preset: " + String(slug) + "\n";
   return false;
 }
 
@@ -558,7 +558,7 @@ bool SettingsService::resetToDefaultPreset(String* reply) {
   getDefaultCatalogProfileId(defaultSlug, sizeof(defaultSlug));
   bool ok = applyPreset(defaultSlug, reply);
   if (ok && reply) {
-    *reply = "OK:SETTINGS.preset.resetToDefault=" + String(defaultSlug) + "\n";
+    *reply = "OK:SETTINGS.preset.resetToDefault:" + String(defaultSlug) + "\n";
   }
   return ok;
 }
@@ -574,7 +574,7 @@ bool SettingsService::getSchema(const char* schemaName, String* reply) {
     *reply = String(LATHE_PROFILE_SCHEMA_JSON) + "\n";
     return true;
   }
-  *reply = "ERR:SETTINGS.schema=unknown schema: " + String(schemaName) + "\n";
+  *reply = "ERR:SETTINGS.schema:unknown schema: " + String(schemaName) + "\n";
   return false;
 }
 
@@ -583,12 +583,12 @@ bool SettingsService::reset(const char* key, String* reply) {
 
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.reset=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.reset:ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
     return false;
   }
 
   auto reportOk = [&](const char* name) {
-    if (reply) *reply = "OK:SETTINGS.reset=" + String(name) + "\n";
+    if (reply) *reply = "OK:SETTINGS.reset:" + String(name) + "\n";
     };
 
   const LatheConfiguration* pBaseline = getActiveBaseline();
@@ -651,7 +651,7 @@ bool SettingsService::reset(const char* key, String* reply) {
     return true;
   }
 
-  if (reply) *reply = "ERR:SETTINGS.reset=unknown key: " + String(key) + "\n";
+  if (reply) *reply = "ERR:SETTINGS.reset:unknown key: " + String(key) + "\n";
   return false;
 }
 
@@ -660,7 +660,7 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
 
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS.resetGroup=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.resetGroup:ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
     return false;
   }
 
@@ -679,11 +679,11 @@ bool SettingsService::resetGroup(const char* group, String* reply) {
     setXDroMode(false);
     operatorPrefs.feedStepDu = 100;
     s_feedStepDu.set(100);
-    if (reply) *reply = "OK:SETTINGS.resetGroup=prefs\n";
-      return true;
+    if (reply) *reply = "OK:SETTINGS.resetGroup:prefs\n";
+    return true;
   }
 
-  if (reply) *reply = "ERR:SETTINGS.resetGroup=unknown group: " + String(group) + "\n";
+  if (reply) *reply = "ERR:SETTINGS.resetGroup:unknown group: " + String(group) + "\n";
   return false;
 }
 
@@ -1268,7 +1268,7 @@ bool SettingsService::get(const char* key, String* reply) {
   bool getAll = (!key || *key == '\0' || strcasecmp(key, "ALL") == 0 || strcmp(key, "*") == 0);
 
   auto appendSetting = [&](const char* name, const String& val) {
-    *reply += "SETTING." + String(name) + "=" + val + "\n";
+    *reply += "OK:SETTINGS.get:" + String(name) + "=" + val + "\n";
   };
 
   // Check if requesting a group via get
@@ -1434,15 +1434,15 @@ bool SettingsService::get(const char* key, String* reply) {
     return true;
   }
 
-  *reply = "ERR:SETTINGS." + String(key) + "=unknown key\n";
-  return true;
+  *reply = "ERR:SETTINGS.get:unknown key: " + String(key) + "\n";
+  return false;
 }
 
 bool SettingsService::getGroup(const char* groupName, String* reply) {
   if (!groupName || *groupName == '\0' || !reply) return false;
 
   auto appendSetting = [&](const char* name, const String& val) {
-    *reply += "SETTING." + String(name) + "=" + val + "\n";
+    *reply += "OK:SETTINGS.get:" + String(name) + "=" + val + "\n";
   };
 
   if (strcasecmp(groupName, "machine") == 0) {
@@ -1493,7 +1493,7 @@ bool SettingsService::getGroup(const char* groupName, String* reply) {
     return true;
   }
 
-  *reply = "ERR:SETTINGS.getGroup=unknown group: " + String(groupName) + "\n";
+  *reply = "ERR:SETTINGS.get:unknown group: " + String(groupName) + "\n";
   return false;
 }
 
@@ -1502,14 +1502,14 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   // [CONC-02] In-motion flash write lockout
   if (MotionEngine::instance().isAnyAxisMoving()) {
-    if (reply) *reply = "ERR:SETTINGS=ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
+    if (reply) *reply = "ERR:SETTINGS.set:ERR_MOTION_ACTIVE: cannot write to NVS flash while motion is active\n";
     return false;
   }
 
   const char* sep = strpbrk(keyVal, ":,=");
   if (!sep) {
-    if (reply) *reply = "ERR:SETTINGS=expected key:value\n";
-    return true;
+    if (reply) *reply = "ERR:SETTINGS.set:expected key:value\n";
+    return false;
   }
 
   char keyBuf[48];
@@ -1522,11 +1522,11 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   while (*valStr == ' ' || *valStr == '\t') valStr++;
 
   auto reportOk = [&](const char* name, const String& val) {
-    if (reply) *reply = "OK:SETTINGS." + String(name) + "=" + val + "\n";
+    if (reply) *reply = "OK:SETTINGS.set:" + String(name) + "=" + val + "\n";
   };
 
   auto reportErr = [&](const char* name, const char* reason) {
-    if (reply) *reply = "ERR:SETTINGS." + String(name) + "=" + String(reason) + "\n";
+    if (reply) *reply = "ERR:SETTINGS.set:" + String(name) + "=" + String(reason) + "\n";
   };
 
   // --- Preset Switch ---
@@ -1537,42 +1537,42 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   // --- Tier 1: Machine Profile ---
   if (strcasecmp(keyBuf, "machine.z.pitchDu") == 0 || strcasecmp(keyBuf, "screwZDu") == 0) {
     long val = atol(valStr);
-    if (!setScrewZDu(val)) { reportErr(keyBuf, "out of bounds (100..10000000)"); return true; }
+    if (!setScrewZDu(val)) { reportErr(keyBuf, "out of bounds (100..10000000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "machine.x.pitchDu") == 0 || strcasecmp(keyBuf, "screwXDu") == 0) {
     long val = atol(valStr);
-    if (!setScrewXDu(val)) { reportErr(keyBuf, "out of bounds (100..10000000)"); return true; }
+    if (!setScrewXDu(val)) { reportErr(keyBuf, "out of bounds (100..10000000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "machine.z.motorSteps") == 0 || strcasecmp(keyBuf, "motorStepsZ") == 0) {
     long val = atol(valStr);
-    if (!setMotorStepsZ(val)) { reportErr(keyBuf, "out of bounds (10..1000000)"); return true; }
+    if (!setMotorStepsZ(val)) { reportErr(keyBuf, "out of bounds (10..1000000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "machine.x.motorSteps") == 0 || strcasecmp(keyBuf, "motorStepsX") == 0) {
     long val = atol(valStr);
-    if (!setMotorStepsX(val)) { reportErr(keyBuf, "out of bounds (10..1000000)"); return true; }
+    if (!setMotorStepsX(val)) { reportErr(keyBuf, "out of bounds (10..1000000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "machine.spindle.ppr") == 0 || strcasecmp(keyBuf, "encoderPpr") == 0) {
     int val = atoi(valStr);
-    if (!setEncoderPpr(val)) { reportErr(keyBuf, "out of bounds (10..30000)"); return true; }
+    if (!setEncoderPpr(val)) { reportErr(keyBuf, "out of bounds (10..30000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "machine.spindle.ratio") == 0) {
     float val = atof(valStr);
-    if (!setSpindleRatio(val)) { reportErr(keyBuf, "out of bounds (0.01..50.0)"); return true; }
+    if (!setSpindleRatio(val)) { reportErr(keyBuf, "out of bounds (0.01..50.0)"); return false; }
     reportOk(keyBuf, String(val, 3));
     return true;
   }
@@ -1608,7 +1608,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "sys.dro.zPulsesPerMm") == 0) {
     int val = atoi(valStr);
-    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
+    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return false; }
     activeMachineProfile.zAxis.droScale.ppr = (uint16_t)val;
     applyDerivedMachineConfig();
     reportOk(keyBuf, String(val));
@@ -1617,7 +1617,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "sys.dro.xPulsesPerMm") == 0) {
     int val = atoi(valStr);
-    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return true; }
+    if (val < 1 || val > 100000) { reportErr(keyBuf, "out of bounds (1..100000)"); return false; }
     activeMachineProfile.xAxis.droScale.ppr = (uint16_t)val;
     applyDerivedMachineConfig();
     reportOk(keyBuf, String(val));
@@ -1626,7 +1626,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "sys.mpg.zPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevZ") == 0) {
     float val = atof(valStr);
-    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
+    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return false; }
     sysConfig.mpg.zHandwheel.ppr = val;
     saveMpgConfig();
     reportOk(keyBuf, String(val, 2));
@@ -1635,7 +1635,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "sys.mpg.xPulsesPerRev") == 0 || strcasecmp(keyBuf, "pulsePerRevX") == 0) {
     float val = atof(valStr);
-    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return true; }
+    if (val < 1.0f || val > 10000.0f) { reportErr(keyBuf, "out of bounds (1..10000)"); return false; }
     sysConfig.mpg.xHandwheel.ppr = val;
     saveMpgConfig();
     reportOk(keyBuf, String(val, 2));
@@ -1645,7 +1645,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
   // --- Tier 3: Operator Preferences ---
   if (strcasecmp(keyBuf, "prefs.startupMeasure") == 0 || strcasecmp(keyBuf, "prefs.measure") == 0 || strcasecmp(keyBuf, "measure") == 0) {
     int val = atoi(valStr);
-    if (!setMeasure(val)) { reportErr(keyBuf, "must be 0 (MM), 1 (TPI), or 2 (IN)"); return true; }
+    if (!setMeasure(val)) { reportErr(keyBuf, "must be 0 (MM), 1 (TPI), or 2 (IN)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
@@ -1680,7 +1680,7 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "prefs.feedStepDu") == 0 || strcasecmp(keyBuf, "feedStepDu") == 0) {
     long val = atol(valStr);
-    if (val < 1 || val > 1000000) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
+    if (val < 1 || val > 1000000) { reportErr(keyBuf, "out of bounds (1..1000000)"); return false; }
     s_feedStepDu.set(val);
     reportOk(keyBuf, String(val));
     return true;
@@ -1688,23 +1688,23 @@ bool SettingsService::set(const char* keyVal, String* reply) {
 
   if (strcasecmp(keyBuf, "prefs.jogStepDu") == 0 || strcasecmp(keyBuf, "jogStepDu") == 0) {
     long val = atol(valStr);
-    if (!setJogStepDu(val)) { reportErr(keyBuf, "out of bounds (1..1000000)"); return true; }
+    if (!setJogStepDu(val)) { reportErr(keyBuf, "out of bounds (1..1000000)"); return false; }
     reportOk(keyBuf, String(val));
     return true;
   }
 
   if (strcasecmp(keyBuf, "prefs.dbAngle") == 0 || strcasecmp(keyBuf, "prefs.deadbandAngle") == 0 || strcasecmp(keyBuf, "deadbandAngle") == 0) {
-    if (!setDeadbandAngle(valStr)) { reportErr(keyBuf, "invalid angle (0..360 or auto)"); return true; }
+    if (!setDeadbandAngle(valStr)) { reportErr(keyBuf, "invalid angle (0..360 or auto)"); return false; }
     reportOk(keyBuf, isDeadbandAngleAuto() ? "auto" : String(getDeadbandAngle(), 3));
     return true;
   }
 
   if (strcasecmp(keyBuf, "prefs.dbTurns") == 0 || strcasecmp(keyBuf, "prefs.deadbandTurns") == 0 || strcasecmp(keyBuf, "deadbandTurns") == 0) {
-    if (!setDeadbandTurns(valStr)) { reportErr(keyBuf, "invalid turns (0..100 or auto)"); return true; }
+    if (!setDeadbandTurns(valStr)) { reportErr(keyBuf, "invalid turns (0..100 or auto)"); return false; }
     reportOk(keyBuf, isDeadbandTurnsAuto() ? "auto" : String(getDeadbandTurns(), 4));
     return true;
   }
 
   reportErr(keyBuf, "unknown key");
-  return true;
+  return false;
 }

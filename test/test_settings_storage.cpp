@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 
+#include "core/MachineModel.h"
 #include "core/PersistentSetting.h"
 #include "mocks/MockSettingsStorage.h"
 
@@ -84,9 +85,39 @@ static void testPersistentSettingWithMockStorage() {
   PersistentSettingBase::setDefaultStorage(nullptr);
 }
 
+static void testIntentStateModel() {
+  IntentState intent = {};
+  intent.thread.format = THREAD_TPI;
+  intent.thread.authorPitch = 13.0f;
+  intent.thread.dupr = 19538;
+  intent.taper.modeType = TAPER_RATIO;
+  intent.taper.authorVal = 3.5f;
+  intent.taper.coneRatio = 1.0f / 7.0f;
+  intent.taper.presetId = -1;
+  intent.feedStepDu = 1000;
+  intent.jogStepDu = 500;
+  intent.direction = -1;
+  intent.targetDistDu = -1;
+
+  assert(intent.thread.format == THREAD_TPI);
+  assert(fabsf(intent.thread.authorPitch - 13.0f) < 0.0001f);
+  assert(intent.thread.dupr == 19538);
+  assert(intent.taper.modeType == TAPER_RATIO);
+  assert(fabsf(intent.taper.authorVal - 3.5f) < 0.0001f);
+  assert(intent.taper.presetId == -1);
+  assert(intent.direction == -1);
+  assert(intent.targetDistDu == -1);
+
+  intent.direction = 1;
+  intent.targetDistDu = 250000; // 25.0 mm finite stroke
+  assert(intent.direction == 1);
+  assert(intent.targetDistDu == 250000);
+}
+
 int main() {
   std::cout << "Running PersistentSetting + MockSettingsStorage unit tests...\n";
   testPersistentSettingWithMockStorage();
+  testIntentStateModel();
   std::cout << "ALL SETTINGS STORAGE TESTS PASSED!\n";
   return 0;
 }

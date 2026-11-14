@@ -1,5 +1,7 @@
 #include "MachineModel.h"
 #include "SettingsService.h"
+#include "modes/ModeRegistry.h"
+#include "modes/composite/UnifiedGearboxMode.h"
 #include "motion/DRO_Scale.h"
 #include "motion/kernel/MotionEngine.h"
 
@@ -79,7 +81,9 @@ IntentState MachineModel::captureIntent() {
   i.taper = SettingsService::getTaperSetting();
   i.feedStepDu = SettingsService::getPreferences().feedStepDu;
   i.jogStepDu = SettingsService::getJogStepDu();
-  i.feedReverse = (i.thread.dupr < 0);
+  UnifiedGearboxMode* gb = ModeRegistry::getGearboxMode();
+  i.direction = gb ? gb->getDirection() : ((i.thread.dupr < 0) ? -1 : 1);
+  i.targetDistDu = gb ? gb->getTargetDistDu() : -1;
   return i;
 }
 
@@ -152,7 +156,8 @@ uint8_t MachineModel::detectChangedDomains(const MachineModel& prev, const Machi
       prev.intent.taper.presetId != current.intent.taper.presetId ||
       prev.intent.feedStepDu != current.intent.feedStepDu ||
       prev.intent.jogStepDu != current.intent.jogStepDu ||
-      prev.intent.feedReverse != current.intent.feedReverse) {
+      prev.intent.direction != current.intent.direction ||
+      prev.intent.targetDistDu != current.intent.targetDistDu) {
     changed |= DOMAIN_INTENT;
   }
 
