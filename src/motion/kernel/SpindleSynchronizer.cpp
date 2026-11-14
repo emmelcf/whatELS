@@ -1,6 +1,6 @@
 #include "SpindleSynchronizer.h"
 
-void SpindleSynchronizer::engage(int64_t currentSpindlePulses, int32_t currentAxisSteps, int32_t pitchDupr) {
+void IRAM_ATTR SpindleSynchronizer::engage(int64_t currentSpindlePulses, int32_t currentAxisSteps, int32_t pitchDupr) {
   m_anchorPulses       = currentSpindlePulses;
   m_anchorSteps        = currentAxisSteps;
   m_currentTargetSteps = currentAxisSteps;
@@ -8,17 +8,17 @@ void SpindleSynchronizer::engage(int64_t currentSpindlePulses, int32_t currentAx
   m_engaged            = true;
 }
 
-void SpindleSynchronizer::disengage() {
+void IRAM_ATTR SpindleSynchronizer::disengage() {
   m_engaged = false;
 }
 
-void SpindleSynchronizer::updatePitchLive(int64_t currentSpindlePulses, int32_t newPitchDupr) {
+void IRAM_ATTR SpindleSynchronizer::updatePitchLive(int64_t currentSpindlePulses, int32_t newPitchDupr) {
   m_anchorSteps  = m_currentTargetSteps;
   m_anchorPulses = currentSpindlePulses;
   m_pitchDupr    = newPitchDupr;
 }
 
-int32_t SpindleSynchronizer::computeIdealSyncSteps(
+int32_t IRAM_ATTR SpindleSynchronizer::computeIdealSyncSteps(
     int64_t accumulatedSpindlePulses,
     int32_t motorStepsPerRev,
     int32_t screwPitchDu,
@@ -37,7 +37,7 @@ int32_t SpindleSynchronizer::computeIdealSyncSteps(
   return m_currentTargetSteps;
 }
 
-int64_t SpindleSynchronizer::calculatePulsesForStep(
+int64_t IRAM_ATTR SpindleSynchronizer::calculatePulsesForStep(
     int32_t targetStep,
     int32_t motorStepsPerRev,
     int32_t screwPitchDu,
@@ -54,11 +54,11 @@ int64_t SpindleSynchronizer::calculatePulsesForStep(
   return m_anchorPulses + (num / den);
 }
 
-void SpindleSynchronizer::updateSpindlePhase(int32_t deltaPulses) {
+void IRAM_ATTR SpindleSynchronizer::updateSpindlePhase(int32_t deltaPulses) {
   m_spindlePhasePulses += deltaPulses;
 }
 
-int32_t SpindleSynchronizer::calculateModuloPhasePulses(int32_t effectiveEncoderEdgesPerRev) const {
+int32_t IRAM_ATTR SpindleSynchronizer::calculateModuloPhasePulses(int32_t effectiveEncoderEdgesPerRev) const {
   if (effectiveEncoderEdgesPerRev <= 0) {
     return 0;
   }

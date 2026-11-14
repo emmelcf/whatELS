@@ -24,7 +24,7 @@ void TrajectoryPlanner::reset() {
   m_accel           = 0;
 }
 
-int32_t TrajectoryPlanner::computeStoppingDistanceSteps(
+int32_t IRAM_ATTR TrajectoryPlanner::computeStoppingDistanceSteps(
     int32_t currentVelocityStepsSec,
     int32_t endVelocityStepsSec,
     int32_t accelStepsSec2,
@@ -49,7 +49,7 @@ int32_t TrajectoryPlanner::computeStoppingDistanceSteps(
   return static_cast<int32_t>(decelSteps + sampleMargin);
 }
 
-int32_t TrajectoryPlanner::computeStoppingDistanceDu(
+int32_t IRAM_ATTR TrajectoryPlanner::computeStoppingDistanceDu(
     const AxisGeometry& geom,
     int32_t currentVelocityStepsSec,
     int32_t endVelocityStepsSec,
@@ -60,7 +60,7 @@ int32_t TrajectoryPlanner::computeStoppingDistanceDu(
   return stepsToDu(geom, stopSteps);
 }
 
-bool TrajectoryPlanner::verifyRunway(
+bool IRAM_ATTR TrajectoryPlanner::verifyRunway(
     int32_t remainingDistanceSteps,
     int32_t entryVelocityStepsSec,
     int32_t accelStepsSec2,
@@ -120,7 +120,7 @@ bool TrajectoryPlanner::verifyRunwaySpindle(
   return isSafe;
 }
 
-int32_t TrajectoryPlanner::updateVelocity(int32_t remainingDistanceSteps, float dt) {
+int32_t IRAM_ATTR TrajectoryPlanner::updateVelocity(int32_t remainingDistanceSteps, float dt) {
   if (m_state == State::IDLE || m_state == State::STOPPED) {
     return 0;
   }

@@ -85,6 +85,7 @@ void testSpindleSyncGearing() {
   StepTimingConfig timing;
   engine.configureAxis(AXIS_Z, geomZ, timing);
   engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
 
   // Initialize Spindle Encoder: 1024 PPR (4096 4x quadrature edges/rev)
   encoderHal.init(1, 2, 3, 1024, 1.0f);
@@ -161,11 +162,12 @@ void testSoftLimitShoulderStop() {
   StepTimingConfig timing;
   engine.configureAxis(AXIS_Z, geomZ, timing);
   engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
 
   // Set Soft Limit at +50,000 du (+5.0 mm = +2,000 steps)
   // 50,000 du * 1600 / 40000 = 2,000 steps
   SoftLimitTable& limits = engine.getSoftLimits(AXIS_Z);
-  bool setOk = limits.setLimit(0, 50000, 2000, "SHOULDER_1", true);
+  bool setOk = limits.setLimit(0, 50000, 2000, "SHOULDER_1", true, LimitBound::UPPER);
   assert(setOk);
 
   // Engage spindle sync feed toward tailstock (+1) with 1.0 mm pitch (10,000 dupr = 400 steps/rev)
@@ -228,6 +230,7 @@ void testLivePitchTrimContinuity() {
   StepTimingConfig timing;
   engine.configureAxis(AXIS_Z, geomZ, timing);
   engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
 
   // Initial pitch: 1.0 mm (10,000 dupr -> 400 steps/rev)
   FeedParameters feed;
@@ -295,6 +298,7 @@ void testInterCoreCommandQueue() {
   StepTimingConfig timing;
   engine.configureAxis(AXIS_Z, geomZ, timing);
   engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
 
   assert(!engine.isMoving(AXIS_Z));
 
@@ -352,6 +356,169 @@ void testInterCoreCommandQueue() {
   std::cout << "  [PASS] Inter-core command queue safely buffers and Core 1 loop dispatches correctly.\n";
 }
 
+// -----------------------------------------------------------------------------
+// Test 5: Hybrid Hardware Offload (VELOCITY_FEED & Continuous MANUAL_JOG)
+// -----------------------------------------------------------------------------
+void testHybridPulseTrainOffload() {
+  printTestHeader("5. Hybrid Hardware Offload (VELOCITY_FEED & Continuous MANUAL_JOG)");
+
+  MockStepperHAL stepperHal;
+  MockSpindleEncoderHAL encoderHal;
+  MotionEngine engine(&stepperHal, &encoderHal);
+
+  AxisGeometry geomZ;
+  geomZ.screwPitchDu     = 40000;
+  geomZ.motorStepsPerRev = 1600; // 400 steps/mm
+  geomZ.maxAccelMmSec2   = 100.0f;
+  geomZ.maxVelocityMmSec = 25.0f;
+  StepTimingConfig timing;
+  engine.configureAxis(AXIS_Z, geomZ, timing);
+  engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
+
+  VelocityFeedParams vf;
+  vf.axis             = AXIS_Z;
+  vf.direction        = 1;
+  vf.feedRateDuPerMin = 600000; // 60 mm/min = 1 mm/s = 400 steps/sec
+  vf.accelMmSec2      = 50.0f;
+  vf.targetDistDu     = 10000;  // 1.0 mm = 400 steps
+  assert(engine.engageVelocityFeed(vf));
+  assert(stepperHal.isPulseTrainActive(AXIS_Z));
+  assert(stepperHal.getTotalSteps(AXIS_Z) == 0); // Hardware pulse train, NOT software pulseStep()
+
+  // Update velocity mid-flight via UPDATE_VELOCITY packet
+  MotionCommandPacket velPkt;
+  velPkt.type       = MotionCommandPacket::Type::UPDATE_VELOCITY;
+  velPkt.axis       = AXIS_Z;
+  velPkt.speedDuMin = 1200000; // 120 mm/min = 800 steps/sec
+  assert(engine.postCommand(velPkt));
+
+  for (int i = 0; i < 100; ++i) {
+    engine.onMotionTick();
+  }
+  assert(engine.isMoving(AXIS_Z));
+  assert(stepperHal.isPulseTrainActive(AXIS_Z));
+  assert(stepperHal.getPulseFrequencyHz(AXIS_Z) > 50);
+  assert(stepperHal.getTotalSteps(AXIS_Z) == 0); // Hardware pulse train, NOT software pulseStep()
+
+  for (int i = 0; i < 2000 && engine.isMoving(AXIS_Z); ++i) {
+    engine.onMotionTick();
+  }
+  assert(!engine.isMoving(AXIS_Z));
+  assert(!stepperHal.isPulseTrainActive(AXIS_Z));
+
+  std::cout << "  [PASS] VELOCITY_FEED offloaded to startPulseTrain/updatePulseFrequency/stopPulseTrain.\n";
+}
+
+// -----------------------------------------------------------------------------
+// Test 6: 200 ms Jog Lease Watchdog
+// -----------------------------------------------------------------------------
+void testJogLeaseWatchdog() {
+  printTestHeader("6. 200 ms Jog Lease Watchdog (Continuous MANUAL_JOG)");
+
+  MockStepperHAL stepperHal;
+  MockSpindleEncoderHAL encoderHal;
+  MotionEngine engine(&stepperHal, &encoderHal);
+
+  AxisGeometry geomZ;
+  geomZ.screwPitchDu     = 40000;
+  geomZ.motorStepsPerRev = 1600;
+  geomZ.maxVelocityMmSec = 10.0f;
+  StepTimingConfig timing;
+  engine.configureAxis(AXIS_Z, geomZ, timing);
+
+  assert(engine.startJog(AXIS_Z, 1, 0));
+  assert(stepperHal.isPulseTrainActive(AXIS_Z));
+
+  // Run 150 ms (< 200 ms) -> still active
+  for (int i = 0; i < 150; ++i) {
+    engine.onMotionTick();
+  }
+  assert(engine.isMoving(AXIS_Z));
+  assert(stepperHal.isPulseTrainActive(AXIS_Z));
+
+  // Renew lease via keepalive startJog(..., 0)
+  assert(engine.startJog(AXIS_Z, 1, 0));
+  for (int i = 0; i < 150; ++i) {
+    engine.onMotionTick();
+  }
+  assert(engine.isMoving(AXIS_Z));
+
+  // Expire 200 ms lease without keepalive
+  for (int i = 0; i < 205; ++i) {
+    engine.onMotionTick();
+  }
+  assert(!engine.isMoving(AXIS_Z));
+  assert(!stepperHal.isPulseTrainActive(AXIS_Z));
+
+  std::cout << "  [PASS] 200 ms Jog Lease Watchdog safely halts runaway continuous jog.\n";
+}
+
+// -----------------------------------------------------------------------------
+// Test 7: Runway Verification, syncIndex, UPDATE_SOFT_LIMITS
+// -----------------------------------------------------------------------------
+void testRunwayAndSyncIndex() {
+  printTestHeader("7. Runway Verification, syncIndex & UPDATE_SOFT_LIMITS");
+
+  MockStepperHAL stepperHal;
+  MockSpindleEncoderHAL encoderHal;
+  MotionEngine engine(&stepperHal, &encoderHal);
+  TestMotionEventListener listener;
+  engine.setEventListener(&listener);
+
+  AxisGeometry geomZ;
+  geomZ.screwPitchDu     = 40000;
+  geomZ.motorStepsPerRev = 1600;
+  geomZ.maxAccelMmSec2   = 10.0f; // Low accel so high RPM runway check triggers
+  StepTimingConfig timing;
+  engine.configureAxis(AXIS_Z, geomZ, timing);
+  engine.zeroAxis(AXIS_Z);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
+  encoderHal.init(1, 2, 3, 1024, 1.0f);
+
+  // Set upper limit at +5,000 du (0.5 mm) via UPDATE_SOFT_LIMITS
+  MotionCommandPacket limPkt;
+  limPkt.type              = MotionCommandPacket::Type::UPDATE_SOFT_LIMITS;
+  limPkt.axis              = AXIS_Z;
+  limPkt.direction         = 1;
+  limPkt.targetCoordDu     = 5000;
+  limPkt.respectSoftLimits = true;
+  assert(engine.postCommand(limPkt));
+  engine.onMotionTick();
+
+  // Feed high RPM (3000 RPM = 50 RPS; 2.0 mm pitch -> 100 mm/s; d_stop = 500 mm >> 0.5 mm)
+  encoderHal.setFilteredRpm(3000);
+  engine.onMotionTick();
+
+  SpindleSyncParams sync;
+  sync.axis              = AXIS_Z;
+  sync.direction         = 1;
+  sync.pitchDupr         = 20000;
+  sync.respectSoftLimits = true;
+  sync.syncIndex         = true;
+  assert(!engine.engageSpindleSync(sync)); // Rejected by verifyRunwaySpindle!
+
+  // Now test syncIndex waiting for index pulse at safe RPM
+  encoderHal.setFilteredRpm(60);
+  engine.onMotionTick();
+  limPkt.targetCoordDu = 500000; // 50 mm runway
+  assert(engine.postCommand(limPkt));
+  engine.onMotionTick();
+
+  assert(engine.engageSpindleSync(sync));
+  encoderHal.injectPulses(100);
+  engine.onMotionTick();
+  assert(stepperHal.getTotalSteps(AXIS_Z) == 0); // Still waiting for index
+
+  encoderHal.setIndexSynced(true);
+  engine.onMotionTick(); // Acquires index sync
+  encoderHal.injectPulses(40);
+  engine.onMotionTick();
+  assert(stepperHal.getTotalSteps(AXIS_Z) > 0); // Synced and stepping!
+
+  std::cout << "  [PASS] Runway verification, syncIndex, and UPDATE_SOFT_LIMITS verified.\n";
+}
+
 int main() {
   std::cout << "========================================================\n";
   std::cout << " whatELS Phase 2 — Automated E2E Motion Simulation Suite\n";
@@ -361,9 +528,12 @@ int main() {
   testSoftLimitShoulderStop();
   testLivePitchTrimContinuity();
   testInterCoreCommandQueue();
+  testHybridPulseTrainOffload();
+  testJogLeaseWatchdog();
+  testRunwayAndSyncIndex();
 
   std::cout << "\n========================================================\n";
-  std::cout << " ALL 4 E2E INTEGRATION TESTS PASSED (100% SUCCESS)\n";
+  std::cout << " ALL 7 E2E INTEGRATION TESTS PASSED (100% SUCCESS)\n";
   std::cout << "========================================================\n";
   return 0;
 }

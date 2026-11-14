@@ -11,6 +11,9 @@
 #if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>
 #include <esp_attr.h>
+#include <esp_timer.h>
+#include <esp_task_wdt.h>
+#include <driver/gptimer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -46,6 +49,9 @@ struct FeedParameters {
   int32_t speedDuPerMin       = 0;     // Commanded velocity (for async power feed)
   int32_t pitchDupr           = 0;     // Commanded thread lead (for spindle sync gearing)
   int32_t targetDistDu        = -1;    // Optional stroke distance (-1 = continuous to soft limit)
+  float   accelMmSec2         = 0.0f;  // Acceleration ramp rate (0.0 = use axis default)
+  bool    respectSoftLimits   = true;  // True = enforce active soft limits
+  bool    syncIndex           = false; // True = wait for 1/rev index marker before step initiation
 
   // Coordinated Dual-Axis / Taper Extension [KIN-04]
   bool    enableSecondaryAxis = false;
@@ -71,6 +77,8 @@ class MotionEngine {
 public:
   static constexpr size_t NUM_AXES = 2;
   static constexpr size_t CMD_QUEUE_DEPTH = 16;
+  static constexpr uint32_t JOG_LEASE_TIMEOUT_MS = 200;
+  static constexpr uint64_t SYNC_TIMER_PERIOD_US = 250; // 4 kHz synchronous dispatch
 
   static MotionEngine& instance();
 
@@ -123,7 +131,15 @@ public:
 
   // Real-Time Service Hooks (Called from Core 1 ISR / Loop)
   void IRAM_ATTR onMotionTick();
+  void IRAM_ATTR onSyncTick();
   void IRAM_ATTR onSpindlePulse(int32_t deltaPulses, uint32_t currentRpm);
+
+  // Jog Lease Watchdog & Profile Cache
+  void IRAM_ATTR renewJogLease(AxisId axis);
+  void setSpindleCountsPerRev(int32_t countsPerRev) {
+    if (countsPerRev > 0) m_cachedCountsPerRev = countsPerRev;
+  }
+  const StepTimingConfig& getStepTiming(AxisId axis) const { return m_stepTiming[axisIdx(axis)]; }
 
   // Telemetry Mailbox Access
   const TelemetryMailbox& getTelemetryMailbox() const { return m_telemetryMailbox; }
@@ -141,10 +157,18 @@ private:
     return (axis == AXIS_X) ? 1 : 0;
   }
 
-  void processCommandPacket(const MotionCommandPacket& pkt);
-  void publishTelemetrySnapshot();
+  void IRAM_ATTR processCommandPacket(const MotionCommandPacket& pkt);
+  void IRAM_ATTR publishTelemetrySnapshot();
+  uint32_t IRAM_ATTR getNowMs() const;
+
+#if defined(ESP32) || defined(ARDUINO)
+  static bool IRAM_ATTR onSyncTimerAlarm(gptimer_handle_t timer, const gptimer_alarm_event_data_t* edata, void* user_ctx);
+  static void motionCore1TaskEntry(void* arg);
+  static void motionSyncTaskEntry(void* arg);
+#endif
 
   AxisState           m_axes[NUM_AXES];
+  StepTimingConfig    m_stepTiming[NUM_AXES];
   SoftLimitTable      m_limits[NUM_AXES];
   SpindleSynchronizer m_sync[NUM_AXES];
   TrajectoryPlanner   m_planners[NUM_AXES];
@@ -161,14 +185,23 @@ private:
   int8_t              m_direction[NUM_AXES]  = { 0, 0 };
   int32_t             m_targetStep[NUM_AXES] = { 0, 0 };
   bool                m_hasTarget[NUM_AXES]  = { false, false };
+  bool                m_respectSoftLimits[NUM_AXES] = { true, true };
+  bool                m_waitingForIndex[NUM_AXES]   = { false, false };
   uint8_t             m_activeLimitSlot[NUM_AXES] = { 0, 0 };
   bool                m_isDualCoordinated = false;
   size_t              m_masterAxisIdx = 0;
   int32_t             m_stepFraction[NUM_AXES] = { 0, 0 };
+  uint32_t            m_jogFreqHz[NUM_AXES] = { 0, 0 };
+  uint32_t            m_lastJogLeaseMs[NUM_AXES] = { 0, 0 };
+  uint32_t            m_jogLeaseElapsedMs[NUM_AXES] = { 0, 0 };
+  int32_t             m_cachedCountsPerRev = 4096;
 
 #if defined(ESP32) || defined(ARDUINO)
-  QueueHandle_t       m_cmdQueue   = nullptr;
-  TaskHandle_t        m_taskHandle = nullptr;
+  QueueHandle_t       m_cmdQueue       = nullptr;
+  TaskHandle_t        m_taskHandle     = nullptr;
+  TaskHandle_t        m_syncTaskHandle = nullptr;
+  gptimer_handle_t    m_syncTimer      = nullptr;
+  portMUX_TYPE        m_spinlock       = portMUX_INITIALIZER_UNLOCKED;
 #else
   std::queue<MotionCommandPacket> m_cmdQueue;
 #endif
