@@ -396,47 +396,10 @@ class WhatelsService extends EventTarget {
     this._emitTelemetry();
   }
 
-  reversePitch() {
-    this.reverseFeed();
-  }
-
-  nudgePitch(plus) {
-    this.nudgeFeed(plus ? 1 : -1);
-  }
-
   // --- Canonical Command Pass-Throughs ---
 
-  setFeedDupr(du) {
-    if (du === undefined || Number.isNaN(Number(du))) return;
-    this.sendRaw(`CMD.feedDupr=${Math.round(du)}\n`);
-  }
-
-  setFeedMm(pitchMm) {
-    if (!pitchMm || Number.isNaN(Number(pitchMm))) return;
-    this.sendRaw(`CMD.feedMm=${pitchMm}\n`);
-  }
-
-  setFeedTpi(tpi) {
-    if (!tpi || Number.isNaN(Number(tpi))) return;
-    this.sendRaw(`CMD.feedTpi=${tpi}\n`);
-  }
-
-  setFeedInch(pitchInch) {
-    if (!pitchInch || Number.isNaN(Number(pitchInch))) return;
-    this.sendRaw(`CMD.feedInch=${pitchInch}\n`);
-  }
-
-  reverseFeed() {
-    this.sendRaw('CMD.feedRev\n');
-  }
-
-  setFeedStepDu(stepDu) {
-    if (!stepDu || Number.isNaN(Number(stepDu))) return;
-    this.sendRaw(`CMD.feedStepDu=${Math.round(stepDu)}\n`);
-  }
-
-  cycleFeedStep() {
-    this.sendRaw('CMD.feedStepCycle\n');
+  startFeed(params) {
+    if (this.client) return this._fire(this.client.startFeed(params));
   }
 
   setJogStepDu(stepDu) {
@@ -444,20 +407,6 @@ class WhatelsService extends EventTarget {
     this.canonical.jogStepDu = Math.round(stepDu);
     this._updateDerivedState();
     this._emitTelemetry();
-  }
-
-  setTaperRatio(ratioK) {
-    if (!ratioK || Number.isNaN(Number(ratioK))) return;
-    this.sendRaw(`CMD.taperRatio=${ratioK}\n`);
-  }
-
-  setTaperAngle(deg) {
-    if (deg === undefined || Number.isNaN(Number(deg))) return;
-    this.sendRaw(`CMD.taperAngle=${deg}\n`);
-  }
-
-  setTaperPreset(presetId, deg, ratioVal) {
-    this.sendRaw(`CMD.taperPreset=${presetId || 0},${deg || 0},${ratioVal || 0}\n`);
   }
 
   setAxisZero(axis) {
@@ -478,10 +427,6 @@ class WhatelsService extends EventTarget {
     const upper = String(axis || '').toUpperCase();
     const boundToken = upper === 'X' ? (isLeftOrUp ? 'UP' : 'DOWN') : (isLeftOrUp ? 'LEFT' : 'RIGHT');
     if (this.client) return this._fire(this.client.axisClearLimit(upper, boundToken));
-  }
-
-  setOperatingMode(modeId) {
-    this.sendRaw(`CMD.mode=${modeId}\n`);
   }
 
   setControllerOn(isOn) {
@@ -530,24 +475,6 @@ class WhatelsService extends EventTarget {
     return Promise.reject(new Error('Client not initialized'));
   }
 
-  setPitch(pitchMm) {
-    this.setFeedMm(pitchMm);
-  }
-
-  setGearAxis(axis) {
-    if (!axis) return;
-    this.sendRaw(`CMD.gearAxis=${String(axis).toUpperCase()}\n`);
-  }
-
-  setGearSync(isSync) {
-    this.sendRaw(`CMD.gearSync=${isSync ? 1 : 0}\n`);
-  }
-
-  setGearDir(dir) {
-    if (dir === undefined) return;
-    this.sendRaw(`CMD.gearDir=${dir}\n`);
-  }
-
   nudgeFeed(dir) {
     if (this.client) return this._fire(this.client.feedNudge(dir));
   }
@@ -566,14 +493,6 @@ class WhatelsService extends EventTarget {
 
   simPulses(pulses) {
     if (this.client) return this._fire(this.client.simPulses(pulses));
-  }
-
-  setMode(modeKeyOrId) {
-    if (typeof modeKeyOrId === 'number') {
-      this.sendRaw(`CMD.mode=${modeKeyOrId}\n`);
-    } else if (typeof modeKeyOrId === 'string') {
-      this.sendRaw(`CMD.mode=${modeKeyOrId.trim().toLowerCase()}\n`);
-    }
   }
 
   setLogStatusPushes(enabled) {
