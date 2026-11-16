@@ -1,0 +1,26 @@
+# whatELS — Project Domain & Engineering Invariants
+
+> Project-specific overlay for `whatELS`. Universal lifecycle gates and pair-programming rules live in the Cognitive Exoskeleton protocol.
+
+### 1. Physical Lathe Safety (`lathe_safety.md`)
+- **Axis Polarities:** $Z-$ toward chuck; $Z+$ toward tailstock. $X-$ into cut (centerline); $X+$ retract. Invariant: $X-$ always deepens cut. Never invert.
+- **Hardware Limits:** Exactly one physical limit pair per axis (`z_min`/`z_max`, `x_min`/`x_max`). Zero software ghost limits.
+- **Anti-Trap Jog Recovery:** Opposing jog direction away from tripped limit MUST NEVER be disabled.
+
+### 2. Dumb-Client & Dual-Core Kernel Boundary (`ADR-0002`)
+- Zero client-side kinematics, pitch math, or soft limits in JS/Web UI.
+- Cross-core motion communication strictly traverses `MotionCommandPacket` and `TelemetryMailbox`. Never mutate kernel state directly from web or client threads.
+
+### 3. Hardware Ground Truth & Zero Fake Mocks
+- **Seams Only:** Unit tests run against pure C++ abstract interfaces (`ISystemInfoHAL`, `IStepperHAL`, `ISettingsStorage`).
+- **Zero Fake Framework Mocks:** `Arduino.h`, `Preferences.h`, `freertos/*` in `test/` are forbidden.
+- **Target Verification:** No change is complete without clean compilation on the physical compiler (`/home/emil/.local/bin/pio run -e esp32s3`).
+
+### 4. Active Specs Authority & Traceability
+- Documentation in `docs/` and `docs/protocol/CANONICAL_COMMAND_REFERENCE.md` is the single source of truth.
+- If code behavior or contracts change, update documentation simultaneously. Code and specs never diverge.
+- **Traceability & Topology Mirroring:** Every C++ header must have a docblock with `@file`, `@brief`, and `@see docs/...` linking to its governing spec and ADR. Documentation directory structure mirrors source tree (`src/foo/` <-> `docs/foo/`).
+
+### 5. whatELS Tooling & Sandbox Rules
+- **Search Scope:** Shell search is permitted only for locating unknown symbols across subdirectories (`src/`, `clients/`, `tests/`). Never use `git grep`.
+- **Direct Network Ingress:** Commands requiring internet (`gh`, `git push`, `git fetch`) use `BypassSandbox: true`. Local commands (`pio`, `node`, `g++`, `git status`) remain sandboxed.
