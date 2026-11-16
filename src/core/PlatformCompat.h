@@ -9,9 +9,17 @@
 
 #if defined(ESP32) || defined(ARDUINO)
 #include <Arduino.h>
+#include <esp_log.h>
 #else
 #include <cstddef>
 #include <cstdint>
 #include <string>
 using String = std::string;
+#ifndef ESP_LOGE
+#define ESP_LOGE(tag, fmt, ...) ((void)0)
+#define ESP_LOGW(tag, fmt, ...) ((void)0)
+#define ESP_LOGI(tag, fmt, ...) ((void)0)
+#define ESP_LOGD(tag, fmt, ...) ((void)0)
+#define ESP_LOGV(tag, fmt, ...) ((void)0)
+#endif
 #endif

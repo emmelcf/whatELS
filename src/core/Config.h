@@ -11,6 +11,10 @@
 #include "BoardPins.h"
 #include "LatheProfile.h"
 
+#ifndef MOTION_STATUS_LOG_MS
+#define MOTION_STATUS_LOG_MS 250
+#endif
+
 /**
  * =============================================================================
  * whatELS - Central Hardware & Motion Configuration (Modular Architecture)

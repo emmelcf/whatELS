@@ -1,5 +1,8 @@
 #include "Esp32StepperHAL.h"
+#include "core/PlatformCompat.h"
 #include <algorithm>
+
+static const char* TAG = "StepperHAL";
 
 Esp32StepperHAL::Esp32StepperHAL() {
   for (size_t i = 0; i < MAX_AXES; ++i) {
@@ -35,6 +38,7 @@ bool Esp32StepperHAL::configureAxis(AxisId axis, int stepPin, int dirPin, int en
 #if defined(ESP32) || defined(ARDUINO)
   if (stepPin >= 0) {
     if (!initRmt(idx)) {
+      ESP_LOGE(TAG, "initRmt failed for axis=%d stepPin=%d", (int)idx, stepPin);
       return false;
     }
     restoreStepGpio(idx);
@@ -53,6 +57,7 @@ bool Esp32StepperHAL::configureAxis(AxisId axis, int stepPin, int dirPin, int en
   }
 
   if (!initTimer(idx)) {
+    ESP_LOGE(TAG, "initTimer failed for axis=%d", (int)idx);
     return false;
   }
 #endif
@@ -62,6 +67,7 @@ bool Esp32StepperHAL::configureAxis(AxisId axis, int stepPin, int dirPin, int en
   m_axes[idx].enableTimestampUs = 0;
   m_axes[idx].lastDirChangeTimestampUs = 0;
   m_axes[idx].lastStepTimestampUs = 0;
+  ESP_LOGI(TAG, "Configured axis=%d step=%d dir=%d ena=%d", (int)idx, stepPin, dirPin, enablePin);
   return true;
 }
 

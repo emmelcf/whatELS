@@ -39,6 +39,7 @@ void DRO_Scale::attach() {
         .high_limit = 32767,
     };
     if (pcnt_new_unit(&unitConfig, &pcntUnit) != ESP_OK) {
+        ESP_LOGE(TAG, "pcnt_new_unit failed for pins A=%d B=%d", aPinNumber, bPinNumber);
         return;
     }
 
@@ -55,6 +56,7 @@ void DRO_Scale::attach() {
     };
     pcnt_channel_handle_t chan = NULL;
     if (pcnt_new_channel(pcntUnit, &chanConfig, &chan) != ESP_OK) {
+        ESP_LOGE(TAG, "pcnt_new_channel failed for pins A=%d B=%d", aPinNumber, bPinNumber);
         return;
     }
 
@@ -72,6 +74,7 @@ void DRO_Scale::attach() {
     pcnt_unit_enable(pcntUnit);
     pcnt_unit_clear_count(pcntUnit);
     pcnt_unit_start(pcntUnit);
+    ESP_LOGI(TAG, "DRO Scale attached on pins A=%d B=%d (scale=%.2f)", aPinNumber, bPinNumber, scaleFactor);
 }
 
 // Returns the raw position from the scale with no offset

@@ -1,8 +1,11 @@
 #include "Esp32SpindleEncoderHAL.h"
 #include <Arduino.h>
+#include <esp_log.h>
 #include <esp_timer.h>
 #include <cmath>
 #include <algorithm>
+
+static const char* TAG = "EncoderHAL";
 
 Esp32SpindleEncoderHAL::Esp32SpindleEncoderHAL() = default;
 
@@ -54,6 +57,7 @@ bool Esp32SpindleEncoderHAL::init(
   };
   esp_err_t err = pcnt_new_unit(&unitConfig, &m_unit);
   if (err != ESP_OK || !m_unit) {
+    ESP_LOGE(TAG, "pcnt_new_unit failed err=0x%x", err);
     return false;
   }
 
@@ -70,6 +74,7 @@ bool Esp32SpindleEncoderHAL::init(
   };
   err = pcnt_new_channel(m_unit, &chanAConfig, &m_chanA);
   if (err != ESP_OK) {
+    ESP_LOGE(TAG, "pcnt_new_channel(A) failed err=0x%x pinA=%d pinB=%d", err, pinA, pinB);
     return false;
   }
   pcnt_channel_set_edge_action(m_chanA, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE);
@@ -81,6 +86,7 @@ bool Esp32SpindleEncoderHAL::init(
   };
   err = pcnt_new_channel(m_unit, &chanBConfig, &m_chanB);
   if (err != ESP_OK) {
+    ESP_LOGE(TAG, "pcnt_new_channel(B) failed err=0x%x pinA=%d pinB=%d", err, pinA, pinB);
     return false;
   }
   pcnt_channel_set_edge_action(m_chanB, PCNT_CHANNEL_EDGE_ACTION_DECREASE, PCNT_CHANNEL_EDGE_ACTION_INCREASE);
@@ -103,6 +109,8 @@ bool Esp32SpindleEncoderHAL::init(
   m_rpmDeltaAccumulator = 0;
   m_lastRpmCalcTimeUs = esp_timer_get_time();
 
+  ESP_LOGI(TAG, "Spindle encoder initialized pinA=%d pinB=%d pinZ=%d ppr=%u ratio=%.4f",
+           pinA, pinB, pinIndex, nativePpr, pulleyRatio);
   return true;
 }
 
