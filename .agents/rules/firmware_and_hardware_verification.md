@@ -8,6 +8,8 @@ description: Embedded C++ real-time invariants for src/ (ISR safety, SettingsSer
 - **ISR Safety (Zero Heap, Zero Blocking, Zero Floats):**
   - High-frequency stepper/encoder ISRs execute from IRAM (`IRAM_ATTR`).
   - Strictly prohibited in ISRs: `new`/`malloc`, `String`, `delay()`, FreeRTOS blocking queues, `Serial.print`, floating-point math.
+- **Logging Standard:**
+  - Use `esp_log.h` (`ESP_LOG*`) with a file-local `TAG`; never call `ESP_LOG*` or `Serial.print` inside `IRAM_ATTR`/ISRs or the 4 kHz tick, and guard `esp_log.h` for host-compiled files. Follow `docs/core/LOGGING_STANDARD.md`.
 - **Lock-Free State & NVS Persistence:**
   - All machine parameters access state via `SettingsService` / canonical accessors (no raw legacy globals).
   - All persisted settings MUST use `PersistentSetting<T>` (`PersistentSetting.h`) for single-read RAM boot caching and dirty-checking. Never call raw `Preferences.put*()`.
